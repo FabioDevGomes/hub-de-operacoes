@@ -1,0 +1,162 @@
+export const ITEM_TYPES=Object.freeze(['duration','number','scale','boolean','text','time']);
+export const BOOLEAN_ITEM_IDS=Object.freeze(['item-alcool','item-refrigerante','item-acucar','item-sodio','item-verde-horario']);
+
+export const DEFAULT_CATEGORIES=Object.freeze([
+  {id:'cat-trabalho',name:'Trabalho',order:10,active:true},
+  {id:'cat-rotina',name:'Rotina',order:20,active:true},
+  {id:'cat-saude',name:'Saúde',order:30,active:true},
+  {id:'cat-lazer',name:'Lazer',order:40,active:true},
+  {id:'cat-outros',name:'Outros',order:50,active:true}
+]);
+
+const seed=(id,name,categoryId,type='duration',order=10,extra={})=>({id,name,categoryId,type,order,active:true,productive:false,showInCharts:type!=='text',chartType:type==='duration'?'bar':'line',aggregation:type==='duration'?'sum':'average',durationMode:type==='duration'?'both':null,...extra});
+export const DEFAULT_ITEMS=Object.freeze([
+  seed('item-dormindo','Dormindo','cat-rotina','duration',10),
+  seed('item-cama-acordar','Na cama após acordar','cat-rotina','duration',20),
+  seed('item-preparo-levantar','Preparo após levantar','cat-rotina','duration',30),
+  seed('item-cafe','Café','cat-rotina','duration',40),
+  seed('item-kakashi','Kakashi','cat-outros','duration',50),
+  seed('item-almoco','Almoço','cat-rotina','duration',60),
+  seed('item-janta','Janta','cat-rotina','duration',70),
+  seed('item-mentalizacao','Mentalização / autossugestão','cat-saude','duration',80),
+  seed('item-treino','Treino','cat-saude','duration',90),
+  seed('item-ads-aplicando','Ads — aplicando','cat-trabalho','duration',100),
+  seed('item-ads-estudos','Ads — estudos / mentoria','cat-trabalho','duration',110),
+  seed('item-reflexao','Importante / reflexão','cat-trabalho','duration',120),
+  seed('item-ia','IA — implementação','cat-trabalho','duration',130),
+  seed('item-insights','Insights / call / podcast / networking','cat-trabalho','duration',140),
+  seed('item-networking','Novas pessoas para networking','cat-trabalho','duration',150,{active:false}),
+  seed('item-familia','Comunicação com a família','cat-rotina','duration',160,{active:false}),
+  seed('item-despesas','Organização / controle de despesas','cat-trabalho','duration',170),
+  seed('item-conteudo','Publicar conteúdo','cat-trabalho','duration',180),
+  seed('item-livros','Livros','cat-lazer','duration',190),
+  seed('item-praia','Praia / sair de casa','cat-lazer','duration',200),
+  seed('item-entretenimento','Entretenimento','cat-lazer','duration',210,{active:false}),
+  seed('item-youtube','YouTube','cat-lazer','duration',220),
+  seed('item-instagram','Instagram','cat-lazer','duration',230),
+  seed('item-verde','Verde','cat-saude','duration',240),
+  seed('item-edonismo','Edonismo / atenção M','cat-outros','duration',250),
+  seed('item-moto','Moto','cat-outros','duration',260),
+  seed('item-outros','Outros','cat-outros','duration',270),
+  seed('item-alcool','Bebida alcoólica','cat-saude','boolean',280),
+  seed('item-refrigerante','Refrigerante','cat-saude','boolean',290),
+  seed('item-acucar','Açúcar / sabor doce','cat-saude','boolean',300),
+  seed('item-sodio','Sódio / embutidos / burger','cat-saude','boolean',310),
+  seed('item-agua','Água','cat-saude','number',320,{unit:'ml',inputUnit:'water_unit',aggregation:'sum'}),
+  seed('item-verde-horario','Verde 16:20...','cat-saude','boolean',330,{showInCharts:false}),
+  seed('item-garganta','Incômodo na garganta','cat-saude','scale',340),
+  seed('item-rim','Incômodo no rim','cat-saude','scale',350),
+  seed('item-metalico','Gosto metálico','cat-saude','scale',360),
+  seed('item-clareza','Clareza mental','cat-saude','scale',370)
+]);
+
+export function parseQuickDuration(raw){
+  const text=String(raw??'').trim();
+  if(!/^\d+$/.test(text))throw new Error('Digite somente números.');
+  let hours=0,minutes=0;
+  if(text.length<=2)minutes=Number(text);
+  else{hours=Number(text.slice(0,-2));minutes=Number(text.slice(-2))}
+  if(minutes<0||minutes>59)throw new Error('Os minutos devem estar entre 00 e 59.');
+  const total=hours*60+minutes;
+  if(total<=0)throw new Error('Informe uma duração maior que zero.');
+  return total;
+}
+
+export function parseLocalizedNumber(raw,{allowNegative=false}={}){
+  const text=String(raw??'').trim().replace(/\s/g,'').replace(',','.');
+  if(!text)throw new Error('Informe um valor.');
+  if(!/^-?\d+(?:\.\d+)?$/.test(text))throw new Error('Informe um número válido.');
+  const value=Number(text);
+  if(!Number.isFinite(value)||!allowNegative&&value<0)throw new Error('Informe um número válido.');
+  return value;
+}
+
+export function waterUnitsToMl(raw,unitMl=350){
+  const units=parseLocalizedNumber(raw),volume=Number(unitMl);
+  if(!Number.isFinite(volume)||volume<=0)throw new Error('Configure um volume de água válido.');
+  return{units,ml:units*volume};
+}
+
+export function minutesBetween(start,end){
+  if(!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))throw new Error('Informe horários válidos.');
+  const toMinutes=value=>{const[h,m]=value.split(':').map(Number);if(h>23||m>59)throw new Error('Informe horários válidos.');return h*60+m};
+  const from=toMinutes(start),to=toMinutes(end);
+  if(to<from)throw new Error('Intervalos atravessando meia-noite ainda precisam de uma regra definida.');
+  if(to===from)throw new Error('O intervalo precisa ter duração maior que zero.');
+  return to-from;
+}
+
+export function registeredIntervalUntil(totalMinutes,currentMinutes){
+  const total=Math.round(Number(totalMinutes)),current=Math.round(Number(currentMinutes));
+  if(!Number.isFinite(total)||total<0)throw new Error('O tempo total registrado é inválido.');
+  if(!Number.isFinite(current)||current<0||current>=1440)throw new Error('O horário atual é inválido.');
+  if(total>current)throw new Error('O tempo total registrado ultrapassa o horário atual. Revise os lançamentos do dia.');
+  if(total===current)throw new Error('Não há tempo novo para registrar agora.');
+  const clock=minutes=>`${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+  return{start:clock(total),end:clock(current),minutes:current-total};
+}
+
+export function planDurationRemoval(entries,requestedMinutes){
+  const requested=Math.round(Number(requestedMinutes));
+  if(!Number.isFinite(requested)||requested<=0)throw new Error('Informe uma duração válida para remover.');
+  const candidates=entries.filter(entry=>entry.type==='duration'&&Number(entry.minutes)>0).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))||String(b.id).localeCompare(String(a.id)));
+  const available=candidates.reduce((sum,entry)=>sum+Number(entry.minutes),0);
+  if(requested>available)throw new Error(`Só existem ${formatDuration(available)} registrados nesta atividade para remover.`);
+  const deleteIds=[],updates=[];let remaining=requested;
+  for(const entry of candidates){if(!remaining)break;const current=Number(entry.minutes),removed=Math.min(current,remaining),next=current-removed;remaining-=removed;if(next===0)deleteIds.push(entry.id);else updates.push({id:entry.id,minutes:next})}
+  return{requestedMinutes:requested,deleteIds,updates};
+}
+
+export function formatDuration(value){
+  const minutes=Math.max(0,Math.round(Number(value)||0)),hours=Math.floor(minutes/60),rest=minutes%60;
+  return hours?`${hours}h${String(rest).padStart(2,'0')}`:`${rest}min`;
+}
+
+export function localDate(value=new Date()){
+  const date=value instanceof Date?value:new Date(value);
+  return`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+export function formatBrazilianDate(iso){
+  const match=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match?`${match[3]}/${match[2]}/${match[1]}`:'—';
+}
+
+export function parseBrazilianDate(raw){
+  const match=String(raw||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!match)throw new Error('Informe a data no formato dd/mm/aaaa.');
+  const day=Number(match[1]),month=Number(match[2]),year=Number(match[3]),date=new Date(Date.UTC(year,month-1,day));
+  if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)throw new Error('Informe uma data válida no formato dd/mm/aaaa.');
+  return`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+export function shiftDate(iso,days){const date=new Date(`${iso}T12:00:00`);date.setDate(date.getDate()+days);return localDate(date)}
+export function dateRange(start,end){const dates=[];for(let date=start;date&&date<=end;date=shiftDate(date,1)){dates.push(date);if(dates.length>3700)break}return dates}
+
+export function valueForEntry(entry){
+  if(entry.type==='duration')return Number(entry.minutes)||0;
+  if(entry.type==='boolean')return entry.value===true||entry.value===1?1:0;
+  if(entry.type==='number'||entry.type==='scale')return Number(entry.value)||0;
+  return null;
+}
+
+export function aggregateDay(entries,date){
+  const rows=entries.filter(entry=>entry.date===date),byItem=new Map();let totalMinutes=0,productiveMinutes=0;
+  for(const entry of rows){
+    const current=byItem.get(entry.itemId)||{entries:[],minutes:0,values:[]};current.entries.push(entry);
+    if(entry.type==='duration'){const minutes=Number(entry.minutes)||0;current.minutes+=minutes;totalMinutes+=minutes;if(entry.productiveSnapshot)productiveMinutes+=minutes}
+    else current.values.push(entry.value);
+    byItem.set(entry.itemId,current);
+  }
+  return{date,entries:rows,byItem,totalMinutes,productiveMinutes,productivePercent:totalMinutes?productiveMinutes/totalMinutes*100:0};
+}
+
+export function comparisonMatrix(items,entries,dates){
+  const rows=items.map(item=>{const cells=dates.map(date=>aggregateDay(entries.filter(entry=>entry.itemId===item.id),date).byItem.get(item.id)||{entries:[],minutes:0,values:[]});const numeric=cells.map(cell=>item.type==='duration'?cell.minutes:cell.values.map(Number).filter(Number.isFinite).reduce((a,b)=>a+b,0)).filter(Number.isFinite);return{item,cells,average:numeric.length?numeric.reduce((a,b)=>a+b,0)/numeric.length:0}});
+  const foot=dates.map(date=>aggregateDay(entries,date));
+  return{dates,rows,foot};
+}
+
+export function snapshotFor(item){return{itemNameSnapshot:item.name,categoryIdSnapshot:item.categoryId,productiveSnapshot:Boolean(item.productive)}}
+export function normalizedName(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+export function makeId(prefix='id'){return`${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`}

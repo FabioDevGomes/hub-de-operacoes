@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+
+const source=await readFile(new URL('../src/product-catalog.js',import.meta.url),'utf8');
+const context=vm.createContext({window:{},structuredClone});
+vm.runInContext(source,context);
+const catalog=context.window.ProductCatalog;
+let value=catalog.create();
+value=catalog.rename(value,'magicglp','Magic GLP');
+assert.equal(value.aliases.magicglp,'Magic GLP');
+value=catalog.hide(value,'magicglp');
+assert.deepEqual(Array.from(value.ocultos),['magicglp']);
+value=catalog.setStartDate(value,'magicglp','2026-08-25');
+assert.equal(value.datas_inicio.magicglp,'2026-08-25');
+value=catalog.restoreAll(value);
+assert.deepEqual(Array.from(value.ocultos),[]);
+assert.equal(value.aliases.magicglp,'Magic GLP');
+assert.equal(value.datas_inicio.magicglp,'2026-08-25');
+console.log('product catalog module ok');

@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import * as Images from '../dist/curadoria/image-search-domain.mjs';
+
+const html=await readFile(new URL('../dist/curadoria/gerentes/index.html',import.meta.url),'utf8');
+const css=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
+assert.equal(Images.imageSearchUrl('PodBloom','US'),'https://www.google.com/search?q=PodBloom&udm=2&gl=us&hl=en');
+assert.equal(Images.imageSearchUrl('Produto teste','DE'),'https://www.google.com/search?q=Produto+teste&udm=2&gl=de&hl=de');
+assert.equal(Images.resultLabel('dominant'),'Dominante');
+assert.equal(Images.progress([{country:'DE',status:'mixed',capturedAt:'2026-09-14T10:00:00Z'}],['DE','AT']).done,1);
+assert.ok(html.includes('data-sort="images"'),'coluna Imagens ausente');
+assert.ok(html.includes('id="imagesFilter"'),'filtro de imagens ausente');
+assert.ok(html.includes('id="columnsPicker"'),'controle de colunas ausente');
+assert.ok(html.includes("localStorage.setItem(COLUMN_PREFS"),'preferência de colunas não é persistida');
+assert.ok(html.includes('.hidden-column{display:none!important}'),'ocultação de colunas ausente');
+assert.ok(html.includes('Google Imagens'),'aba de validação visual ausente');
+assert.ok(html.includes('data-manager-image-result="dominant"'),'resultado Dominante ausente');
+assert.ok(html.includes('data-manager-image-result="mixed"'),'resultado Mista ausente');
+assert.ok(html.includes('candidatos a palavras-chave negativas'),'orientação de negativas ausente');
+assert.ok(html.includes('data-manager-image-candidate-input'),'entrada de outros produtos ausente');
+assert.ok(html.includes('negativeKeywordCandidates'),'candidatos a negativas não são persistidos');
+assert.ok(html.includes('image-candidate-summary'),'resumo persistente das candidatas ausente');
+assert.ok(css.includes('.image-candidate.saved'),'destaque das candidatas salvas ausente');
+assert.ok(css.includes('.image-result-actions{display:grid;grid-template-columns:repeat(6,minmax(0,1fr))'),'resultados visuais não estão em uma linha');
+assert.ok(css.includes('overflow-x:auto'),'proteção responsiva contra sobreposição ausente');
+assert.ok(html.includes("window.open(ImagesDomain.imageSearchUrl"),'atalho localizado do Google Imagens ausente');
+assert.ok(html.includes("putAll('images'"),'histórico visual não é persistido');
+console.log('manager images ui ok');

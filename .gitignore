@@ -1,0 +1,9 @@
+.sites-runtime/
+data-local/*
+!data-local/.gitkeep
+dist/catalogo-produtos-oficial.json
+*.xlsx
+*.xls
+*.csv
+manifesto*.json
+base-painel-*.json

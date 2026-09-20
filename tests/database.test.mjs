@@ -69,6 +69,26 @@ assert.equal(db.consecutiveZeroImpressionDays(zeroBase,'cmp_zero','2026-09-17'),
 
 const dailyManifest=(date,names)=>({separacao_temporal:{D_menos_1:{datas_detectadas:[date]},D_zero:{datas_detectadas:[date]}},campanhas:names.map(nome_campanha_exato=>({nome_campanha_exato,metricas_D_menos_1:{data:{valor:date}}}))});
 const dailyRow=source=>({cells:{A:{value:Date.parse(source.metricas_D_menos_1.data.valor+'T00:00:00Z')/86400000+25569}}});
+const oldMedic6='05/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 70% - U$ 60';
+const newMedic6='16/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 85% - U$ 60';
+let reusedNumber=db.importManifest(db.create(),dailyManifest('2026-09-15',[oldMedic6]),()=>({date:'2026-09-15',cells:{A:{value:46280},B:{value:0}}})).base;
+reusedNumber=db.importManifest(reusedNumber,dailyManifest('2026-09-16',[newMedic6]),()=>({date:'2026-09-16',cells:{A:{value:46281},B:{value:0}}})).base;
+assert.equal(reusedNumber.campanhas.filter(x=>x.nome_exibicao==='MagicGLP 6').length,2);
+assert.notEqual(reusedNumber.campanhas.find(x=>x.nome_mcc===oldMedic6).id,reusedNumber.campanhas.find(x=>x.nome_mcc===newMedic6).id);
+assert.equal(reusedNumber.diario.find(x=>x.data==='2026-09-15').campanha_id,reusedNumber.campanhas.find(x=>x.nome_mcc===oldMedic6).id);
+assert.equal(reusedNumber.diario.find(x=>x.data==='2026-09-16').campanha_id,reusedNumber.campanhas.find(x=>x.nome_mcc===newMedic6).id);
+
+let collided=db.create();
+collided.campanhas.push({id:'cmp_legacy_magic6',nome_mcc:newMedic6,nome_exibicao:'MagicGLP 6',status:'ativa'});
+collided.diario.push({campanha_id:'cmp_legacy_magic6',data:'2026-09-15',celulas:{B:{value:0}},fontes:['manifesto']},{campanha_id:'cmp_legacy_magic6',data:'2026-09-16',celulas:{B:{value:0}},fontes:['manifesto']});
+collided.snapshots_campanhas.push({data:'2026-09-15',capturada_em:'2026-09-15T12:00:00.000Z',campanhas:[oldMedic6]},{data:'2026-09-16',capturada_em:'2026-09-16T12:00:00.000Z',campanhas:[newMedic6]});
+collided=db.importManifest(collided,dailyManifest('2026-09-20',[newMedic6]),()=>({date:'2026-09-20',cells:{A:{value:46285},B:{value:0}}})).base;
+const repairedOld=collided.campanhas.find(x=>x.nome_mcc===oldMedic6),repairedNew=collided.campanhas.find(x=>x.nome_mcc===newMedic6);
+assert.ok(repairedOld&&repairedNew);
+assert.notEqual(repairedOld.id,repairedNew.id);
+assert.equal(collided.diario.find(x=>x.data==='2026-09-15').campanha_id,repairedOld.id);
+assert.equal(collided.diario.find(x=>x.data==='2026-09-16').campanha_id,repairedNew.id);
+
 let lifecycle=db.importManifest(db.create(),dailyManifest('2026-09-13',['Campanha A','Campanha B']),dailyRow).base;
 lifecycle=db.importManifest(lifecycle,dailyManifest('2026-09-14',['Campanha A','Campanha C']),dailyRow).base;
 assert.equal(lifecycle.snapshots_campanhas.length,2);
@@ -93,4 +113,12 @@ assert.equal(duplicate.duplicate,true);
 duplicate.base.diario.push({campanha_id:'cmp_sale',data:'2026-09-14',celulas:{F:{value:1}},fontes:['manifesto']});
 saleAdjustments=db.salesAdjustmentMap(duplicate.base).get('cmp_sale');
 assert.equal(saleAdjustments.pendingConversions,0);
+const partialSaleManifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-09-14']}},campanhas:[{nome_campanha_exato:'Wego6 campanha',metricas_D_zero:{data:{valor:'2026-09-14'}}}]};
+const partialSale=db.importManifest(saleResult.base,partialSaleManifest,()=>({date:'2026-09-14',period:'d0',cells:{A:{value:46283},F:{value:1},P:{value:436.75}}})).base;
+assert.equal(partialSale.vendas_provisorias[0].status,'provisoria');
+assert.equal(db.salesAdjustmentMap(partialSale).get('cmp_sale').manualSales,1);
+const officialSaleManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2026-09-14']}},campanhas:[{nome_campanha_exato:'Wego6 campanha',metricas_D_menos_1:{data:{valor:'2026-09-14'}}}]};
+const reconciledSale=db.importManifest(partialSale,officialSaleManifest,()=>({date:'2026-09-14',period:'d1',cells:{A:{value:46283},F:{value:1},P:{value:436.75}}})).base;
+assert.equal(reconciledSale.vendas_provisorias[0].status,'conciliada');
+assert.equal(db.salesAdjustmentMap(reconciledSale).get('cmp_sale'),undefined);
 console.log('database module ok');

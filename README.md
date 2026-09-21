@@ -2,6 +2,13 @@
 
 Painel local, sem servidor externo, para consolidar o histórico do Excel com as atualizações diárias do manifesto MCC.
 
+O Hub inteiro é servido por `scripts/serve-panel.ps1`, usando somente o Windows
+PowerShell. A execução não depende do Codex nem de um runtime Python. Todas as
+telas existentes em `dist/` usam o mesmo processo local. O motor de Pre-Sell fica
+versionado em `presell-engine/`, com as proteções de validação e não sobrescrita.
+O endereço permanece fixo em `http://127.0.0.1:8765/`, pois o IndexedDB do
+navegador é isolado por origem; trocar a porta faria a base existente parecer vazia.
+
 ## Abrir o painel sem o Codex
 
 Dê um duplo clique em `iniciar-painel.cmd`. O iniciador liga o servidor somente no próprio computador e abre o endereço local no navegador. O Codex pode permanecer fechado.

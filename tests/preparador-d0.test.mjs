@@ -21,6 +21,9 @@ assert.ok(html.includes("conversion_value: ['valor conv'"),'coluna Valor conv. n
 assert.ok(html.includes("valor_conversao:field(r0,'conversion_value',parseNumber)"),'valor de conversão de D0 não é preservado no manifesto');
 assert.ok(html.includes('P:{ value:panelValue(metrics.valor_conversao)'),'valor de conversão não é gravado no Diário do Produto');
 assert.ok(html.includes('grid-template-columns: 224px minmax(0, 1fr)'),'menu lateral do Preparador não segue a largura compacta do painel');
+assert.ok(html.includes('overflow-y: scroll; scrollbar-gutter: stable;'),'Preparador não mantém a rolagem vertical da tela disponível e visível');
+assert.ok(html.includes('.hub-app { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh; height: auto; overflow: visible; align-items: start; }'),'estrutura do Preparador ainda pode bloquear a rolagem vertical da tela');
+assert.ok(html.includes('.hub-main { min-width: 0; min-height: 100vh; overflow: visible; }'),'conteúdo principal do Preparador ainda pode criar um contêiner de rolagem indevido');
 assert.ok(html.includes('data-sidebar-group="operation"')&&html.includes('data-sidebar-group="curation"')&&html.includes('data-sidebar-group="products"'),'grupos expansíveis do menu não estão completos no Preparador');
 assert.ok(html.includes("localStorage.setItem(SIDEBAR_GROUP_KEY, openName)"),'estado expansível do menu não é compartilhado com as demais telas');
 assert.ok(html.includes("setSidebarGroup(isOpen ? '' : toggle.dataset.sidebarToggle)"),'menu do Preparador não fecha o grupo anterior ao abrir outro');

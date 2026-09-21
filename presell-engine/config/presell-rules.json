@@ -1,0 +1,20 @@
+{
+  "version": "1.1.0",
+  "requiredFiles": [
+    "index.html",
+    "styles.css",
+    "scripts.js"
+  ],
+  "defaultAssetFolder": "background",
+  "requiredAssetNames": [
+    "01.png",
+    "02.png",
+    "03.png"
+  ],
+  "forbiddenTokens": [],
+  "visualRules": {
+    "preserveMobileBackgroundFramingWhenDetailsOpen": true,
+    "mobileBackgroundSizing": "width-locked",
+    "expandedDetailsSurface": "neutral-gray"
+  }
+}

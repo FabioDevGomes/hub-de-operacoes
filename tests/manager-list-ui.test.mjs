@@ -10,4 +10,7 @@ assert.ok(html.includes('id="visibilityFilter"'),'filtro de itens visíveis e oc
 assert.ok(html.includes('data-toggle-product-visibility'),'ação de ocultar ou reexibir produto ausente');
 assert.ok(html.includes("const HIDDEN_PRODUCTS_PREFS='radar-gerentes-itens-ocultos-v1'"),'preferência de itens ocultos não é persistida');
 assert.ok(html.includes("visibility==='all'||(visibility==='hidden'?hidden:!hidden)"),'filtro de visibilidade não cobre visíveis, ocultos e todos');
+assert.ok(html.includes('class="product-cell-layout"'),'ação de ocultar não está centralizada verticalmente na célula do produto');
+assert.ok(html.includes("import * as TrendsUI from '../trends-ui.mjs'"),'Lista de Gerente não reutiliza o módulo visual de Trends');
+assert.ok(html.includes('id="managerProductAgeActions"')&&html.includes('id="managerTrendsResults"'),'controles compartilhados de Trends ausentes na Lista de Gerente');
 console.log('manager list ui ok');

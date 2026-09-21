@@ -3,51 +3,52 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $siteDirectory = Join-Path $projectRoot 'dist'
 $dataDirectory = Join-Path $projectRoot 'data-local'
+$pidFile = Join-Path $dataDirectory 'painel-server.pid'
+$urlFile = Join-Path $dataDirectory 'painel-server.url'
+$port = 8765
 $serverUrl = 'http://127.0.0.1:8765/'
+$healthUrl = $serverUrl + 'api/presell/health'
 
 if (-not (Test-Path -LiteralPath (Join-Path $siteDirectory 'index.html'))) {
     throw 'O painel não foi encontrado na pasta dist.'
 }
 
 try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $serverUrl -TimeoutSec 2
-    if ($response.StatusCode -eq 200) {
+    $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1
+    if ($health.presellApi -eq 'v2' -and $health.runtime -eq 'powershell') {
         Start-Process $serverUrl
         exit 0
     }
 } catch {
-    # O servidor ainda não está ativo; a inicialização continua abaixo.
+    # O servidor independente ainda não está ativo na origem persistente.
 }
 
-$pythonCandidates = @(
-    (Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'),
-    (Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
-    (Get-Command py.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
-
-$pythonExe = $pythonCandidates | Select-Object -First 1
-if (-not $pythonExe) {
-    throw 'Python não foi encontrado. Abra o painel pelo Codex uma vez ou instale o Python.'
+try {
+    $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
+    $probe.Start()
+} catch {
+    throw 'A porta 8765 está ocupada por um servidor antigo. Encerre o servidor antigo uma vez e execute novamente. A porta não será trocada porque isso separaria a base IndexedDB.'
+} finally {
+    if ($null -ne $probe) { $probe.Stop() }
 }
 
 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
-$server = Start-Process -FilePath $pythonExe `
-    -ArgumentList @((Join-Path $PSScriptRoot 'serve_panel.py'), '--port', '8765', '--bind', '127.0.0.1', '--directory', $siteDirectory) `
-    -WorkingDirectory $siteDirectory `
-    -WindowStyle Hidden `
-    -PassThru
-$server.Id | Set-Content -LiteralPath (Join-Path $dataDirectory 'painel-server.pid') -Encoding ascii
+$serverScript = Join-Path $PSScriptRoot 'serve-panel.ps1'
+$argumentLine = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Port {1}' -f $serverScript.Replace('"','\"'), $port
+$server = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentLine -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
+$server.Id | Set-Content -LiteralPath $pidFile -Encoding ascii
+$serverUrl | Set-Content -LiteralPath $urlFile -Encoding ascii
 
-for ($attempt = 0; $attempt -lt 20; $attempt++) {
+for ($attempt = 0; $attempt -lt 30; $attempt++) {
     try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri $serverUrl -TimeoutSec 1
-        if ($response.StatusCode -eq 200) {
+        $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1
+        if ($health.presellApi -eq 'v2') {
             Start-Process $serverUrl
             exit 0
         }
     } catch {
-        Start-Sleep -Milliseconds 250
+        Start-Sleep -Milliseconds 200
     }
 }
 
-throw 'O servidor foi iniciado, mas o painel não respondeu na porta 8765.'
+throw "O servidor PowerShell foi iniciado, mas não respondeu na porta $port."

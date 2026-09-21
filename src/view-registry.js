@@ -5,7 +5,8 @@
     tested:Object.freeze({id:'tested',query:'tested',enabled:true,activeView:'tested-products',sectionId:'testedProductsView',navId:'testedProductsNav',title:'Produtos testados',subtitle:'Lista consolidada de todo o histórico'}),
     cpa:Object.freeze({id:'cpa',query:'cpa',enabled:true,activeView:'cpa-report',sectionId:'cpaReportView',navId:'cpaReportNav',title:'Análise por Faixa de CPA',subtitle:'Distribuição, desempenho e validação das faixas configuradas'}),
     accounts:Object.freeze({id:'accounts',query:'accounts',enabled:true,activeView:'account-report',sectionId:'accountReportView',navId:'accountReportNav',title:'Mapa de Produtos por Conta',subtitle:'Visão consolidada de onde cada campanha está e de suas principais métricas'}),
-    time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'})
+    time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'}),
+    presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'presell',sectionId:'presellView',navId:'presellNav',title:'Gerador de Pre-Sell',subtitle:'Valide a ficha e crie arquivos locais com as proteções obrigatórias'})
   });
   function definition(id){return VIEWS[String(id||'')]||null}
   function enabledViews(){return Object.values(VIEWS).filter(view=>view.enabled)}

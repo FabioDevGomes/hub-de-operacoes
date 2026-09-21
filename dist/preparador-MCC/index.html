@@ -164,7 +164,7 @@
       <nav class="hub-nav" aria-label="Menu principal">
         <div class="hub-nav-group" data-sidebar-group="operation">
           <button class="hub-nav-toggle" type="button" data-sidebar-toggle="operation" aria-expanded="true" aria-controls="preparatorOperationNav"><span>Operação</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
-          <div id="preparatorOperationNav" class="hub-nav-body"><a href="/">Visão geral</a><a href="/?view=tested">Produtos testados</a><a class="active" href="/preparador-MCC/" aria-current="page">Preparador MCC</a><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=time">Meu Tempo</a></div>
+          <div id="preparatorOperationNav" class="hub-nav-body"><a href="/">Visão geral</a><a href="/?view=tested">Produtos testados</a><a class="active" href="/preparador-MCC/" aria-current="page">Preparador MCC</a><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=time">Meu Tempo</a><a href="/?view=presell">Gerador de Pre-Sell</a><a href="/asset-studio/">Asset Studio</a></div>
         </div>
         <div class="hub-nav-group collapsed" data-sidebar-group="curation">
           <button class="hub-nav-toggle" type="button" data-sidebar-toggle="curation" aria-expanded="false" aria-controls="preparatorCurationNav"><span>Curadoria</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
@@ -297,6 +297,8 @@
     const slots = { d1: null, d0: null };
     let currentManifest = null;
     let currentResult = null;
+    let numberingIssues = [];
+    let numberingValidationToken = 0;
     let previewRole = 'd1';
     let currentFilename = 'manifesto_mcc.json';
     const PANEL_DB_NAME = 'painel-campanhas';
@@ -410,12 +412,6 @@
       });
     }
 
-    function confirmPanelConflicts(conflicts) {
-      if (!conflicts.length) return true;
-      const sample = conflicts.slice(0, 5).map(item => `${item.campanha} em ${panelDateLabel(item.data)}, coluna ${item.coluna}: ${item.anterior} → ${item.novo}`).join('\n');
-      return confirm(`${conflicts.length} divergência(s) encontradas ao importar o manifesto:\n\n${sample}${conflicts.length > 5 ? '\n\n…e outras divergências.' : ''}\n\nDeseja substituir os valores anteriores?`);
-    }
-
     const panelClone = value => structuredClone(value);
     const panelBlank = value => value == null || value === '';
     const panelComparable = value => JSON.stringify(value ?? null);
@@ -426,6 +422,23 @@
       if (match = name.match(/\bSlimQA\s+(\d+)\b/i)) return `SlimQA ${+match[1]}`;
       if (match = name.match(/\bAkemi\s+(\d+)\b/i)) return `Akemi ${String(+match[1]).padStart(2, '0')}`;
       return name;
+    }
+    function panelManifestNames(manifest) {
+      return [...new Set((manifest?.campanhas || []).map(item => String(item.nome_campanha_exato || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR', { numeric:true, sensitivity:'base' }));
+    }
+    function panelCampaignNumberReuseIssues(baseInput, manifest) {
+      const base = normalizePanelBase(baseInput), incoming = panelManifestNames(manifest), incomingKeys = new Set(incoming.map(name => name.toLocaleLowerCase('pt-BR'))), known = new Set(incoming);
+      for (const campaign of base.campanhas || []) if (campaign.nome_mcc) known.add(String(campaign.nome_mcc).trim());
+      for (const snapshot of base.snapshots_campanhas || []) for (const name of snapshot.campanhas || []) if (String(name || '').trim()) known.add(String(name).trim());
+      for (const campaign of base.manifesto_atual?.campanhas || []) if (campaign.nome_campanha_exato) known.add(String(campaign.nome_campanha_exato).trim());
+      const groups = new Map();
+      for (const name of known) {
+        const group = panelDisplayName(name);
+        if (group.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR')) continue;
+        const key = group.toLocaleLowerCase('pt-BR'), nameKey = name.toLocaleLowerCase('pt-BR'), entry = groups.get(key) || { group, names:new Map(), incomingNames:new Map() };
+        entry.names.set(nameKey, name); if (incomingKeys.has(nameKey)) entry.incomingNames.set(nameKey, name); groups.set(key, entry);
+      }
+      return [...groups.values()].filter(entry => entry.incomingNames.size && entry.names.size > 1).map(entry => ({ group:entry.group, incomingNames:[...entry.incomingNames.values()], knownNames:[...entry.names.values()] }));
     }
     function panelIdFor(value) {
       let hash = 2166136261;
@@ -480,7 +493,7 @@
       base.atualizado_em = new Date().toISOString();
       return { base, conflicts };
     }
-    const fallbackPanelDatabase = { normalize:normalizePanelBase, importManifest:importManifestIntoPanel };
+    const fallbackPanelDatabase = { normalize:normalizePanelBase, importManifest:importManifestIntoPanel, campaignNumberReuseIssues:panelCampaignNumberReuseIssues };
 
     function panelUpdateError(error) {
       if (error?.name === 'VersionError') return 'A base do painel usa uma versão mais nova. Recarregue o Hub e tente novamente.';
@@ -496,8 +509,10 @@
       const db = await openPanelDatabase();
       try {
         const original = databaseApi.normalize(await readPanelBase(db));
+        const reuseIssues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(original, manifest);
+        if (reuseIssues.length) { const error = new Error('Há campanha usando uma numeração que já pertenceu a outro nome. Corrija o nome na MCC e importe um novo CSV.'); error.code = 'CAMPAIGN_NUMBER_REUSE'; error.numberingIssues = reuseIssues; throw error; }
         const preview = databaseApi.importManifest(original, manifest, panelManifestRow);
-        const overwrite = preview.conflicts.length ? confirmPanelConflicts(preview.conflicts) : false;
+        const overwrite = preview.conflicts.length > 0;
         const applied = overwrite ? databaseApi.importManifest(original, manifest, panelManifestRow, { overwrite:true }) : preview;
         const base = applied.base;
         delete base.produtos_ocultos;
@@ -905,17 +920,49 @@
       [['Campanhas', validation.quantidades.campanhas_saida_unicas, ''], ['Pendências', validation.quantidades.campanhas_pendentes, validation.quantidades.campanhas_pendentes ? 'bad':'good'], ['Alertas críticos', critical.length, critical.length ? 'bad':'good'], ['Confiança', confidence[0].toUpperCase()+confidence.slice(1), confidence === 'alta' ? 'good':confidence === 'baixa' ? 'bad':'']].forEach(([label,value,cls]) => { const div=document.createElement('div'); div.className=`summary ${cls}`; const span=document.createElement('span'), strong=document.createElement('strong'); span.textContent=label; strong.textContent=String(value); div.append(span,strong); summary.append(div); });
       renderPreviewTable(manifest, previewRole);
       setPanel('#validation-panel', true); setPanel('#preview-panel', true); setPanel('#apply-panel', true);
-      q('#output-name').textContent = 'Base local do Painel de Campanhas'; q('#apply-note').textContent = critical.length ? 'Corrija as falhas críticas antes de atualizar.' : 'O manifesto será aplicado diretamente à mesma base usada pela Visão Geral.';
+      q('#output-name').textContent = 'Base local do Painel de Campanhas'; q('#apply-note').textContent = critical.length ? 'Corrija as falhas críticas antes de atualizar.' : 'Validando a numeração das campanhas na base local…';
       q('#apply-feedback').hidden = true;
-      q('#apply-manifest').disabled = critical.length > 0; q('#announcer').textContent = critical.length ? 'Validação concluída com falhas críticas.' : 'Manifesto validado e pronto para atualizar a base.';
+      q('#apply-manifest').textContent = 'Atualizar base'; q('#apply-manifest').disabled = true; q('#announcer').textContent = critical.length ? 'Validação concluída com falhas críticas.' : 'Validando a numeração das campanhas.';
+    }
+
+    async function validatePreparedNumbering(result) {
+      const token = ++numberingValidationToken, databaseApi = window.CampaignDatabase || fallbackPanelDatabase;
+      let issues = [];
+      try {
+        const db = await openPanelDatabase();
+        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); }
+        finally { db.close(); }
+      } catch (error) {
+        if (token !== numberingValidationToken || currentResult !== result) return;
+        numberingIssues = [];
+        q('#apply-note').textContent = 'Não foi possível validar a numeração contra a base local.';
+        q('#apply-feedback').className = 'apply-feedback error'; q('#apply-feedback').textContent = `FALHA — A base não foi atualizada. Motivo: ${panelUpdateError(error)}`; q('#apply-feedback').hidden = false;
+        q('#apply-manifest').disabled = true; return;
+      }
+      if (token !== numberingValidationToken || currentResult !== result) return;
+      numberingIssues = issues;
+      const issueList = q('#issues'); issueList.querySelectorAll('[data-numbering-issue]').forEach(item => item.remove());
+      if (issues.length) {
+        for (const issue of issues) { const li = document.createElement('li'); li.className = 'issue fail'; li.dataset.numberingIssue = 'true'; li.textContent = `${issue.group}: a numeração aparece em mais de um nome de campanha. Renomeie a campanha nova na MCC e exporte novamente o CSV.`; issueList.prepend(li); }
+        const names = issues.flatMap(issue => issue.incomingNames).join(' | '), feedback = q('#apply-feedback');
+        q('#validation-status').textContent = 'Correção de numeração necessária';
+        q('#apply-note').textContent = 'Atualização bloqueada. Corrija a numeração na MCC e importe um novo CSV.';
+        feedback.className = 'apply-feedback error'; feedback.textContent = `BASE NÃO ATUALIZADA — Renumere: ${names}`; feedback.hidden = false;
+        q('#apply-manifest').disabled = true; q('#announcer').textContent = 'Atualização bloqueada por reutilização de numeração de campanha.';
+      } else {
+        q('#apply-feedback').hidden = true;
+        q('#apply-note').textContent = result.critical.length ? 'Corrija as falhas críticas antes de atualizar.' : 'O CSV foi validado e pode atualizar a mesma base usada pela Visão Geral.';
+        q('#apply-manifest').disabled = result.critical.length > 0;
+        q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : 'CSV validado e pronto para atualizar a base.';
+      }
     }
 
     function resetResults() {
-      currentManifest = null; currentResult = null; setPanel('#validation-panel', false); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando o CSV de D0';
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', false); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando o CSV de D0';
     }
 
     function showInputBlock(message) {
-      currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
       const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'fail', 'CSV de D0 obrigatório', message);
       const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=message; issues.append(li);
       q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
@@ -930,9 +977,9 @@
         const result = buildManifest(slots.d1, slots.d0); currentManifest = result.payload; currentResult = result;
         const d1Dates = result.manifest.separacao_temporal.D_menos_1.datas_detectadas, d0Dates = result.manifest.separacao_temporal.D_zero.datas_detectadas;
         const dateToken = d1Dates.length === 1 ? d1Dates[0] : d0Dates.length === 1 ? d0Dates[0] : 'data_indeterminada';
-        currentFilename = `manifesto_mcc_${dateToken}.json`; renderResults(result);
+        currentFilename = `manifesto_mcc_${dateToken}.json`; renderResults(result); validatePreparedNumbering(result);
       } catch (error) {
-        currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
+        numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
       }
     }
 
@@ -971,10 +1018,9 @@
       button.disabled = true; button.textContent = 'Atualizando…';
       try {
         const result = await applyManifestToPanel(currentResult.manifest);
-        const kept = result.conflicts.length && !result.overwritten ? ' Os valores divergentes anteriores foram mantidos.' : '';
         const paused = result.movimentos?.pausadas?.length || 0, reactivated = result.movimentos?.reativadas?.length || 0, newCount = result.movimentos?.novas?.length || 0;
         const movements = ` ${paused} pausada(s) por ausência, ${newCount} nova(s) e ${reactivated} reativada(s).`;
-        q('#apply-note').textContent = `Base atualizada com ${currentResult.manifest.campanhas.length} campanha(s) e ${result.conflicts.length} divergência(s).${movements}${kept}`;
+        q('#apply-note').textContent = `Base atualizada com ${currentResult.manifest.campanhas.length} campanha(s).${movements}`;
         feedback.className = 'apply-feedback success'; feedback.textContent = 'SUCESSO — A base foi atualizada. Você já pode abrir a Visão Geral.'; feedback.hidden = false;
         q('#announcer').textContent = 'Base do Painel de Campanhas atualizada com sucesso.';
         button.textContent = 'Atualizada ✓';
@@ -984,9 +1030,10 @@
         q('#apply-note').textContent = 'Nenhuma confirmação de atualização foi registrada.';
         feedback.className = 'apply-feedback error'; feedback.textContent = `FALHA — A base não foi atualizada. Motivo: ${reason}`; feedback.hidden = false;
         q('#announcer').textContent = `Falha ao atualizar a base: ${reason}`;
-        button.textContent = 'Falhou — tentar novamente';
+        if (error.code === 'CAMPAIGN_NUMBER_REUSE') numberingIssues = error.numberingIssues || numberingIssues;
+        button.textContent = numberingIssues.length ? 'Corrija a numeração' : 'Falhou — tentar novamente';
       } finally {
-        button.disabled = false;
+        button.disabled = numberingIssues.length > 0 || Boolean(currentResult?.critical?.length);
       }
     });
   })();

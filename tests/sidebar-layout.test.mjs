@@ -13,6 +13,7 @@ for(const[name,path]of pages){
   assert.ok(html.includes('painel-sidebar-grupo-aberto-v1'),`${name}: preferência compartilhada do acordeão ausente`);
   assert.ok(html.includes('224px minmax(0,1fr)')||html.includes('224px minmax(0, 1fr)'),`${name}: largura compacta do menu ausente`);
   assert.ok(html.includes('Meu Tempo')&&html.includes('Mapa por conta')&&html.includes('Análise por faixa de CPA'),`${name}: rotas atuais de Operação ausentes`);
+  assert.ok(html.includes('Gerador de Pre-Sell')&&html.includes('Asset Studio'),`${name}: ferramentas de Pre-Sell ausentes da Operação`);
   assert.ok(html.includes('Top Performance'),`${name}: rota Top Performance ausente da Curadoria`);
 }
 console.log('sidebar layout ok');

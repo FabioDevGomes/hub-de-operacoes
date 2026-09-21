@@ -72,6 +72,13 @@ const dailyRow=source=>({cells:{A:{value:Date.parse(source.metricas_D_menos_1.da
 const oldMedic6='05/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 70% - U$ 60';
 const newMedic6='16/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 85% - U$ 60';
 let reusedNumber=db.importManifest(db.create(),dailyManifest('2026-09-15',[oldMedic6]),()=>({date:'2026-09-15',cells:{A:{value:46280},B:{value:0}}})).base;
+const numberingIssues=db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[newMedic6]));
+assert.equal(numberingIssues.length,1);
+assert.equal(numberingIssues[0].group,'MagicGLP 6');
+assert.equal(numberingIssues[0].incomingNames.length,1);
+assert.equal(numberingIssues[0].incomingNames[0],newMedic6);
+assert.ok(numberingIssues[0].knownNames.includes(oldMedic6));
+assert.equal(db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[oldMedic6])).length,0,'reimportar o mesmo nome não deve exigir renumeração');
 reusedNumber=db.importManifest(reusedNumber,dailyManifest('2026-09-16',[newMedic6]),()=>({date:'2026-09-16',cells:{A:{value:46281},B:{value:0}}})).base;
 assert.equal(reusedNumber.campanhas.filter(x=>x.nome_exibicao==='MagicGLP 6').length,2);
 assert.notEqual(reusedNumber.campanhas.find(x=>x.nome_mcc===oldMedic6).id,reusedNumber.campanhas.find(x=>x.nome_mcc===newMedic6).id);

@@ -16,6 +16,8 @@ assert.ok(html.includes('Produtos testados'),'página de produtos testados ausen
 assert.ok(html.includes('id="accountReportNav">Mapa por conta</button>'),'menu do relatório por conta ausente');
 assert.ok(html.includes('id="accountReportView"'),'tela do relatório por conta ausente');
 assert.ok(html.includes('id="timeNav">Meu Tempo</button>'),'menu Meu Tempo ausente');
+assert.ok(html.includes('id="presellNav">Gerador de Pre-Sell</button>'),'menu Gerador de Pre-Sell ausente');
+assert.ok(html.includes('href="asset-studio/">Asset Studio</a>'),'menu Asset Studio ausente');
 assert.ok(html.includes('id="timeView"'),'tela Meu Tempo ausente');
 assert.ok(html.includes('data-sidebar-group="operation"'),'grupo expansível Operação ausente');
 assert.ok(html.includes('data-sidebar-group="curation"'),'grupo expansível Curadoria ausente');
@@ -48,6 +50,10 @@ assert.ok(timeStorageModule.includes('for(const id of BOOLEAN_ITEM_IDS)')&&timeS
 assert.ok(timeCss.includes('.time-table .activity{min-width:210px;font-weight:400'),'nome da atividade permanece em negrito no Diário');
 assert.ok(timeCss.includes('.time-table th,.time-table td{padding:5px 7px}') && timeCss.includes('.time-table .time-input,.time-table .time-select{padding:5px 7px}'),'linhas e controles do Diário não estão compactos');
 assert.ok(timeCss.includes('.time-table{font-size:.77rem}'),'tamanho da fonte da tabela do Diário foi alterado');
+assert.ok(timeViewModule.includes("class=\"${item.productive?'time-productive-row':''}\""),'linhas produtivas não são destacadas no Lançamento rápido');
+assert.ok(timeViewModule.includes("class=\"${row.item.productive?'time-productive-row':''}\""),'linhas produtivas não são destacadas na comparação do Histórico');
+assert.ok(timeViewModule.includes("class=\"${entry.productiveSnapshot?'time-productive-row':''}\""),'lançamentos produtivos não são destacados no Histórico detalhado');
+assert.ok(timeCss.includes('.time-table tr.time-productive-row>td,.time-matrix tr.time-productive-row>td{background:rgba(52,211,153,.075)}'),'destaque verde sutil das linhas produtivas não foi definido');
 assert.ok(html.includes('<title>Visão geral</title>'),'título inicial do navegador não acompanha a Visão Geral');
 assert.ok(html.includes("document.title=PanelViews.definition('cpa').title"),'título do navegador não acompanha as telas do painel');
 assert.ok(timeViewModule.includes("setBrowserTitle(`Meu Tempo · ${titles[tab]||'Diário'}`)"),'título do navegador não acompanha as abas do Meu Tempo');
@@ -75,6 +81,10 @@ assert.ok(html.includes("accountReportStatus:'ativa'"),'Mapa por Conta não abre
 assert.ok(html.includes('Quantidade de produtos por faixa de CPA')&&html.includes('id="accountCpaRangeBars"'),'quadro de quantidade de produtos por faixa de CPA ausente');
 assert.ok(!html.includes('Distribuição de campanhas'),'quadro antigo de distribuição de campanhas ainda aparece no Mapa por Conta');
 assert.ok(html.includes('function accountProductsByCpaRange(rows)')&&html.includes('productKeys:new Set()')&&html.includes('group.productKeys.add(row.productKey)'),'produtos não são contados de forma única por faixa de CPA');
+assert.ok(html.includes('Faixas de CPA não exploradas')&&html.includes('id="accountCpaGapHead"')&&html.includes('id="accountCpaGapBody"'),'matriz de faixas de CPA não exploradas ausente');
+assert.ok(html.includes('function accountCpaCoverage(rows,ranges)')&&html.includes("state.accountReportProduct==='all'||x.product===state.accountReportProduct"),'cobertura de CPA por produto não respeita o recorte do relatório');
+assert.ok(html.includes('class="cpa-missing">Não explora')&&html.includes('class="cpa-explored"'),'estados de faixa explorada e não explorada não estão destacados');
+assert.ok(html.includes("title.payoutCurrency==='USD'")&&html.includes('function accountCommissionLabel(product)')&&html.includes("${esc(product.name)} — ${esc(accountCommissionLabel(product))}"),'comissão em dólar não acompanha o nome do produto na matriz de faixas');
 assert.ok(html.includes('function derivedContext()'),'contexto derivado reutilizável ausente');
 assert.ok(html.includes('dailyByCampaign=new Map()'),'registros diários não são indexados por campanha');
 assert.ok(html.includes('cpaRowsByKey:new Map()'),'resultados de CPA não são reutilizados entre filtros');

@@ -28,6 +28,12 @@ assert.ok(html.includes('data-sidebar-group="operation"')&&html.includes('data-s
 assert.ok(html.includes("localStorage.setItem(SIDEBAR_GROUP_KEY, openName)"),'estado expansível do menu não é compartilhado com as demais telas');
 assert.ok(html.includes("setSidebarGroup(isOpen ? '' : toggle.dataset.sidebarToggle)"),'menu do Preparador não fecha o grupo anterior ao abrir outro');
 assert.ok(html.includes('/?view=cpa')&&html.includes('/?view=accounts')&&html.includes('/?view=time'),'rotas atuais de Operação estão ausentes no menu do Preparador');
+assert.ok(html.includes('/?view=presell')&&html.includes('/asset-studio/'),'ferramentas de Pre-Sell estão ausentes no menu do Preparador');
+assert.ok(html.includes('validatePreparedNumbering(result)'),'validação de numeração não ocorre ao carregar o CSV');
+assert.ok(html.includes('BASE NÃO ATUALIZADA — Renumere:'),'alerta claro de renumeração ausente');
+assert.ok(html.includes("error.code = 'CAMPAIGN_NUMBER_REUSE'"),'aplicação não possui bloqueio defensivo para numeração reutilizada');
+assert.ok(!html.includes('function confirmPanelConflicts('),'confirmação antiga de divergências ainda aparece durante a atualização');
+assert.ok(html.includes('const overwrite = preview.conflicts.length > 0;'),'valores fechados do CSV não substituem silenciosamente os parciais após a validação');
 assert.ok(
   html.indexOf('id="validation-panel"') < html.indexOf('id="apply-panel"')
   && html.indexOf('id="apply-panel"') < html.indexOf('id="preview-panel"'),

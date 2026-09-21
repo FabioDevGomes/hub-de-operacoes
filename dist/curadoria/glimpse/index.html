@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Glimpse · Curadoria</title><link rel="icon" href="/favicon.png"><link rel="stylesheet" href="./glimpse.css?v=1"></head>
+<body><main class="page">
+  <header class="hero"><div><div class="eyebrow">Curadoria · Glimpse</div><h1 id="productName">Análise Glimpse</h1><p id="productMeta">Cole a página completa do Google Trends com a extensão Glimpse ativa.</p></div><button class="button" id="cancelTop" type="button">← Voltar</button></header>
+  <section class="surface input-card"><div class="section-title"><div><h2>Colar dados do Glimpse / Google Trends</h2><p>Use Ctrl+A e Ctrl+C na página. O sistema limpa o ruído e preserva somente dados úteis e texto sanitizado.</p></div><button class="button subtle" id="newCollection" type="button">Nova coleta</button></div><textarea id="rawInput" placeholder="Cole aqui todo o conteúdo copiado da página..."></textarea><div class="actions"><button class="button" id="clearInput" type="button">Limpar</button><button class="button primary" id="analyze" type="button">Analisar</button></div><div id="message" class="message"></div></section>
+  <section id="results" class="hidden">
+    <div class="cards"><article class="metric-card"><span>Volume</span><strong id="volumeCard">—</strong><small>buscas no último mês</small></article><article class="metric-card"><span>Movimento</span><strong id="movementCard">—</strong><small id="movementPeriod">período recente</small></article><article class="metric-card"><span>Geografia</span><strong id="geographyCard">—</strong><small id="geographyNote">regiões capturadas</small></article><article class="metric-card"><span>Cobertura</span><strong id="coverageCard">—</strong><small>material disponível</small></article></div>
+    <section class="surface signal"><div><span>Sinal Glimpse</span><strong id="signalValue">—</strong></div><p id="operationalReading"></p></section>
+    <section class="surface"><div class="section-title"><div><h2>Indicadores principais</h2><p>Dado objetivo, resultado e leitura operacional permanecem separados.</p></div></div><div class="table-wrap"><table><thead><tr><th>Indicador</th><th>Resultado</th><th>Leitura</th></tr></thead><tbody id="indicatorRows"></tbody></table></div></section>
+    <div class="two-columns">
+      <section class="surface"><div class="section-title"><div><h2>Intenção das queries</h2><p>Classificação extensível, sem excluir itens ambíguos.</p></div></div><div id="intentions" class="stack"></div></section>
+      <section class="surface"><div class="section-title"><div><h2>Geografia</h2><p id="regionsSummary">Índice relativo de interesse — não representa buscas.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Região</th><th>Índice</th></tr></thead><tbody id="regionRows"></tbody></table></div></section>
+    </div>
+    <section class="surface"><div class="section-title"><div><h2>Sinais emergentes</h2><p>Itens de baixa relevância continuam visíveis, mas não elevam o sinal.</p></div></div><div class="two-columns"><div><h3>Related Topics</h3><div id="topicRows" class="stack"></div></div><div><h3>Related Queries</h3><div id="queryRows" class="stack"></div></div></div></section>
+    <section class="surface"><details open><summary>Related Trends</summary><p id="trendsSummary" class="muted"></p><div id="trendRows" class="tags"></div></details></section>
+    <section class="surface"><div class="section-title"><div><h2>Dados da coleta</h2><p>Texto bruto sanitizado, parser, classificação e sinal são armazenados separadamente.</p></div></div><dl id="collectionData" class="data-grid"></dl></section>
+    <section class="surface"><div class="section-title"><div><h2>Histórico</h2><p>Coletas anteriores deste produto.</p></div></div><div id="history" class="history"></div></section>
+  </section>
+  <footer class="footer"><button class="button" id="cancel" type="button">Cancelar</button><button class="button primary" id="finish" type="button">Concluir</button></footer>
+</main><script type="module" src="./glimpse-page.mjs?v=1"></script></body></html>

@@ -29,3 +29,4 @@ await cp(resolve(root, "src/flowtracking-copy-guide.png"), resolve(root, "dist/f
 await cp(resolve(root, "src/curadoria"), resolve(root, "dist/curadoria"), { recursive: true });
 await cp(resolve(root, "src/meu-tempo"), resolve(root, "dist/meu-tempo"), { recursive: true });
 await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursive: true });
+await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });

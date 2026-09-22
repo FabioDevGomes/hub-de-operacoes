@@ -13,3 +13,13 @@
 @media(max-width:700px){.trends-result-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.decision-dialog-actions{grid-template-columns:1fr 1fr}.decision-dialog-actions .decision-option:first-child{grid-column:1/-1}}
 @media(max-width:760px){.image-country-head,.image-mixed-copy{align-items:stretch;flex-direction:column}.image-search-button{width:100%}.image-result-actions{grid-template-columns:repeat(6,minmax(96px,1fr));overflow-x:auto;padding:2px 2px 7px}.image-mixed-copy span{text-align:left}.image-candidate-entry{grid-template-columns:1fr auto}.image-candidate-entry [data-manager-image-save-mixed]{grid-column:1/-1}}
+
+/* Decisões de curadoria compartilhadas: intenção em amarelo, campanha no ar em verde. */
+.decision-badge.launch,.decision-option.launch{border-color:#8a6f18;background:#332b0f;color:#ffe46d}
+.decision-badge.live,.decision-option.live{border-color:#276249;background:#102d24;color:#83e5bb}
+.decision-row-launch>td{background:rgba(171,130,35,.2)}
+.decision-row-live>td{background:rgba(16,74,54,.25)}
+.decision-row-launch:hover>td{background:rgba(190,145,40,.32)!important}
+.decision-row-live:hover>td{background:rgba(20,92,66,.34)!important}
+.decision-option.selected.launch{outline-color:#ffe46d}
+.decision-option.selected.live{outline-color:#34d399}

@@ -22,11 +22,17 @@ assert.ok(html.includes('id="timeNav">Meu Tempo</button>'),'menu Meu Tempo ausen
 assert.ok(html.includes('id="presellNav">Gerador de Pre-Sell</button>'),'menu Gerador de Pre-Sell ausente');
 assert.ok(html.includes('id="copyFichaNav">Copy e Ficha</button>'),'menu Copy e Ficha ausente');
 assert.ok(html.includes('id="copyFichaView"'),'tela Copy e Ficha ausente');
-assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=1')"),'módulo Copy e Ficha não é carregado sob demanda');
+assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=2')"),'módulo Copy e Ficha não é carregado sob demanda ou usa versão antiga');
 assert.ok(copyFichaView.includes('Gerar copy e ficha')&&copyFichaView.includes('URL de afiliação (sempre separada)'),'fluxo Copy e Ficha não foi copiado para dist');
 assert.ok(copyFichaView.includes("applyDetected(root,'copyProduct',result.productCandidate)")&&copyFichaView.includes("state.packages=result.packages;renderPackages(root)"),'análise não preenche automaticamente os dados e pacotes confirmados');
+assert.ok(copyFichaView.includes('generationBlockers(data)')&&copyFichaView.includes('error.blockers=blockers')&&copyFichaView.includes('renderWarnings(root,blockers||[error.message],{blocked:Boolean(blockers)})'),'Copy e Ficha permite gerar com confirmações pendentes ou não mostra os bloqueios individualmente');
+assert.ok(copyFichaView.includes("invalidateGeneratedOutputs(root,'Dados alterados. Revise as confirmações e gere novamente.')")&&!copyFichaView.includes("applyDetected(root,'copyUrgency'")&&!copyFichaView.includes("applyDetected(root,'copyScarcity'"),'edições mantêm saídas antigas ou urgência e escassez são aceitas sem validação');
+assert.ok(copyFichaView.includes('id="copyGuaranteeStatus"')&&copyFichaView.includes('Não usar / não confirmada'),'interface não permite resolver explicitamente garantias, urgência e escassez ausentes');
 assert.ok(copyFichaDomain.includes('export function buildFicha')&&copyFichaDomain.includes('mustContain'),'contrato JSON da ficha não foi copiado para dist');
+assert.ok(copyFichaDomain.includes('export function generationBlockers'),'validação de bloqueios não foi copiada para dist');
 assert.ok(copyFichaCss.includes('.copy-ficha-shell'),'CSS da tela Copy e Ficha não foi copiado para dist');
+const copyFichaPendingCss=await readFile(new URL('../dist/copy-ficha/copy-ficha-pending.css',import.meta.url),'utf8');
+assert.ok(html.includes('copy-ficha/copy-ficha-pending.css?v=1')&&copyFichaPendingCss.includes('.copy-ficha-warning-count')&&copyFichaPendingCss.includes('.copy-ficha-warning-list li::marker'),'pendências de Copy e Ficha não são exibidas como itens numerados com contagem destacada');
 assert.ok(html.includes('href="asset-studio/">Asset Studio</a>'),'menu Asset Studio ausente');
 assert.ok(html.includes('id="timeView"'),'tela Meu Tempo ausente');
 assert.ok(html.includes('data-sidebar-group="operation"'),'grupo expansível Operação ausente');
@@ -185,5 +191,7 @@ assert.ok(databaseModule.includes('addProvisionalSale'),'persistência de venda 
 assert.ok(databaseModule.includes('salesAdjustmentMap'),'conciliação de venda provisória ausente');
 assert.ok(databaseModule.includes('reconcileProvisionalSales'),'persistência da conciliação oficial da venda manual ausente');
 assert.ok(!html.includes('MedicGLP 4'),'a distribuição limpa contém dados reais');
+assert.ok(copyFichaView.includes('id="copyReset"')&&copyFichaView.includes('localStorage.removeItem(STORAGE_KEY)')&&copyFichaView.includes('Limpar todos os campos, pacotes e resultados desta coleta?'),'controle de nova coleta não limpa o rascunho com confirmação');
+assert.ok(copyFichaView.includes('<option value="">Selecionar</option><option value="en-US">')&&copyFichaView.includes('<option value="">Selecionar</option><option value="USD">'),'nova coleta não permite deixar idioma e moeda pendentes para outra DTC');
 for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 console.log('clean build ok');

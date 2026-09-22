@@ -17,4 +17,5 @@ assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Pagamento não
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'Lista de Gerente não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-manager-decision')&&html.includes('openManagerDecision'),'decisão manual não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
+assert.ok(html.includes('trends-sheet.css?v=20260922-curation-decision-colors'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
 console.log('manager list ui ok');

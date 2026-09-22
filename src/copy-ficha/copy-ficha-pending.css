@@ -1,0 +1,9 @@
+.copy-ficha-warning-listing{padding:12px 14px}
+.copy-ficha-warning-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:.84rem}
+.copy-ficha-warning-count{flex:0 0 auto;border:1px solid #b88631;border-radius:999px;padding:3px 9px;background:#463515;color:#ffe2a0;font-size:.72rem;font-weight:800;white-space:nowrap}
+.copy-ficha-warning-list{display:grid;gap:7px;margin:0;padding-left:2rem}
+.copy-ficha-warning-list li{padding:9px 11px;border:1px solid rgba(194,145,55,.48);border-radius:8px;background:rgba(18,22,29,.52);color:#ffe6b4;font-size:.79rem;line-height:1.4}
+.copy-ficha-warning-list li::marker{color:#ffd16f;font-weight:850}
+.copy-ficha-warning-listing.is-blocked{border-color:#a87524;background:linear-gradient(145deg,#33250f,#261f17);color:#ffe2a0}
+.copy-ficha-warning-listing.is-blocked .copy-ficha-warning-heading strong{color:#ffe2a0}
+@media(max-width:620px){.copy-ficha-warning-listing{padding:10px}.copy-ficha-warning-heading{align-items:flex-start;font-size:.8rem}.copy-ficha-warning-list{padding-left:1.7rem}.copy-ficha-warning-list li{padding:8px 9px}}

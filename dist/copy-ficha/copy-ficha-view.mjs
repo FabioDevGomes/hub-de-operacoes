@@ -1,4 +1,4 @@
-import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor} from './copy-ficha-domain.mjs';
+import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor,generationBlockers} from './copy-ficha-domain.mjs';
 
 let mounted=false;
 const STORAGE_KEY='copy-ficha-draft-v1';
@@ -50,6 +50,7 @@ function payload(root){
     assetFolder:inputValue(root,'copyAssetFolder')||'assets',
     affiliateUrl:normalizedUrl(inputValue(root,'copyAffiliateUrl')),
     guaranteeDays:inputValue(root,'copyGuarantee'),
+    guaranteeStatus:inputValue(root,'copyGuaranteeStatus'),
     freeShipping:inputValue(root,'copyFreeShipping'),
     fastShipping:inputValue(root,'copyFastShipping'),
     urgencyConfirmed:inputValue(root,'copyUrgency'),
@@ -64,10 +65,33 @@ function restoreDraft(root){
   try{
     const draft=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
     if(!draft)return;
-    const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyFreeShipping:draft.freeShipping,copyFastShipping:draft.fastShipping,copyUrgency:draft.urgencyConfirmed,copyScarcity:draft.scarcityConfirmed};
+    const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyGuaranteeStatus:draft.guaranteeStatus,copyFreeShipping:draft.freeShipping,copyFastShipping:draft.fastShipping,copyUrgency:draft.urgencyConfirmed,copyScarcity:draft.scarcityConfirmed};
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
+    if(draft.guaranteeStatus===undefined&&draft.guaranteeDays)by(root,'copyGuaranteeStatus').value='confirmed';
     if(Array.isArray(draft.packages)&&draft.packages.length){state.packages=draft.packages;renderPackages(root)}
   }catch{}
+}
+
+function resetCollection(root,toast){
+  if(!confirm('Limpar todos os campos, pacotes e resultados desta coleta?'))return;
+  try{localStorage.removeItem(STORAGE_KEY)}catch{}
+  const blankFields=['copyDtcUrl','copyAffiliateUrl','copyRawText','copyProduct','copyCountry','copyLanguage','copyCurrency','copyDiscount','copyGuarantee','copyPageTitle','copyDestination'];
+  blankFields.forEach(id=>{const field=by(root,id);if(field)field.value=''});
+  const pendingFields=['copyFreeShipping','copyFastShipping','copyGuaranteeStatus','copyUrgency','copyScarcity'];
+  pendingFields.forEach(id=>{const field=by(root,id);if(field)field.value='pending'});
+  by(root,'copyAssetFolder').value='assets';
+  root.querySelectorAll('[data-auto-filled],.is-autofilled').forEach(field=>{delete field.dataset.autoFilled;field.classList.remove('is-autofilled')});
+  state.packages=[{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''}];
+  renderPackages(root);
+  by(root,'copyDetected').innerHTML='';
+  by(root,'copyAnalysisNote').textContent='';
+  ['copyHeadlines','copyDescriptions','copyCallouts','copySitelinks','copyFichaJson'].forEach(id=>setOutput(root,id,''));
+  ['copyHeadlineCount','copyDescriptionCount','copySitelinkCount'].forEach(id=>{by(root,id).textContent=''});
+  const warnings=by(root,'copyWarnings');
+  warnings.className='copy-ficha-note';
+  warnings.textContent='Preencha e valide os dados para gerar.';
+  by(root,'copyDtcUrl').focus();
+  toast?.('Nova coleta iniciada');
 }
 
 function applyDetected(root,id,value,{force=false}={}){
@@ -81,19 +105,20 @@ function applyDetected(root,id,value,{force=false}={}){
 }
 
 function analyze(root){
+  invalidateGeneratedOutputs(root,'Análise atualizada. Revise as confirmações antes de gerar.');
   const result=parseOfferText(inputValue(root,'copyRawText'),normalizedUrl(inputValue(root,'copyDtcUrl'))),applied=[];
   if(applyDetected(root,'copyProduct',result.productCandidate))applied.push('produto');
   if(applyDetected(root,'copyCountry',result.countryCode))applied.push('país');
   if(applyDetected(root,'copyLanguage',result.htmlLanguage,{force:Boolean(result.htmlLanguage)}))applied.push('idioma');
   if(applyDetected(root,'copyCurrency',result.currency,{force:Boolean(result.currency)}))applied.push('moeda');
   if(applyDetected(root,'copyDiscount',result.highestPercent))applied.push('desconto');
-  if(applyDetected(root,'copyGuarantee',result.guaranteeDays))applied.push('garantia');
+  const guaranteeApplied=applyDetected(root,'copyGuarantee',result.guaranteeDays);
+  if(guaranteeApplied)applied.push('garantia');
+  if(guaranteeApplied&&inputValue(root,'copyGuaranteeStatus')==='pending')applyDetected(root,'copyGuaranteeStatus','confirmed',{force:true});
   const titleProduct=inputValue(root,'copyProduct')||result.productCandidate,titleLanguage=result.htmlLanguage||inputValue(root,'copyLanguage'),titleCandidate=titleProduct?`${titleProduct} | ${dictionaryFor(titleLanguage).packages}`:result.pageTitleCandidate;
   if(applyDetected(root,'copyPageTitle',titleCandidate))applied.push('título da página');
   if(result.freeShippingCandidate&&applyDetected(root,'copyFreeShipping','confirmed',{force:inputValue(root,'copyFreeShipping')==='pending'}))applied.push('frete grátis');
   if(result.fastShippingCandidate&&applyDetected(root,'copyFastShipping','confirmed',{force:inputValue(root,'copyFastShipping')==='pending'}))applied.push('envio rápido');
-  if(result.urgencyCandidate&&applyDetected(root,'copyUrgency','confirmed',{force:inputValue(root,'copyUrgency')==='pending'}))applied.push('urgência');
-  if(result.scarcityCandidate&&applyDetected(root,'copyScarcity','confirmed',{force:inputValue(root,'copyScarcity')==='pending'}))applied.push('escassez');
   const currentPackages=packageValues(root),hasPackageData=currentPackages.some(item=>Object.values(item).some(Boolean));
   if(result.packages.length&&!hasPackageData){state.packages=result.packages;renderPackages(root);applied.push(`${result.packages.length} pacote(s)`)}
   const chips=[];
@@ -114,26 +139,48 @@ function analyze(root){
 }
 
 function setOutput(root,id,value){by(root,id).value=value}
-function renderWarnings(root,warnings){
+function clearGeneratedOutputs(root){
+  ['copyHeadlines','copyDescriptions','copyCallouts','copySitelinks','copyFichaJson'].forEach(id=>setOutput(root,id,''));
+  ['copyHeadlineCount','copyDescriptionCount','copySitelinkCount'].forEach(id=>{by(root,id).textContent=''});
+}
+function invalidateGeneratedOutputs(root,message){
+  clearGeneratedOutputs(root);
   const host=by(root,'copyWarnings');
-  host.className=warnings.length?'copy-ficha-warning':'copy-ficha-success';
-  host.textContent=warnings.length?warnings.join(' '):'Copy e ficha geradas com dados confirmados. Revise antes de publicar.';
+  host.className='copy-ficha-note';
+  host.textContent=message;
+}
+function renderWarnings(root,warnings,{blocked=false}={}){
+  const host=by(root,'copyWarnings');
+  host.replaceChildren();
+  if(!warnings.length){host.className='copy-ficha-success';host.textContent='Copy e ficha geradas com dados confirmados. Revise antes de publicar.';return}
+  host.className=`copy-ficha-warning copy-ficha-warning-listing${blocked?' is-blocked':''}`;
+  const heading=document.createElement('div');heading.className='copy-ficha-warning-heading';
+  const title=document.createElement('strong');title.textContent=blocked?'Geração bloqueada':'Itens para revisar';
+  const count=document.createElement('span');count.className='copy-ficha-warning-count';count.textContent=`${warnings.length} ${warnings.length===1?'item':'itens'}`;
+  heading.append(title,count);host.append(heading);
+  const list=document.createElement('ol');list.className='copy-ficha-warning-list';
+  for(const warning of warnings){const item=document.createElement('li');item.textContent=warning;list.append(item)}
+  host.append(list);
 }
 function generate(root,toast){
   const data=payload(root);
   if(!data.product)throw new Error('Informe o nome do produto.');
   if(!data.countryCode)throw new Error('Informe o país (código de duas letras).');
   if(!data.htmlLanguage)throw new Error('Informe o idioma HTML.');
-  if(!data.packages.some(item=>item.regularPrice&&item.promoPrice)&&!data.confirmedDiscountPercent)throw new Error('Informe pelo menos um preço original e promocional, ou um percentual confirmado.');
+  if(!data.currency)throw new Error('Informe a moeda da oferta.');
+  const blockers=generationBlockers(data);
+  if(blockers.length){const error=new Error(`Geração bloqueada por ${blockers.length} ${blockers.length===1?'item pendente':'itens pendentes'}.`);error.blockers=blockers;throw error}
   if(data.affiliateUrl&&data.affiliateUrl!=='CONFIRMAR'&&!/^https?:\/\//i.test(data.affiliateUrl))throw new Error('A URL de afiliação precisa ser uma URL completa.');
-  const assets=generateAssets(data),json=fichaJson(data);
+  const json=fichaJson(data),ficha=JSON.parse(json);
+  if(ficha.pending.length||json.includes('"CONFIRMAR"'))throw new Error('Geração bloqueada: a ficha ainda contém confirmações ou campos sem preencher.');
+  const assets=generateAssets(data);
   setOutput(root,'copyHeadlines',assets.headlines.join('\n'));
   setOutput(root,'copyDescriptions',assets.descriptions.join('\n'));
   setOutput(root,'copyCallouts',assets.callouts.join('\n'));
   setOutput(root,'copySitelinks',formatSitelinks(assets.sitelinks));
   setOutput(root,'copyFichaJson',json);
   by(root,'copyHeadlineCount').textContent=`${assets.headlines.length} opções · até 30 caracteres`;
-  by(root,'copyDescriptionCount').textContent=`${assets.descriptions.length} opções · até 90 caracteres`;
+  by(root,'copyDescriptionCount').textContent=`${assets.descriptions.length} opções · 70–90 caracteres`;
   by(root,'copySitelinkCount').textContent=`${assets.sitelinks.length} opções · 3 linhas sem rótulos`;
   renderWarnings(root,assets.warnings);
   saveDraft(root);
@@ -161,20 +208,21 @@ export async function mount({root,toast}={}){
     root.innerHTML=`<div class="copy-ficha-shell">
       <section class="copy-ficha-card"><header><div><h2>1. Fonte da oferta</h2><p>A URL identifica a DTC; a colagem fornece os dados analisáveis sem depender de IA.</p></div></header><div class="copy-ficha-body">
         <div class="copy-ficha-grid"><div class="copy-ficha-field span-2"><label>URL da DTC / página do produtor</label><input id="copyDtcUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-2"><label>URL de afiliação (sempre separada)</label><input id="copyAffiliateUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-4"><label>Texto copiado da página (Ctrl+A, Ctrl+C, Ctrl+V)</label><textarea id="copyRawText" class="copy-ficha-textarea" placeholder="Cole aqui o conteúdo visível da oferta. O sistema preencherá o que reconhecer e destacará o que precisa de revisão."></textarea></div></div>
-        <div class="copy-ficha-actions"><button id="copyAnalyze" class="copy-ficha-btn primary" type="button">Analisar e preencher</button></div><div id="copyDetected" class="copy-ficha-detected"></div><div id="copyAnalysisNote" class="copy-ficha-note"></div>
+        <div class="copy-ficha-actions"><button id="copyAnalyze" class="copy-ficha-btn primary" type="button">Analisar e preencher</button><button id="copyReset" class="copy-ficha-btn danger" type="button">Nova coleta</button></div><div id="copyDetected" class="copy-ficha-detected"></div><div id="copyAnalysisNote" class="copy-ficha-note"></div>
       </div></section>
       <section class="copy-ficha-card"><header><div><h2>2. Validação estruturada</h2><p>Os dados reconhecidos são preenchidos automaticamente; revise os campos destacados.</p></div></header><div class="copy-ficha-body">
         <div class="copy-ficha-grid">
           <div class="copy-ficha-field"><label>Produto</label><input id="copyProduct" class="copy-ficha-input" placeholder="MyoGlow"></div>
           <div class="copy-ficha-field"><label>País</label><input id="copyCountry" class="copy-ficha-input" maxlength="2" placeholder="US"></div>
-          <div class="copy-ficha-field"><label>Idioma HTML</label><select id="copyLanguage" class="copy-ficha-select"><option value="en-US">en-US</option><option value="en-AU">en-AU</option><option value="en-CA">en-CA</option><option value="en-GB">en-GB</option><option value="pt-BR">pt-BR</option><option value="it-IT">it-IT</option><option value="es-ES">es-ES</option><option value="fr-FR">fr-FR</option><option value="de-DE">de-DE</option><option value="sv-SE">sv-SE</option></select></div>
-          <div class="copy-ficha-field"><label>Moeda</label><select id="copyCurrency" class="copy-ficha-select"><option value="USD">USD</option><option value="AUD">AUD</option><option value="CAD">CAD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="BRL">BRL</option><option value="SEK">SEK</option></select></div>
+          <div class="copy-ficha-field"><label>Idioma HTML</label><select id="copyLanguage" class="copy-ficha-select"><option value="">Selecionar</option><option value="en-US">en-US</option><option value="en-AU">en-AU</option><option value="en-CA">en-CA</option><option value="en-GB">en-GB</option><option value="pt-BR">pt-BR</option><option value="it-IT">it-IT</option><option value="es-ES">es-ES</option><option value="fr-FR">fr-FR</option><option value="de-DE">de-DE</option><option value="sv-SE">sv-SE</option></select></div>
+          <div class="copy-ficha-field"><label>Moeda</label><select id="copyCurrency" class="copy-ficha-select"><option value="">Selecionar</option><option value="USD">USD</option><option value="AUD">AUD</option><option value="CAD">CAD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="BRL">BRL</option><option value="SEK">SEK</option></select></div>
           <div class="copy-ficha-field"><label>Desconto confirmado (%)</label><input id="copyDiscount" class="copy-ficha-input" inputmode="decimal" placeholder="Calculado pelos pacotes"></div>
-          <div class="copy-ficha-field"><label>Garantia confirmada (dias)</label><input id="copyGuarantee" class="copy-ficha-input" type="number" min="1" placeholder="90"></div>
+          <div class="copy-ficha-field"><label>Confirmação da garantia</label><select id="copyGuaranteeStatus" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmada</option><option value="no">Não há garantia exibida</option></select></div>
+          <div class="copy-ficha-field"><label>Prazo confirmado (dias)</label><input id="copyGuarantee" class="copy-ficha-input" type="number" min="1" placeholder="90"></div>
           <div class="copy-ficha-field"><label>Frete grátis</label><select id="copyFreeShipping" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="no">Não exibido</option></select></div>
-          <div class="copy-ficha-field"><label>Envio rápido</label><select id="copyFastShipping" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="no">Não confirmado</option></select></div>
-          <div class="copy-ficha-field"><label>Urgência atual</label><select id="copyUrgency" class="copy-ficha-select"><option value="pending">Não validada</option><option value="confirmed">Confirmada</option></select></div>
-          <div class="copy-ficha-field"><label>Escassez atual</label><select id="copyScarcity" class="copy-ficha-select"><option value="pending">Não validada</option><option value="confirmed">Confirmada</option></select></div>
+          <div class="copy-ficha-field"><label>Envio rápido</label><select id="copyFastShipping" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="no">Não confirmado / não usar</option></select></div>
+          <div class="copy-ficha-field"><label>Urgência atual</label><select id="copyUrgency" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmada</option><option value="no">Não usar / não confirmada</option></select></div>
+          <div class="copy-ficha-field"><label>Escassez atual</label><select id="copyScarcity" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmada</option><option value="no">Não usar / não confirmada</option></select></div>
           <div class="copy-ficha-field span-2"><label>Título da página</label><input id="copyPageTitle" class="copy-ficha-input" placeholder="Produto | Package Options"></div>
           <div class="copy-ficha-field span-2"><label>Diretório da Pre-Sell</label><input id="copyDestination" class="copy-ficha-input" placeholder="C:\\Users\\...\\pag01"></div>
           <div class="copy-ficha-field"><label>Pasta de assets</label><input id="copyAssetFolder" class="copy-ficha-input" value="assets"></div>
@@ -191,11 +239,15 @@ export async function mount({root,toast}={}){
     </div>`;
     renderPackages(root);restoreDraft(root);
     by(root,'copyAnalyze').onclick=()=>analyze(root);
+    by(root,'copyReset').onclick=()=>resetCollection(root,toast);
     by(root,'copyAddPackage').onclick=()=>{state.packages=packageValues(root);state.packages.push({label:'',regularPrice:'',promoPrice:'',contents:''});renderPackages(root)};
-    by(root,'copyGenerate').onclick=()=>{try{generate(root,toast)}catch(error){renderWarnings(root,[error.message]);toast?.(error.message)}};
+    by(root,'copyGenerate').onclick=()=>{try{generate(root,toast)}catch(error){clearGeneratedOutputs(root);const blockers=Array.isArray(error?.blockers)?error.blockers:null;renderWarnings(root,blockers||[error.message],{blocked:Boolean(blockers)});toast?.(error.message)}};
     by(root,'copyDownloadFicha').onclick=()=>downloadFicha(root);
     root.querySelectorAll('[data-copy-output]').forEach(button=>button.onclick=()=>copyOutput(root,button.dataset.copyOutput,toast));
-    const markManual=event=>{if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}};
+    const markManual=event=>{
+      if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
+      if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise as confirmações e gere novamente.');
+    };
     root.addEventListener('input',markManual);root.addEventListener('change',markManual);
     mounted=true;
   }

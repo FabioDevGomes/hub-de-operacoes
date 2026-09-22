@@ -37,27 +37,33 @@ export function normalizePackages(packages=[]){
   }).filter(item=>item.regularPrice!==null||item.promoPrice!==null||item.contents);
 }
 
-const COUNTRY_NAMES={US:/\b(united states|usa|u\.s\.a?\.?|estados unidos)\b/i,AU:/\b(australia|austrália)\b/i,CA:/\b(canada|canadá)\b/i,GB:/\b(united kingdom|great britain|uk)\b/i,BR:/\b(brazil|brasil)\b/i,IT:/\b(italy|italia)\b/i,ES:/\b(spain|españa)\b/i,FR:/\b(france)\b/i,DE:/\b(germany|deutschland)\b/i,SE:/\b(sweden|sverige)\b/i};
-const LANGUAGE_SIGNALS={pt:/\b(frete|garantia|compre|economize|pacote)\b/gi,it:/\b(spedizione|garanzia|acquista|risparmia|pacchetto)\b/gi,es:/\b(envío|garantía|compra|ahorra|paquete)\b/gi,fr:/\b(livraison|garantie|achetez|économisez|offre)\b/gi,de:/\b(versand|garantie|kaufen|sparen|angebot)\b/gi,sv:/\b(frakt|garanti|köp|spara|erbjudande)\b/gi,en:/\b(shipping|guarantee|buy|save|bundle|package)\b/gi};
+const LANGUAGE_SIGNALS={pt:/\b(frete|garantia|compre|economize|pacote|pagamento|finalizar pedido|endereço|estado|cidade)\b/gi,it:/\b(spedizione|garanzia|acquista|risparmia|pacchetto|pagamento|indirizzo|ordine)\b/gi,es:/\b(envío|garantía|compra|ahorra|paquete|pago|dirección|pedido)\b/gi,fr:/\b(livraison|garantie|achetez|économisez|offre|paiement|adresse|commande)\b/gi,de:/\b(versand|garantie|kaufen|sparen|angebot|zahlung|adresse|bestellung)\b/gi,sv:/\b(frakt|garanti|köp|spara|erbjudande|betalning|adress|beställning)\b/gi,en:/\b(shipping|guarantee|buy|save|bundle|package|select quantity|payment|place order|secure checkout|order summary|shipping information|first name|last name|street address|zip code|credit card|complete secure purchase)\b/gi};
 const DEFAULT_COUNTRY={pt:'BR',it:'IT',es:'ES',fr:'FR',de:'DE',sv:'SE',en:'US'};
 const DEFAULT_LOCALE={BR:'pt-BR',IT:'it-IT',ES:'es-ES',FR:'fr-FR',DE:'de-DE',SE:'sv-SE',US:'en-US',AU:'en-AU',CA:'en-CA',GB:'en-GB'};
 const PRODUCT_STOP=/^(save|free|shipping|guarantee|order|buy|checkout|package|packages|bundle|bundles|best|value|basic|starter|premium|offer|official|today|total|regular|price|discount|cookies?|privacy|accept|decline|frete|garantia|compre|oferta|spedizione|garanzia|acquista|offerta|envío|garantía|compra|livraison|achetez|versand|kaufen|frakt|köp)$/i;
+const PRODUCT_NOISE_WORDS=new Set('a an and applied american apt apartment asked assured address all been buy card city complete contact country credit customer days delaware delivery discount edit enter expiration fast first free from full grab guaranteed house image information large last limited medium order payment phone proudly quantity reliable reships return safe salem secure selling small state street summary support today total try united vip worry zipcode zip code quality square feet'.split(/\s+/));
+const FOOTER_MARKER=/^(?:proudly american\b|quality assured products\b|our \d{1,3}[- ]day[^\n]*pledge\b|fast and reliable shipping\b|superior customer service\b|©\s*20\d{2}\b|terms\s*(?:&|and)\s*conditions\b|privacy policy\b|contact us\b)/i;
 const PACKAGE_LABEL=/^(?:(?:basic|starter|premium|popular|best\s+value|most\s+popular|single|standard|essentials?|base|completo|completa)\s*(?:bundle|package|pack|kit|pacchetto|pacote|paquete)?|(?:\d+|one|two|three|four|five|six|uno|due|tre)\s*[- ]?(?:month|months|month supply|bottle|bottles|unit|units|pack|packs|mese|mesi|mes|meses|mois|monat|monate|månad|månader)(?:\s*(?:bundle|package|pack|supply|kit|pacchetto|pacote|paquete))?)/i;
+const PACKAGE_DECORATION=/^(?:image\d*|check|arrow|banner|selling out)$/i;
 const PRICE_TOKEN=/(?:US\$|AU\$|CA\$|R\$|\$|€|£|kr)\s?\d{1,6}(?:[.,]\d{1,2})?|\d{1,6}(?:[.,]\d{1,2})?\s?(?:USD|AUD|CAD|BRL|EUR|GBP|SEK)\b/gi;
+
+function primaryOfferText(text){
+  const lines=String(text||'').split(/\r?\n/),footerIndex=lines.findIndex(line=>FOOTER_MARKER.test(clean(line)));
+  return (footerIndex<0?lines:lines.slice(0,footerIndex)).join('\n');
+}
 
 function inferLocale(text,url,currency){
   let explicitLanguage='',country='';
-  const source=`${url||''} ${text||''}`;
-  const locale=source.match(/\b(en|pt|it|es|fr|de|sv)[-_\/]([A-Z]{2})\b/i);
+  const localePattern=/\b(en|pt|it|es|fr|de|sv)[-_\/]([A-Z]{2})\b/i;
+  const locale=String(url||'').match(localePattern)||String(text||'').match(localePattern);
   if(locale){explicitLanguage=locale[1].toLowerCase();country=locale[2].toUpperCase()}
-  if(!country)for(const [code,pattern] of Object.entries(COUNTRY_NAMES))if(pattern.test(source)){country=code;break}
-  if(!country)country=currency==='AUD'?'AU':currency==='CAD'?'CA':currency==='GBP'?'GB':currency==='BRL'?'BR':currency==='SEK'?'SE':'';
   if(!explicitLanguage){
     const scores=Object.entries(LANGUAGE_SIGNALS).map(([code,pattern])=>[code,(text.match(pattern)||[]).length]).sort((a,b)=>b[1]-a[1]);
     if(scores[0]?.[1]>0)explicitLanguage=scores[0][0];
   }
-  if(!country&&explicitLanguage)country=DEFAULT_COUNTRY[explicitLanguage]||'';
-  const htmlLanguage=country?(DEFAULT_LOCALE[country]||`${explicitLanguage||'en'}-${country}`):(explicitLanguage?`${explicitLanguage}-${DEFAULT_COUNTRY[explicitLanguage]||explicitLanguage.toUpperCase()}`:'');
+  const currencyCountry={AUD:'AU',CAD:'CA',GBP:'GB',BRL:'BR',SEK:'SE'}[currency]||'';
+  if(!country)country=currencyCountry||(explicitLanguage?DEFAULT_COUNTRY[explicitLanguage]:'');
+  const htmlLanguage=country?`${explicitLanguage||DEFAULT_LOCALE[country]?.split('-')[0]||'en'}-${country}`:'';
   return {countryCode:country,htmlLanguage};
 }
 
@@ -77,15 +83,31 @@ function urlProductCandidate(url,raw){
 }
 
 function textProductCandidate(text,url){
-  const lines=String(text||'').split(/\r?\n/).map(clean).filter(Boolean);
-  const shortLine=lines.find(line=>line.length>=3&&line.length<=45&&!PRODUCT_STOP.test(line)&&!/[$€£%]|\b(?:shipping|guarantee|bundle|package|checkout|price|save|discount|plus|month|months|supply|bottle|bottles)\b/i.test(line)&&/^[A-Za-zÀ-ÿ0-9®™+.'’ -]+$/.test(line));
-  if(shortLine)return shortLine.replace(/[®™]/g,'').trim();
-  const urlCandidate=urlProductCandidate(url,text);
-  if(urlCandidate)return urlCandidate;
-  const tokens=[...String(text||'').matchAll(/\b[A-Z][A-Za-z0-9®™]*(?:[-'][A-Za-z0-9®™]+)*\b/g)].map((match,index)=>({value:match[0],index})).filter(item=>item.value.length>3&&!PRODUCT_STOP.test(item.value));
-  const scores=new Map();
-  for(const item of tokens){const key=item.value.toLowerCase(),current=scores.get(key)||{value:item.value,count:0,first:item.index};current.count+=1;scores.set(key,current)}
-  return [...scores.values()].sort((a,b)=>b.count-a.count||a.first-b.first)[0]?.value||'';
+  const offerText=primaryOfferText(text),lines=offerText.split(/\r?\n/).map(clean).filter(Boolean),scores=new Map();
+  const ignoredLine=/^(?:banner|image\d*|select quantity|shipping information|payment|place order|secure checkout|shipping|order summary|question:?|arrow|country|state|zip code|checkout)$/i;
+  const titleCaseLine=/^[A-Z][A-Za-z0-9®™]*(?:[ '-][A-Z][A-Za-z0-9®™]*){0,4}$/;
+  for(let index=0;index<lines.length;index++){
+    const original=lines[index];
+    if(ignoredLine.test(original))continue;
+    const normalized=original.replace(/\s*[+|]\s*\d{1,3}(?:[.,]\d+)?\s*%\s*off\b.*$/i,'')
+      .replace(/\s*[-–—]\s*\d{1,2}\s*$/,'').replace(/\s*\+\s*\d{1,3}(?:[.,]\d+)?\s*%\s*off\b.*$/i,'')
+      .replace(/\s*(?:\$|€|£|US\$|AU\$|CA\$)\s?\d[\d.,]*/gi,'').replace(/[®™]/g,'').replace(/\s+/g,' ').trim();
+    if(normalized.length<3||normalized.length>42||PRODUCT_STOP.test(normalized)||!titleCaseLine.test(normalized))continue;
+    const words=normalized.split(/\s+/);
+    if(words.some(word=>PRODUCT_NOISE_WORDS.has(word.toLowerCase())))continue;
+    const internalBrand=words.length===1&&/[a-z][A-Z]/.test(words[0]);
+    if(words.length<2&&!internalBrand)continue;
+    const key=normalized.toLowerCase(),current=scores.get(key)||{value:normalized,count:0,score:0,first:index};
+    current.count++;
+    const context=lines.slice(Math.max(0,index-2),Math.min(lines.length,index+4)).join(' ');
+    current.score+=/\b(?:qty|quantity|order summary|order now|buy now|shipping|\$\s?\d|\+\s*\d+%\s*off)\b/i.test(context)?2:1;
+    scores.set(key,current);
+  }
+  const ranked=[...scores.values()].sort((a,b)=>b.count-a.count||b.score-a.score||a.first-b.first);
+  const repeated=ranked.find(item=>item.count>=2);
+  if(repeated)return repeated.value;
+  const urlCandidate=urlProductCandidate(url,offerText);
+  return urlCandidate||ranked[0]?.value||'';
 }
 
 function priceEntries(lines){
@@ -99,12 +121,22 @@ function priceEntries(lines){
   return entries.filter((entry,index)=>entries.findIndex(other=>other.value===entry.value&&other.lineIndex===entry.lineIndex)===index);
 }
 
-function parsePackages(text){
+function parsePackages(text,productCandidate=''){
   const lines=String(text||'').split(/\r?\n/).map(clean).filter(Boolean),starts=[];
   lines.forEach((line,index)=>{const match=line.match(PACKAGE_LABEL);if(match)starts.push({index,label:clean(match[0])})});
   if(!starts.length&&lines.length===1){
     const match=lines[0].match(/\b(?:basic|starter|premium|best value|most popular)\s+(?:bundle|package|pack|kit)\b/i);
     if(match)starts.push({index:0,label:clean(match[0])});
+  }
+  if(!starts.length&&clean(productCandidate)){
+    const escaped=clean(productCandidate).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const productLabel=new RegExp(`^${escaped}(?:\\s*[-–—]\\s*\\d{1,2})?$`,'i'),candidates=[];
+    lines.forEach((line,index)=>{if(productLabel.test(line))candidates.push({index,label:line})});
+    candidates.forEach((start,position)=>{
+      const end=candidates[position+1]?.index??Math.min(lines.length,start.index+14);
+      const priceCount=unique(priceEntries(lines.slice(start.index,end)).map(item=>String(item.value))).length;
+      if(priceCount>=2)starts.push(start);
+    });
   }
   const packages=[];
   starts.forEach((start,position)=>{
@@ -118,7 +150,7 @@ function parsePackages(text){
       else{confidence='review';regularPrice=regularPrice??null;promoPrice=promoPrice??null}
     }
     if(regularPrice!==null&&promoPrice!==null&&regularPrice<=promoPrice){confidence='review';regularPrice=null;promoPrice=null}
-    const contents=block.slice(1).find(line=>!new RegExp(PRICE_TOKEN.source,'i').test(line)&&!/\b(add to cart|order now|buy now|free shipping|guarantee|save|discount|economize|risparmia)\b/i.test(line)&&line.length<=110)||'';
+    const contents=block.slice(1).find(line=>!new RegExp(PRICE_TOKEN.source,'i').test(line)&&!PACKAGE_DECORATION.test(line)&&!/\b(add to cart|order now|buy now|free shipping|guarantee|guaranteed|save|savings?|discount|economize|risparmia|\d{1,3}(?:[.,]\d+)?\s*%\s*off|try one today|lowest price guaranteed)\b/i.test(line)&&line.length<=110)||'';
     const entry={label:start.label,regularPrice,promoPrice,contents,confidence};
     if(!packages.some(item=>item.label.toLowerCase()===entry.label.toLowerCase()))packages.push(entry);
   });
@@ -126,12 +158,12 @@ function parsePackages(text){
 }
 
 export function parseOfferText(raw='',url=''){
-  const text=String(raw||''),flat=clean(text);
+  const text=String(raw||''),flat=clean(text),offerText=primaryOfferText(text),offerFlat=clean(offerText);
   const percentages=[...flat.matchAll(/\b(\d{1,2}(?:[.,]\d+)?)\s*%/g)].map(match=>number(match[1])).filter(value=>value>0&&value<100);
   const amounts=[...flat.matchAll(/(?:US\$|AU\$|CA\$|R\$|\$|€|£|kr)\s?\d{1,5}(?:[.,]\d{1,2})?/gi)].map(match=>clean(match[0]));
   const guarantee=[...flat.matchAll(/\b(\d{1,3})\s*[- ]?\s*(?:day|days|dias|giorni|jours|tage|dagar)\b[^.]{0,45}(?:guarantee|garantia|garanzia|garantie|garanti)/gi)].map(match=>Number(match[1]));
-  const currency=/AU\$/i.test(flat)?'AUD':/CA\$/i.test(flat)?'CAD':/R\$/i.test(flat)?'BRL':/€/i.test(flat)?'EUR':/£/i.test(flat)?'GBP':/\bkr\b/i.test(flat)?'SEK':/\$/.test(flat)?'USD':'';
-  const locale=inferLocale(text,url,currency),productCandidate=textProductCandidate(text,url),packages=parsePackages(text),calculatedDiscounts=packages.map(item=>calculateDiscount(item.regularPrice,item.promoPrice)).filter(value=>value!==null);
+  const currency=/AU\$/i.test(offerFlat)?'AUD':/CA\$/i.test(offerFlat)?'CAD':/R\$/i.test(offerFlat)?'BRL':/€/i.test(offerFlat)?'EUR':/£/i.test(offerFlat)?'GBP':/\bkr\b/i.test(offerFlat)?'SEK':/\$/.test(offerFlat)?'USD':'';
+  const locale=inferLocale(offerText,url,currency),productCandidate=textProductCandidate(offerText,url),packages=parsePackages(offerText,productCandidate),calculatedDiscounts=packages.map(item=>calculateDiscount(item.regularPrice,item.promoPrice)).filter(value=>value!==null);
   const highestPercent=[...percentages,...calculatedDiscounts].length?Math.max(...percentages,...calculatedDiscounts):null;
   return {
     percentages:unique(percentages.map(percent)),
@@ -145,7 +177,7 @@ export function parseOfferText(raw='',url=''){
     packages,
     guaranteeDays:guarantee.length?guarantee[0]:null,
     freeShippingCandidate:/\b(free shipping|frete gr[aá]tis|spedizione gratuita|env[ií]o gratis|livraison gratuite|kostenloser versand|fri frakt)\b/i.test(flat),
-    fastShippingCandidate:/\b(fast shipping|quick delivery|express shipping|envio r[aá]pido|spedizione rapida|env[ií]o r[aá]pido|exp[eé]dition rapide|schneller versand|snabb leverans)\b/i.test(flat),
+    fastShippingCandidate:/\b(fast shipping|fast delivery(?:\s+guaranteed)?|quick delivery|express shipping|envio r[aá]pido|spedizione rapida|env[ií]o r[aá]pido|exp[eé]dition rapide|schneller versand|snabb leverans)\b/i.test(flat),
     urgencyCandidate:/\b(today only|limited time|ends today|oggi|aujourd'hui|nur heute|idag|por tempo limitado|tempo limitato)\b/i.test(flat),
     scarcityCandidate:/\b(limited stock|while supplies last|few left|estoque limitado|scorte limitate|stock limit[eé]|begrenzter vorrat|begränsat lager)\b/i.test(flat)
   };
@@ -179,25 +211,73 @@ function headlineCandidates(data,t,best,lowest){
   return values;
 }
 
-function descriptionCandidates(data,t,best,lowest){
-  const p=clean(data.product),pct=best?percent(best,data.htmlLanguage):'',price=lowest?money(lowest.promoPrice,data.currency,data.htmlLanguage):'';
-  const values=[];
-  if(pct)values.push(`${t.save} ${pct}%${p?` · ${p}`:''}. ${t.choose} ${t.packages}. ${t.order} ${t.now}.`,`${pct}% ${t.off}${p?` · ${p}`:''}. ${t.view}.`,`${t.offer}: ${pct}% ${t.off}. ${t.choose} ${t.bundle}. ${t.checkout}.`);
-  if(price)values.push(`${t.price}: ${price}. ${t.view}. ${t.order} ${t.now}.`);
-  if(data.guaranteeDays)values.push(`${data.guaranteeDays} ${t.guarantee}. ${t.view}. ${t.order} ${t.today}.`,`${t.buy} ${p||t.offer}. ${data.guaranteeDays} ${t.guarantee}.`);
-  if(data.freeShipping==='confirmed')values.push(`${t.freeShipping}. ${t.choose} ${t.bundle}. ${t.order} ${t.today}.`);
-  if(data.fastShipping==='confirmed')values.push(`${t.fastShipping}. ${t.order} ${p||t.offer} ${t.today}.`);
-  values.push(
-    `${t.view}. ${t.choose} ${t.bundle}. ${t.checkout}.`,
-    `${t.choose} ${t.bundle}. ${t.view}. ${t.order} ${t.today}.`,
-    `${t.buy} ${p||t.offer} ${t.online}. ${t.view}.`,
-    `${t.offer}. ${pct?`${t.save} ${pct}%. `:''}${t.order} ${t.today}.`,
-    `${t.discount}${pct?`: ${pct}%`:''}. ${t.choose} ${t.packages}. ${t.buy} ${t.now}.`,
-    `${t.buy} ${p||t.offer}. ${pct?`${t.save} ${pct}%. `:''}${t.checkout}.`,
-    `${t.packages}${p?` · ${p}`:''}. ${t.view}. ${t.order} ${t.now}.`,
-    `${t.choose} ${t.packages}. ${t.buy} ${t.online}. ${t.checkout}.`,
-    `${t.details}. ${t.price}. ${t.packages}. ${t.order} ${t.today}.`
-  );
+const DESCRIPTION_VARIANTS={
+  en:(pct,p)=>[
+    `Save up to ${pct}% on ${p}. Choose your package and place your order online.`,
+    `Get up to ${pct}% off ${p}. Compare the available packages and order online now.`,
+    `Enjoy up to ${pct}% savings on ${p}. Select your preferred bundle and shop online.`,
+    `Up to ${pct}% off ${p}. Review the package options and complete your order online.`
+  ],
+  pt:(pct,p)=>[
+    `Economize até ${pct}% em ${p}. Escolha seu pacote e faça seu pedido online.`,
+    `Até ${pct}% de desconto em ${p}. Compare os pacotes disponíveis e compre online agora.`,
+    `Aproveite até ${pct}% de desconto em ${p}. Selecione seu pacote e finalize o pedido online.`,
+    `Até ${pct}% de economia em ${p}. Confira as opções de pacotes e compre online agora.`
+  ],
+  it:(pct,p)=>[
+    `Risparmia fino al ${pct}% su ${p}. Scegli il pacchetto e ordina online.`,
+    `Fino al ${pct}% di sconto su ${p}. Confronta i pacchetti e acquista online ora.`,
+    `Ottieni fino al ${pct}% di sconto su ${p}. Seleziona il pacchetto e completa l'ordine.`,
+    `Fino al ${pct}% di risparmio su ${p}. Scegli l'opzione e fai il tuo ordine online.`
+  ],
+  es:(pct,p)=>[
+    `Ahorra hasta un ${pct}% en ${p}. Elige tu paquete y haz tu pedido online.`,
+    `Hasta un ${pct}% de descuento en ${p}. Compara los paquetes y compra online ahora.`,
+    `Consigue hasta un ${pct}% de ahorro en ${p}. Elige una opción y completa tu pedido.`,
+    `Aprovecha hasta un ${pct}% de descuento en ${p}. Elige tu paquete y compra online.`
+  ],
+  fr:(pct,p)=>[
+    `Économisez jusqu'à ${pct} % sur ${p}. Choisissez un pack et commandez en ligne.`,
+    `Jusqu'à ${pct} % de réduction sur ${p}. Comparez les packs et achetez en ligne.`,
+    `Profitez d'économies jusqu'à ${pct} % sur ${p}. Choisissez votre pack et commandez.`,
+    `Obtenez jusqu'à ${pct} % de remise sur ${p}. Consultez les packs et passez commande.`
+  ],
+  de:(pct,p)=>[
+    `Sparen Sie bis zu ${pct} % bei ${p}. Wählen Sie Ihr Paket und bestellen Sie online.`,
+    `Bis zu ${pct} % Rabatt bei ${p}. Vergleichen Sie die Pakete und bestellen Sie online.`,
+    `Sichern Sie sich bis zu ${pct} % Ersparnis bei ${p}. Paket wählen und online bestellen.`,
+    `Bis zu ${pct} % sparen bei ${p}. Wählen Sie Ihr Paket und schließen Sie die Bestellung ab.`
+  ],
+  sv:(pct,p)=>[
+    `Spara upp till ${pct} % på ${p}. Välj ditt paket och beställ online.`,
+    `Upp till ${pct} % rabatt på ${p}. Jämför paketen och beställ online nu.`,
+    `Få upp till ${pct} % rabatt på ${p}. Välj ett paket och lägg din beställning online.`,
+    `Spara upp till ${pct} % på ${p}. Se paketen, välj ditt och gör din beställning online.`
+  ]
+};
+const OFFER_REFERENCE={en:'this offer',pt:'uma oferta',it:'questa offerta',es:'esta oferta',fr:'cette offre',de:'diesem Angebot',sv:'detta erbjudande'};
+const SAVING_VARIANT={
+  en:(saved,pct,label)=>`Save ${saved} on ${label} with ${pct}% off. Select this package and order online.`,
+  pt:(saved,pct,label)=>`Economize ${saved} no ${label} com ${pct}% de desconto. Escolha este pacote e peça online.`,
+  it:(saved,pct,label)=>`Risparmia ${saved} su ${label} con ${pct}% di sconto. Scegli il pacchetto e ordina online.`,
+  es:(saved,pct,label)=>`Ahorra ${saved} en ${label} con ${pct}% de descuento. Elige este paquete y compra online.`,
+  fr:(saved,pct,label)=>`Économisez ${saved} sur ${label} avec ${pct} % de remise. Choisissez ce pack et commandez en ligne.`,
+  de:(saved,pct,label)=>`Sparen Sie ${saved} bei ${label} mit ${pct} % Rabatt. Wählen Sie das Paket und bestellen Sie online.`,
+  sv:(saved,pct,label)=>`Spara ${saved} på ${label} med ${pct} % rabatt. Välj paketet och beställ online.`
+};
+
+function descriptionCandidates(data,best,packages){
+  if(!(best>0))return[];
+  const lang=language(data.htmlLanguage),pct=percent(best,data.htmlLanguage),spacedPct=['fr','de','sv'].includes(lang)?`${pct} %`:`${pct}%`;
+  const templates=DESCRIPTION_VARIANTS[lang]||DESCRIPTION_VARIANTS.en;
+  const values=[...templates(spacedPct,clean(data.product)||OFFER_REFERENCE[lang]||OFFER_REFERENCE.en)];
+  const bestPackage=packages.filter(item=>item.discountPercent!==null).sort((a,b)=>b.discountPercent-a.discountPercent)[0];
+  const saved=bestPackage?packageSavings(bestPackage):null;
+  const savingCopy=SAVING_VARIANT[lang]||SAVING_VARIANT.en;
+  if(saved!==null&&bestPackage?.label){
+    values.push(savingCopy(money(saved,data.currency,data.htmlLanguage),spacedPct,bestPackage.label));
+  }
+  if(clean(data.product))values.push(...templates(spacedPct,OFFER_REFERENCE[lang]||OFFER_REFERENCE.en));
   return values;
 }
 
@@ -250,7 +330,7 @@ export function generateAssets(data={}){
   if(headlines.length<30)warnings.push(`Apenas ${headlines.length} títulos únicos couberam no limite de 30 caracteres.`);
   const productCount=headlines.filter(item=>clean(data.product)&&item.toLocaleLowerCase().includes(clean(data.product).toLocaleLowerCase())).length;
   if(clean(data.product)&&productCount<10)warnings.push(`O nome do produto coube em ${productCount} títulos; o restante excederia 30 caracteres.`);
-  const descriptions=within(descriptionCandidates(data,t,best,lowest),90).slice(0,15);
+  const descriptions=within(descriptionCandidates(data,best,packages),90).filter(item=>[...item].length>=70).slice(0,15);
   const callouts=within([
     best?`${percent(best,data.htmlLanguage)}% ${t.off}`:'',data.freeShipping==='confirmed'?t.freeShipping:'',data.fastShipping==='confirmed'?t.fastShipping:'',data.guaranteeDays?`${data.guaranteeDays} ${t.guarantee}`:'',t.offer,t.packages,t.details,t.checkout
   ],25).slice(0,10);
@@ -272,6 +352,7 @@ function packageSentence(item,data){
 
 export function buildFicha(data={}){
   const t=dictionaryFor(data.htmlLanguage),product=clean(data.product)||'CONFIRMAR',packages=normalizePackages(data.packages);
+  const guaranteeStatus=data.guaranteeStatus||(data.guaranteeDays?'confirmed':'pending');
   const priced=packages.filter(item=>item.promoPrice!==null).sort((a,b)=>a.promoPrice-b.promoPrice),lowest=priced[0]||null;
   const shipping=[];
   if(data.freeShipping==='confirmed')shipping.push(t.shipFree);
@@ -279,11 +360,11 @@ export function buildFicha(data={}){
   if(data.fastShipping==='confirmed')shipping.push(t.shipFast);
   shipping.push(data.guaranteeDays?t.guaranteeDays(data.guaranteeDays):t.guaranteeNone);
   const pending=[];
-  if(data.freeShipping==='pending')pending.push('Confirm whether free shipping applies.');
-  if(data.fastShipping==='pending')pending.push('Confirm whether fast shipping applies.');
-  if(!data.guaranteeDays)pending.push('Confirm whether a guarantee applies and its current terms.');
-  if(data.urgencyConfirmed!=='confirmed')pending.push('No current promotional urgency has been validated for use.');
-  if(data.scarcityConfirmed!=='confirmed')pending.push('No current scarcity claim has been validated for use.');
+  if(!['confirmed','no'].includes(data.freeShipping))pending.push('Confirm whether free shipping applies.');
+  if(!['confirmed','no'].includes(data.fastShipping))pending.push('Confirm whether fast shipping applies.');
+  if(guaranteeStatus==='pending'||(guaranteeStatus==='confirmed'&&!data.guaranteeDays))pending.push('Confirm whether a guarantee applies and its current terms.');
+  if(!['confirmed','no'].includes(data.urgencyConfirmed||'pending'))pending.push('No current promotional urgency has been validated for use.');
+  if(!['confirmed','no'].includes(data.scarcityConfirmed||'pending'))pending.push('No current scarcity claim has been validated for use.');
   const mustContain=unique([product,...packages.map(item=>packageSentence(item,data)),data.freeShipping==='confirmed'?t.freeShipping:'',data.fastShipping==='confirmed'?t.fastShipping:'',data.guaranteeDays?`${data.guaranteeDays}-Day ${t.guarantee}`:'']);
   const mustNotContain=unique([
     'Unverified health or result claims','Results within a specific timeframe','Studies prove the results','Testimonials prove the results',data.freeShipping!=='confirmed'?'Free shipping is included':'',data.fastShipping!=='confirmed'?'Fast shipping is available':'',data.urgencyConfirmed!=='confirmed'?'Unverified urgency claims':'',data.scarcityConfirmed!=='confirmed'?'Unverified scarcity claims':''
@@ -316,7 +397,7 @@ export function buildFicha(data={}){
     faqs:[
       {question:t.lowest,answer:lowestAnswer},
       {question:t.shippingQ,answer:shipping.slice(0,-1).join(' ')||'CONFIRMAR'},
-      {question:t.guaranteeQ,answer:data.guaranteeDays?`${t.guaranteeDays(data.guaranteeDays)} ${t.review}`:'CONFIRMAR'},
+      {question:t.guaranteeQ,answer:data.guaranteeDays?`${t.guaranteeDays(data.guaranteeDays)} ${t.review}`:guaranteeStatus==='no'?t.guaranteeNone:'CONFIRMAR'},
       {question:t.optionsQ,answer:optionsAnswer}
     ],
     mustContain,
@@ -324,6 +405,24 @@ export function buildFicha(data={}){
     pending,
     assumptions:unique(['Cookie interface labels were generated from the selected visible language.','The neutral offer-details and FAQ labels were generated because no custom interface labels were supplied.'])
   };
+}
+
+export function generationBlockers(data={}){
+  const blockers=[];
+  if(!['confirmed','no'].includes(data.freeShipping))blockers.push('Frete grátis');
+  if(!['confirmed','no'].includes(data.fastShipping))blockers.push('Envio rápido');
+  const guaranteeStatus=data.guaranteeStatus||(data.guaranteeDays?'confirmed':'pending');
+  if(guaranteeStatus==='pending')blockers.push('Garantia: confirme o prazo ou marque que não há garantia exibida');
+  else if(guaranteeStatus==='confirmed'&&!data.guaranteeDays)blockers.push('Garantia: informe o prazo confirmado');
+  else if(guaranteeStatus==='no'&&data.guaranteeDays)blockers.push('Garantia: há um prazo preenchido, mas está marcada como não exibida');
+  else if(!['confirmed','no'].includes(guaranteeStatus))blockers.push('Garantia: selecione um estado de confirmação válido');
+  if(!['confirmed','no'].includes(data.urgencyConfirmed||'pending'))blockers.push('Urgência atual');
+  if(!['confirmed','no'].includes(data.scarcityConfirmed||'pending'))blockers.push('Escassez atual');
+  if(!clean(data.affiliateUrl)||clean(data.affiliateUrl).toUpperCase()==='CONFIRMAR')blockers.push('URL de afiliação');
+  if(!clean(data.destination)||clean(data.destination).toUpperCase()==='CONFIRMAR')blockers.push('Diretório da Pre-Sell');
+  if(!clean(data.currency))blockers.push('Moeda');
+  if(!normalizePackages(data.packages).some(item=>item.promoPrice!==null))blockers.push('Ao menos um pacote com preço promocional');
+  return unique(blockers);
 }
 
 export function formatSitelinks(items=[]){return items.map(item=>[item.text,item.line1,item.line2].join('\n')).join('\n\n')}

@@ -35,5 +35,6 @@ assert.ok(html.includes("sortKey='payout';sortDirection='desc';render()"),'Limpa
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'E-commerce GM não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecision'),'decisão da E-commerce GM não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
+assert.ok(html.includes('trends-sheet.css?v=20260922-curation-decision-colors'),'E-commerce GM não carrega os estilos compartilhados atualizados');
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim()&&!match[0].includes('type="module"'))new vm.Script(match[1]);
 console.log('top performance ui ok');

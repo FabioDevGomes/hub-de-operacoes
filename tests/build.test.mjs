@@ -51,9 +51,11 @@ assert.ok(timeCss.includes('.time-table .activity{min-width:210px;font-weight:40
 assert.ok(timeCss.includes('.time-table th,.time-table td{padding:5px 7px}') && timeCss.includes('.time-table .time-input,.time-table .time-select{padding:5px 7px}'),'linhas e controles do Diário não estão compactos');
 assert.ok(timeCss.includes('.time-table{font-size:.77rem}'),'tamanho da fonte da tabela do Diário foi alterado');
 assert.ok(timeViewModule.includes("class=\"${item.productive?'time-productive-row':''}\""),'linhas produtivas não são destacadas no Lançamento rápido');
-assert.ok(timeViewModule.includes("class=\"${row.item.productive?'time-productive-row':''}\""),'linhas produtivas não são destacadas na comparação do Histórico');
+assert.ok(timeViewModule.includes("row.item.productive?'time-productive-row ':''"),'linhas produtivas não são destacadas na comparação do Histórico');
 assert.ok(timeViewModule.includes("class=\"${entry.productiveSnapshot?'time-productive-row':''}\""),'lançamentos produtivos não são destacados no Histórico detalhado');
 assert.ok(timeCss.includes('.time-table tr.time-productive-row>td,.time-matrix tr.time-productive-row>td{background:rgba(52,211,153,.075)}'),'destaque verde sutil das linhas produtivas não foi definido');
+assert.ok(timeViewModule.includes("time-behavior-start")&&timeCss.includes('.time-matrix tr.time-behavior-start>td{border-top:3px solid #4b6686}'),'Histórico não separa atividades de duração dos itens comportamentais');
+assert.ok(timeViewModule.includes("item?.id==='item-alcool'")&&timeViewModule.includes("if(numeric===0)return'Não'")&&timeViewModule.includes("if(numeric===1)return'Sim'"),'Bebida alcoólica não é apresentada como Não/Sim no Histórico');
 assert.ok(html.includes('<title>Visão geral</title>'),'título inicial do navegador não acompanha a Visão Geral');
 assert.ok(html.includes("document.title=PanelViews.definition('cpa').title"),'título do navegador não acompanha as telas do painel');
 assert.ok(timeViewModule.includes("setBrowserTitle(`Meu Tempo · ${titles[tab]||'Diário'}`)"),'título do navegador não acompanha as abas do Meu Tempo');

@@ -3,12 +3,13 @@ import{readFile}from'node:fs/promises';
 import vm from'node:vm';
 
 const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8');
-assert.ok(html.includes('Top Performance'));
+assert.ok(html.includes('E-commerce GM'));
 assert.ok(html.includes('./top-performance-storage.mjs'));
 assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
 assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));
 assert.ok(html.includes('id="pasteArea"')&&html.includes('id="confirmImport"'));
 assert.ok(html.includes('id="movementFilter"'));
+assert.ok(html.includes('<option value="best">Best</option>')&&html.includes('badge-best'),'badges Best e Top não estão separados na interface');
 assert.ok(html.includes('data-panel="trends"')&&html.includes('data-panel="images"')&&html.includes('data-panel="history"'));
 assert.ok(html.includes('id="columnMenu"'));
 assert.ok(!html.includes('data-col="image"'));
@@ -31,5 +32,8 @@ assert.ok(html.includes('image-candidate-summary')&&html.includes('data-top-imag
 assert.ok(html.includes('badge-summary')&&html.includes("labels.join(' · ')")&&html.includes("tone=b.new?'new':b.top?'top':b.brandOk?'brand':''"),'badges não foram consolidados em uma pílula compacta');
 assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Payout não inicia ordenado do maior para o menor');
 assert.ok(html.includes("sortKey='payout';sortDirection='desc';render()"),'Limpar filtros não restaura a ordenação padrão por Payout');
+assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'E-commerce GM não reutiliza o seletor compartilhado de decisão');
+assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecision'),'decisão da E-commerce GM não abre o seletor pela coluna');
+assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim()&&!match[0].includes('type="module"'))new vm.Script(match[1]);
 console.log('top performance ui ok');

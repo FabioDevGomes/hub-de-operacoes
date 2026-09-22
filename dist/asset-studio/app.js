@@ -101,16 +101,42 @@ $$('[data-file]').forEach(input => input.addEventListener('change', () => {
   else setSlot(input.dataset.file, input.files[0]);
 }));
 
+function svgTextBlob(clipboardData) {
+  const text = clipboardData?.getData('image/svg+xml') || clipboardData?.getData('text/plain') || '';
+  return /^\s*<svg(?:\s|>)/i.test(text) ? new Blob([text], { type: 'image/svg+xml' }) : null;
+}
+
 window.addEventListener('paste', event => {
   const image = [...event.clipboardData.items].find(item => item.type.startsWith('image/'));
-  if (!image) return;
+  const blob = image?.getAsFile() || (state.activeSlot === 'favicon' ? svgTextBlob(event.clipboardData) : null);
+  if (!blob) return;
   event.preventDefault();
-  if (state.activeSlot === 'favicon') setFaviconBlob(image.getAsFile(), 'Favicon colado');
-  else setSlot(state.activeSlot, image.getAsFile());
+  if (state.activeSlot === 'favicon') setFaviconBlob(blob, 'Favicon colado');
+  else setSlot(state.activeSlot, blob);
 });
 
 async function blobToImage(blob) {
-  return createImageBitmap(blob);
+  if (blob.type === 'image/svg+xml' || /\.svg$/i.test(blob.name || '')) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const image = new Image();
+      image.decoding = 'async';
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('Não foi possível interpretar o SVG do favicon.'));
+        image.src = url;
+      });
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      if (!width || !height) throw new Error('O SVG não possui dimensões válidas.');
+      return { image, width, height, close: () => URL.revokeObjectURL(url) };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
+  const image = await createImageBitmap(blob);
+  return { image, width: image.width, height: image.height, close: () => image.close() };
 }
 
 function drawCover(ctx, image, width, height) {
@@ -133,7 +159,8 @@ function optimizeColorsBalanced(imageData) {
 }
 
 async function processBackground(file, spec) {
-  const image = await blobToImage(file);
+  const decoded = await blobToImage(file);
+  const image = decoded.image;
   const canvas = document.createElement('canvas');
   canvas.width = spec.width;
   canvas.height = spec.height;
@@ -143,16 +170,15 @@ async function processBackground(file, spec) {
   ctx.filter = 'none';
   const pixels = ctx.getImageData(0, 0, spec.width, spec.height);
   ctx.putImageData(optimizeColorsBalanced(pixels), 0, 0);
-  image.close();
+  decoded.close();
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }
 
 async function processFavicon(blob) {
-  const image = await blobToImage(blob);
-  const width = image.width;
-  const height = image.height;
+  const decoded = await blobToImage(blob);
+  const { image, width, height } = decoded;
   if (blob.type === 'image/png') {
-    image.close();
+    decoded.close();
     return { blob, width, height };
   }
   const canvas = document.createElement('canvas');
@@ -160,13 +186,24 @@ async function processFavicon(blob) {
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(image, 0, 0);
-  image.close();
-  const converted = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  decoded.close();
+  const converted = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('Não foi possível converter o favicon para PNG.')), 'image/png'));
   return { blob: converted, width, height };
 }
 
-function setFaviconBlob(blob, label = 'Imagem selecionada') {
-  if (!blob?.type?.startsWith('image/')) return;
+async function setFaviconBlob(blob, label = 'Imagem selecionada') {
+  if (!blob || (!blob.type?.startsWith('image/') && !/\.svg$/i.test(blob.name || ''))) return;
+  $('#faviconMessage').textContent = 'Validando favicon…';
+  try {
+    const decoded = await blobToImage(blob);
+    decoded.close();
+  } catch (error) {
+    state.favicon = null;
+    $('#faviconMessage').textContent = error.message;
+    $('#faviconMessage').className = 'hint error';
+    updateReadyState();
+    return;
+  }
   state.favicon = blob;
   const previewUrl = URL.createObjectURL(blob);
   const preview = $('#faviconPreview');

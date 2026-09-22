@@ -14,4 +14,7 @@ assert.ok(html.includes('class="product-cell-layout"'),'ação de ocultar não e
 assert.ok(html.includes("import * as TrendsUI from '../trends-ui.mjs'"),'Lista de Gerente não reutiliza o módulo visual de Trends');
 assert.ok(html.includes('id="managerProductAgeActions"')&&html.includes('id="managerTrendsResults"'),'controles compartilhados de Trends ausentes na Lista de Gerente');
 assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Pagamento não inicia ordenado do maior para o menor');
+assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'Lista de Gerente não reutiliza o seletor compartilhado de decisão');
+assert.ok(html.includes('data-open-manager-decision')&&html.includes('openManagerDecision'),'decisão manual não abre o seletor pela coluna');
+assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
 console.log('manager list ui ok');

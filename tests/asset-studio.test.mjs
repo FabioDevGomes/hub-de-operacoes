@@ -5,12 +5,17 @@ const html=await readFile(new URL('../dist/asset-studio/index.html',import.meta.
 const app=await readFile(new URL('../dist/asset-studio/app.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../dist/asset-studio/styles.css',import.meta.url),'utf8');
 
-assert.ok(html.includes('Conversão para PNG, mantendo tamanho e fundo'));
+assert.ok(html.includes('PNG, JPG, WebP ou SVG · mantém tamanho e fundo'));
+assert.ok(html.includes('accept="image/*,.svg,image/svg+xml"'),'seletor do favicon não aceita SVG explicitamente');
 assert.ok(!html.includes('id="removeLightBg"'),'controle de remoção de fundo ainda aparece');
 assert.ok(!html.includes('16 × 16'),'instrução de redimensionamento ainda aparece');
 assert.ok(app.includes('canvas.width = width')&&app.includes('canvas.height = height'),'favicon não preserva as dimensões originais');
 assert.ok(app.includes("if (blob.type === 'image/png')")&&app.includes('return { blob, width, height }'),'PNG original não é preservado sem recodificação');
-assert.ok(app.includes("canvas.toBlob(resolve, 'image/png')"),'favicon não é convertido para PNG');
+assert.ok(app.includes("canvas.toBlob(result => result ? resolve(result)")&&app.includes("'image/png'"),'favicon não é convertido para PNG');
+assert.ok(app.includes("blob.type === 'image/svg+xml'")&&app.includes("/\\.svg$/i.test(blob.name || '')"),'arquivo SVG não usa decodificação compatível');
+assert.ok(app.includes("getData('image/svg+xml')")&&app.includes("new Blob([text], { type: 'image/svg+xml' })"),'SVG colado como texto não é reconhecido');
+assert.ok(app.includes("image.onerror = () => reject(new Error('Não foi possível interpretar o SVG do favicon.'))"),'falha de leitura do SVG não é informada');
+assert.ok(app.includes("async function setFaviconBlob")&&app.includes("$('#faviconMessage').textContent = 'Validando favicon…'"),'favicon SVG não é validado no momento da entrada');
 assert.ok(!app.includes('removeLightBackground'),'remoção de fundo ainda está ativa');
 for(const group of['operation','curation','products'])assert.ok(html.includes(`data-sidebar-group="${group}"`),`grupo lateral ${group} ausente`);
 assert.ok(html.includes('painel-sidebar-grupo-aberto-v1'),'menu lateral não compartilha o acordeão do painel');

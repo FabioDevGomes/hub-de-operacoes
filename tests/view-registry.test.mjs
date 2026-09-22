@@ -13,6 +13,7 @@ assert.equal(views.resolveRoute('/?view=tested').id,'tested');
 assert.equal(views.resolveRoute('?view=cpa').id,'cpa');
 assert.equal(views.resolveRoute('/?view=accounts').id,'accounts');
 assert.equal(views.resolveRoute('/?view=time').id,'time');
+assert.equal(views.resolveRoute('/?view=copy').id,'copy');
 assert.equal(views.resolveRoute('/?view=presell').id,'presell');
 assert.equal(views.resolveRoute('/?view=desconhecida').id,'totals');
 
@@ -21,11 +22,13 @@ assert.equal(views.urlFor('tested','/'),'/?view=tested');
 assert.equal(views.urlFor('cpa','/'),'/?view=cpa');
 assert.equal(views.urlFor('accounts','/'),'/?view=accounts');
 assert.equal(views.urlFor('time','/'),'/?view=time');
+assert.equal(views.urlFor('copy','/'),'/?view=copy');
 assert.equal(views.urlFor('presell','/'),'/?view=presell');
 
 assert.equal(views.isReserved('time'),false);
 assert.equal(views.definition('time').enabled,true);
 assert.equal(views.definition('time').sectionId,'timeView');
+assert.equal(views.definition('copy').sectionId,'copyFichaView');
 assert.equal(views.definition('presell').sectionId,'presellView');
 assert.equal(Array.from(views.enabledViews()).some(view=>view.id==='time'),true);
 

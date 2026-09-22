@@ -7,6 +7,9 @@ const databaseModule=await readFile(new URL('../dist/database.js',import.meta.ur
 const timeViewModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const timeStorageModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-storage.mjs',import.meta.url),'utf8');
 const timeCss=await readFile(new URL('../dist/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
+const copyFichaView=await readFile(new URL('../dist/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
+const copyFichaDomain=await readFile(new URL('../dist/copy-ficha/copy-ficha-domain.mjs',import.meta.url),'utf8');
+const copyFichaCss=await readFile(new URL('../dist/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
 assert.ok(html.includes('data:image/png;base64,'),'favicon ausente');
 assert.ok(html.includes('Carregar base JSON'),'controle de base ausente');
 assert.ok(html.includes('Registrar venda'),'registro provisório de venda ausente');
@@ -17,6 +20,13 @@ assert.ok(html.includes('id="accountReportNav">Mapa por conta</button>'),'menu d
 assert.ok(html.includes('id="accountReportView"'),'tela do relatório por conta ausente');
 assert.ok(html.includes('id="timeNav">Meu Tempo</button>'),'menu Meu Tempo ausente');
 assert.ok(html.includes('id="presellNav">Gerador de Pre-Sell</button>'),'menu Gerador de Pre-Sell ausente');
+assert.ok(html.includes('id="copyFichaNav">Copy e Ficha</button>'),'menu Copy e Ficha ausente');
+assert.ok(html.includes('id="copyFichaView"'),'tela Copy e Ficha ausente');
+assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=1')"),'módulo Copy e Ficha não é carregado sob demanda');
+assert.ok(copyFichaView.includes('Gerar copy e ficha')&&copyFichaView.includes('URL de afiliação (sempre separada)'),'fluxo Copy e Ficha não foi copiado para dist');
+assert.ok(copyFichaView.includes("applyDetected(root,'copyProduct',result.productCandidate)")&&copyFichaView.includes("state.packages=result.packages;renderPackages(root)"),'análise não preenche automaticamente os dados e pacotes confirmados');
+assert.ok(copyFichaDomain.includes('export function buildFicha')&&copyFichaDomain.includes('mustContain'),'contrato JSON da ficha não foi copiado para dist');
+assert.ok(copyFichaCss.includes('.copy-ficha-shell'),'CSS da tela Copy e Ficha não foi copiado para dist');
 assert.ok(html.includes('href="asset-studio/">Asset Studio</a>'),'menu Asset Studio ausente');
 assert.ok(html.includes('id="timeView"'),'tela Meu Tempo ausente');
 assert.ok(html.includes('data-sidebar-group="operation"'),'grupo expansível Operação ausente');

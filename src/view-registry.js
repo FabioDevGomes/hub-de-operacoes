@@ -6,6 +6,7 @@
     cpa:Object.freeze({id:'cpa',query:'cpa',enabled:true,activeView:'cpa-report',sectionId:'cpaReportView',navId:'cpaReportNav',title:'Análise por Faixa de CPA',subtitle:'Distribuição, desempenho e validação das faixas configuradas'}),
     accounts:Object.freeze({id:'accounts',query:'accounts',enabled:true,activeView:'account-report',sectionId:'accountReportView',navId:'accountReportNav',title:'Mapa de Produtos por Conta',subtitle:'Visão consolidada de onde cada campanha está e de suas principais métricas'}),
     time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'}),
+    copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Copy e Ficha',subtitle:'Cole a oferta, valide os dados e gere ativos e ficha JSON'}),
     presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'presell',sectionId:'presellView',navId:'presellNav',title:'Gerador de Pre-Sell',subtitle:'Valide a ficha e crie arquivos locais com as proteções obrigatórias'})
   });
   function definition(id){return VIEWS[String(id||'')]||null}

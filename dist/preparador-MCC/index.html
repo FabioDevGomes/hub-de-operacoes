@@ -164,15 +164,27 @@
       <nav class="hub-nav" aria-label="Menu principal">
         <div class="hub-nav-group" data-sidebar-group="operation">
           <button class="hub-nav-toggle" type="button" data-sidebar-toggle="operation" aria-expanded="true" aria-controls="preparatorOperationNav"><span>Operação</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
-          <div id="preparatorOperationNav" class="hub-nav-body"><a href="/">Visão geral</a><a href="/?view=tested">Produtos testados</a><a class="active" href="/preparador-MCC/" aria-current="page">Preparador MCC</a><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=time">Meu Tempo</a><a href="/asset-studio/">Asset Studio</a><a href="/?view=copy">Copy e Ficha</a><a href="/?view=presell">Gerador de Pre-Sell</a></div>
+          <div id="preparatorOperationNav" class="hub-nav-body"><a href="/">Visão geral</a><a class="active" href="/preparador-MCC/" aria-current="page">Preparador MCC</a><a href="/?view=macro">Controle Macro</a></div>
+        </div>
+        <div class="hub-nav-group collapsed" data-sidebar-group="analysis">
+          <button class="hub-nav-toggle" type="button" data-sidebar-toggle="analysis" aria-expanded="false" aria-controls="preparatorAnalysisNav"><span>Análises</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
+          <div id="preparatorAnalysisNav" class="hub-nav-body"><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=observability">Observabilidade decisória</a></div>
+        </div>
+        <div class="hub-nav-group collapsed" data-sidebar-group="personal">
+          <button class="hub-nav-toggle" type="button" data-sidebar-toggle="personal" aria-expanded="false" aria-controls="preparatorPersonalNav"><span>Pessoal</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
+          <div id="preparatorPersonalNav" class="hub-nav-body"><a href="/?view=time">Meu Tempo</a></div>
         </div>
         <div class="hub-nav-group collapsed" data-sidebar-group="curation">
           <button class="hub-nav-toggle" type="button" data-sidebar-toggle="curation" aria-expanded="false" aria-controls="preparatorCurationNav"><span>Curadoria</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
           <div id="preparatorCurationNav" class="hub-nav-body"><a href="/curadoria/">Radar SpyHero</a><a href="/curadoria/gerentes/">Lista de Gerente</a><a href="/curadoria/top-performance/">E-commerce GM</a></div>
         </div>
+        <div class="hub-nav-group collapsed" data-sidebar-group="creation">
+          <button class="hub-nav-toggle" type="button" data-sidebar-toggle="creation" aria-expanded="false" aria-controls="preparatorCreationNav"><span>Criação de ofertas</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
+          <div id="preparatorCreationNav" class="hub-nav-body"><a href="/?view=copy">Copy e Ficha</a><a href="/?view=presell">Gerador de Pre-Sell</a><a href="/asset-studio/">Asset Studio</a></div>
+        </div>
         <div class="hub-nav-group collapsed" data-sidebar-group="products">
           <button class="hub-nav-toggle" type="button" data-sidebar-toggle="products" aria-expanded="false" aria-controls="preparatorProductsNav"><span>Produtos</span><span class="hub-nav-chevron" aria-hidden="true">›</span></button>
-          <div id="preparatorProductsNav" class="hub-nav-body"><a href="/">Abrir lista de campanhas</a></div>
+          <div id="preparatorProductsNav" class="hub-nav-body"><a href="/?view=tested">Produtos testados</a><a href="/">Diário do produto</a></div>
         </div>
       </nav>
       <div class="hub-sidebar-foot"><b>● Dados locais</b><br>As bases ficam separadas e persistentes neste navegador.</div>
@@ -276,6 +288,7 @@
       date: ['data', 'dia', 'day', 'date'],
       campaign: ['campanha', 'nome da campanha', 'campaign', 'campaign name'],
       account: ['conta', 'nome da conta', 'account', 'account name', 'cliente', 'nome do cliente'],
+      target_geo: ['target geo', 'targeting geo', 'geo codes', 'codigos geo'],
       campaign_state: ['status da campanha', 'estado da campanha', 'campaign status', 'campaign state'],
       status: ['status', 'estado', 'status de qualificacao', 'qualification status'],
       currency: ['moeda', 'currency', 'codigo da moeda', 'currency code'],
@@ -302,8 +315,9 @@
     let previewRole = 'd1';
     let currentFilename = 'manifesto_mcc.json';
     const PANEL_DB_NAME = 'painel-campanhas';
-    const PANEL_DB_VERSION = 2;
+    const PANEL_DB_VERSION = 3;
     const PANEL_BASE_STORE = 'bases';
+    const PANEL_EVENT_STORE = 'events';
     const PANEL_BASE_KEY = 'atual';
     const PANEL_USD_BRL_RATE = 5.10;
 
@@ -322,6 +336,8 @@
     function initSidebarAccordion() {
       let saved = '';
       try { saved = localStorage.getItem(SIDEBAR_GROUP_KEY) || ''; } catch {}
+      const activeGroup = q('[data-sidebar-group] a.active')?.closest('[data-sidebar-group]')?.dataset.sidebarGroup;
+      if (activeGroup) saved = activeGroup;
       if (!q(`[data-sidebar-group="${saved}"]`)) saved = 'operation';
       setSidebarGroup(saved, false);
       for (const toggle of qa('[data-sidebar-toggle]')) toggle.addEventListener('click', () => {
@@ -388,6 +404,7 @@
         request.onupgradeneeded = () => {
           if (!request.result.objectStoreNames.contains(PANEL_BASE_STORE)) request.result.createObjectStore(PANEL_BASE_STORE);
           if (!request.result.objectStoreNames.contains('catalogos')) request.result.createObjectStore('catalogos');
+          if (!request.result.objectStoreNames.contains(PANEL_EVENT_STORE)) request.result.createObjectStore(PANEL_EVENT_STORE, { keyPath:'event_id' });
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
@@ -396,16 +413,34 @@
 
     function readPanelBase(db) {
       return new Promise((resolve, reject) => {
-        const request = db.transaction(PANEL_BASE_STORE, 'readonly').objectStore(PANEL_BASE_STORE).get(PANEL_BASE_KEY);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
+        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE], 'readonly');
+        const baseRequest = transaction.objectStore(PANEL_BASE_STORE).get(PANEL_BASE_KEY);
+        const eventRequest = transaction.objectStore(PANEL_EVENT_STORE).getAll();
+        let base = null, events = [];
+        baseRequest.onsuccess = () => { base = baseRequest.result || null; };
+        eventRequest.onsuccess = () => { events = eventRequest.result || []; };
+        transaction.oncomplete = () => {
+          if (base) base.event_log = window.CampaignDatabase?.mergeEventLogs
+            ? window.CampaignDatabase.mergeEventLogs(base, events).event_log
+            : [...new Map([...(base.event_log || []), ...events].filter(item => item?.event_id).map(item => [item.event_id, item])).values()];
+          resolve(base);
+        };
+        transaction.onerror = () => reject(transaction.error);
       });
     }
 
     function writePanelBase(db, base) {
       return new Promise((resolve, reject) => {
-        const transaction = db.transaction(PANEL_BASE_STORE, 'readwrite');
-        transaction.objectStore(PANEL_BASE_STORE).put(base, PANEL_BASE_KEY);
+        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE], 'readwrite');
+        const persistedBase = panelClone(base), eventStore = transaction.objectStore(PANEL_EVENT_STORE);
+        const events = persistedBase.event_log || [];
+        delete persistedBase.event_log;
+        transaction.objectStore(PANEL_BASE_STORE).put(persistedBase, PANEL_BASE_KEY);
+        const keys = eventStore.getAllKeys();
+        keys.onsuccess = () => {
+          const existing = new Set(keys.result.map(String));
+          for (const event of events) if (event?.event_id && !existing.has(String(event.event_id))) eventStore.add(event);
+        };
         transaction.oncomplete = resolve;
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error || new Error('A atualização da base foi cancelada.'));
@@ -447,7 +482,7 @@
     }
     function normalizePanelBase(base) {
       const value = base?.schema === 'base_campanhas_v1' ? panelClone(base) : { schema:'base_campanhas_v1', atualizado_em:new Date().toISOString(), manifesto_atual:null, campanhas:[], diario:[], campos_operacionais:[], importacoes:[] };
-      value.campanhas ??= []; value.diario ??= []; value.campos_operacionais ??= []; value.importacoes ??= [];
+      value.campanhas ??= []; value.diario ??= []; value.campos_operacionais ??= []; value.importacoes ??= []; value.event_log ??= [];
       return value;
     }
     function ensurePanelCampaign(base, exactName) {
@@ -511,9 +546,10 @@
         const original = databaseApi.normalize(await readPanelBase(db));
         const reuseIssues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(original, manifest);
         if (reuseIssues.length) { const error = new Error('Há campanha usando uma numeração que já pertenceu a outro nome. Corrija o nome na MCC e importe um novo CSV.'); error.code = 'CAMPAIGN_NUMBER_REUSE'; error.numberingIssues = reuseIssues; throw error; }
-        const preview = databaseApi.importManifest(original, manifest, panelManifestRow);
+        const importOptions = { source:'preparador_mcc' };
+        const preview = databaseApi.importManifest(original, manifest, panelManifestRow, importOptions);
         const overwrite = preview.conflicts.length > 0;
-        const applied = overwrite ? databaseApi.importManifest(original, manifest, panelManifestRow, { overwrite:true }) : preview;
+        const applied = overwrite ? databaseApi.importManifest(original, manifest, panelManifestRow, { ...importOptions, overwrite:true }) : preview;
         const base = applied.base;
         delete base.produtos_ocultos;
         delete base.produtos_aliases;
@@ -669,7 +705,7 @@
         Object.entries(mapping).forEach(([key, index]) => raw[key] = row[index]);
         let currency = currencyFromText(raw.currency);
         if (!currency) for (const key of ['cost','avg_cost','budget']) { currency = currencyFromText(raw[key]); if (currency) break; }
-        records.push({ linha_origem:line, nome_campanha_exato:campaign, data_linha:rowDates.length === 1 ? rowDates[0] : null, conta:raw.account?.trim() || null, estado_campanha:raw.campaign_state?.trim() || null, status_qualificacao:raw.status?.trim() || null, status_campanha:raw.status?.trim() || raw.campaign_state?.trim() || null, moeda:currency || raw.currency?.trim() || null, raw });
+        records.push({ linha_origem:line, nome_campanha_exato:campaign, data_linha:rowDates.length === 1 ? rowDates[0] : null, conta:raw.account?.trim() || null, estado_campanha:raw.campaign_state?.trim() || null, status_qualificacao:raw.status?.trim() || null, status_campanha:raw.status?.trim() || raw.campaign_state?.trim() || null, geo:raw.target_geo?.trim() || null, moeda:currency || raw.currency?.trim() || null, raw });
       });
       const byName = new Map();
       records.forEach(record => { const arr = byName.get(record.nome_campanha_exato) || []; arr.push(record.linha_origem); byName.set(record.nome_campanha_exato, arr); });
@@ -813,8 +849,8 @@
         if (r1 && r0 && r1.moeda && r0.moeda && r1.moeda !== r0.moeda) { pending = true; observations.push('Mesmo nome exato, mas moedas diferentes entre D−1 e D0.'); }
         const date1 = r1?.data_linha || (d1?.dates.length === 1 ? d1.dates[0] : null);
         const date0 = r0?.data_linha || (d0.dates.length === 1 ? d0.dates[0] : null);
-        const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), status_campanha:stateValue(r1?.status_campanha), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
-        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
+        const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), estado_campanha:stateValue(r1?.estado_campanha), status_qualificacao:stateValue(r1?.status_qualificacao), status_campanha:stateValue(r1?.status_campanha), geo:stateValue(r1?.geo), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
+        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
         const todayCost = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), custo_total_destino_totais_coluna_M:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
         if ([metrics.impressoes, metrics.cliques_google, metrics.conversoes, metrics.valor_conversao].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D−1.'); }
         if ([metrics0.impressoes, metrics0.cliques_google, metrics0.conversoes, metrics0.valor_conversao, metrics0.custo_medio, metrics0.porcentagem_impressao_primeira_posicao, metrics0.porcentagem_impressao_parte_superior, metrics0.orcamento_diario, metrics0.custo_total].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D0.'); }

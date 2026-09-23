@@ -31,3 +31,4 @@ await cp(resolve(root, "src/meu-tempo"), resolve(root, "dist/meu-tempo"), { recu
 await cp(resolve(root, "src/copy-ficha"), resolve(root, "dist/copy-ficha"), { recursive: true });
 await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursive: true });
 await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });
+await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro"), { recursive: true });

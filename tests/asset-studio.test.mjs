@@ -17,7 +17,14 @@ assert.ok(app.includes("getData('image/svg+xml')")&&app.includes("new Blob([text
 assert.ok(app.includes("image.onerror = () => reject(new Error('Não foi possível interpretar o SVG do favicon.'))"),'falha de leitura do SVG não é informada');
 assert.ok(app.includes("async function setFaviconBlob")&&app.includes("$('#faviconMessage').textContent = 'Validando favicon…'"),'favicon SVG não é validado no momento da entrada');
 assert.ok(!app.includes('removeLightBackground'),'remoção de fundo ainda está ativa');
-for(const group of['operation','curation','products'])assert.ok(html.includes(`data-sidebar-group="${group}"`),`grupo lateral ${group} ausente`);
+for(const group of['operation','analysis','personal','curation','creation','products'])assert.ok(html.includes(`data-sidebar-group="${group}"`),`grupo lateral ${group} ausente`);
+const personal=html.match(/data-sidebar-group="personal"[\s\S]*?<\/div>\s*<\/div>/)?.[0]||'';
+assert.ok(personal.includes('Meu Tempo')&&!personal.includes('Observabilidade decisória'),'grupo pessoal deve conter Meu Tempo no Asset Studio');
+const analysis=html.match(/data-sidebar-group="analysis"[\s\S]*?<\/div>\s*<\/div>/)?.[0]||'';
+assert.ok(analysis.includes('Observabilidade decisória')&&analysis.includes('/?view=cpa')&&analysis.includes('/?view=accounts'),'grupo de análises incompleto no Asset Studio');
+const products=html.match(/data-sidebar-group="products"[\s\S]*?<\/div>\s*<\/div>/)?.[0]||'';
+assert.ok(products.includes('Produtos testados')&&products.includes('Diário do produto'),'grupo Produtos incompleto no Asset Studio');
+assert.ok(html.includes('/?view=macro')&&html.includes('Controle Macro'),'Controle Macro ausente no grupo Operação do Asset Studio');
 assert.ok(html.includes('painel-sidebar-grupo-aberto-v1'),'menu lateral não compartilha o acordeão do painel');
 assert.ok(html.includes('class="active" href="/asset-studio/"'),'Asset Studio não fica ativo no próprio menu');
 assert.ok(css.includes('color-scheme: dark')&&css.includes('grid-template-columns: 224px minmax(0, 1fr)'),'tema escuro ou largura do menu lateral ausente');

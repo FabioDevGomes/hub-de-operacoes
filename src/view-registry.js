@@ -2,9 +2,11 @@
   const DEFAULT_VIEW_ID='totals';
   const VIEWS=Object.freeze({
     totals:Object.freeze({id:'totals',query:null,enabled:true,activeView:'totals',sectionId:'totalsView',navId:'totalsNav',title:'Visão geral',subtitle:'Acompanhamento das campanhas ativas'}),
+    macro:Object.freeze({id:'macro',query:'macro',enabled:true,activeView:'control-macro',sectionId:'controlMacroView',navId:'controlMacroNav',title:'Controle Macro',subtitle:'Resumo diário do desempenho da operação'}),
     tested:Object.freeze({id:'tested',query:'tested',enabled:true,activeView:'tested-products',sectionId:'testedProductsView',navId:'testedProductsNav',title:'Produtos testados',subtitle:'Lista consolidada de todo o histórico'}),
     cpa:Object.freeze({id:'cpa',query:'cpa',enabled:true,activeView:'cpa-report',sectionId:'cpaReportView',navId:'cpaReportNav',title:'Análise por Faixa de CPA',subtitle:'Distribuição, desempenho e validação das faixas configuradas'}),
     accounts:Object.freeze({id:'accounts',query:'accounts',enabled:true,activeView:'account-report',sectionId:'accountReportView',navId:'accountReportNav',title:'Mapa de Produtos por Conta',subtitle:'Visão consolidada de onde cada campanha está e de suas principais métricas'}),
+    observability:Object.freeze({id:'observability',query:'observability',enabled:true,activeView:'observability',sectionId:'observabilityView',navId:'observabilityNav',title:'Observabilidade Decisória Operacional',subtitle:'Auditoria dos fatos e snapshots registrados nas sincronizações'}),
     time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'}),
     copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Copy e Ficha',subtitle:'Cole a oferta, valide os dados e gere ativos e ficha JSON'}),
     presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'presell',sectionId:'presellView',navId:'presellNav',title:'Gerador de Pre-Sell',subtitle:'Valide a ficha e crie arquivos locais com as proteções obrigatórias'})

@@ -14,7 +14,15 @@
       <nav class="sidebar-nav" aria-label="Menu principal">
         <div class="sidebar-nav-group" data-sidebar-group="operation">
           <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="operation" aria-expanded="true"><span>Operação</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
-          <div class="sidebar-nav-body"><a href="/">Visão geral</a><a href="/?view=tested">Produtos testados</a><a href="/preparador-MCC/">Preparador MCC</a><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=time">Meu Tempo</a><a class="active" href="/asset-studio/" aria-current="page">Asset Studio</a><a href="/?view=copy">Copy e Ficha</a><a href="/?view=presell">Gerador de Pre-Sell</a></div>
+          <div class="sidebar-nav-body"><a href="/">Visão geral</a><a href="/preparador-MCC/">Preparador MCC</a><a href="/?view=macro">Controle Macro</a></div>
+        </div>
+        <div class="sidebar-nav-group collapsed" data-sidebar-group="analysis">
+          <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="analysis" aria-expanded="false"><span>Análises</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
+          <div class="sidebar-nav-body"><a href="/?view=cpa">Análise por faixa de CPA</a><a href="/?view=accounts">Mapa por conta</a><a href="/?view=observability">Observabilidade decisória</a></div>
+        </div>
+        <div class="sidebar-nav-group collapsed" data-sidebar-group="personal">
+          <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="personal" aria-expanded="false"><span>Pessoal</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
+          <div class="sidebar-nav-body"><a href="/?view=time">Meu Tempo</a></div>
         </div>
         <div class="sidebar-nav-group collapsed" data-sidebar-group="curation">
           <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="curation" aria-expanded="false"><span>Curadoria</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
@@ -22,7 +30,11 @@
         </div>
         <div class="sidebar-nav-group collapsed" data-sidebar-group="products">
           <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="products" aria-expanded="false"><span>Produtos</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
-          <div class="sidebar-nav-body"><a href="/">Abrir lista de campanhas</a></div>
+          <div class="sidebar-nav-body"><a href="/?view=tested">Produtos testados</a><a href="/">Diário do produto</a></div>
+        </div>
+        <div class="sidebar-nav-group collapsed" data-sidebar-group="creation">
+          <button class="sidebar-nav-toggle" type="button" data-sidebar-toggle="creation" aria-expanded="false"><span>Criação de ofertas</span><span class="sidebar-nav-chevron" aria-hidden="true">›</span></button>
+          <div class="sidebar-nav-body"><a href="/?view=copy">Copy e Ficha</a><a href="/?view=presell">Gerador de Pre-Sell</a><a class="active" href="/asset-studio/" aria-current="page">Asset Studio</a></div>
         </div>
       </nav>
       <div class="sidebar-foot"><b>● Dados locais</b><br>Processamento realizado neste navegador.</div>
@@ -141,6 +153,6 @@
     </main>
   </div>
   <script src="app.js"></script>
-  <script>(()=>{const key='painel-sidebar-grupo-aberto-v1',groups=()=>[...document.querySelectorAll('[data-sidebar-group]')];function open(name,persist=true){for(const group of groups()){const expanded=group.dataset.sidebarGroup===name;group.classList.toggle('collapsed',!expanded);group.querySelector(':scope>.sidebar-nav-toggle')?.setAttribute('aria-expanded',String(expanded))}if(persist)try{name?localStorage.setItem(key,name):localStorage.removeItem(key)}catch{}}let saved='';try{saved=localStorage.getItem(key)||'operation'}catch{}if(!document.querySelector(`[data-sidebar-group="${saved}"]`))saved='operation';open(saved,false);document.querySelectorAll('[data-sidebar-toggle]').forEach(button=>button.onclick=()=>{const group=button.closest('[data-sidebar-group]');open(group.classList.contains('collapsed')?button.dataset.sidebarToggle:'')})})();</script>
+  <script>(()=>{const key='painel-sidebar-grupo-aberto-v1',groups=()=>[...document.querySelectorAll('[data-sidebar-group]')];function open(name,persist=true){for(const group of groups()){const expanded=group.dataset.sidebarGroup===name;group.classList.toggle('collapsed',!expanded);group.querySelector(':scope>.sidebar-nav-toggle')?.setAttribute('aria-expanded',String(expanded))}if(persist)try{name?localStorage.setItem(key,name):localStorage.removeItem(key)}catch{}}let saved='';try{saved=localStorage.getItem(key)||'operation'}catch{}const activeGroup=document.querySelector('[data-sidebar-group] a.active')?.closest('[data-sidebar-group]')?.dataset.sidebarGroup;if(activeGroup)saved=activeGroup;if(!document.querySelector(`[data-sidebar-group="${saved}"]`))saved='operation';open(saved,false);document.querySelectorAll('[data-sidebar-toggle]').forEach(button=>button.onclick=()=>{const group=button.closest('[data-sidebar-group]');open(group.classList.contains('collapsed')?button.dataset.sidebarToggle:'')})})();</script>
 </body>
 </html>

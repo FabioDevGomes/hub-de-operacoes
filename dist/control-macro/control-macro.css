@@ -1,0 +1,52 @@
+.macro-toolbar{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.macro-month-nav{display:flex;align-items:center;gap:8px;min-height:38px}
+.macro-month-arrow{min-width:38px;padding:7px 10px;font-size:1.15rem;line-height:1}
+.macro-month-label{min-width:170px;text-align:center;color:var(--text);font-size:.9rem}
+.macro-kpis{display:grid;grid-template-columns:repeat(7,minmax(115px,1fr));gap:8px;margin-bottom:12px}
+.macro-kpi{min-width:0;padding:10px 12px;border-radius:11px}
+.macro-kpi span{display:block;color:var(--muted);font-size:.67rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.macro-kpi strong{display:block;margin-top:4px;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.macro-kpi small{display:block;margin-top:2px;color:#8298b2;font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.macro-table-wrap{overflow-x:auto;overflow-y:visible;max-height:none}
+.macro-table{min-width:1000px}
+.macro-table th,.macro-table td{text-align:right;padding:6px 9px}
+.macro-table th:first-child,.macro-table td:first-child{text-align:left}
+.macro-table th:last-child,.macro-table td:last-child{text-align:left;white-space:normal;min-width:180px}
+.macro-table .macro-date{font-weight:750;white-space:nowrap}
+.macro-table tr.macro-sales-row td{background:rgba(52,211,153,.075)}
+.macro-table tr.macro-sales-row td:first-child{box-shadow:inset 3px 0 0 rgba(52,211,153,.5)}
+.macro-table tr.macro-suspension-row td{background:rgba(248,113,113,.075)}
+.macro-table tr.macro-suspension-row td:first-child{box-shadow:inset 3px 0 0 rgba(248,113,113,.55)}
+.macro-provisional{color:#ffd27c;font-size:.66rem;display:block;margin-top:2px}
+.macro-empty{padding:36px 18px;text-align:center;color:var(--muted);white-space:normal}
+.macro-trend-panel{margin-top:12px;padding:14px 16px}
+.macro-trend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.macro-trend-head h2{margin:0;font-size:.94rem}
+.macro-trend-head p{margin:3px 0 0;color:var(--muted);font-size:.72rem}
+.macro-trend-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.macro-chart-switch{display:flex;align-items:center;gap:4px;padding:3px;border:1px solid var(--line);border-radius:9px;background:rgba(5,14,28,.36)}
+.macro-chart-switch .btn{padding:6px 9px;font-size:.67rem;line-height:1.15;white-space:nowrap}
+.macro-chart-switch .btn.active{background:#173858;border-color:#2c6da0;color:#e7f4ff;box-shadow:inset 0 0 0 1px rgba(77,164,255,.13)}
+.macro-trend-legend{display:flex;align-items:center;gap:13px;flex-wrap:wrap;min-height:26px;margin-top:7px;color:var(--muted);font-size:.68rem}
+.macro-trend-key{display:inline-flex;align-items:center;gap:6px}
+.macro-trend-key i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--trend-color);box-shadow:0 0 8px color-mix(in srgb,var(--trend-color) 35%,transparent)}
+.macro-trend-chart{width:100%;min-height:180px;overflow:hidden}
+.macro-trend-svg{display:block;width:100%;height:auto;min-height:180px;max-height:340px;overflow:visible}
+.macro-chart-grid{stroke:rgba(119,151,190,.15);stroke-width:1}
+.macro-chart-zero{stroke:rgba(180,204,230,.42);stroke-width:1.2;stroke-dasharray:4 4}
+.macro-chart-axis{fill:#94a9c2;font-size:11px;font-family:inherit}
+.macro-trend-note{margin:3px 0 0;color:#8298b2;font-size:.65rem}
+.macro-import-modal{position:fixed;inset:0;z-index:55;display:grid;place-items:center;padding:20px;background:rgba(2,8,18,.82);overflow:auto}
+.macro-import-dialog{width:min(720px,100%);max-height:calc(100vh - 40px);overflow:auto;background:#0d192b;border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow)}
+.macro-import-dialog h2{font-size:1rem;margin:0 0 4px}
+.macro-import-dialog p{font-size:.78rem;color:var(--muted);margin:0}
+.macro-import-head,.macro-import-content{padding:15px 18px}
+.macro-import-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+.macro-import-content{display:grid;gap:12px}
+.macro-import-stats{display:flex;gap:8px;flex-wrap:wrap}
+.macro-import-conflicts{max-height:210px;overflow:auto;border:1px solid var(--line);border-radius:9px}
+.macro-import-conflicts table{font-size:.72rem}
+.macro-import-conflicts td,.macro-import-conflicts th{padding:7px 9px}
+.macro-import-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+@media(max-width:1200px){.macro-kpis{grid-template-columns:repeat(4,minmax(120px,1fr))}}
+@media(max-width:700px){.macro-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.macro-toolbar{align-items:stretch}.macro-month-nav{justify-content:center;flex-wrap:wrap}.macro-month-label{min-width:140px}.macro-toolbar>label.btn{width:100%;text-align:center}.macro-trend-controls{justify-content:flex-start;width:100%}.macro-chart-switch{max-width:100%;overflow-x:auto}.macro-chart-switch .btn{padding:6px 7px;font-size:.62rem}.macro-trend-panel{padding:12px}.macro-trend-chart{overflow-x:auto}.macro-trend-svg{min-width:680px}}

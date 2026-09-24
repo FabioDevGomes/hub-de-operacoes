@@ -1,6 +1,6 @@
-# Extensão local — captura MCC D0
+# Extensão local — captura MCC D0/D−1
 
-Extensão Chrome Manifest V3 para capturar estruturalmente a grade MCC já carregada e preparar a prévia D0 no Preparador local. O fluxo antigo de encaminhar o CSV original continua disponível como fallback. A extensão não atualiza a base: a confirmação final continua sendo o botão **Atualizar base** no Preparador.
+Extensão Chrome Manifest V3 para capturar estruturalmente a grade MCC já carregada e preparar a prévia de D0/D−1 no Preparador local. O fluxo de encaminhar o CSV original continua disponível como fallback. A extensão não atualiza a base: a confirmação final continua sendo o botão **Atualizar base** no Preparador.
 
 ## Instalação local
 
@@ -12,13 +12,22 @@ Extensão Chrome Manifest V3 para capturar estruturalmente a grade MCC já carre
 
 Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
-## Fluxo principal: captura direta da MCC
+## Captura direta de D0
 
 1. Abra na MCC a visão de campanhas, selecione um único dia D0 explícito e aguarde a grade completa carregar. Deixe visíveis as colunas obrigatórias: campanha, conta, status de qualificação, impressões, cliques, conversões, custo médio, impr. primeira posição, impr. parte superior, orçamento, estratégia de lance e custo.
 2. Clique no ícone da extensão e em **Capturar D0 da MCC**. Uma ação captura, valida, abre/foca o Preparador e entrega os dados.
 3. A extensão associa semanticamente cabeçalhos e células. Só envia quando paginação/contagem indicam a lista completa, as campanhas são únicas, a associação linha/campanha é estrutural e os campos obrigatórios são legíveis. Se a MCC estiver incompleta, ambígua, truncada/virtualizada, sem data única explícita ou sem moeda identificável, a captura é bloqueada.
 4. O Preparador adapta a captura ao parser D0 existente, roda as validações usuais e deixa a prévia pronta para revisão. Confira os dados e alertas.
 5. A base permanece inalterada até você clicar manualmente em **Atualizar base**.
+
+## Captura direta de D−1
+
+1. Na MCC, selecione uma única data explícita correspondente a ontem no fuso `America/Sao_Paulo`; texto relativo como “Yesterday” sem a data resolvida não é aceito.
+2. Role manualmente a grade até o final para que todas as campanhas estejam materializadas e clique em **Capturar D−1 da MCC**. A extensão não rola nem pagina automaticamente.
+3. A captura usa o mesmo leitor semântico e os mesmos 13 campos obrigatórios de D0, mas envia o contrato adicional `mcc-d1-grid-v1`. Data errada, intervalo, grade incompleta, cabeçalho ausente, nome duplicado, conta ilegível ou moeda ambígua bloqueiam a entrega.
+4. O Preparador instala os dados no slot D−1 existente. Se D0 ainda não estiver carregado, mostra “D−1 recebido e validado. Aguardando D0 para gerar a prévia.” Não é criado manifesto aplicável nem gravação isolada.
+5. Quando D0 estiver carregado, o Preparador exige uma única data em cada período e que D0 seja o dia imediatamente seguinte a D−1. Nomes, contas, moedas e percentuais seguem as validações normais do manifesto `manifesto_mcc_v2`.
+6. Revise a prévia combinada. A base continua inalterada até clicar manualmente em **Atualizar base**.
 
 Valores `0` são mantidos como zero confirmado; `—` e células vazias são ausência e não se convertem em zero. A moeda só é inferida de código/símbolo explícito e inequívoco (`$` isolado é insuficiente). GEO, estado individual, CPA e valor de conversão não são inventados quando não estão disponíveis com segurança. A extensão não rola nem pagina a MCC.
 
@@ -30,7 +39,7 @@ Valores `0` são mantidos como zero confirmado; `—` e células vazias são aus
 4. Aguarde a leitura, validação e prévia feitas pelo Hub. Revise os alertas e a numeração das campanhas.
 5. Só confirme a gravação clicando manualmente em **Atualizar base** no Preparador.
 
-O fluxo manual do Preparador — colar, arrastar ou selecionar o arquivo diretamente — continua disponível como fallback. A extensão é somente para D0; não selecione D−1 nela.
+O fluxo manual do Preparador — colar, arrastar ou selecionar arquivo diretamente — continua disponível como fallback para D0 e D−1. A extensão ainda mantém o encaminhamento de arquivo CSV original para D0; o CSV D−1 pode ser carregado no slot D−1 do Preparador.
 
 ## Diagnóstico separado: leitura/comparação da grade MCC
 
@@ -75,7 +84,9 @@ O parser D0 atual consome 18 campos (`data`, `campanha`, `conta`, `target_geo`, 
 
 ## Ponte e dados
 
-No caminho CSV, o popup lê os bytes do arquivo escolhido para transportá-los sem alterar o conteúdo, e o service worker abre/ativa a rota local específica do Preparador. Um script isolado reconstrói um `File` com o mesmo nome e bytes e o atribui ao campo `.paste-box[data-slot="d0"]` existente, disparando o evento `change` que chama o decodificador atual do Hub. No caminho de grade, o service worker envia somente a captura validada e chama o receptor `window.__hubReceiveMccD0Grid`. Essa entrega usa `chrome.scripting.executeScript` com `world: 'MAIN'`: o mundo `ISOLATED` padrão compartilha o DOM, mas não vê as funções registradas em `window` pelo script da página. O adaptador cria uma representação de entrada em memória e chama `parseSource` no Preparador. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub. Nenhum dos caminhos grava até o usuário acionar `Atualizar base`.
+No caminho CSV, o popup lê os bytes do arquivo escolhido para transportá-los sem alterar o conteúdo, e o service worker abre/ativa a rota local específica do Preparador. Um script isolado reconstrói um `File` com o mesmo nome e bytes e o atribui ao campo existente do slot D0. No caminho de grade, o service worker envia somente a captura validada e chama `window.__hubReceiveMccD0Grid` ou `window.__hubReceiveMccD1Grid`, sempre em `world: 'MAIN'`: o mundo `ISOLATED` padrão compartilha o DOM, mas não vê as funções registradas em `window` pela página. O adaptador cria uma representação tabular em memória e usa `parseSource` com o papel D0/D−1 existente. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub. Nenhum dos caminhos grava até o usuário acionar `Atualizar base`.
+
+O contrato estável `mcc-d0-grid-v1` não mudou. D−1 acrescenta `mcc-d1-grid-v1` com `periodRole: 'd1'`, os mesmos metadados/células e validação de data esperada no fuso `America/Sao_Paulo`. Se D0 já estiver no Preparador, a data D0 deve ser exatamente o dia seguinte; a mesma verificação é aplicada ao carregar D0 depois de D−1. A origem continua sendo `mcc_chrome_extension`, e o papel é preservado pelo slot/parsing existente.
 
 ## Permissões
 
@@ -90,6 +101,7 @@ No caminho CSV, o popup lê os bytes do arquivo escolhido para transportá-los s
 - Depende do Hub local estar ativo exatamente na porta `8765`.
 - O Chrome não permite a extensão gravar a base diretamente; a confirmação final continua no Preparador.
 - A captura estrutural exige data única explícita no controle da MCC; períodos relativos, multidiários ou não reconhecidos são bloqueados, nunca substituídos pela data local do computador.
+- D−1 só é aceito se a data explícita corresponder a ontem no fuso `America/Sao_Paulo`; se D0 também estiver no Preparador, as datas precisam ser consecutivas. D−1 isolado fica aguardando D0 e nunca atualiza a base.
 - O Preparador precisa estar disponível em `http://127.0.0.1:8765/preparador-MCC/` na mesma janela do Chrome para foco/entrega confiáveis.
 - A grade precisa expor cabeçalhos/células semânticos e todas as campanhas no DOM. Conteúdo que não esteja materializado é bloqueado em vez de tratado como completo.
 - Arquivos muito grandes podem atingir limites de mensageria/injeção do Chrome; os CSVs usuais da MCC são o cenário do MVP.
@@ -98,7 +110,7 @@ No caminho CSV, o popup lê os bytes do arquivo escolhido para transportá-los s
 
 Execute `node tests/mcc-extension-parity.test.mjs`. O teste compara, sem IndexedDB ou dados reais, o resultado do decodificador/parser atuais quando recebem o mesmo CSV pelo fluxo de seleção manual e pela reconstrução de bytes usada pela extensão.
 
-Para captura estrutural D0, prévia, zero × ausência, bloqueios de completude e ordenação execute `node tests/mcc-grid-production.test.mjs`. Para o diagnóstico da grade execute `node tests/mcc-grid-experiment.test.mjs`; para a captura textual execute `node tests/mcc-text-experiment.test.mjs`. Os testes usam fixtures sintéticas e não escrevem na base real. O teste de paridade CSV legado continua em `node tests/mcc-extension-parity.test.mjs`.
+Para captura estrutural D0/D−1, prévia, data operacional, zero × ausência, bloqueios de completude, ponte e ordenação execute `node tests/mcc-grid-production.test.mjs` e `node tests/preparador-d1.test.mjs`; a não regressão D0 do Preparador está em `node tests/preparador-d0.test.mjs`. Para o diagnóstico da grade execute `node tests/mcc-grid-experiment.test.mjs`; para a captura textual execute `node tests/mcc-text-experiment.test.mjs`. Os testes usam fixtures sintéticas e não escrevem na base real. O teste de paridade CSV legado continua em `node tests/mcc-extension-parity.test.mjs`.
 
 ## Ordenação da prévia
 

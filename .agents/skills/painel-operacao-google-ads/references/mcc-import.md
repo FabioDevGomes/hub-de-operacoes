@@ -34,20 +34,22 @@
 - A regra anterior descreve o comportamento atual para datas já presentes no histórico legado. Em caso de sobreposição, não afirmar que MCC substituiu a planilha até essa precedência ser alterada no código; a orientação operacional, por si só, não muda a persistência existente.
 - Se a tela não atualizar após a confirmação de sucesso, recarregue-a antes de repetir a importação. A atualização automática falhar não significa que se deva importar o mesmo arquivo novamente.
 
-## Extensão local de captura e encaminhamento D0
+## Extensão local de captura e encaminhamento D0/D−1
 
-`extensions/mcc-d0-bridge/` contém uma extensão Chrome local, opcional e não publicada. Há dois caminhos produtivos para D0: (1) **Capturar D0 da MCC** lê estruturalmente a grade semântica já renderizada e entrega uma captura validada à prévia do Preparador; (2) o fluxo legado encaminha o CSV original selecionado manualmente. Colagem, arrastar/soltar e seleção direta no Preparador permanecem disponíveis. D−1 continua no fluxo manual existente.
+`extensions/mcc-d0-bridge/` contém uma extensão Chrome local, opcional e não publicada. A captura direta oferece D0 e D−1, lendo a grade semântica já renderizada e entregando a captura validada à prévia do Preparador. O encaminhamento do CSV original D0 e os fluxos manuais de CSV D0/D−1, colagem e arrastar/soltar continuam disponíveis como fallback.
 
 Na captura direta, cabeçalhos semânticos são associados às células da respectiva linha, preferindo o identificador `essfield` compartilhado por cabeçalho e célula quando presente. O nome de campanha vem do texto exato do `<a>` na célula `essfield=name`; na MCC real esse link pode não ter `href` e a célula pode conter texto extra de edição. A extensão bloqueia se não conseguir identificar a grade/associação, se faltar cabeçalho obrigatório, se a data não for uma única data explícita, se moeda/conta não puderem ser lidas, ou se paginação/contagem, virtualização aparente, truncamento ou nomes duplicados não confirmarem a lista completa. A captura não rola nem pagina a MCC. Valores `0` são preservados como zero; `—` e células vazias são preservados como ausência, nunca convertidos em zero. Não infere GEO, estado de campanha, CPA nem valor de conversão quando não há campo explícito confiável.
 
-A captura estrutural é transportada para o receptor local `window.__hubReceiveMccD0Grid` do Preparador. Ali, uma adaptação pequena converte valores tipados para a representação que o parser existente já consome; `parseSource`, validação, manifesto, identidade, IndexedDB e observabilidade continuam sob responsabilidade do Preparador. A origem técnica fica em `source: mcc_chrome_extension`. O receptor prepara e valida a prévia D0, mas não invoca `applyManifestToPanel`; só o clique manual em **Atualizar base** grava a base. Não há novo pipeline de negócio ou escrita da extensão.
+A captura estrutural D0 usa o contrato estável `mcc-d0-grid-v1` e o receptor `window.__hubReceiveMccD0Grid`. D−1 usa o contrato aditivo `mcc-d1-grid-v1` (`periodRole: 'd1'`) e `window.__hubReceiveMccD1Grid`; ambos convergem para o mesmo leitor, adaptador em memória, `parseSource`, validação, `manifesto_mcc_v2`, persistência e observabilidade existentes. A origem técnica é `mcc_chrome_extension`. Nenhum receptor invoca `applyManifestToPanel`; só o clique manual em **Atualizar base** grava a base. Não há parser de negócio nem escrita na extensão.
+
+O papel D−1 é validado contra uma única data explícita do controle da MCC, igual a ontem no fuso operacional fixo `America/Sao_Paulo`. Não converta “ontem” em data quando a MCC só exibir texto relativo. A grade precisa passar de novo a validação integral de cabeçalhos, linhas únicas, contagem/paginação, conta/moeda, valores e zero × ausência; D−1 não pressupõe o mesmo total que D0. Se D0 já estiver carregado, ou quando for carregado depois, ambos precisam ter uma data cada e D0 deve ser exatamente o dia seguinte a D−1. D−1 isolado fica no slot `d1` aguardando D0 e nunca gera manifesto aplicável ou gravação.
 
 ### Versão estável atual da captura direta
 
 A versão validada corrige dois pontos independentes:
 
 1. **Associação das células MCC:** cabeçalhos e células são ligados pelo `essfield` da grade. O nome da campanha é lido do `<a>` dentro de `essfield=name`, mesmo quando o link não tem `href`; não use o texto completo da célula, pois ele pode incluir o controle “settings”. A conta também é lida do link da própria célula, sem concatenar o ID exibido ao lado. `primary_status` identifica qualificação e é distinto do `status` operacional. Linhas auxiliares sem link de campanha ficam fora da contagem.
-2. **Entrega ao Preparador:** `chrome.scripting.executeScript` usa `world: 'MAIN'` somente ao invocar `deliverD0GridToPreparador`. O padrão `ISOLATED` do Chrome compartilha o DOM, mas tem outro `window` JavaScript; portanto não enxerga `window.__hubReceiveMccD0Grid`, definido pelo HTML do Preparador. O transporte continua limitado à URL local do Preparador; a verificação de origem e caminho permanece em `bridge.mjs`. O caminho de encaminhamento CSV permanece no mundo isolado e inalterado.
+2. **Entrega ao Preparador:** `chrome.scripting.executeScript` usa `world: 'MAIN'` ao invocar os adaptadores D0/D−1. O padrão `ISOLATED` do Chrome compartilha o DOM, mas tem outro `window` JavaScript; portanto não enxerga os receptores definidos pelo HTML do Preparador. O transporte continua limitado à URL local do Preparador; a verificação de origem e caminho permanece em `bridge.mjs`. O encaminhamento CSV legado permanece no mundo isolado.
 
 O leitor não rola a página MCC. Antes da captura, o usuário deve rolar a grade manualmente até o final, para que todas as campanhas estejam materializadas; a validação continua bloqueando uma lista parcial. Depois de alterar os arquivos da extensão, recarregue-a em `chrome://extensions`; o Hub servido também precisa estar atualizado. A captura aceita prepara só a prévia e nunca grava até **Atualizar base**.
 
@@ -65,11 +67,11 @@ Completude exige paginação explícita começando em 1 e terminando no total, t
 
 ### Contrato e sequência de execução
 
-1. O botão do popup envia `CAPTURE_AND_FORWARD_MCC_D0` ao service worker (`extensions/mcc-d0-bridge/background.js`). Ele exige uma aba ativa `https://ads.google.com/`, executa o leitor apenas após o clique e valida completude/campos antes de abrir o Preparador.
-2. `mcc-grid-domain.mjs` aplica a validação de captura e emite o contrato versionado `mcc-d0-grid-v1`, origem `mcc_chrome_extension`; o payload contém somente metadados da captura e registros estruturados, sem HTML bruto, cookies, token ou estado de sessão.
-3. O service worker abre/cria a aba local do Preparador em segundo plano, injeta `deliverD0GridToPreparador` com `world: 'MAIN'`, entrega o contrato por `bridge.mjs` e só foca a aba depois do ACK de `window.__hubReceiveMccD0Grid`. Assim erros de validação/entrega continuam visíveis no popup; sucesso deixa o usuário na prévia pronta. Não remova `world: 'MAIN'`: no mundo isolado, o teste/usuário recebe a mensagem “Preparador MCC carregou sem o receptor”, embora o receptor esteja no JavaScript da página.
-4. O receptor no `dist/preparador-MCC/index.html` valida versão, quantidade, paginação, data e nomes únicos. `decodeMccGridCapture` faz uma adaptação interna em memória para a representação tabular exigida por `parseSource`; esse texto CSV sintético não é um arquivo exportado nem é enviado para fora do Hub. Depois, segue o mesmo `parseSource` → validação → `buildManifest` → prévia usados no D0 existente.
-5. `installParsedSource` atualiza somente o estado em memória da tela. A validação da numeração consulta a base em leitura; não chama a gravação. A ação mutável continua restrita ao botão **Atualizar base**, que passa pelo mesmo `applyManifestToPanel` já usado no fluxo anterior.
+1. O popup envia `CAPTURE_AND_FORWARD_MCC_D0` ou `CAPTURE_AND_FORWARD_MCC_D1` ao service worker. Ambos exigem uma aba ativa `https://ads.google.com/`, usam o mesmo leitor após clique explícito e validam completude/campos antes da entrega.
+2. `mcc-grid-domain.mjs` emite `mcc-d0-grid-v1` ou `mcc-d1-grid-v1`; D0 mantém o contrato estável sem novos campos, D−1 inclui `periodRole:'d1'` e exige a data esperada no fuso `America/Sao_Paulo`. O payload contém só metadados e registros estruturados, nunca HTML bruto, cookies, token ou estado de sessão.
+3. O service worker abre/cria a aba local do Preparador em segundo plano, injeta o adaptador correspondente com `world: 'MAIN'`, entrega por `bridge.mjs` e só foca a aba depois do ACK do receptor correto. Assim erros continuam visíveis no popup; sucesso deixa o usuário no Preparador.
+4. O Preparador valida versão, quantidade, paginação, campos, data, moeda/conta e nomes únicos. A adaptação D−1 cria a mesma representação tabular em memória e chama `parseSource(...,'d1')`. D−1 sozinho instala no slot `d1`, informa que aguarda D0 e não gera manifesto aplicável. Com os dois slots, datas únicas e consecutivas são obrigatórias antes do manifesto e prévia.
+5. `installParsedSource` atualiza somente o estado em memória. A validação da numeração consulta a base em leitura; a ação mutável continua restrita ao botão **Atualizar base**, que usa o mesmo `applyManifestToPanel`.
 
 Ao manter o fluxo, não criar parser de negócio na extensão e não chamar persistência diretamente do service worker. Se a grade for rejeitada, mostrar a causa e deixar disponível o caminho CSV, sem limpar/substituir silenciosamente outro D0 que já esteja carregado.
 
@@ -81,7 +83,8 @@ Implementação em `sortPreviewRows`/`renderPreviewTable` no Preparador: compara
 
 ### Testes
 
-- `node tests/mcc-grid-production.test.mjs`: associação estrutural por `essfield`, link de campanha sem `href`, extração da conta/status, exclusão de resumos, paginação/completude, data explícita, locale numérico, moeda, zero × ausência, adaptação para o parser existente, execução no mundo `MAIN`, ausência de autoaplicação e ordenação visual.
+- `node tests/mcc-grid-production.test.mjs`: associação estrutural por `essfield`, link de campanha sem `href`, extração da conta/status, exclusão de resumos, paginação/completude, data explícita D0/D−1, fuso operacional, locale numérico, moeda, zero × ausência, execução no mundo `MAIN`, ausência de autoaplicação e ordenação visual.
+- `node tests/preparador-d1.test.mjs` e `node tests/preparador-d0.test.mjs`: data D−1 esperada, consecutividade, espera de D0, prévia sem autoaplicação e não regressão do receptor D0.
 - `node tests/mcc-grid-experiment.test.mjs`: compatibilidade da leitura/diagnóstico local da grade.
 - `node tests/mcc-extension-parity.test.mjs`: não regressão/paridade do transporte CSV legado.
 

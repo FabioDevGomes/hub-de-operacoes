@@ -117,6 +117,51 @@ export function validateMccD0Capture(snapshot) {
   };
 }
 
+export const MCC_OPERATIONAL_TIME_ZONE = 'America/Sao_Paulo';
+
+export function expectedMccD1Date(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MCC_OPERATIONAL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const today = Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
+  return new Date(today - 86400000).toISOString().slice(0, 10);
+}
+
+export function validateMccD1Capture(snapshot, { now = new Date() } = {}) {
+  const validation = validateMccD0Capture(snapshot);
+  if (!validation.ok) {
+    const errors = validation.errors.map(error => error.code === 'date'
+      ? { ...error, message: snapshot?.reportDate?.reason || 'D−1 exige uma única data explícita no controle de período; intervalos ou texto relativo não são aceitos.' }
+      : error);
+    return { ok: false, errors };
+  }
+
+  const expectedDate = expectedMccD1Date(now);
+  const actualDate = validation.capture.reportDate;
+  if (actualDate !== expectedDate) {
+    return {
+      ok: false,
+      errors: [{
+        code: 'date_expected',
+        message: `A MCC está em ${actualDate}, mas D−1 esperado para hoje é ${expectedDate} (${MCC_OPERATIONAL_TIME_ZONE}). Selecione o dia correto; nenhum dado foi enviado.`
+      }]
+    };
+  }
+
+  return {
+    ok: true,
+    capture: {
+      ...validation.capture,
+      schema: 'mcc-d1-grid-v1',
+      periodRole: 'd1'
+    }
+  };
+}
+
 const ABSENT = new Set(['', '--', '—', '-', 'n/a', 'na', 'n.a.', 'não disponível', 'nao disponivel']);
 
 export function comparableValue(field, raw) {

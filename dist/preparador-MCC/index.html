@@ -613,6 +613,26 @@
       return [...dates].sort();
     }
 
+    const MCC_OPERATIONAL_TIME_ZONE = 'America/Sao_Paulo';
+    function expectedMccD1ReportDate(now = new Date()) {
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone:MCC_OPERATIONAL_TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(now);
+      const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)) - 86400000).toISOString().slice(0, 10);
+    }
+    function addIsoDay(value, amount = 1) {
+      if (!/^20\d{2}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+      const date = new Date(`${value}T00:00:00Z`);
+      if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null;
+      return new Date(date.getTime() + amount * 86400000).toISOString().slice(0, 10);
+    }
+    function reportDatePairIssue(d1, d0) {
+      if (!d1 || !d0) return null;
+      if (d1.dates?.length !== 1 || d0.dates?.length !== 1) return 'D−1 e D0 precisam conter, cada um, uma única data explícita para formar a prévia.';
+      const expectedD0 = addIsoDay(d1.dates[0]);
+      if (!expectedD0 || d0.dates[0] !== expectedD0) return `As datas não são consecutivas: D−1 é ${d1.dates[0]} e o D0 esperado é ${expectedD0 || 'a data seguinte'}. Corrija os períodos antes de continuar.`;
+      return null;
+    }
+
     function parseNumber(raw) {
       let s = String(raw).trim().replace(/\u00a0/g, '').replace(/\s/g, '').replace(/R\$|US\$|USD|BRL|EUR|GBP/gi, '').replace('%', '');
       if (s.startsWith('(') && s.endsWith(')')) s = '-' + s.slice(1, -1);
@@ -770,6 +790,18 @@
       const bytes = new TextEncoder().encode(text);
       const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
       return { text, encoding: 'mcc_dom_structured', hash, size: bytes.byteLength, name: `captura_mcc_d0_${capture.reportDate}.csv`, source: 'mcc_chrome_extension' };
+    }
+
+    async function decodeMccD1GridCapture(capture) {
+      if (!capture || capture.schema !== 'mcc-d1-grid-v1' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem, papel ou versão da captura MCC D−1 incompatível.');
+      if (!/^20\d{2}-\d{2}-\d{2}$/.test(capture.reportDate || '') || extractDates(capture.reportDate).length !== 1) throw new Error('D−1 precisa conter uma única data explícita da MCC.');
+      const expectedDate = expectedMccD1ReportDate();
+      if (capture.reportDate !== expectedDate) throw new Error(`A data capturada foi ${capture.reportDate}, mas D−1 esperado para hoje é ${expectedDate} (${MCC_OPERATIONAL_TIME_ZONE}). A captura não foi instalada.`);
+      const decoded = await decodeMccGridCapture({ ...capture, schema:'mcc-d0-grid-v1' });
+      const text = decoded.text.replace(/^Relatório D0:/, 'Relatório D−1:');
+      const bytes = new TextEncoder().encode(text);
+      const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      return { ...decoded, text, hash, size:bytes.byteLength, name:`captura_mcc_d1_${capture.reportDate}.csv` };
     }
 
     function uniqueRecord(source, name) {
@@ -1084,16 +1116,25 @@
       numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', false); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando D0';
     }
 
-    function showInputBlock(message) {
+    function showInputBlock(message, { title='D0 obrigatório', status='Aguardando D0' }={}) {
       numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
-      const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'fail', 'D0 obrigatório', message);
+      const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'fail', title, message);
       const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=message; issues.append(li);
-      q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
+      q('#validation-status').textContent=status; q('#announcer').textContent=message;
+    }
+
+    function showWaitingForD0() {
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
+      const message = 'D−1 recebido e validado. Aguardando D0 para gerar a prévia.';
+      const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'warn', 'Aguardando D0', message);
+      q('#issues').replaceChildren(); q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
     }
 
     function attemptBuild() {
-      if (!slots.d0) { if (slots.d1 && !slots.d1.error) showInputBlock('O CSV de D−1 sozinho não gera manifesto. Adicione o CSV de D0.'); else resetResults(); return; }
+      if (!slots.d0) { if (slots.d1 && !slots.d1.error) showWaitingForD0(); else resetResults(); return; }
       if (slots.d0.error || slots.d1?.error) { showInputBlock(slots.d0.error ? 'O CSV de D0 contém erro e precisa ser corrigido.' : 'O CSV de D−1 informado contém erro. Corrija-o ou limpe tudo e envie somente o D0.'); return; }
+      const datePairIssue = reportDatePairIssue(slots.d1, slots.d0);
+      if (datePairIssue) { showInputBlock(datePairIssue, { title:'Datas incompatíveis', status:'Correção necessária' }); return; }
       try {
         const priorMode = currentResult?.manifest.validacao_manifesto.modo_entrada;
         if (!slots.d1) previewRole = 'd0'; else if (!currentResult || priorMode === 'D_zero_somente') previewRole = 'd1';
@@ -1155,10 +1196,25 @@
       const descriptor = sourceDescriptor(parsed);
       if (descriptor.colunas_obrigatorias_ausentes.length) throw new Error(`Campos obrigatórios não chegaram ao Preparador: ${descriptor.colunas_obrigatorias_ausentes.join(', ')}.`);
       if (Object.keys(parsed.duplicateNames).length || parsed.records.length !== capture.campaignCount) throw new Error('O Preparador detectou duplicidade ou diferença na quantidade de campanhas recebidas.');
+      if (slots.d1 && !slots.d1.error) { const datePairIssue = reportDatePairIssue(slots.d1, parsed); if (datePairIssue) throw new Error(datePairIssue); }
       installParsedSource('d0', parsed);
       if (!currentResult?.manifest) throw new Error('O Preparador recebeu os dados, mas não conseguiu montar a prévia D0.');
       renderPreviewTable(currentResult.manifest, 'd0');
       return { ok:true, campaignCount:parsed.records.length, previewReady:true, source:'mcc_chrome_extension' };
+    };
+    window.__hubReceiveMccD1Grid = async capture => {
+      const decoded = await decodeMccD1GridCapture(capture);
+      const parsed = parseSource(decoded, 'd1');
+      const descriptor = sourceDescriptor(parsed);
+      if (descriptor.colunas_obrigatorias_ausentes.length) throw new Error(`Campos obrigatórios não chegaram ao Preparador: ${descriptor.colunas_obrigatorias_ausentes.join(', ')}.`);
+      if (parsed.dates.length !== 1 || parsed.dates[0] !== capture.reportDate) throw new Error('A data D−1 do controle MCC não corresponde à data explícita instalada no Preparador.');
+      if (Object.keys(parsed.duplicateNames).length || parsed.records.length !== capture.campaignCount) throw new Error('O Preparador detectou duplicidade ou diferença na quantidade de campanhas recebidas.');
+      if (slots.d0 && !slots.d0.error) { const datePairIssue = reportDatePairIssue(parsed, slots.d0); if (datePairIssue) throw new Error(datePairIssue); }
+      installParsedSource('d1', parsed);
+      if (slots.d0 && !currentResult?.manifest) throw new Error('O Preparador recebeu D−1, mas não conseguiu montar a prévia combinada.');
+      if (!slots.d0) return { ok:true, campaignCount:parsed.records.length, reportDate:capture.reportDate, previewReady:false, waitingForD0:true, source:'mcc_chrome_extension' };
+      renderPreviewTable(currentResult.manifest, previewRole);
+      return { ok:true, campaignCount:parsed.records.length, reportDate:capture.reportDate, previewReady:true, waitingForD0:false, source:'mcc_chrome_extension' };
     };
 
     q('#apply-manifest').addEventListener('click', async () => {

@@ -95,7 +95,7 @@ assert.ok(timeViewModule.includes('data-productive'),'marcação de produtividad
 assert.ok(timeViewModule.includes("totalIsZero=item.type==='duration'&&Number(cell?.minutes||0)===0")&&timeViewModule.includes("class=\"${totalIsZero?'time-total-zero':''}\""),'valores zero de duração não são isolados somente na célula Total hoje');
 assert.ok(timeViewModule.includes("items=data.items.filter(x=>x.active&&x.showInCharts&&x.id!=='item-dormindo')"),'Dormindo ainda aparece no seletor Item para evolução');
 assert.ok(timeViewModule.includes("if(entry.itemId!=='item-dormindo'){\n   categoryTotals.set"),'Dormindo ainda entra nos gráficos por categoria ou por atividade');
-assert.ok(timeViewModule.includes("dates.map(date=>`<th>${dateLabel(date)}</th>`)"),'datas da comparação do Meu Tempo não usam dia, mês e ano');
+assert.ok(timeViewModule.includes("dates.map(date=>`<th class=\"${alcoholDates.has(date)?'time-alcohol-day':''}\">${dateLabel(date)}</th>`)"),'datas da comparação do Meu Tempo não usam dia, mês e ano ou perderam a sinalização leve de álcool');
 assert.ok(timeViewModule.includes("daily.map(x=>({label:dateLabel(x.date)"),'datas das análises do Meu Tempo não usam dia, mês e ano');
 assert.ok(timeViewModule.includes('placeholder="dd/mm/aaaa"'),'campos de data do Meu Tempo não exibem o formato brasileiro');
 assert.ok(!timeViewModule.includes('type="date"'),'Meu Tempo ainda depende do formato regional do navegador para exibir datas');
@@ -114,7 +114,7 @@ assert.ok(timeCss.includes('.time-table{font-size:.77rem}'),'tamanho da fonte da
 assert.ok(timeViewModule.includes("item.id==='item-alcool'?'time-behavior-start':''")&&timeViewModule.includes('class="${item.productive?\'time-productive-row \':\'\'}${item.id==='),'Lançamento rápido não separa a linha de rotinas após “Outros”');
 assert.ok(timeViewModule.includes("row.item.productive?'time-productive-row ':''"),'linhas produtivas não são destacadas na comparação do Histórico');
 assert.ok(timeViewModule.includes('productiveTotalHighlightClass(x.productiveMinutes)')&&timeViewModule.includes('productiveTotalHighlightClass(productiveAverage)')&&timeCss.includes('.time-matrix tbody td.time-over-eight-hours,.time-matrix tbody tr:hover td.time-over-eight-hours{background:rgba(52,211,153,.2)'),'totais produtivos acima de oito horas devem receber destaque verde no Histórico');
-assert.ok(timeViewModule.includes("class=\"${entry.productiveSnapshot?'time-productive-row':''}\""),'lançamentos produtivos não são destacados no Histórico detalhado');
+assert.ok(timeViewModule.includes("class=\"${entry.productiveSnapshot?'time-productive-row ':''}${alcoholHistoryHighlightClass(item,entry.value)}\""),'destaques de produtividade e bebida alcoólica não são preservados no Histórico detalhado');
 assert.ok(timeCss.includes('.time-table tr.time-productive-row>td,.time-matrix tr.time-productive-row>td{background:rgba(52,211,153,.075)}'),'destaque verde sutil das linhas produtivas não foi definido');
 assert.ok(timeViewModule.includes("time-behavior-start")&&timeCss.includes('.time-matrix tr.time-behavior-start>td{border-top:3px solid #4b6686}'),'Histórico não separa atividades de duração dos itens comportamentais');
 assert.ok(timeCss.includes('.time-table tr.time-behavior-start>td,.time-matrix tr.time-behavior-start>td{border-top:3px solid #4b6686}'),'Lançamento rápido não exibe a divisória antes dos controles de rotina e saúde');

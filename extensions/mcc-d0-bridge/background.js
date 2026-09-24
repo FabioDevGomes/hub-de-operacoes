@@ -1,7 +1,7 @@
-import { deliverD0CsvToPreparador, deliverD0GridToPreparador } from './bridge.mjs';
+import { deliverD0CsvToPreparador, deliverD0GridToPreparador, deliverD1GridToPreparador } from './bridge.mjs';
 import { collectMccGrid } from './mcc-grid-reader.mjs';
 import { collectMccSelectableText } from './mcc-text-reader.mjs';
-import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture } from './mcc-grid-domain.mjs';
+import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD1Capture } from './mcc-grid-domain.mjs';
 import { parseMccSelectableText } from './mcc-text-domain.mjs';
 
 const PREPARADOR_URL = 'http://127.0.0.1:8765/preparador-MCC/';
@@ -67,6 +67,23 @@ async function forwardD0Grid(capture) {
   return execution.result;
 }
 
+async function forwardD1Grid(capture) {
+  const existing = await chrome.tabs.query({ currentWindow: true, url: PREPARADOR_MATCH });
+  const tab = existing[0] || await chrome.tabs.create({ url: PREPARADOR_URL, active: false });
+  if (!tab?.id) throw new Error('Não foi possível abrir uma aba do Preparador MCC.');
+
+  await waitUntilLoaded(tab.id);
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: 'MAIN',
+    func: deliverD1GridToPreparador,
+    args: [capture]
+  });
+  if (!execution?.result?.ok) throw new Error(execution?.result?.message || 'O Preparador não recebeu a captura D−1.');
+  await chrome.tabs.update(tab.id, { active: true });
+  return execution.result;
+}
+
 async function readActiveMccGrid() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !/^https:\/\/ads\.google\.com\//i.test(String(tab.url || ''))) {
@@ -86,6 +103,14 @@ async function captureAndForwardActiveMccD0() {
   const validation = validateMccD0Capture(snapshot);
   if (!validation.ok) throw new Error(validation.errors.map(item => item.message).join('\n'));
   const received = await forwardD0Grid(validation.capture);
+  return { ...received, campaignCount: validation.capture.campaignCount };
+}
+
+async function captureAndForwardActiveMccD1() {
+  const snapshot = await readActiveMccGrid();
+  const validation = validateMccD1Capture(snapshot);
+  if (!validation.ok) throw new Error(validation.errors.map(item => item.message).join('\n'));
+  const received = await forwardD1Grid(validation.capture);
   return { ...received, campaignCount: validation.capture.campaignCount };
 }
 
@@ -110,6 +135,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     captureAndForwardActiveMccD0()
       .then(result => sendResponse({ ok: true, result }))
       .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura direta do D0.' }));
+    return true;
+  }
+  if (message?.type === 'CAPTURE_AND_FORWARD_MCC_D1') {
+    captureAndForwardActiveMccD1()
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura estrutural do D−1.' }));
     return true;
   }
   if (message?.type === 'READ_ACTIVE_MCC_GRID') {

@@ -12,6 +12,8 @@ assert.ok(!html.includes('16 × 16'),'instrução de redimensionamento ainda apa
 assert.ok(app.includes('canvas.width = width')&&app.includes('canvas.height = height'),'favicon não preserva as dimensões originais');
 assert.ok(app.includes("if (blob.type === 'image/png')")&&app.includes('return { blob, width, height }'),'PNG original não é preservado sem recodificação');
 assert.ok(app.includes("canvas.toBlob(result => result ? resolve(result)")&&app.includes("'image/png'"),'favicon não é convertido para PNG');
+assert.ok(app.includes('desktop: { name: \'01.png\', width: 1892, height: 908, brightness: 0.72, colorMask: 0xFC }'),'imagem desktop deve manter brilho e dimensões, com redução de cor menos agressiva');
+assert.ok(app.includes('function optimizeColorsBalanced(imageData, colorMask = 0xF8)')&&app.includes('optimizeColorsBalanced(pixels, spec.colorMask)'),'redução de cor padrão do mobile deve permanecer intacta e configurável para desktop');
 assert.ok(app.includes("blob.type === 'image/svg+xml'")&&app.includes("/\\.svg$/i.test(blob.name || '')"),'arquivo SVG não usa decodificação compatível');
 assert.ok(app.includes("getData('image/svg+xml')")&&app.includes("new Blob([text], { type: 'image/svg+xml' })"),'SVG colado como texto não é reconhecido');
 assert.ok(app.includes("image.onerror = () => reject(new Error('Não foi possível interpretar o SVG do favicon.'))"),'falha de leitura do SVG não é informada');

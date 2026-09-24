@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import { deliverD0GridToPreparador } from '../extensions/mcc-d0-bridge/bridge.mjs';
-import { validateMccD0Capture } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
+import { deliverD0GridToPreparador, deliverD1GridToPreparador } from '../extensions/mcc-d0-bridge/bridge.mjs';
+import { expectedMccD1Date, validateMccD0Capture, validateMccD1Capture } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
 import { collectMccGrid } from '../extensions/mcc-d0-bridge/mcc-grid-reader.mjs';
 import { D0_FIELDS, HEADER_ALIASES } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
 
@@ -203,9 +203,29 @@ const dateOnlyButtonSnapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, visible
 assert.equal(dateOnlyButtonSnapshot.reportDate.value, '2026-09-23', 'aceita datas explícitas no texto visível de um botão, mesmo sem aria-label descritivo');
 const valid = validateMccD0Capture(snapshot);
 assert.equal(valid.ok, true, JSON.stringify(valid.errors));
+assert.equal(valid.capture.schema, 'mcc-d0-grid-v1', 'o contrato D0 estável permanece sem alteração');
 assert.equal(valid.capture.records[0].currency, 'USD', 'extrai a moeda somente de código/símbolo explícito');
 assert.equal(valid.capture.records[0].impressions, '0', 'zero permanece explícito');
 assert.equal(valid.capture.records[0].avg_cost, '—', 'traço permanece ausência, não zero');
+
+const referenceNow = new Date('2026-09-24T15:00:00.000Z');
+assert.equal(expectedMccD1Date(referenceNow), '2026-09-23', 'ontem é calculado no fuso operacional, não em UTC');
+assert.equal(expectedMccD1Date(new Date('2026-09-24T02:30:00.000Z')), '2026-09-22', 'a virada de dia respeita America/Sao_Paulo perto da meia-noite UTC');
+const d1Snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 23, 2026' }).doc);
+const validD1 = validateMccD1Capture(d1Snapshot, { now:referenceNow });
+assert.equal(validD1.ok, true, JSON.stringify(validD1.errors));
+assert.equal(validD1.capture.schema, 'mcc-d1-grid-v1');
+assert.equal(validD1.capture.periodRole, 'd1');
+assert.equal(validD1.capture.records[0].impressions, '0', 'D−1 preserva zero confirmado');
+assert.equal(validD1.capture.records[0].avg_cost, '—', 'D−1 preserva ausência sem convertê-la em zero');
+
+const wrongD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 22, 2026' }).doc), { now:referenceNow });
+assert.ok(wrongD1.errors.some(error => error.code === 'date_expected'), 'D−1 com data diferente de ontem é bloqueado');
+const intervalD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 1, 2026 – Sep 23, 2026' }).doc), { now:referenceNow });
+assert.ok(intervalD1.errors.some(error => error.code === 'date'), 'intervalo MCC é bloqueado para D−1');
+const relativeD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Yesterday' }).doc), { now:referenceNow });
+assert.ok(relativeD1.errors.some(error => error.code === 'date'), 'texto relativo sem data real é bloqueado');
+assert.ok(validateMccD1Capture(essfieldPartial, { now:referenceNow }).errors.some(error => error.code === 'incomplete'), 'a completude D−1 é verificada independentemente');
 
 const partial = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
   values: rowValues.slice(0, 1), footer: '1 - 1 de 2'
@@ -232,6 +252,8 @@ const missingHeader = {
   fields: { ...snapshot.fields, cost: { found:false, hidden:false, ambiguous:false } }
 };
 assert.ok(validateMccD0Capture(missingHeader).errors.some(error => error.code === 'required_header'));
+assert.ok(validateMccD1Capture(duplicated, { now:referenceNow }).errors.some(error => error.code === 'duplicates'), 'D−1 duplicado é bloqueado');
+assert.ok(validateMccD1Capture(missingHeader, { now:referenceNow }).errors.some(error => error.code === 'required_header'), 'cabeçalho D−1 obrigatório ausente é bloqueado');
 
 const incompleteDate = { ...snapshot, reportDate: { value:null, reason:'Data não encontrada.' } };
 assert.ok(validateMccD0Capture(incompleteDate).errors.some(error => error.code === 'date'));
@@ -298,8 +320,12 @@ assert.deepEqual(previewRows.map(row => row.campanha), ['Duas','Dez','Cem','Ause
 assert.ok(html.includes('data-sort-key="abs_top_share"') && html.includes('data-sort-key="top_share"'));
 assert.ok(html.includes('1ª posição<span class="sort-arrow"'), 'a prévia expõe uma coluna ordenável para primeira posição');
 assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'"));
+assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"));
+assert.ok(popup.includes('Aguardando D0 para gerar a prévia.'));
 assert.ok(background.includes('validateMccD0Capture(snapshot)'));
+assert.ok(background.includes('validateMccD1Capture(snapshot)'));
 assert.ok(background.includes('deliverD0GridToPreparador'));
+assert.ok(background.includes('deliverD1GridToPreparador'));
 assert.ok(background.includes("chrome.tabs.create({ url: PREPARADOR_URL, active: false })"), 'mantém o popup aberto para mostrar erros enquanto o Preparador recebe a captura');
 assert.ok(background.indexOf("if (!execution?.result?.ok)") < background.indexOf("chrome.tabs.update(tab.id, { active: true })"), 'só foca o Preparador depois do aceite da captura');
 assert.deepEqual(manifest.permissions, ['scripting','activeTab']);
@@ -323,6 +349,10 @@ const mainWindow = {
   async __hubReceiveMccD0Grid(capture) {
     captureReceivedInMain = capture;
     return { ok:true, campaignCount:capture.campaignCount, previewReady:true };
+  },
+  async __hubReceiveMccD1Grid(capture) {
+    captureReceivedInMain = capture;
+    return { ok:true, campaignCount:capture.campaignCount, previewReady:false, waitingForD0:true };
   }
 };
 const forwardContext = vm.createContext({
@@ -330,6 +360,7 @@ const forwardContext = vm.createContext({
   PREPARADOR_MATCH:'http://127.0.0.1:8765/preparador-MCC/*',
   waitUntilLoaded:async () => {},
   deliverD0GridToPreparador,
+  deliverD1GridToPreparador,
   chrome: {
     tabs: {
       query:async () => [{id:42}],
@@ -349,23 +380,35 @@ const forwardContext = vm.createContext({
     }
   }
 });
-vm.runInContext(background.slice(forwardStart, forwardEnd) + '\nglobalThis.__forwardD0Grid = forwardD0Grid;', forwardContext);
+vm.runInContext(background.slice(forwardStart, forwardEnd) + '\nglobalThis.__forwardD0Grid = forwardD0Grid; globalThis.__forwardD1Grid = forwardD1Grid;', forwardContext);
 const forwarded = await forwardContext.__forwardD0Grid(valid.capture);
 assert.equal(injectedWorld, 'MAIN', 'usa o mesmo mundo JavaScript do receptor da página');
 assert.equal(forwarded.previewReady, true);
 assert.equal(captureReceivedInMain, valid.capture, 'a ponte entrega a captura ao receptor real, não ao window isolado');
+const forwardedD1 = await forwardContext.__forwardD1Grid(validD1.capture);
+assert.equal(injectedWorld, 'MAIN', 'a entrega D−1 também usa o mundo da página');
+assert.equal(forwardedD1.waitingForD0, true);
+assert.equal(captureReceivedInMain, validD1.capture, 'a ponte entrega o contrato D−1 ao receptor D−1');
 
 const previous = new Map(['location','window'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
 let receivedCapture = null;
+let receivedD1Capture = null;
 Object.assign(globalThis, {
   location: { origin:'http://127.0.0.1:8765', pathname:'/preparador-MCC/' },
-  window: { async __hubReceiveMccD0Grid(capture) { receivedCapture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:true}; } }
+  window: {
+    async __hubReceiveMccD0Grid(capture) { receivedCapture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:true}; },
+    async __hubReceiveMccD1Grid(capture) { receivedD1Capture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:false,waitingForD0:true}; }
+  }
 });
 try {
   const delivered = await deliverD0GridToPreparador(valid.capture);
   assert.equal(delivered.ok, true);
   assert.equal(receivedCapture.source, 'mcc_chrome_extension');
   assert.equal(delivered.campaignCount, 2);
+  const deliveredD1 = await deliverD1GridToPreparador(validD1.capture);
+  assert.equal(deliveredD1.ok, true);
+  assert.equal(deliveredD1.waitingForD0, true);
+  assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v1');
 } finally {
   for (const [key, descriptor] of previous) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -373,4 +416,4 @@ try {
   }
 }
 
-console.log('captura MCC estrutural D0, completude, data/locale, zero×ausência, ponte e ordenação visual ok');
+console.log('captura MCC estrutural D0/D−1, completude, data operacional, zero×ausência, ponte e ordenação visual ok');

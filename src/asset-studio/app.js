@@ -1,5 +1,5 @@
 const specs = {
-  desktop: { name: '01.png', width: 1892, height: 908, brightness: 0.72 },
+  desktop: { name: '01.png', width: 1892, height: 908, brightness: 0.72, colorMask: 0xFC },
   mobile: { name: '02.png', width: 373, height: 819, brightness: 0.72 },
   favicon: { name: '03.png' }
 };
@@ -148,12 +148,12 @@ function drawCover(ctx, image, width, height) {
   ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
 }
 
-function optimizeColorsBalanced(imageData) {
+function optimizeColorsBalanced(imageData, colorMask = 0xF8) {
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
-    data[i] &= 0xF8;
-    data[i + 1] &= 0xF8;
-    data[i + 2] &= 0xF8;
+    data[i] &= colorMask;
+    data[i + 1] &= colorMask;
+    data[i + 2] &= colorMask;
   }
   return imageData;
 }
@@ -169,7 +169,7 @@ async function processBackground(file, spec) {
   drawCover(ctx, image, spec.width, spec.height);
   ctx.filter = 'none';
   const pixels = ctx.getImageData(0, 0, spec.width, spec.height);
-  ctx.putImageData(optimizeColorsBalanced(pixels), 0, 0);
+  ctx.putImageData(optimizeColorsBalanced(pixels, spec.colorMask), 0, 0);
   decoded.close();
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }

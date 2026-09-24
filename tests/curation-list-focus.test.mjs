@@ -1,0 +1,46 @@
+import assert from'node:assert/strict';
+import{mountCurationListFocus}from'../src/curadoria/list-focus.mjs';
+
+const stored=new Map(),listeners=[],rowClasses=new Set(),controlClasses=new Set();
+const control={dataset:{curationFocus:'glimpse'},offsetWidth:100,classList:{add:value=>controlClasses.add(value),remove:value=>controlClasses.delete(value)}};
+const row={dataset:{product:'normalized-product'},offsetWidth:800,classList:{add:value=>rowClasses.add(value),remove:value=>rowClasses.delete(value)},hasAttribute:name=>name==='data-product',getAttribute:name=>name==='data-product'?'normalized-product':null,querySelectorAll:selector=>selector.includes('data-curation-focus')?[control]:[]};
+control.closest=selector=>selector==='[data-product],[data-offer]'?row:null;
+let scrollPosition=[0,0],listScrollPosition=[0,0];
+const listScroll={dataset:{},scrollLeft:154,scrollTop:386};
+globalThis.sessionStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)};
+globalThis.document={addEventListener:(name,handler,capture)=>listeners.push({name,handler,capture}),querySelector:selector=>selector==='.tablewrap'||selector==='[data-curation-list-scroll]'?listScroll:null,querySelectorAll:()=>[row]};
+globalThis.window={scrollX:31,scrollY:742,scrollTo:(x,y)=>{scrollPosition=[x,y]},addEventListener:(name,handler)=>listeners.push({name,handler})};
+
+const focus=mountCurationListFocus('manager',{blockingSelector:'#productSheet:not(.hidden)'});
+listeners.find(item=>item.name==='click'&&item.capture===true).handler({target:{closest:()=>control}});
+assert.ok(rowClasses.has('curation-focus-pulse'),'a linha recebe destaque imediato no acionamento');
+assert.ok(controlClasses.has('curation-focus-pulse'),'o controle acionado recebe destaque imediato');
+assert.ok('curationListScroll'in listScroll.dataset,'o contêiner da tabela fica marcado para preservar sua rolagem');
+const saved=JSON.parse(stored.get('curadoria-list-focus:v1:manager'));
+assert.deepEqual(saved,{rowAttribute:'data-product',rowKey:'normalized-product',control:'glimpse',scrollX:31,scrollY:742,listScroll:{left:154,top:386},capturedAt:saved.capturedAt});
+scrollPosition=[0,0];
+listScrollPosition=[listScroll.scrollLeft,listScroll.scrollTop];
+listScroll.scrollLeft=0;listScroll.scrollTop=0;
+rowClasses.clear();controlClasses.clear();
+globalThis.document.querySelectorAll=()=>[];
+assert.equal(focus.restore(),false,'a posição aguarda a listagem recriar a linha capturada');
+assert.deepEqual(scrollPosition,[0,0],'não tenta restaurar antes de a linha existir na página');
+assert.equal(stored.has('curadoria-list-focus:v1:manager'),true,'mantém o estado salvo até a linha reaparecer');
+globalThis.document.querySelectorAll=()=>[row];
+assert.equal(focus.restore(),true,'o estado capturado pode ser restaurado depois da volta');
+assert.deepEqual(scrollPosition,[31,742],'a posição vertical e horizontal da página é restaurada');
+assert.deepEqual([listScroll.scrollLeft,listScroll.scrollTop],listScrollPosition,'a rolagem interna e horizontal da tabela também é restaurada');
+assert.ok(rowClasses.has('curation-focus-pulse'),'a linha é destacada novamente no retorno');
+assert.ok(controlClasses.has('curation-focus-pulse'),'o mesmo controle é destacado no retorno');
+assert.equal(stored.has('curadoria-list-focus:v1:manager'),false,'o estado é consumido após restauração');
+
+rowClasses.clear();controlClasses.clear();
+const ecommerceFocus=mountCurationListFocus('top-performance',{blockingSelector:'#offerSheet:not(.hidden)',highlightOnCapture:false});
+const ecommerceCapture=listeners.filter(item=>item.name==='click'&&item.capture===true).at(-2);
+ecommerceCapture.handler({target:{closest:()=>control}});
+assert.equal(rowClasses.has('curation-focus-pulse'),false,'E-commerce GM não anima a linha ao abrir a ficha/pop-up');
+assert.equal(controlClasses.has('curation-focus-pulse'),false,'E-commerce GM não anima o botão ao abrir a ficha/pop-up');
+assert.equal(ecommerceFocus.restore(),true,'E-commerce GM restaura e anima somente ao voltar à listagem');
+assert.ok(rowClasses.has('curation-focus-pulse'),'a linha é animada depois do retorno à lista');
+assert.ok(controlClasses.has('curation-focus-pulse'),'o controle de imagens/trends é animado depois do retorno à lista');
+console.log('curation list focus ok');

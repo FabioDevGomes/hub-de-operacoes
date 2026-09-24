@@ -17,5 +17,13 @@ assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Pagamento não
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'Lista de Gerente não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-manager-decision')&&html.includes('openManagerDecision'),'decisão manual não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20260922-curation-decision-colors'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
+assert.ok(html.includes('trends-sheet.css?v=20260923-curation-list-typography'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
+const sharedStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
+assert.ok(sharedStyles.includes('nav[data-hub-sidebar-active="manager"]')&&sharedStyles.includes('#rows td *{font-weight:400!important}'),'valores das colunas da Lista de Gerente não estão em peso normal');
+assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=1'")&&html.includes("mountCurationListFocus('manager'"),'Lista de Gerente não instala a preservação compartilhada de posição e linha');
+assert.ok(html.includes('list-focus.mjs'),'helper de foco e rolagem não foi incluído no build');
+assert.ok(html.includes('listFocus.restore()'),'Lista de Gerente não tenta restaurar o foco após atualizar a listagem');
+const focusStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
+assert.ok(focusStyles.includes('curation-focus-row-pulse')&&focusStyles.includes('curation-focus-control-pulse'),'animação leve da linha e do controle ausente');
+assert.ok(focusStyles.includes('.tablewrap td[data-col="countries"]{white-space:nowrap}'),'países da Lista de Gerente devem permanecer em uma linha');
 console.log('manager list ui ok');

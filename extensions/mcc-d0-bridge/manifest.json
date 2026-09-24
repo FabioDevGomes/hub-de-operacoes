@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Hub MCC D0",
+  "version": "1.1.0",
+  "description": "Captura a grade D0 da MCC ou encaminha um CSV manual ao Preparador local.",
+  "action": {
+    "default_title": "Capturar D0 da MCC",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["scripting", "activeTab"],
+  "host_permissions": ["http://127.0.0.1:8765/preparador-MCC/*"]
+}

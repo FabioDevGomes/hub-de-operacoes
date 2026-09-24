@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {calculateDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers} from '../src/copy-ficha/copy-ficha-domain.mjs';
+import {calculateDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields} from '../src/copy-ficha/copy-ficha-domain.mjs';
 
 const input={
   product:'MyoGlow',countryCode:'US',htmlLanguage:'en-US',currency:'USD',
@@ -144,6 +144,90 @@ assert.deepEqual(checkoutPackages.packages.map(item=>[item.label,item.regularPri
 ],'deve reconhecer cards rotulados pelo produto e preservar a ordem e os dois preços em cada bloco');
 assert.deepEqual(checkoutPackages.packages.map(item=>item.confidence),['high','high','high','high'],'pacotes com dois preços explícitos devem ser classificados com confiança alta');
 assert.deepEqual(checkoutPackages.packages.map(item=>item.contents),['Medium House 1500 - 2000 sq.ft','Small Apartment Under 1000 sq.ft','Small House 1000-1500 sq.ft','Large House 2000 - 2500 sq.ft'],'badges, placeholders e CTAs não devem ser interpretados como conteúdo do pacote');
+const groundedFootwearPaste=`GET UP TO 60% OFF NOW! USE PROMO CODE: MOVE26 — LIMITED TIME OFFER
+90-Day 100% Money Back Guarantee
+Questions? Call: 1-888-996-7910 Email: support@groundedfootwear.com
+100% Encrypted & Secure Checkout
+Checkout
+Bonus Deals
+Receipt
+MOVE26
+PROMO APPLIED
+Promo code expires in: 06:38. Stay on this page.
+1. Select Quantity
+Bundle and Save!
+You can select color and size on next step
+1 Pair
+Save 50%
+$69.99/ea
+$139.98
+2 Pairs
+Save 55%
+Most Popular
+$62.99/ea
+$279.96
+3 Pairs
+Save 60%
+Best Deal
+$55.99/ea
+$419.94
+Select Your Color and Size
+TARIFF FREE
+SECURE SSL ENCRYPTION
+GUARANTEED SAFE CHECKOUT
+A Complete Guide to Transitioning from Traditional to Grounded Barefoot Shoes
+Yours FREE for a limited time
+with every purchase.
+Valued at $49.99
+©2026 Copyright Grounded Footwear® - All rights reserved.
+Contact Us
+Terms of Use
+Privacy Policy
+Sam from Modesto.
+Just purchased: x3 Pairs of Grounded Freedom Shoes
+JUST NOW`;
+const groundedFootwear=parseOfferText(groundedFootwearPaste);
+assert.equal(groundedFootwear.productCandidate,'Grounded Footwear','nome de rodapé pode ser sugerido quando um termo distintivo é corroborado no conteúdo principal');
+assert.equal(groundedFootwear.productCandidateSource,'footer_corroborated');
+assert.equal(groundedFootwear.productCandidateNeedsReview,true,'produto sugerido do rodapé deve permanecer candidato para revisão');
+assert.match(groundedFootwear.productCandidateEvidence,/grounded/i);
+assert.deepEqual(groundedFootwear.packages.map(item=>[item.label,item.packageQuantity,item.regularPrice,item.promoPrice,item.displayedUnitPrice,item.confidence]),[
+  ['1 Pair',1,139.98,69.99,69.99,'high'],
+  ['2 Pairs',2,279.96,125.98,62.99,'high'],
+  ['3 Pairs',3,419.94,167.97,55.99,'high']
+],'pacotes por quantidade separam preço promocional por unidade, total original exibido e total promocional calculado');
+const groundedFootwearFormattedPaste=groundedFootwearPaste
+  .replace('1. Select Quantity\nBundle and Save!','#### 1. Select QuantityBundle and Save!')
+  .replace(/^(\d{1,2} Pairs?)$/gm,'- **$1**')
+  .replace(/^(Save \d+%|\$\d+\.\d{2}\/ea|Most Popular|Best Deal)$/gm,'**$1**');
+assert.deepEqual(parseOfferText(groundedFootwearFormattedPaste).packages.map(item=>[item.label,item.packageQuantity,item.regularPrice,item.promoPrice,item.displayedUnitPrice,item.confidence]),[
+  ['1 Pair',1,139.98,69.99,69.99,'high'],
+  ['2 Pairs',2,279.96,125.98,62.99,'high'],
+  ['3 Pairs',3,419.94,167.97,55.99,'high']
+],'colagem formatada com título “Select QuantityBundle” e cartões em Markdown ainda deve detectar os pacotes');
+assert.ok(groundedFootwear.packages.every(item=>item.promoTotalCalculated&&item.priceNote.includes('total promocional calculado')));
+assert.ok(groundedFootwear.packages[1].priceNote.includes('$62.99/ea')&&groundedFootwear.packages[1].priceNote.includes('$279.96'));
+assert.equal(groundedFootwear.packages[1].contents,'','selos e textos de navegação não entram como conteúdo do pacote');
+const mismatchedPairBadge=parseOfferText(groundedFootwearPaste.replace('Save 55%','Save 45%'));
+assert.equal(mismatchedPairBadge.packages[1].confidence,'review','percentual promocional incompatível impede alta confiança do pacote');
+const groundedAssets=generateAssets({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
+assert.equal(groundedAssets.bestDiscountPercent,60);
+assert.deepEqual(groundedAssets.packages.map(item=>item.discountPercent),[50,55,60],'descontos são calculados usando totais comparáveis para cada quantidade');
+assert.ok(groundedAssets.sitelinks.some(item=>item.text==='3 Pairs'&&item.line1.includes('$55.99/ea')),'sitelinks usam o preço por unidade realmente exibido');
+assert.ok(!groundedAssets.sitelinks.some(item=>item.line1.includes('$167.97')),'copy de anúncio não apresenta total promocional calculado como se estivesse diretamente exibido');
+const groundedFicha=buildFicha({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
+assert.ok(groundedFicha.priceText.includes('calculated promotional total $125.98')&&groundedFicha.priceText.includes('displayed unit price $62.99/ea'),'ficha registra explicitamente unidade exibida e total promocional calculado');
+assert.ok(groundedFicha.faqs[0].answer.includes('total calculated from $69.99/ea × 1'),'FAQ não confunde preço unitário com total do pacote');
+const uncorroboratedFooter=parseOfferText(groundedFootwearPaste.replace('Grounded Barefoot Shoes','Traditional Barefoot Shoes'));
+assert.notEqual(uncorroboratedFooter.productCandidate,'Grounded Footwear','nome de rodapé sem termo distintivo no corpo não deve ser promovido');
+const groundedHeading=parseOfferText(groundedFootwearPaste.replace('A Complete Guide to Transitioning from Traditional to Grounded Barefoot Shoes','Grounded Footwear®\nBarefoot Shoes'),'https://offer.example/freedom/en/us/checkout');
+assert.equal(groundedHeading.productCandidate,'Grounded Footwear','título exato do conteúdo principal prevalece sobre slug curto da URL');
+assert.equal(groundedHeading.productCandidateSource,'body_corroborated_footer');
+assert.equal(groundedHeading.productCandidateNeedsReview,true,'nome da linha de produto/rodapé permanece sujeito à revisão humana');
+const groundedBodyFooter=parseOfferText(groundedFootwearPaste.replace('A Complete Guide to Transitioning from Traditional to Grounded Barefoot Shoes','A Complete Guide to Transitioning from\nTraditional to Grounded Barefoot Shoes\nGrounded Footwear®\nBarefoot Shoes\nTalk to a Grounded Footwear® expert to receive help for any needs.'));
+assert.equal(groundedBodyFooter.productCandidate,'Grounded Footwear','o nome literal repetido no conteúdo deve prevalecer como sugestão da oferta');
+assert.equal(groundedBodyFooter.productCandidateSource,'body_corroborated_footer','a coincidência exata entre conteúdo e rodapé deve ser distinguida de repetição genérica');
+assert.equal(groundedBodyFooter.productCandidateNeedsReview,true,'nome corroborado no conteúdo permanece para revisão de marca/produto');
 const australianLocale=parseOfferText('Shipping information. Place order.','https://shop.example.com/order/en/au/checkout');
 assert.equal(australianLocale.countryCode,'AU','locale regional explícito da URL deve prevalecer sobre o país padrão do idioma');
 assert.equal(australianLocale.htmlLanguage,'en-AU');
@@ -155,6 +239,7 @@ assert.ok(assets.headlines.some(item=>item.includes('60.3%')),'deve priorizar o 
 assert.ok(assets.headlines.every(item=>[...item].length<=30),'títulos devem respeitar 30 caracteres');
 assert.ok(assets.descriptions.every(item=>[...item].length>=70&&[...item].length<=90),'descrições devem ficar entre 70 e 90 caracteres');
 assert.ok(assets.descriptions.every(item=>/60\.3%/.test(item)),'todas as descrições devem destacar o percentual de desconto');
+assert.ok(assets.descriptions.every(item=>[...item].filter(character=>character==='%').length===1&&!/%\s*%/.test(item)),'cada descrição deve conter exatamente um sinal de porcentagem');
 assert.ok(assets.descriptions.every(item=>/choose|order|compare|select|shop|complete your order/i.test(item)),'todas as descrições devem incluir uma CTA direta');
 assert.ok(assets.descriptions.some(item=>/\$120\.00/.test(item)&&/60\.3%/.test(item)),'deve incluir o valor economizado junto ao percentual quando calculável');
 assert.ok(assets.sitelinks.length>=8,'deve gerar ao menos 8 sitelinks');
@@ -179,6 +264,7 @@ for(const [htmlLanguage,cta] of Object.entries(localeCtas)){
   assert.ok(localized.descriptions.length>=3,`${htmlLanguage}: deve gerar várias descrições válidas`);
   assert.ok(localized.descriptions.every(item=>[...item].length>=70&&[...item].length<=90),`${htmlLanguage}: todas devem ficar entre 70 e 90 caracteres`);
   assert.ok(localized.descriptions.every(item=>/60[.,]3\s?%/.test(item)),`${htmlLanguage}: todas devem manter o percentual de desconto`);
+  assert.ok(localized.descriptions.every(item=>[...item].filter(character=>character==='%').length===1&&!/%\s*%/.test(item)),`${htmlLanguage}: cada descrição deve conter exatamente um sinal de porcentagem`);
   assert.ok(localized.descriptions.every(item=>cta.test(item)),`${htmlLanguage}: todas devem conter CTA localizada`);
 }
 const longProductAssets=generateAssets({...input,product:'A Product Name That Is Deliberately Much Longer Than The Description Limit'});
@@ -205,6 +291,11 @@ assert.ok(!unconfirmed.sitelinks.some(item=>/shipping|guarantee/i.test(`${item.t
 
 assert.deepEqual(generationBlockers(input),['Urgência atual','Escassez atual'],'estados de urgência e escassez pendentes devem bloquear a geração');
 const resolved={...input,urgencyConfirmed:'no',scarcityConfirmed:'no'};
+assert.deepEqual(generationBlockerFields({...resolved,freeShipping:'pending'}),['freeShipping'],'campo de frete grátis deve ser identificado para destaque visual');
+assert.deepEqual(generationBlockerFields({...resolved,guaranteeStatus:'confirmed',guaranteeDays:''}),['guaranteeDays'],'prazo ausente deve apontar o campo específico que falta');
+assert.deepEqual(generationBlockerFields({...resolved,affiliateUrl:'not-a-url'}),['affiliateUrl'],'URL inválida deve ser identificada para destaque');
+assert.deepEqual(generationBlockerFields({...input,freeShipping:'pending',fastShipping:'pending',guaranteeStatus:'pending',urgencyConfirmed:'pending',scarcityConfirmed:'pending',affiliateUrl:'',destination:'',currency:'',packages:[]}),['freeShipping','fastShipping','guaranteeStatus','urgencyConfirmed','scarcityConfirmed','affiliateUrl','destination','currency','packages'],'todos os bloqueadores pendentes devem ser enumerados');
+assert.deepEqual(generationBlockerFields(resolved),[],'formulário sem bloqueios não deve manter campos sinalizados');
 assert.deepEqual(generationBlockers(resolved),[],'estados confirmados ou explicitamente recusados não devem bloquear');
 assert.equal(buildFicha(resolved).pending.length,0,'ficha resolvida não deve conter pendências');
 assert.ok(!fichaJson(resolved).includes('"CONFIRMAR"'),'ficha liberada não pode conter campos CONFIRMAR');

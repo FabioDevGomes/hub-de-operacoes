@@ -32,6 +32,10 @@ assert.equal(iteration.snapshot.periods.D_zero.status_campanha_observado.valor,'
 assert.equal(iteration.snapshot.periods.D_zero.status_qualificacao.valor,'Eligible');
 assert.equal(first.events.some(event=>event.event_type==='campaign_delivery_started'),false,'sinais positivos na primeira coleta não comprovam início observado da entrega');
 
+const metricsBaseline=db.importManifest(db.create(),manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:100,clicks:10,cost:5,conversions:1,revenue:20})]),rowFactory,{source:'preparador_mcc'});
+const metricsOnly=db.importManifest(metricsBaseline.base,manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:150,clicks:15,cost:7,conversions:2,revenue:40})]),rowFactory,{overwrite:true,source:'preparador_mcc'});
+assert.equal(metricsOnly.events.length,0,'alteração isolada de métricas não deve criar eventos operacionais');
+
 const repeated=db.importManifest(first.base,manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60')]),rowFactory,{source:'test-preparador'});
 assert.equal(repeated.events.length,0,'reimportar o mesmo manifesto não gera eventos duplicados');
 assert.equal(repeated.base.event_log.length,initial.length);
@@ -48,11 +52,12 @@ assert.notEqual(siblingEvent.iteration_id,iteration.iteration_id,'cada campanha 
 assert.equal(withSibling.events.some(event=>event.event_type==='account_first_seen'),false);
 
 const delivering=db.importManifest(withSibling.base,manifest([
-  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2,conversions:1,revenue:85}),
-  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60'),
-]),rowFactory,{overwrite:true,source:'hub_excel_sync'});
+  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{date:'2026-09-21',impressions:40,clicks:4,cost:2,conversions:1,revenue:85}),
+  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60',{date:'2026-09-21'}),
+],'2026-09-21'),rowFactory,{overwrite:true,source:'hub_excel_sync'});
 const delivery=delivering.events.find(event=>event.event_type==='campaign_delivery_started');
-assert.ok(delivery,'transição observada de zero para entrega deve ser registrada');
+assert.ok(delivery,'campanha previamente observada sem entrega deve gerar evento ao iniciar entrega em outro dia');
+assert.equal(delivery.metadata.observation_date,'2026-09-21');
 assert.equal(delivery.snapshot.periods.D_zero.cpa_real,2);
 assert.equal(delivery.snapshot.periods.D_zero.roi,4150);
 assert.equal(delivery.snapshot.periods.D_zero.valor_conversao.valor,85);
@@ -61,9 +66,9 @@ assert.equal(delivery.snapshot.periods.D_zero.porcentagem_impressao_parte_superi
 const invalidPrior=structuredClone(withSibling.base);
 invalidPrior.diario.find(row=>row.campanha_id===iteration.campaign_id).celulas.O={value:'valor inválido'};
 const invalidBaseline=db.importManifest(invalidPrior,manifest([
-  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2}),
-  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60'),
-]),rowFactory,{overwrite:true,source:'preparador_mcc'});
+  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{date:'2026-09-21',impressions:40,clicks:4,cost:2}),
+  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60',{date:'2026-09-21'}),
+],'2026-09-21'),rowFactory,{overwrite:true,source:'preparador_mcc'});
 assert.equal(invalidBaseline.events.some(event=>event.event_type==='campaign_delivery_started'&&event.campaign_id===iteration.campaign_id),false,'métrica anterior inválida não pode ser interpretada como custo zero');
 
 const statusChanged=db.importManifest(delivering.base,manifest([
@@ -75,6 +80,25 @@ const stateEvent=statusChanged.events.find(event=>event.event_type==='campaign_s
 assert.equal(stateEvent.metadata.from_status,'Enabled');
 assert.equal(stateEvent.metadata.to_status,'Paused');
 assert.equal(stateEvent.snapshot.status_qualificacao,'Disapproved');
+
+const statusReverted=db.importManifest(statusChanged.base,manifest([
+  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2,conversions:1,revenue:85,campaignState:'Enabled',qualification:'Eligible'}),
+  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60'),
+]),rowFactory,{overwrite:true,source:'preparador_mcc'});
+const statusChangedAgain=db.importManifest(statusReverted.base,manifest([
+  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2,conversions:1,revenue:85,campaignState:'Paused',qualification:'Disapproved'}),
+  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60'),
+]),rowFactory,{overwrite:true,source:'preparador_mcc'});
+const repeatedStatusEvent=statusChangedAgain.events.find(event=>event.event_type==='campaign_status_changed');
+assert.ok(repeatedStatusEvent,'uma segunda transição real, mesmo no mesmo dia, deve ser registrada');
+assert.notEqual(repeatedStatusEvent.event_id,stateEvent.event_id,'transições distintas não podem colidir na chave de idempotência');
+assert.equal(repeatedStatusEvent.metadata.from_status,'Enabled');
+assert.equal(repeatedStatusEvent.metadata.to_status,'Paused');
+const sameStatusAgain=db.importManifest(statusChangedAgain.base,manifest([
+  campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2,conversions:1,revenue:85,campaignState:'Paused',qualification:'Disapproved'}),
+  campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60'),
+]),rowFactory,{overwrite:true,source:'preparador_mcc'});
+assert.equal(sameStatusAgain.events.length,0,'reimportar o mesmo estado após uma transição repetida continua idempotente');
 
 const qualificationOnly=db.importManifest(statusChanged.base,manifest([
   campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{impressions:40,clicks:4,cost:2,conversions:1,revenue:85,campaignState:'Paused',qualification:'Eligible'}),
@@ -91,6 +115,8 @@ const differentAccount=db.importManifest(qualificationOnly.base,manifest([
 const accountTest=differentAccount.base.event_log.find(event=>event.event_type==='test_iteration_created'&&event.account_id==='9999');
 assert.equal(accountTest.product_id,iteration.product_id);
 assert.equal(accountTest.test_id,'test:vitaslimex|account:9999');
+assert.equal(differentAccount.events.filter(event=>event.event_type==='account_first_seen'&&event.account_id==='9999').length,1,'nova conta deve registrar primeiro aparecimento');
+assert.equal(differentAccount.events.filter(event=>event.event_type==='account_first_used'&&event.account_id==='9999').length,1,'nova conta deve registrar primeiro uso');
 
 const ambiguous=db.importManifest(db.create(),manifest([campaign('20/09 - Produto Desconhecido 3 (GM) 45% - U$ 60')]),rowFactory,{source:'preparador_mcc'});
 const ambiguousEvent=ambiguous.events.find(event=>event.event_type==='test_iteration_created');

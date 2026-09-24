@@ -25,6 +25,7 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 - `/?view=accounts`: Mapa de Produtos por Conta.
 - `/?view=macro`: Controle Macro, com resumo diário da operação.
 - `/?view=observability`: Observabilidade Decisória Operacional.
+- `/?view=curation-observability`: Observabilidade da Curadoria (domínio pré-teste, separado da operação).
 - `/?view=time`: Meu Tempo.
 - `/?view=copy`: Copy e Ficha.
 - `/?view=presell`: Gerador de Pre-Sell.
@@ -32,10 +33,22 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 - `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/glimpse/`: módulos de curadoria.
 - `/asset-studio/`: preparação local de assets.
 
+As listas da Lista de Gerente e de E-commerce GM usam `src/curadoria/list-focus.mjs` para registrar em `sessionStorage` a rolagem da página e do contêiner `.tablewrap`, a identidade da linha e a coluna acionada (Glimpse, Trends, Imagens ou Decisão). Ao voltar do Glimpse, fechar as fichas ou atualizar a lista após uma decisão, a página restaura as posições e anima a linha e o controle acionado com três pulsos azuis sutis. O estado é temporário por aba e expira após 30 minutos.
+
+`src/curadoria/keyword-candidates-ui.mjs` é o componente de apresentação compartilhado para listas de candidatas e seus botões de pesquisa/remoção. Ele recebe callbacks e contexto; cada tela continua responsável por persistir no domínio correspondente e montar a URL da plataforma. Lista de Gerente e E-commerce GM o usam tanto para candidatas positivas do Google Trends quanto para negativas do Google Imagens: no Trends, cada candidata tem busca individual; em Imagens, as candidatas não têm botões individuais e um único botão coletivo fica à direita da lista, excluindo todos os termos registrados naquele produto/país. `imageSearchUrlExcluding` aceita um termo ou uma lista, adiciona `-palavra` (ou `-"frase com espaços"`) para cada negativa e preserva país/idioma do cartão; a busca normal de imagens permanece sem exclusão. Radar SpyHero usa somente o fluxo de Trends, com `trendsKeywordCandidates` no registro do sinal, sem criar avaliações ou entradas no histórico de Trends. Ao incluir outra tela, reutilize o renderizador e mantenha separado o armazenamento e o contexto de busca.
+
+No E-commerce GM, países incluídos manualmente na ficha de Google Trends são persistidos em `offers.manualCountries`, separados de `countriesVisible` vindos da coleta GuruMedia. `Domain.offerCountryCodes()` combina e deduplica as duas listas para os chips de Trends e para gerar uma seção por país em Google Imagens; países manuais são identificados visualmente. `mergeOffer()` preserva `manualCountries` em coletas futuras, enquanto snapshots continuam registrando apenas os países obtidos da fonte. Não grave países manuais como se fizessem parte da coleta original.
+
+O badge de progresso da coluna Imagens e sua ordenação usam a mesma lista combinada de países. Portanto, incluir um país manualmente aumenta o total de validações esperadas; se houver uma avaliação de Imagens salva para esse código, ela também conta como verificada. Ao modificar esse progresso, atualize a apresentação e a ordenação em conjunto.
+
 ## Grupos do menu lateral
 
+O menu lateral das telas principais e dos módulos independentes usa o componente comum `src/sidebar-component.js` e seus estilos `src/sidebar-component.css`. O build publica esses arquivos na raiz de `dist/`. Cada tela mantém somente um mount com `data-hub-sidebar` e um mount `data-hub-sidebar-products`, configurando o modo SPA ou a chave ativa da página; rótulos, grupos, links, acordeão, estado aberto compartilhado e animação ficam centralizados. Na SPA, IDs de navegação vêm de `src/view-registry.js`; os controles/lista dinâmica de campanhas do Diário continuam no mount de Produtos e preservam seus IDs existentes. Glimpse é exceção intencional: é uma janela transitória focada e permanece sem menu.
+
+Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.js` (e registre views da SPA em `src/view-registry.js`), sem copiar rótulos, destinos ou lógica do acordeão para cada HTML. Para validar, rode `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs`, `tests/build.test.mjs` e a suíte completa; confira visualmente a Visão Geral, Preparador MCC, Lista de Gerente, E-commerce GM, Radar e Asset Studio, incluindo estado ativo e expansão do grupo.
+
 - Operação: Visão geral, Preparador MCC e Controle Macro.
-- Análises: CPA, Mapa por Conta e Observabilidade Decisória.
+- Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
 - Curadoria: Radar SpyHero, Lista de Gerente e E-commerce GM.
 - Criação de ofertas: Copy e Ficha, Gerador de Pre-Sell e Asset Studio.
 - Pessoal: Meu Tempo.
@@ -47,6 +60,18 @@ Para as próximas atualizações diárias, a política operacional é usar somen
 
 O Controle Macro também apresenta uma evolução com dois escopos: diário do mês selecionado e consolidado mensal desde abril de 2026. `src/control-macro/domain.js` expõe `dailyTrendBuckets()` e `monthlyTrendBuckets()` para preparar séries sem converter dados ausentes em zero; agregados incluem cobertura observada. O ROI mensal deve ser ponderado pela soma de faturamento menos investimento nos dias pareados, dividida pelo investimento pareado, e não por média de percentuais diários. A interface mantém Financeiro, ROI, Cliques e Vendas em visualizações próprias e inclui Desempenho, que agrupa ROI, cliques e vendas num único painel com três faixas alinhadas no mesmo eixo de tempo e escala independente por métrica; o tooltip de vendas informa totais oficiais e provisórios. Preserve lacunas por falta de dados e a cobertura dos pontos nos tooltips. `tests/control-macro.test.mjs` valida os agregados; `tests/build.test.mjs` verifica controles e integração da visualização.
 
+## Observabilidade da Curadoria (pré-teste)
+
+`src/curadoria/curation-observability-domain.mjs`, `curation-observability-storage.mjs`, `curation-observability.mjs` e `curation-observability-view.mjs` implementam uma view principal registrada como `curation-observability`. A pergunta deste domínio é “o que eu sabia sobre este produto antes do teste?”; não acrescente esses eventos ao Event Log operacional. A store usa o banco independente `radar-curadoria-observability`; decisões “Subir campanha” geram `snapshot_decisao` imutável e uma correlação inicialmente pendente. Snapshot de início de teste ainda não existe no MVP.
+
+Trends, Imagens, Glimpse e decisão são capturados após o salvamento original, de forma assíncrona e idempotente. Para performance, não abra a base de Observabilidade ao carregar as listas de curadoria; o banco é aberto na primeira gravação ou ao acessar a view. Grave somente o novo evento/detalhe. Snapshot mantém projeção compacta do sinal atual; Glimpse aponta para sua análise existente e eventos detalhados são lidos por chave só ao expandir. A lista consulta páginas de 30 itens por índice, com limite de 600 posições por página/filtro; o estado aberto de uma linha não carrega ao navegar para outra página. Exportação integral só ocorre quando o usuário solicita backup e a restauração é merge-only.
+
+Correlação por nome é sugestão, não confirmação. A busca do Event Log operacional é sob demanda; exija confirmação humana do `product_id` e registre cada confirmação, correção ou invalidação em `correlations`, sem editar os dois históricos. Ver [modelo e persistência](data-model.md) e [workflow de testes](engineering-workflow.md) para stores, índices e validação.
+
+Em Meu Tempo (`src/meu-tempo/`), a aba Histórico inicia com 13 dias inclusivos até a data atual. Na comparação, a coluna Média calcula também os tempos produtivo e total incluindo dias sem registros como zero. O quadro “Tempo trabalhado” nos últimos 7 dias soma somente lançamentos de duração na categoria Trabalho e usa o snapshot da categoria do lançamento; se não existir, recorre à categoria atual do item. O quadro “Tempo produtivo” no mesmo período soma os lançamentos de duração de qualquer categoria cujo `productiveSnapshot` esteja marcado como verdadeiro. Na comparação e no detalhamento do Histórico, itens de tipo booleano exibem `1` como “Sim” e `0` como “Não”; valores ausentes permanecem como “—”, sem serem tratados como zero. As tabelas da aba não devem ter limite de altura nem rolagem vertical interna: a tabela cresce com o conteúdo, mantém apenas rolagem horizontal quando necessária e a rolagem vertical fica na página.
+
 ## Build e servidor
+
+O padrão tipográfico dos cabeçalhos das tabelas fica centralizado em `src/table-headers.css`, copiado para a raiz de `dist/` pelo build. A SPA principal e páginas independentes carregam essa folha global; as telas de curadoria a incluem pela folha compartilhada `src/curadoria/trends-sheet.css`. Novas páginas com tabelas devem carregar/reutilizar o estilo compartilhado em vez de recriar uppercase ou negrito localmente.
 
 Na raiz, `node build.mjs` gera o painel. O uso operacional é `iniciar-painel.cmd`, servido em `http://127.0.0.1:8765/`. Não selecione outra porta automaticamente: o IndexedDB é isolado por origem. O build padrão deve continuar sem manifesto operacional real.

@@ -3,6 +3,9 @@ import {access, readFile} from 'node:fs/promises';
 
 const launcher=await readFile(new URL('../scripts/iniciar-painel.ps1',import.meta.url),'utf8');
 const server=await readFile(new URL('../scripts/serve-panel.ps1',import.meta.url),'utf8');
+const presellCommon=await readFile(new URL('../presell-engine/modules/Presell.Validation.Common.psm1',import.meta.url),'utf8');
+const presellWorkflow=await readFile(new URL('../presell-engine/tools/Invoke-PresellWorkflow.ps1',import.meta.url),'utf8');
+const presellStructure=await readFile(new URL('../presell-engine/tools/Test-PresellStructure.ps1',import.meta.url),'utf8');
 
 assert.doesNotMatch(launcher,/codex-runtimes|serve_panel\.py|python\.exe/i);
 assert.match(launcher,/serve-panel\.ps1/);
@@ -23,6 +26,17 @@ assert.match(server,/runtime\s*=\s*'powershell'/);
 assert.match(server,/engine\s*=\s*'embedded'/);
 assert.match(server,/\/api\/presell\/validate/);
 assert.match(server,/\/api\/presell\/produce/);
+assert.match(presellCommon,/function Get-PresellPowerShellExecutable/);
+assert.match(presellCommon,/Process\]::GetCurrentProcess\(\)\.MainModule\.FileName/);
+assert.match(presellCommon,/Get-Process -Id \$PID/);
+assert.match(presellCommon,/if \(-not \[string\]::IsNullOrWhiteSpace\(\$engineDirectory\)\)\s*\{\s*\$hostExecutable = Join-Path -Path \$engineDirectory/);
+assert.match(presellCommon,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File \$ScriptPath/);
+assert.match(presellWorkflow,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File \$ProductionScript/);
+assert.doesNotMatch(presellCommon,/&\s*pwsh\b/i,'validadores não devem depender de pwsh estar no PATH');
+assert.doesNotMatch(presellWorkflow,/&\s*pwsh\b/i,'produção do workflow não deve depender de pwsh estar no PATH');
+assert.match(presellStructure,/\[string\]\$RulesPath,/);
+assert.match(presellStructure,/if \(\[string\]::IsNullOrWhiteSpace\(\$RulesPath\)\)\s*\{\s*\$RulesPath = Join-Path -Path \$PSScriptRoot/);
+assert.doesNotMatch(presellStructure,/\$RulesPath\s*=\s*\(Join-Path\s+\$PSScriptRoot/,'RulesPath não deve usar PSScriptRoot no bloco param');
 
 for(const relative of [
   'dist/index.html',

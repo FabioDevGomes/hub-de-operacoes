@@ -1,5 +1,12 @@
 export const ITEM_TYPES=Object.freeze(['duration','number','scale','boolean','text','time']);
 export const BOOLEAN_ITEM_IDS=Object.freeze(['item-alcool','item-refrigerante','item-acucar','item-sodio','item-verde-horario']);
+export const SYMPTOM_SCALE_ITEM_IDS=Object.freeze(['item-garganta','item-rim','item-metalico']);
+export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
+  Object.freeze({value:3,label:'Alto'}),
+  Object.freeze({value:2,label:'Médio'}),
+  Object.freeze({value:1,label:'Baixo'}),
+  Object.freeze({value:0,label:'Inexistente'})
+]);
 
 export const DEFAULT_CATEGORIES=Object.freeze([
   {id:'cat-trabalho',name:'Trabalho',order:10,active:true},
@@ -72,7 +79,7 @@ export function parseLocalizedNumber(raw,{allowNegative=false}={}){
 }
 
 export function waterUnitsToMl(raw,unitMl=350){
-  const units=parseLocalizedNumber(raw),volume=Number(unitMl);
+  const units=parseLocalizedNumber(raw,{allowNegative:true}),volume=Number(unitMl);
   if(!Number.isFinite(volume)||volume<=0)throw new Error('Configure um volume de água válido.');
   return{units,ml:units*volume};
 }
@@ -110,6 +117,22 @@ export function planDurationRemoval(entries,requestedMinutes){
 export function formatDuration(value){
   const minutes=Math.max(0,Math.round(Number(value)||0)),hours=Math.floor(minutes/60),rest=minutes%60;
   return hours?`${hours}h${String(rest).padStart(2,'0')}`:`${rest}min`;
+}
+
+export function booleanHistoryValue(item,value){
+  if(item?.type!=='boolean'&&!BOOLEAN_ITEM_IDS.includes(item?.id))return null;
+  if(value==null||String(value).trim()==='')return'—';
+  const numeric=Number(value);
+  if(numeric===0)return'Não';
+  if(numeric===1)return'Sim';
+  return null;
+}
+
+export function symptomScaleHistoryValue(item,value){
+  if(!SYMPTOM_SCALE_ITEM_IDS.includes(item?.id))return null;
+  if(value==null||String(value).trim()==='')return'—';
+  const numeric=Number(value);
+  return SYMPTOM_SCALE_OPTIONS.find(option=>option.value===numeric)?.label??null;
 }
 
 export function localDate(value=new Date()){
@@ -152,9 +175,29 @@ export function aggregateDay(entries,date){
 }
 
 export function comparisonMatrix(items,entries,dates){
-  const rows=items.map(item=>{const cells=dates.map(date=>aggregateDay(entries.filter(entry=>entry.itemId===item.id),date).byItem.get(item.id)||{entries:[],minutes:0,values:[]});const numeric=cells.map(cell=>item.type==='duration'?cell.minutes:cell.values.map(Number).filter(Number.isFinite).reduce((a,b)=>a+b,0)).filter(Number.isFinite);return{item,cells,average:numeric.length?numeric.reduce((a,b)=>a+b,0)/numeric.length:0}});
+  const rows=items.map(item=>{const cells=dates.map(date=>{const cell=aggregateDay(entries.filter(entry=>entry.itemId===item.id),date).byItem.get(item.id)||{entries:[],minutes:0,values:[]};return SYMPTOM_SCALE_ITEM_IDS.includes(item.id)?{...cell,values:cell.values.length?[cell.values.at(-1)]:[]}:cell});const numeric=cells.map(cell=>{if(item.type==='duration')return cell.minutes;const values=cell.values.map(Number).filter(Number.isFinite);if(SYMPTOM_SCALE_ITEM_IDS.includes(item.id))return values.length?values.at(-1):null;return values.reduce((a,b)=>a+b,0)}).filter(Number.isFinite);return{item,cells,average:numeric.length?numeric.reduce((a,b)=>a+b,0)/numeric.length:0}});
   const foot=dates.map(date=>aggregateDay(entries,date));
-  return{dates,rows,foot};
+  const averages=foot.length?{productiveMinutes:foot.reduce((sum,day)=>sum+day.productiveMinutes,0)/foot.length,totalMinutes:foot.reduce((sum,day)=>sum+day.totalMinutes,0)/foot.length}:{productiveMinutes:null,totalMinutes:null};
+  return{dates,rows,foot,averages};
+}
+
+export function totalDurationForCategory(entries,items,categoryId,dates){
+  const itemById=new Map(items.map(item=>[item.id,item])),dateSet=new Set(dates);
+  return entries.reduce((total,entry)=>{
+    if(entry.type!=='duration'||!dateSet.has(entry.date))return total;
+    const category=entry.categoryIdSnapshot||itemById.get(entry.itemId)?.categoryId;
+    const minutes=Number(entry.minutes);
+    return category===categoryId&&Number.isFinite(minutes)?total+Math.max(0,minutes):total;
+  },0);
+}
+
+export function totalProductiveDuration(entries,dates){
+  const dateSet=new Set(dates);
+  return entries.reduce((total,entry)=>{
+    if(entry.type!=='duration'||!entry.productiveSnapshot||!dateSet.has(entry.date))return total;
+    const minutes=Number(entry.minutes);
+    return Number.isFinite(minutes)?total+Math.max(0,minutes):total;
+  },0);
 }
 
 export function snapshotFor(item){return{itemNameSnapshot:item.name,categoryIdSnapshot:item.categoryId,productiveSnapshot:Boolean(item.productive)}}

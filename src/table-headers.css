@@ -1,0 +1,13 @@
+/* Padrão global dos cabeçalhos de tabela do Hub. */
+table thead th,
+table thead th * {
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+  text-transform: lowercase !important;
+}
+
+table thead th::first-letter,
+table thead th button::first-letter,
+table thead th > *::first-letter {
+  text-transform: uppercase !important;
+}

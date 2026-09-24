@@ -16,6 +16,7 @@ assert.equal(rowClass('Subir campanha'),'decision-row-launch');
 assert.equal(rowClass('Campanha no ar'),'decision-row-live');
 assert.equal(rowClass('Revisar'),'');
 assert.match(buttonHtml('Campanha no ar','data-example','123'),/decision-badge live/);
+assert.match(buttonHtml('Campanha no ar','data-example','123'),/data-curation-focus="decision"/);
 assert.match(buttonHtml('Campanha no ar','data-example','123'),/>Campanha no ar<\/button>/);
 assert.ok(styles.includes('.decision-badge.launch,.decision-option.launch{border-color:#8a6f18;background:#332b0f;color:#ffe46d}'),'Subir campanha não usa o tom amarelo nos botões');
 assert.ok(styles.includes('.decision-badge.live,.decision-option.live{border-color:#276249;background:#102d24;color:#83e5bb}'),'Campanha no ar não usa o tom verde nos botões');

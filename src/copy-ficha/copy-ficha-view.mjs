@@ -1,4 +1,4 @@
-import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor,generationBlockers} from './copy-ficha-domain.mjs';
+import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor,generationBlockers,generationBlockerFields} from './copy-ficha-domain.mjs?v=7';
 
 let mounted=false;
 const STORAGE_KEY='copy-ficha-draft-v1';
@@ -6,29 +6,82 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&
 const by=(root,id)=>root.querySelector(`#${id}`);
 const state={packages:[{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''}]};
 
+export function canApplyDetectedValue(field,value,{force=false}={}){
+  const candidate=String(value??'').trim(),current=String(field?.value??'').trim();
+  if(!field||!candidate||current===candidate)return false;
+  return force||!current||field.dataset?.autoFilled==='true';
+}
+
+export function collectAutoFilledFieldIds(fields){
+  return [...fields].filter(field=>field?.id&&field.dataset?.autoFilled==='true').map(field=>field.id);
+}
+
+export function restoreAutoFilledFieldIds(fields,ids=[]){
+  const autoFilled=new Set(Array.isArray(ids)?ids:[]);
+  for(const field of fields){
+    if(!field?.id||!autoFilled.has(field.id))continue;
+    field.dataset.autoFilled='true';
+    field.classList?.add('is-autofilled');
+  }
+}
+
 function packageValues(root){
-  return [...root.querySelectorAll('.copy-ficha-package')].map(row=>({
-    label:row.querySelector('[data-field="label"]').value,
-    regularPrice:row.querySelector('[data-field="regularPrice"]').value,
-    promoPrice:row.querySelector('[data-field="promoPrice"]').value,
-    contents:row.querySelector('[data-field="contents"]').value
-  }));
+  return [...root.querySelectorAll('.copy-ficha-package')].map(row=>{
+    const regularPrice=row.querySelector('[data-field="regularPrice"]').value,promoPrice=row.querySelector('[data-field="promoPrice"]').value;
+    const edited=row.dataset.priceMode==='quantity_bundle'&&(regularPrice!==row.dataset.initialRegular||promoPrice!==row.dataset.initialPromo),priceNote=row.dataset.priceNote||'';
+    return {
+      label:row.querySelector('[data-field="label"]').value,
+      regularPrice,
+      promoPrice,
+      contents:row.querySelector('[data-field="contents"]').value,
+      confidence:edited?'review':row.dataset.confidence||'',
+      priceMode:row.dataset.priceMode||'',
+      packageQuantity:row.dataset.packageQuantity||'',
+      displayedUnitPrice:row.dataset.displayedUnitPrice||'',
+      regularDisplayedTotal:row.dataset.regularDisplayedTotal||'',
+      promoTotalCalculated:!edited&&row.dataset.promoTotalCalculated==='true',
+      discountBadgePercent:row.dataset.discountBadgePercent||'',
+      priceNote:edited?`${priceNote} · Preços editados manualmente; revise unidade e total.`:priceNote
+    };
+  });
+}
+
+function updatePendingHighlights(root){
+  const data=payload(root),pending=new Set(generationBlockerFields(data)),fieldIds={
+    product:'copyProduct',countryCode:'copyCountry',htmlLanguage:'copyLanguage',currency:'copyCurrency',
+    freeShipping:'copyFreeShipping',fastShipping:'copyFastShipping',guaranteeStatus:'copyGuaranteeStatus',
+    guaranteeDays:'copyGuarantee',urgencyConfirmed:'copyUrgency',scarcityConfirmed:'copyScarcity',
+    affiliateUrl:'copyAffiliateUrl',destination:'copyDestination'
+  };
+  root.querySelectorAll('.is-pending').forEach(field=>{field.classList.remove('is-pending');field.removeAttribute('aria-invalid')});
+  for(const [key,id] of Object.entries(fieldIds)){
+    const field=by(root,id);
+    if(pending.has(key)&&field){field.classList.add('is-pending');field.setAttribute('aria-invalid','true')}
+  }
+  const packages=by(root,'copyPackages'),packagesPending=pending.has('packages');
+  packages?.classList.toggle('is-pending',packagesPending);
+  packages?.querySelectorAll('[data-field="promoPrice"]').forEach(field=>{
+    field.classList.toggle('is-pending',packagesPending);
+    if(packagesPending)field.setAttribute('aria-invalid','true');else field.removeAttribute('aria-invalid');
+  });
 }
 
 function renderPackages(root){
   const host=by(root,'copyPackages');
-  host.innerHTML=state.packages.map((item,index)=>`<div class="copy-ficha-package ${item.confidence?'is-autofilled':''}" data-index="${index}">
+  host.innerHTML=state.packages.map((item,index)=>`<div class="copy-ficha-package ${item.confidence?'is-autofilled':''}" data-index="${index}" data-confidence="${esc(item.confidence||'')}" data-price-mode="${esc(item.priceMode||'')}" data-package-quantity="${esc(item.packageQuantity??'')}" data-displayed-unit-price="${esc(item.displayedUnitPrice??'')}" data-regular-displayed-total="${esc(item.regularDisplayedTotal??'')}" data-promo-total-calculated="${item.promoTotalCalculated?'true':'false'}" data-discount-badge-percent="${esc(item.discountBadgePercent??'')}" data-price-note="${esc(item.priceNote||'')}" data-initial-regular="${esc(item.regularPrice??'')}" data-initial-promo="${esc(item.promoPrice??'')}">
     <div class="copy-ficha-field"><label>Nome do pacote${item.confidence?` <span class="copy-ficha-auto-tag">${item.confidence==='high'?'Detectado':'Revisar'}</span>`:''}</label><input class="copy-ficha-input" data-field="label" value="${esc(item.label)}" placeholder="Ex.: 6-month bundle"></div>
-    <div class="copy-ficha-field"><label>Preço original</label><input class="copy-ficha-input" data-field="regularPrice" inputmode="decimal" value="${esc(item.regularPrice)}" placeholder="199.00"></div>
-    <div class="copy-ficha-field"><label>Preço promocional</label><input class="copy-ficha-input" data-field="promoPrice" inputmode="decimal" value="${esc(item.promoPrice)}" placeholder="79.00"></div>
+    <div class="copy-ficha-field"><label>Preço original${item.priceMode==='quantity_bundle'?' (total exibido)':''}</label><input class="copy-ficha-input" data-field="regularPrice" inputmode="decimal" value="${esc(item.regularPrice)}" placeholder="199.00"></div>
+    <div class="copy-ficha-field"><label>Preço promocional${item.promoTotalCalculated?' (total calculado)':''}</label><input class="copy-ficha-input" data-field="promoPrice" inputmode="decimal" value="${esc(item.promoPrice)}" placeholder="79.00"></div>
     <div class="copy-ficha-field"><label>Conteúdo confirmado</label><input class="copy-ficha-input" data-field="contents" value="${esc(item.contents)}" placeholder="Ex.: MyoGlow + 1 month of No-Tox"></div>
     <button class="copy-ficha-btn danger" type="button" data-remove-package="${index}" aria-label="Remover pacote">Remover</button>
+    ${item.priceNote?`<div class="copy-ficha-field span-4 copy-ficha-note">${esc(item.priceNote)}</div>`:''}
   </div>`).join('');
   host.querySelectorAll('[data-remove-package]').forEach(button=>button.onclick=()=>{
     state.packages=packageValues(root).filter((_,index)=>index!==Number(button.dataset.removePackage));
     if(!state.packages.length)state.packages=[{label:'',regularPrice:'',promoPrice:'',contents:''}];
     renderPackages(root);
   });
+  updatePendingHighlights(root);
 }
 
 function inputValue(root,id){return by(root,id)?.value?.trim()||''}
@@ -59,7 +112,10 @@ function payload(root){
   };
 }
 function saveDraft(root){
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload(root)))}catch{}
+  try{
+    const draft={...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(draft));
+  }catch{}
 }
 function restoreDraft(root){
   try{
@@ -69,6 +125,7 @@ function restoreDraft(root){
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
     if(draft.guaranteeStatus===undefined&&draft.guaranteeDays)by(root,'copyGuaranteeStatus').value='confirmed';
     if(Array.isArray(draft.packages)&&draft.packages.length){state.packages=draft.packages;renderPackages(root)}
+    restoreAutoFilledFieldIds(root.querySelectorAll('input,select,textarea'),draft.autoFilledFields);
   }catch{}
 }
 
@@ -96,18 +153,34 @@ function resetCollection(root,toast){
 
 function applyDetected(root,id,value,{force=false}={}){
   const field=by(root,id);
-  if(!field||value===null||value===undefined||String(value).trim()==='')return false;
-  if(!force&&field.value&&field.dataset.autoFilled!=='true')return false;
+  if(!canApplyDetectedValue(field,value,{force}))return false;
   field.value=String(value);
   field.dataset.autoFilled='true';
   field.classList.add('is-autofilled');
   return true;
 }
 
+function useProductSuggestion(root,value){
+  const field=by(root,'copyProduct'),candidate=String(value||'').trim();
+  if(!field||!candidate)return;
+  field.value=candidate;
+  field.dataset.autoFilled='true';
+  field.classList.add('is-autofilled');
+  const titleField=by(root,'copyPageTitle'),titleCandidate=`${candidate} | ${dictionaryFor(inputValue(root,'copyLanguage')||'en-US').packages}`;
+  if(titleField&&(!titleField.value||titleField.dataset.autoFilled==='true'))applyDetected(root,'copyPageTitle',titleCandidate,{force:true});
+  root.querySelector('.copy-ficha-suggestion')?.remove();
+  invalidateGeneratedOutputs(root,'Produto atualizado pela sugestão. Revise os dados e gere novamente.');
+  by(root,'copyAnalysisNote').textContent=`Sugestão aplicada: ${candidate}. Revise se esse nome identifica o produto anunciado ou apenas a marca.`;
+  updatePendingHighlights(root);
+  saveDraft(root);
+}
+
 function analyze(root){
   invalidateGeneratedOutputs(root,'Análise atualizada. Revise as confirmações antes de gerar.');
   const result=parseOfferText(inputValue(root,'copyRawText'),normalizedUrl(inputValue(root,'copyDtcUrl'))),applied=[];
-  if(applyDetected(root,'copyProduct',result.productCandidate))applied.push('produto');
+  const productSuggestionLabel=result.productCandidateSource==='body_corroborated_footer'?'Produto sugerido pelo título/rodapé (revisar)':'Produto sugerido pelo rodapé (revisar)';
+  const productField=by(root,'copyProduct'),currentProduct=inputValue(root,'copyProduct'),hasManualProduct=Boolean(result.productCandidate&&currentProduct&&productField?.dataset.autoFilled!=='true'&&currentProduct!==result.productCandidate);
+  if(applyDetected(root,'copyProduct',result.productCandidate))applied.push(result.productCandidateNeedsReview?productSuggestionLabel.toLowerCase():'produto');
   if(applyDetected(root,'copyCountry',result.countryCode))applied.push('país');
   if(applyDetected(root,'copyLanguage',result.htmlLanguage,{force:Boolean(result.htmlLanguage)}))applied.push('idioma');
   if(applyDetected(root,'copyCurrency',result.currency,{force:Boolean(result.currency)}))applied.push('moeda');
@@ -122,7 +195,7 @@ function analyze(root){
   const currentPackages=packageValues(root),hasPackageData=currentPackages.some(item=>Object.values(item).some(Boolean));
   if(result.packages.length&&!hasPackageData){state.packages=result.packages;renderPackages(root);applied.push(`${result.packages.length} pacote(s)`)}
   const chips=[];
-  if(result.productCandidate)chips.push(`Produto: ${result.productCandidate}`);
+  if(result.productCandidate)chips.push(`${result.productCandidateNeedsReview?productSuggestionLabel:'Produto'}: ${result.productCandidate}`);
   if(result.countryCode)chips.push(`País: ${result.countryCode}`);
   if(result.htmlLanguage)chips.push(`Idioma: ${result.htmlLanguage}`);
   if(result.highestPercent)chips.push(`Maior percentual detectado: ${result.highestPercent}%`);
@@ -133,8 +206,18 @@ function analyze(root){
   if(result.urgencyCandidate)chips.push('Candidato: urgência');
   if(result.scarcityCandidate)chips.push('Candidato: escassez');
   if(result.packages.length)chips.push(`Pacotes detectados: ${result.packages.length}`);
-  by(root,'copyDetected').innerHTML=chips.length?chips.map(item=>`<span class="copy-ficha-chip">${esc(item)}</span>`).join(''):'<span class="copy-ficha-note">Nenhum preço, desconto ou condição reconhecível foi detectado automaticamente.</span>';
-  by(root,'copyAnalysisNote').textContent=applied.length?`Preenchido automaticamente: ${applied.join(', ')}. Revise os campos destacados antes de gerar.`:'Os itens detectados foram mantidos como candidatos porque os campos já continham dados. Revise o passo 2.';
+  const detected=by(root,'copyDetected');
+  detected.innerHTML=chips.length?chips.map(item=>`<span class="copy-ficha-chip">${esc(item)}</span>`).join(''):'<span class="copy-ficha-note">Nenhum preço, desconto ou condição reconhecível foi detectado automaticamente.</span>';
+  if(hasManualProduct&&result.productCandidate){
+    const useSuggestion=document.createElement('button');
+    useSuggestion.type='button';
+    useSuggestion.className='copy-ficha-btn copy-ficha-suggestion';
+    useSuggestion.textContent=`Usar sugestão de produto: ${result.productCandidate}`;
+    useSuggestion.onclick=()=>useProductSuggestion(root,result.productCandidate);
+    detected.append(useSuggestion);
+  }
+  by(root,'copyAnalysisNote').textContent=hasManualProduct?`O campo Produto já tem um valor manual e foi preservado. A análise detectou “${result.productCandidate}”; use o botão ao lado se quiser aplicar a sugestão.${result.productCandidateNeedsReview?` ${result.productCandidateEvidence} Confira se é o produto anunciado ou apenas a marca.`:''}`:result.productCandidateNeedsReview?`${result.productCandidateEvidence} Revise se este nome identifica o produto anunciado ou apenas a marca antes de gerar.`:applied.length?`Preenchido automaticamente: ${applied.join(', ')}. Revise os campos destacados antes de gerar.`:'Os itens detectados foram mantidos como candidatos porque os campos já continham dados. Revise o passo 2.';
+  updatePendingHighlights(root);
   saveDraft(root);
 }
 
@@ -163,6 +246,7 @@ function renderWarnings(root,warnings,{blocked=false}={}){
   host.append(list);
 }
 function generate(root,toast){
+  updatePendingHighlights(root);
   const data=payload(root);
   if(!data.product)throw new Error('Informe o nome do produto.');
   if(!data.countryCode)throw new Error('Informe o país (código de duas letras).');
@@ -248,7 +332,8 @@ export async function mount({root,toast}={}){
       if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
       if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise as confirmações e gere novamente.');
     };
-    root.addEventListener('input',markManual);root.addEventListener('change',markManual);
+    root.addEventListener('input',event=>{markManual(event);updatePendingHighlights(root)});root.addEventListener('change',event=>{markManual(event);updatePendingHighlights(root)});
+    updatePendingHighlights(root);
     mounted=true;
   }
 }

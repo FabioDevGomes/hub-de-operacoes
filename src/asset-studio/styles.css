@@ -71,7 +71,8 @@ kbd { border: 1px solid #cfd6e1; border-bottom-width: 2px; border-radius: 5px; b
 .hint { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
 .hint.error { color: #b42318; }
 .checker { background-color: #fff; background-image: linear-gradient(45deg,#e3e7ed 25%,transparent 25%),linear-gradient(-45deg,#e3e7ed 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e7ed 75%),linear-gradient(-45deg,transparent 75%,#e3e7ed 75%); background-size: 16px 16px; background-position: 0 0,0 8px,8px -8px,-8px 0; }
-.destination-row { display: grid; grid-template-columns: auto 1fr auto; gap: 15px; align-items: center; }
+.destination-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 15px; align-items: center; }
+.destination-row [hidden] { display: none !important; }
 .destination-row strong, .destination-row small { display: block; }
 .destination-row small { color: var(--muted); }
 .primary, .secondary { border-radius: 11px; padding: 11px 16px; font-weight: 800; border: 1px solid transparent; }

@@ -12,7 +12,7 @@ assert.ok(html.includes('slice(0,5)'),'restauração das avaliações ainda limi
 assert.ok(html.includes('countries:[...managerTrendsCountries]'),'países não são persistidos com a avaliação');
 assert.ok(trendsUi.includes('Produto novo')&&trendsUi.includes('Produto antigo'),'classificação compartilhada de momento do produto ausente');
 assert.ok(html.includes('productAge:managerTrendsProductAge||null'),'momento do produto não é persistido');
-assert.ok(html.includes('closeManagerSheet();await refresh()'),'a ficha não fecha e atualiza depois de salvar');
+assert.ok(html.includes('closeManagerSheet({restoreFocus:false});await refresh()'),'a ficha não fecha e atualiza depois de salvar');
 assert.ok(html.includes("productAgeLabel(latest?.productAge)"),'momento do produto não aparece no selo da listagem');
 assert.ok(html.includes('assessmentCountries(latest)'),'países não aparecem no selo da listagem');
 assert.ok(html.includes('Histórico das avaliações'),'histórico visível das avaliações ausente');
@@ -24,5 +24,17 @@ assert.ok(html.includes("TrendsUI.renderResultButtons($('#managerTrendsResults')
 assert.ok(trendsUi.includes("selectedValue === value ? 'selected' : ''"),'componente compartilhado não aplica a seleção visual');
 assert.ok(css.includes('.trends-result-action.selected'),'destaque visual do último resultado ausente');
 assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr))'),'botões de resultado não foram compactados');
+assert.ok(html.includes('Candidatas à palavra-chave'),'campo de candidatas do Google Trends ausente');
+assert.ok(html.includes('id="managerTrendsKeywordInput"')&&html.includes('Digite uma ideia e pressione Enter'),'campo de candidata não está sempre disponível no quadro de pesquisa');
+assert.ok(html.includes("if(event.key==='Enter'){event.preventDefault();addManagerTrendKeywordCandidate(product)}"),'Enter não adiciona a candidata à palavra-chave');
+assert.ok(html.includes('keywordCandidates:candidates')&&html.includes("await putAll('trends',[stored])"),'candidatas do Google Trends não são persistidas no registro do produto');
+assert.ok(html.includes("import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=4'")&&html.includes('KeywordCandidatesUI.renderKeywordCandidates'),'a Lista de Gerente não reutiliza o componente compartilhado de candidatas');
+assert.ok(html.includes("keywordCandidateMarkerHtml(count,'positive')"),'Lista de Gerente não sinaliza candidatas positivas de Trends na listagem');
+assert.ok(html.includes("onSearch:term=>{const tab=window.open(TrendsDomain.exploreUrl(term),'google-trends-radar')"),'a pesquisa da candidata não usa seu próprio termo com o padrão de URL do Trends');
+assert.ok(html.includes('TrendsDomain.exploreUrl(term),\'google-trends-radar\''),'pesquisa de candidata na Lista de Gerente não reutiliza o padrão de URL do Trends');
+assert.ok(css.includes('.trends-keyword-candidate')&&css.includes('background:#102d24')&&css.includes('color:#83e5bb'),'destaque verde para candidatas do Google Trends ausente');
+assert.ok(css.includes('.keyword-candidate-search')&&css.includes('white-space:nowrap'),'botão compacto compartilhado de pesquisa da candidata não fica alinhado na mesma linha');
+assert.ok(css.includes('.trends-keyword-candidate{font-size:.9rem}'),'fonte das candidatas à palavra-chave do Trends não foi ampliada');
+assert.ok(html.includes('gurumedia-offer-links-ui.mjs?view=manager'),'atalho para a oferta GuruMedia não está incluído na Lista de Gerente');
 
 console.log('manager trends ui ok');

@@ -117,6 +117,23 @@ test('interpreta baixo volume sem transformar <500 em valor exato',()=>{
   assert.equal(parsed.relatedQueries.state,'not_available');
 });
 
+test('preserva movimento negativo Unicode e não o apresenta como crescimento',()=>{
+  const parsed=Glimpse.parseGlimpse(`GloraMD\nTermo de pesquisa\nCompare\nMundo\nÚltimos 30 dias\nTodas as categorias\nPesquisa na Web\n2K searches past month\n−37%\npast week`);
+  const analysis=Glimpse.analyzeGlimpse(parsed);
+  assert.equal(parsed.movement.percent,-37);
+  assert.equal(parsed.movement.period,'past week');
+  assert.equal(Glimpse.movementValueLabel(parsed.movement.percent),'-37%');
+  assert.match(analysis.operationalReading,/-37% no período recente/);
+  assert.doesNotMatch(analysis.operationalReading,/\+37%/);
+  assert.equal(parsed.parserVersion,'1.1.0');
+});
+
+test('preserva os sinais explícitos positivo e negativo e trata zero como neutro',()=>{
+  assert.equal(Glimpse.parseGlimpse('+12%\npast week').movement.percent,12);
+  assert.equal(Glimpse.parseGlimpse('-12%\npast week').movement.percent,-12);
+  assert.equal(Glimpse.parseGlimpse('0%\npast week').movement.percent,0);
+});
+
 test('distingue itens capturados de totais e páginas informados',()=>{
   const parsed=Glimpse.parseGlimpse(ezstream);
   assert.equal(parsed.volume.value,4000);

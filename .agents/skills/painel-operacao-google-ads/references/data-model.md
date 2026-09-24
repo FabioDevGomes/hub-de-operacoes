@@ -59,3 +59,20 @@ Importações devem unir eventos por `event_id`. IDs são idempotentes e writes 
 - Radar SpyHero: `radar-curadoria`.
 
 Valide versões e stores antes de alterar qualquer banco local.
+
+## Observabilidade da Curadoria — domínio separado
+
+O banco IndexedDB `radar-curadoria-observability` (versão 1) não é o banco operacional nem os bancos das listas. Stores:
+
+- `events`, chave `eventId`: sumários de ações salvas, com IDs de produto/oferta e origem;
+- `event_details`, chave `detailId`: payload da avaliação individual, lido somente ao expandir o evento;
+- `pretest_snapshots`, chave `snapshotId`: snapshot imutável `snapshot_decisao` criado na transição para “Subir campanha”;
+- `correlations`, chave `correlationId`: ligação pendente/confirmada/revisada entre um snapshot e identidade(s) operacional(is), com trilha de correção.
+
+Índices previstos para paginação e filtros: eventos por timestamp+ID, productKey+timestamp, nome normalizado+timestamp, origem+timestamp, tipo+timestamp e decisão+timestamp; snapshots por data/produto/origem/tipo; correlações por estado/produto/origem. A busca por nome usa `productNameKey` (normalização apenas para localizar; não confirma identidades). Writes comuns fazem lookup por ID e adicionam apenas o evento/detalhe novo na transação; a criação do snapshot/correlação ocorre atomicamente no bundle da decisão. Não use `getAll()` em caminhos de gravação ou abertura da tela.
+
+`/?view=curation-observability` carrega 30 eventos por página (até 600 chaves examinadas por solicitação quando filtros são esparsos). Sumários e contagem são consultados primeiro; `event_details` e `pretest_snapshots` só são buscados ao expandir. Análise Glimpse mantém referência imutável ao registro em `radar-glimpse/analyses` em vez de copiar texto bruto. A projeção do snapshot guarda só a avaliação de Trends atual, última avaliação de Imagens por país e indicadores compactos de Glimpse; refinamentos/eventos anteriores ficam na timeline, não são reprocessados no ato da decisão.
+
+A captura acontece depois de salvar no banco original e é iniciada no próximo turno de tarefa; não deve segurar a confirmação visual do salvamento. `assessmentId`, `analysisId` e identidade da transição tornam o write idempotente via consulta por chave, sem varredura histórica. Se a captura falhar, mantenha intactos os registros originais e registre o erro sem apagar ou sobrescrever histórico. A exportação JSON pode percorrer stores inteiras somente após ação explícita; restauração mescla registros e nunca substitui IDs existentes. O Event Log de `painel-campanhas` segue sendo exclusivamente da Observabilidade Decisória Operacional.
+
+Uma correlação nasce pendente, com `offerId + origem` preservados como contexto. Nome normalizado gera somente candidatos do Event Log operacional; `product_id`, `test_id`, contas e campanhas só se associam após confirmação humana. Correção ou invalidação atualiza apenas `correlations.history`, não o snapshot nem o Event Log operacional. O índice de candidatos no MVP é construído somente quando o usuário pede a busca; essa operação sob demanda é o ponto mais sujeito a custo O(N) conforme o Event Log crescer.

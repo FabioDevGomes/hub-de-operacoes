@@ -1,0 +1,49 @@
+.hub-menu,
+.hub-menu-products { display: grid; gap: 5px; min-width: 0; }
+.hub-menu-group { min-width: 0; }
+.hub-menu-toggle,
+.hub-menu-link {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: transparent;
+  color: #92a4bc;
+  font: inherit;
+  font-size: .82rem;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.hub-menu-toggle { justify-content: space-between; color: #e7eef8; font-weight: 750; }
+.hub-menu .hub-menu-toggle:hover,
+.hub-menu-products .hub-menu-toggle:hover,
+.hub-menu-group:not(.collapsed) > .hub-menu-toggle { background: #101f33; color: #fff; }
+.hub-menu-chevron { color: #8295ad; font-size: 1.05rem; line-height: 1; transition: transform .16s ease; }
+.hub-menu-group:not(.collapsed) > .hub-menu-toggle .hub-menu-chevron { transform: rotate(90deg); }
+.hub-menu-body {
+  display: grid;
+  gap: 2px;
+  margin: 3px 0 5px 12px;
+  padding-left: 9px;
+  border-left: 1px solid #263850;
+  overflow: hidden;
+}
+.hub-menu-group.collapsed > .hub-menu-body { height: 0; opacity: 0; transform: translateY(-4px); pointer-events: none; }
+.hub-menu .hub-menu-link:hover,
+.hub-menu-products .hub-menu-link:hover,
+.hub-menu .hub-menu-link.active,
+.hub-menu-products .hub-menu-link.active { background: #18304d; color: #fff; }
+.hub-menu-subhead { padding: 7px 9px 2px; color: #8298b2; text-transform: uppercase; letter-spacing: .07em; font-size: .61rem; font-weight: 800; }
+.hub-menu-products:not(.collapsed) { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.hub-menu-products > .hub-menu-body { min-height: 0; }
+.hub-menu-products:not(.collapsed) > .hub-menu-body { display: flex; flex: 1 1 auto; flex-direction: column; }
+.hub-menu-products #campaignList { flex: 1 1 auto; min-height: 0; }
+.hub-menu-products #search { flex: 0 0 auto; }
+@media (prefers-reduced-motion: reduce) { .hub-menu-chevron { transition: none; } }

@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Destination,
 
-    [string]$RulesPath = (Join-Path $PSScriptRoot '..\config\presell-rules.json'),
+    [string]$RulesPath,
 
     [string]$AssetFolder,
 
@@ -11,6 +11,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($RulesPath)) {
+    $RulesPath = Join-Path -Path $PSScriptRoot -ChildPath '..\config\presell-rules.json'
+}
 
 function New-Check {
     param(

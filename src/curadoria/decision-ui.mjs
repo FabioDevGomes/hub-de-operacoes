@@ -32,7 +32,7 @@ export function rowClass(value){
 
 export function buttonHtml(value,attribute,identity){
   const normalized=normalizeDecision(value),tone=decisionTone(normalized);
-  return `<button class="decision-badge ${tone}" ${attribute}="${identity}" type="button">${normalized}</button>`;
+  return `<button class="decision-badge ${tone}" ${attribute}="${identity}" data-curation-focus="decision" type="button">${normalized}</button>`;
 }
 
 function ensureDialog(){

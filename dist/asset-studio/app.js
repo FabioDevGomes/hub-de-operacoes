@@ -4,7 +4,7 @@ const specs = {
   favicon: { name: '03.png' }
 };
 
-const state = { desktop: null, mobile: null, favicon: null, directory: null, activeSlot: 'desktop', skipFavicon: false };
+const state = { desktop: null, mobile: null, favicon: null, directory: null, outputDirectory: null, activeSlot: 'desktop', skipFavicon: false };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -224,11 +224,24 @@ $('#chooseFolder').addEventListener('click', async () => {
   }
   try {
     state.directory = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.outputDirectory = null;
+    $('#openFolder').hidden = true;
     $('#folderName').textContent = state.directory.name;
     $('#folderHelp').textContent = `${state.directory.name} / assets`;
     updateReadyState();
   } catch (error) {
     if (error.name !== 'AbortError') $('#folderHelp').textContent = `Falha ao abrir a pasta: ${error.message}`;
+  }
+});
+
+$('#openFolder').addEventListener('click', async () => {
+  if (!state.outputDirectory || !window.showDirectoryPicker) return;
+  try {
+    // O File System Access API não expõe o caminho local nem permite abrir o Explorer.
+    // Reabrimos o seletor nativo já posicionado na pasta de saída para o usuário ver os arquivos.
+    await window.showDirectoryPicker({ id: 'asset-studio-output', mode: 'readwrite', startIn: state.outputDirectory });
+  } catch (error) {
+    if (error.name !== 'AbortError') $('#folderHelp').textContent = `Não foi possível abrir a pasta de saída: ${error.message}`;
   }
 });
 
@@ -259,6 +272,7 @@ $('#processAll').addEventListener('click', async () => {
   const button = $('#processAll');
   button.disabled = true;
   button.textContent = 'Processando…';
+  $('#openFolder').hidden = true;
   $('#results').replaceChildren();
   try {
     const assetsDirectory = await state.directory.getDirectoryHandle('assets', { create: true });
@@ -272,6 +286,9 @@ $('#processAll').addEventListener('click', async () => {
       if (result.skipped) addResult(`assets/${spec.name} preservado — substituição cancelada.`);
       else addResult(`assets/${spec.name} · ${width} × ${height} · ${formatBytes(blob.size)} · salvo`, 'ok');
     }
+    state.outputDirectory = assetsDirectory;
+    $('#openFolder').hidden = false;
+    $('#folderHelp').textContent = `${state.directory.name} / assets · clique em “Abrir pasta” para abrir o seletor nessa pasta.`;
   } catch (error) {
     addResult(`Falha: ${error.message}`, 'error');
   } finally {

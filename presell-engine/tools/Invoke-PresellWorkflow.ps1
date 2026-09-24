@@ -82,7 +82,8 @@ if ($Mode -eq 'Produce') {
     }
     else {
         $productionArgs = @('-Destination', $Destination) + (Get-FichaArguments)
-        & pwsh -NoProfile -File $ProductionScript @productionArgs
+        $powerShellExecutable = Get-PresellPowerShellExecutable
+        & $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $ProductionScript @productionArgs
         if ($LASTEXITCODE -ne 0) {
             $phases.Add((New-PresellWorkflowPhase 'production' 'BLOCKED' ([PSCustomObject]@{
                 module = 'presell-workflow'

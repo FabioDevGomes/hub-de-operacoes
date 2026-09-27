@@ -1,5 +1,7 @@
 export const ITEM_TYPES=Object.freeze(['duration','number','scale','boolean','text','time']);
 export const BOOLEAN_ITEM_IDS=Object.freeze(['item-alcool','item-refrigerante','item-acucar','item-sodio','item-verde-horario']);
+export const PARTIALLY_PRODUCTIVE_ITEM_ID='item-kakashi';
+export const PARTIAL_PRODUCTIVE_RATE=0.1;
 export const SYMPTOM_SCALE_ITEM_IDS=Object.freeze(['item-garganta','item-rim','item-metalico']);
 export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
   Object.freeze({value:3,label:'Alto'}),
@@ -167,11 +169,23 @@ export function aggregateDay(entries,date){
   const rows=entries.filter(entry=>entry.date===date),byItem=new Map();let totalMinutes=0,productiveMinutes=0;
   for(const entry of rows){
     const current=byItem.get(entry.itemId)||{entries:[],minutes:0,values:[]};current.entries.push(entry);
-    if(entry.type==='duration'){const minutes=Number(entry.minutes)||0;current.minutes+=minutes;totalMinutes+=minutes;if(entry.productiveSnapshot)productiveMinutes+=minutes}
+    if(entry.type==='duration'){const minutes=Number(entry.minutes)||0;current.minutes+=minutes;totalMinutes+=minutes;productiveMinutes+=productiveContributionMinutes(entry)}
     else current.values.push(entry.value);
     byItem.set(entry.itemId,current);
   }
   return{date,entries:rows,byItem,totalMinutes,productiveMinutes,productivePercent:totalMinutes?productiveMinutes/totalMinutes*100:0};
+}
+
+export function productiveContributionMinutes(entry){
+  if(entry?.type!=='duration')return 0;
+  const minutes=Math.max(0,Number(entry.minutes)||0);
+  if(entry.itemId===PARTIALLY_PRODUCTIVE_ITEM_ID)return minutes*PARTIAL_PRODUCTIVE_RATE;
+  return entry.productiveSnapshot?minutes:0;
+}
+
+export function productivityLabel(entry){
+  if(entry?.type==='duration'&&entry.itemId===PARTIALLY_PRODUCTIVE_ITEM_ID)return'10% produtivo';
+  return entry?.productiveSnapshot?'Sim':'Não';
 }
 
 export function comparisonMatrix(items,entries,dates){
@@ -194,9 +208,8 @@ export function totalDurationForCategory(entries,items,categoryId,dates){
 export function totalProductiveDuration(entries,dates){
   const dateSet=new Set(dates);
   return entries.reduce((total,entry)=>{
-    if(entry.type!=='duration'||!entry.productiveSnapshot||!dateSet.has(entry.date))return total;
-    const minutes=Number(entry.minutes);
-    return Number.isFinite(minutes)?total+Math.max(0,minutes):total;
+    if(entry.type!=='duration'||!dateSet.has(entry.date))return total;
+    return total+productiveContributionMinutes(entry);
   },0);
 }
 

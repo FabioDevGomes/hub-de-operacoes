@@ -1,4 +1,4 @@
-import { cp, readFile, mkdir, writeFile } from "node:fs/promises";
+import { cp, readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname);
@@ -29,9 +29,21 @@ await cp(resolve(root, "src/flowtracking-copy-guide.png"), resolve(root, "dist/f
 await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-component.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
+await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
 await cp(resolve(root, "src/curadoria"), resolve(root, "dist/curadoria"), { recursive: true });
 await cp(resolve(root, "src/meu-tempo"), resolve(root, "dist/meu-tempo"), { recursive: true });
 await cp(resolve(root, "src/copy-ficha"), resolve(root, "dist/copy-ficha"), { recursive: true });
 await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursive: true });
 await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });
 await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro"), { recursive: true });
+await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
+await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
+await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
+const legacyTotalsSeed = resolve(root, "data-local/legacy-totais-migration-v1.json");
+const legacyTotalsSeedOutput = resolve(root, "dist/legacy-totais-migration-v1.json");
+try {
+  await cp(legacyTotalsSeed, legacyTotalsSeedOutput);
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+  await rm(legacyTotalsSeedOutput, { force: true });
+}

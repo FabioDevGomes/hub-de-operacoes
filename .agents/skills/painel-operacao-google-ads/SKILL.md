@@ -1,6 +1,6 @@
 ---
 name: painel-operacao-google-ads
-description: Desenvolver, diagnosticar, testar e manter este Hub local de operações de Google Ads. Use para alterações ou investigações do painel; não use para edição direta das planilhas operacionais ou dúvidas genéricas sobre anúncios.
+description: Desenvolver, diagnosticar, testar e manter o Hub local de operações de Google Ads. Para a tela Controle de gastos pessoais, use a skill especializada controle-gastos-pessoal; não use para edição direta das planilhas operacionais ou dúvidas genéricas sobre anúncios.
 ---
 
 # Engenharia do Hub de Operações
@@ -12,6 +12,8 @@ Esta é a fonte canônica do conhecimento técnico específico do repositório. 
 - Localize a raiz por `build.mjs`, `src/index.template.html` e `src/database.js`; não dependa de caminhos absolutos da máquina.
 - Preserve dados locais reais. Não importe fixtures, limpe IndexedDB ou altere `data-local/` para testar.
 - Nomes MCC completos identificam campanhas; a chave diária é `campanha_id + data`. Zero, ausente e inválido são estados diferentes.
+- O **Diário de campanha** exibe a série diária de uma campanha por vez. Um produto pode ter várias campanhas relacionadas: preserve cada nome/ID, série diária e métricas de campanha separadamente; a agregação no nível do produto fica em Produtos Testados e não deve fundir os diários. Nesse menu, sequências confirmadas por sufixos numéricos de iteração — inclusive ordinal como `1°` e um marcador final entre colchetes, como `[MS]` — podem ser exibidas como um único produto quando houver mais de um número distinto para a mesma base. Isso só consolida a listagem e os totais do produto; não renomeia nem mescla campanhas na base.
+- Em **Produtos Testados**, `Total faturado` soma por campanha a comissão histórica observada de `legacy_totais` e acrescenta diário/ajustes provisórios apenas em datas após o `end_date`, evitando duplicação do período histórico. Se o resumo observado não tiver data final, não acrescente dados sem sobreposição comprovadamente ausente. Sem comissão histórica observada, use o diário e ajustes provisórios disponíveis. Preserve zero versus ausência; essa consolidação não modifica Diário/MCC ou outras telas.
 - O manifesto D0 é parcial; D−1 pode fechar o mesmo dia e gerar conflitos financeiros. Não sobrescreva silenciosamente dados conflitantes.
 - Não deduza pausa, suspensão, reprovação, GEO ou entrega pela falta de linha ou por um zero isolado. Use somente evidência explícita da fonte e as regras registradas.
 - Ao criar uma view principal, use `src/view-registry.js` para rota, título, subtítulo e metadados.
@@ -28,6 +30,10 @@ Esta é a fonte canônica do conhecimento técnico específico do repositório. 
 - Ao alterar ou diagnosticar o Controle Macro, confira também em `references/data-model.md` a precedência por campo entre planilha histórica e MCC, o fallback de D−1 e a atualização automática da tela.
 - Para os princípios de domínio e limites do MVP, use a skill [observabilidade-decisoria](../observabilidade-decisoria/SKILL.md).
 - A Observabilidade da Curadoria é outro domínio; consulte a seção homônima em [arquitetura](references/architecture.md), [modelo de persistência](references/data-model.md) e [workflow](references/engineering-workflow.md). Não confunda nem misture seus eventos com o Event Log operacional.
+- O módulo **Faturamento** é um domínio financeiro separado da MCC e do Controle Macro. Lançamentos manuais podem ser confirmados por D−1; as conversões MCC também entram como agregados por campanha/data (D0 provisório, D−1 confirmado), sem inventar transações e sem marcar recebimento. Consulte [Faturamento](references/billing.md) e [Importação MCC](references/mcc-import.md) antes de alterar esse fluxo, suas stores, cálculos, backups ou interface.
+- Para alterar ou diagnosticar a tela pessoal `/?view=personal-finance`, carregue a skill especializada [Controle de gastos pessoais](../controle-gastos-pessoal/SKILL.md). Não misture suas despesas/reservas com Faturamento, MCC ou Controle Macro.
+- O item `item-agua` é lançado em Meu Tempo (`/?view=time`). O lembrete recorrente de hidratação pertence a esse fluxo, não ao Realizado do Controle de gastos: veja `src/meu-tempo/water-reminder.mjs` e o início global pelo menu compartilhado em `src/sidebar-component.js`.
+- A migração histórica única de `totais` reutiliza a base atual: campanhas legadas aparecem em Diário > Histórico com resumo consolidado de investimento e lucro derivado, sem linhas diárias artificiais ou tela/importador XLSX. Contas MCC já existentes são excluídas por sufixo; contas ausentes continuam sem associação e IDs de contas novas são preservados. O módulo é `src/legacy-totais-migration.mjs`; leia [modelo e persistência](references/data-model.md), [arquitetura](references/architecture.md) e o procedimento de validação/backups em [workflow](references/engineering-workflow.md). Payloads pessoais permanecem em `data-local/` (ignorado pelo Git), nunca em código ou testes versionados.
 - Para workflow de testes, diagnóstico e segurança, use [engineering-workflow.md](references/engineering-workflow.md).
 
 ## Entrega

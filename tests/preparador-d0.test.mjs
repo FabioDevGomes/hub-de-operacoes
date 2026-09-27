@@ -12,7 +12,8 @@ assert.ok(html.includes('Campanha duplicada em D0; métricas não associadas.'),
 assert.ok(html.includes('function panelStatusObservation(field)'),'normalização do status da MCC ausente no Preparador');
 assert.ok(html.includes("const disqualified = search.includes('nao qualificad')"),'Preparador não reconhece “Não qualificado” no masculino');
 assert.ok(html.includes("new BroadcastChannel('painel-campanhas')"),'Preparador não avisa a Visão Geral após atualizar a base');
-assert.ok(html.includes('const PANEL_DB_VERSION = 3;'),'Preparador MCC não participa da migração aditiva do Event Log');
+assert.ok(html.includes('const PANEL_DB_VERSION = 5;'),'Preparador MCC não participa da migração aditiva do Hub');
+for (const store of ['billing_sales','billing_movements','billing_audit','billing_meta']) assert.ok(html.includes(store),`Preparador MCC não cria a store aditiva ${store}`);
 assert.ok(html.includes("createObjectStore(PANEL_EVENT_STORE, { keyPath:'event_id' })"),'Preparador MCC não cria o armazenamento append-only dos eventos');
 assert.ok(html.includes('transaction.objectStore(PANEL_EVENT_STORE).getAll()'),'Preparador MCC não mescla o Event Log ao ler a base compartilhada');
 assert.ok(html.includes('eventStore.add(event)'),'Preparador MCC não persiste eventos sem sobrescrever registros anteriores');
@@ -20,6 +21,12 @@ assert.ok(html.includes("source:'preparador_mcc'"),'importação do Preparador M
 const applyFlow=html.match(/async function applyManifestToPanel\(manifest\) \{[\s\S]*?\n    \}/)?.[0]||'';
 assert.ok(applyFlow.includes('const databaseApi = window.CampaignDatabase;'),'aplicação D0/D-1 deve usar o módulo central, não uma implementação paralela');
 assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"),'Preparador deve bloquear atualização se o módulo central não estiver disponível');
+assert.ok(applyFlow.includes('applied.reconciledSales'),'o Preparador envia apenas as vendas manuais cujo estado mudou na importação');
+assert.ok(!applyFlow.includes('.filter(sale=>sale.billing_sale_id)'),'o Preparador não deve descartar lançamentos legados sem o vínculo novo do Faturamento');
+assert.ok(applyFlow.includes('provisionalSaleIds:linkedSales.map(sale=>String(sale.id))'),'o Preparador deve avisar a tela aberta quais vendas manuais foram conciliadas');
+assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=3')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
+assert.ok(html.includes('billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales)'),'base MCC e conciliação financeira são gravadas na mesma transação local');
+assert.ok(html.includes('billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales)'),'agregados D0/D−1 do MCC também são gravados atomicamente no Faturamento');
 assert.ok(!applyFlow.includes('fallbackPanelDatabase'),'Preparador não pode atualizar silenciosamente sem Event Log');
 assert.ok(html.includes('Q:{ value:panelStatusObservation(metrics.status_campanha) }'),'Preparador não grava o status nas observações diárias');
 assert.ok(html.includes("campaign_state: ['status da campanha'"),'estado operacional e status de qualificação continuam misturados');
@@ -30,7 +37,7 @@ assert.ok(html.includes("target_cpa: ['cpa desejado'"),'coluna CPA desejado não
 assert.ok(html.includes("cpa_desejado:field(r0,'target_cpa',parseNumber)"),'CPA desejado de D0 não é preservado no manifesto');
 assert.ok(html.includes("conversion_value: ['valor conv'"),'coluna Valor conv. não é reconhecida');
 assert.ok(html.includes("valor_conversao:field(r0,'conversion_value',parseNumber)"),'valor de conversão de D0 não é preservado no manifesto');
-assert.ok(html.includes('P:{ value:panelValue(metrics.valor_conversao)'),'valor de conversão não é gravado no Diário do Produto');
+assert.ok(html.includes('P:{ value:panelValue(metrics.valor_conversao)'),'valor de conversão não é gravado no Diário de campanha');
 assert.ok(html.includes('grid-template-columns: 224px minmax(0, 1fr)'),'menu lateral do Preparador não segue a largura compacta do painel');
 assert.ok(html.includes('overflow-y: scroll; scrollbar-gutter: stable;'),'Preparador não mantém a rolagem vertical da tela disponível e visível');
 assert.ok(html.includes('.hub-app { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh; height: auto; overflow: visible; align-items: start; }'),'estrutura do Preparador ainda pode bloquear a rolagem vertical da tela');
@@ -39,7 +46,7 @@ assert.ok(html.includes('data-hub-sidebar-active="preparer"')&&html.includes('da
 assert.ok(html.includes('/sidebar-component.js')&&html.includes('/sidebar-component.css'),'componentes compartilhados do menu ausentes no Preparador');
 assert.ok(html.includes("style-src 'unsafe-inline' 'self'"),'CSP do Preparador bloqueia os estilos locais do menu compartilhado');
 assert.ok(sidebar.includes("id: 'operation'")&&sidebar.includes("id: 'analysis'")&&sidebar.includes('data-sidebar-group="products"'),'grupos do Preparador não estão no registro central do menu');
-assert.ok(sidebar.includes('Preparador MCC')&&sidebar.includes('Controle Macro')&&sidebar.includes('Produtos testados')&&sidebar.includes('Diário do produto'),'itens do Preparador estão ausentes da configuração compartilhada');
+assert.ok(sidebar.includes('Preparador MCC')&&sidebar.includes('Controle Macro')&&sidebar.includes('Produtos testados')&&sidebar.includes('Diário de campanha'),'itens do Preparador estão ausentes da configuração compartilhada');
 assert.ok(sidebar.includes('setOpenGroup')&&sidebar.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado expansível do menu não é compartilhado com as demais telas');
 assert.ok(sidebar.includes('body.animate(')&&sidebar.includes('body.inert = !expanded')&&sidebar.includes('prefers-reduced-motion: reduce'),'menu compartilhado não anima a abertura/retração com acessibilidade');
 assert.ok(html.includes('validatePreparedNumbering(result)'),'validação de numeração não ocorre ao carregar o CSV');

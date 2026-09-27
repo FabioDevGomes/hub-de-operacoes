@@ -8,6 +8,7 @@
 - `dist/preparador-MCC/index.html`: atualmente é a fonte editável do Preparador; o build não o gera.
 - `src/curadoria/`: Radar, Lista de Gerente, E-commerce GM e Glimpse.
 - `src/control-macro/`: domínio de agregação do Controle Macro e estilos próprios da tela.
+- `src/personal-finance/`: domínio, armazenamento local, sincronização entre abas e interface do Controle de gastos pessoais.
 - `src/meu-tempo/`, `src/presell/`, `src/asset-studio/`: módulos próprios.
 - `dist/index.html` e a maioria de `dist/**`: saída gerada. Edite fontes e rode o build.
 
@@ -19,7 +20,7 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 
 ## Rotas centrais atuais
 
-- `/`: Visão Geral / Diário do Produto.
+- `/`: Visão Geral / Diário de campanha (seleção de uma campanha por vez).
 - `/?view=tested`: Produtos Testados.
 - `/?view=cpa`: Análise por Faixa de CPA.
 - `/?view=accounts`: Mapa de Produtos por Conta.
@@ -27,11 +28,14 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 - `/?view=observability`: Observabilidade Decisória Operacional.
 - `/?view=curation-observability`: Observabilidade da Curadoria (domínio pré-teste, separado da operação).
 - `/?view=time`: Meu Tempo.
+- `/?view=personal-finance`: Controle de gastos pessoais (skill dedicada `../../controle-gastos-pessoal/SKILL.md`).
 - `/?view=copy`: Copy e Ficha.
 - `/?view=presell`: Gerador de Pre-Sell.
 - `/preparador-MCC/`: Preparador MCC.
 - `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/glimpse/`: módulos de curadoria.
 - `/asset-studio/`: preparação local de assets.
+
+O lembrete global do item `item-agua` é baseado nos lançamentos de Meu Tempo, não nos gastos. `src/meu-tempo/water-reminder.mjs` salva somente os horários locais e é iniciado pelo componente compartilhado de navegação; seus avisos recorrentes respeitam a janela de 8h a 20h e apontam para `/?view=time`.
 
 As listas da Lista de Gerente e de E-commerce GM usam `src/curadoria/list-focus.mjs` para registrar em `sessionStorage` a rolagem da página e do contêiner `.tablewrap`, a identidade da linha e a coluna acionada (Glimpse, Trends, Imagens ou Decisão). Ao voltar do Glimpse, fechar as fichas ou atualizar a lista após uma decisão, a página restaura as posições e anima a linha e o controle acionado com três pulsos azuis sutis. O estado é temporário por aba e expira após 30 minutos.
 
@@ -41,18 +45,29 @@ No E-commerce GM, países incluídos manualmente na ficha de Google Trends são 
 
 O badge de progresso da coluna Imagens e sua ordenação usam a mesma lista combinada de países. Portanto, incluir um país manualmente aumenta o total de validações esperadas; se houver uma avaliação de Imagens salva para esse código, ela também conta como verificada. Ao modificar esse progresso, atualize a apresentação e a ordenação em conjunto.
 
+Nas fichas Google Imagens da Lista de Gerente e E-commerce GM, selecionar `Mista` salva imediatamente a avaliação, mesmo sem candidatas negativas. O editor de candidatas é opcional; se a pessoa as preencher depois, a avaliação atualizada é salva com elas. Ao persistir após ações assíncronas, capture a chave do produto/oferta antes do `await`, pois a ficha pode ser fechada durante a gravação.
+
 ## Grupos do menu lateral
 
 O menu lateral das telas principais e dos módulos independentes usa o componente comum `src/sidebar-component.js` e seus estilos `src/sidebar-component.css`. O build publica esses arquivos na raiz de `dist/`. Cada tela mantém somente um mount com `data-hub-sidebar` e um mount `data-hub-sidebar-products`, configurando o modo SPA ou a chave ativa da página; rótulos, grupos, links, acordeão, estado aberto compartilhado e animação ficam centralizados. Na SPA, IDs de navegação vêm de `src/view-registry.js`; os controles/lista dinâmica de campanhas do Diário continuam no mount de Produtos e preservam seus IDs existentes. Glimpse é exceção intencional: é uma janela transitória focada e permanece sem menu.
 
 Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.js` (e registre views da SPA em `src/view-registry.js`), sem copiar rótulos, destinos ou lógica do acordeão para cada HTML. Para validar, rode `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs`, `tests/build.test.mjs` e a suíte completa; confira visualmente a Visão Geral, Preparador MCC, Lista de Gerente, E-commerce GM, Radar e Asset Studio, incluindo estado ativo e expansão do grupo.
 
-- Operação: Visão geral, Preparador MCC e Controle Macro.
+- Operação: Visão geral e Preparador MCC.
+- Financeiro: Controle Macro e Faturamento.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
 - Curadoria: Radar SpyHero, Lista de Gerente e E-commerce GM.
 - Criação de ofertas: Copy e Ficha, Gerador de Pre-Sell e Asset Studio.
-- Pessoal: Meu Tempo.
-- Produtos: Produtos Testados e acesso ao Diário do Produto; a lista de campanhas permanece no painel principal.
+- Pessoal: Meu Tempo e Controle de gastos pessoais.
+- Produtos: Produtos Testados e acesso ao Diário de campanha; a lista de campanhas permanece no painel principal.
+
+### Produtos e campanhas no diário
+
+O Diário de campanha é campanha-cêntrico: cada seleção mostra somente as linhas diárias e métricas daquela campanha. Um mesmo produto pode reunir várias campanhas relacionadas; mantenha-as como campanhas distintas, com identidades e históricos próprios. Produtos Testados é a visão agregada por produto e lista as campanhas relacionadas, enquanto o Diário de campanha abre cada uma individualmente. Não some nem funda diários de campanhas automaticamente.
+
+### Migração histórica única da aba `totais`
+
+`src/legacy-totais-migration.mjs` planeja uma migração versionada (`legacy_totais_migration.version = 1`) para o objeto de base que já existe em `bases/atual`. Não cria tela, importador visível, store IndexedDB nem outra base de campanhas. O payload privado é local e ignorado pelo Git (`data-local/legacy-totais-migration-v1.json`); `node build.mjs` o copia para `dist/` somente quando presente. A página principal lê esse payload uma vez durante a restauração da base, pré-valida nomes/contas/IDs e aborta sem persistir se houver ambiguidade. Linhas de contas MCC que já existem na base são excluídas pelo sufixo de quatro dígitos e ficam explícitas no relatório; campanhas sem conta definida são aceitas sem associação. Campanhas sem identidade operacional exata viram registros `status: 'historico'`, `registro_origem: 'legacy_totais'` com um resumo consolidado de campanha; nenhuma linha diária é criada. Correspondências nativas inequívocas recebem `legacy_totais`, sem substituir diário, status ou métricas MCC. O resumo de investimento e lucro fica visível no Histórico mesmo quando associado a uma campanha nativa. Depois da conclusão, a base e os backups são a fonte persistente; não há dependência do XLSX no fluxo normal.
 
 O Controle Macro é uma tela principal registrada no `src/view-registry.js`. Sua lógica pura fica em `src/control-macro/domain.js`; a interface e persistência são integradas em `src/index.template.html`. A tela navega por meses completos (anterior, posterior e mês atual), abre sempre no mês atual e conserva a navegação manual enquanto permanece aberta. As alterações MCC recalculam as métricas agregadas ao salvar/recarregar a base. O Preparador MCC também publica `base-updated` pelo `BroadcastChannel('painel-campanhas')`, fazendo a tela aberta restaurar a base e recalcular sem nova importação do histórico. O arquivo histórico importado fica como `controle_macro_historico` na base existente, sem nova store ou migração de IndexedDB. A planilha prevalece campo a campo: MCC/D−1 só complementa cliques e vendas ausentes desde 13/09/2026; não substitui investimento, faturamento ou zeros explícitos. Consulte `references/data-model.md` para a regra integral e o tratamento de suspensões e vendas.
 

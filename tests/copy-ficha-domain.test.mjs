@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {calculateDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields} from '../src/copy-ficha/copy-ficha-domain.mjs';
+import {calculateDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from '../src/copy-ficha/copy-ficha-domain.mjs';
 
 const input={
   product:'MyoGlow',countryCode:'US',htmlLanguage:'en-US',currency:'USD',
@@ -49,6 +49,47 @@ assert.equal(analyzed.freeShippingCandidate,true);
 assert.equal(analyzed.packages.length,3);
 assert.deepEqual(analyzed.packages.map(item=>[item.label,item.regularPrice,item.promoPrice]),[['Basic Bundle',199,79],['3-month bundle',294,127],['6-month bundle',468,214]]);
 assert.equal(analyzed.highestPercent,60.3);
+
+const germanDurationPackages=`Such dir dein passendes Slimqa-Paket aus
+Investiere in eine bessere tägliche Routine.
+30-Tage-Vorrat
+STARTERPAKET
+30-Tage-Vorrat
+33,99 €
+Preis pro Packung
+65,99 €
+Enthält 1 Box – Dein Monatsvorrat
+90-Tage-Vorrat
+Bestseller
+90-Tage-Vorrat
+22,99 €
+Preis pro Packung
+Du sparst: 129,00 €
+65,99 €
+0,77 € pro Tag
+Kostenloser Versand inklusive
+Enthält 3 Boxen – ein Vorrat für 3 Monate
+60-Tage-Vorrat
+2-MONATS-VORRAT
+60-Tage-Vorrat
+28,99 €
+Preis pro Packung
+65,99 €
+0,95 € pro Tag
+Versandkosten: Nur 4,95 €
+Enthält 2 Boxen – Vorrat für 2 Monate
+© 2026 Slimqa. Alle Rechte vorbehalten.`;
+const germanDurationDetected=parseOfferText(germanDurationPackages);
+assert.equal(germanDurationDetected.productCandidate,'Slimqa','nome antes do sufixo alemão “-Paket” deve ser extraído do título');
+assert.equal(germanDurationDetected.productCandidateSource,'package_title','nome reconhecido pelo título do pacote não deve ser confundido com rótulos de depoimento');
+assert.equal(germanDurationDetected.htmlLanguage,'de-DE');
+assert.equal(germanDurationDetected.currency,'EUR');
+assert.deepEqual(germanDurationDetected.packages.map(item=>[item.label,item.regularPrice,item.promoPrice,item.contents]),[
+  ['30-Tage-Vorrat',65.99,33.99,'Enthält 1 Box – Dein Monatsvorrat'],
+  ['90-Tage-Vorrat',65.99,22.99,'Enthält 3 Boxen – ein Vorrat für 3 Monate'],
+  ['60-Tage-Vorrat',65.99,28.99,'Enthält 2 Boxen – Vorrat für 2 Monate']
+],'o formato alemão agrupa títulos repetidos, interpreta € após o valor e ignora economia, preço diário e frete');
+assert.ok(germanDurationDetected.packages.every(item=>item.confidence==='high'),'papéis de preço ligados a “Preis pro Packung” ficam detectados com confiança alta');
 
 const checkoutPaste=`Your OFF Discount Has Been Applied!
 banner
@@ -210,6 +251,7 @@ assert.ok(groundedFootwear.packages[1].priceNote.includes('$62.99/ea')&&grounded
 assert.equal(groundedFootwear.packages[1].contents,'','selos e textos de navegação não entram como conteúdo do pacote');
 const mismatchedPairBadge=parseOfferText(groundedFootwearPaste.replace('Save 55%','Save 45%'));
 assert.equal(mismatchedPairBadge.packages[1].confidence,'review','percentual promocional incompatível impede alta confiança do pacote');
+assert.equal(generateAssets({packages:[mismatchedPairBadge.packages[1]]}).bestDiscountPercent,null,'desconto calculado que diverge do selo não deve virar percentual anunciado automaticamente');
 const groundedAssets=generateAssets({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
 assert.equal(groundedAssets.bestDiscountPercent,60);
 assert.deepEqual(groundedAssets.packages.map(item=>item.discountPercent),[50,55,60],'descontos são calculados usando totais comparáveis para cada quantidade');
@@ -218,6 +260,74 @@ assert.ok(!groundedAssets.sitelinks.some(item=>item.line1.includes('$167.97')),'
 const groundedFicha=buildFicha({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
 assert.ok(groundedFicha.priceText.includes('calculated promotional total $125.98')&&groundedFicha.priceText.includes('displayed unit price $62.99/ea'),'ficha registra explicitamente unidade exibida e total promocional calculado');
 assert.ok(groundedFicha.faqs[0].answer.includes('total calculated from $69.99/ea × 1'),'FAQ não confunde preço unitário com total do pacote');
+const gloraRecurringPaste=`A SPECIAL LIMITED-TIME OFFER | GET 70% OFF
+GloraMD
+Hurry! Your discount is reserved for 09:09 minutes!
+Only 81 items Left in Stock
+Choose Your Package
+Subscribe & Save
+One-Time Purchase
+1x GloraMD
+Received Every 30 Days + Free Shipping
+$99.98
+$
+42.49
+/each
+SAVE 50%
+2x GloraMD
+Received Every 60 Days + Free Shipping
+$199.96
+$
+36.52
+/each
+SAVE 55%
+BEST SELLER
+3x GloraMD
+Received Every 90 Days + Free Shipping
+$299.94
+$
+32.97
+/each
+SAVE 65%
+BEST VALUE
+4x GloraMD
+Received Every 120 Days + Free Shipping
+$399.92
+$
+29.48
+/each
+SAVE 70%
+Zero Commitment | Exclusive Discounts | Cancel Anytime
+Customer Information
+Order Summary
+3
+Why Choose GloraMD
+90-Day Money-Back Guarantee
+Over 75,000+ Happy Customers
+GloraMD helps thousands of women reduce wrinkles and restore their natural glow.
+©2026 Copyright GloraMD - All rights reserved.`;
+const gloraRecurring=parseOfferText(gloraRecurringPaste);
+assert.equal(gloraRecurring.productCandidate,'GloraMD','o nome do produto deve continuar sendo detectado com a nova estrutura de cartões');
+assert.equal(gloraRecurring.packages.length,4,'todos os cartões Nx devem ser reconhecidos, sem converter selos em pacotes');
+assert.deepEqual(gloraRecurring.packages.map(item=>[item.label,item.packageQuantity,item.regularPrice,item.promoPrice,item.displayedUnitPrice,item.discountBadgePercent,item.confidence]),[
+  ['1x GloraMD',1,99.98,42.49,42.49,50,'review'],
+  ['2x GloraMD',2,199.96,73.04,36.52,55,'review'],
+  ['3x GloraMD',3,299.94,98.91,32.97,65,'review'],
+  ['4x GloraMD',4,399.92,117.92,29.48,70,'high']
+],'o formato recorrente deve separar total original, preço por unidade, total calculado e selo exibido');
+assert.ok(gloraRecurring.packages.every(item=>item.quantityUnit==='unit'),'pacotes deste formato representam unidades, não pares');
+assert.equal(gloraRecurring.packages[0].packageDescriptor,'Received Every 30 Days + Free Shipping','o descritor de recorrência e frete fica associado ao pacote');
+assert.ok(gloraRecurring.packages[0].priceNote.includes('Received Every 30 Days + Free Shipping'),'a frequência e a condição de envio exibidas devem permanecer associadas ao cartão');
+assert.ok(gloraRecurring.packages[0].priceNote.includes('diverge do selo'),'divergência entre cálculo e selo deve ficar visível para revisão');
+assert.equal(gloraRecurring.highestPercent,70,'o cálculo de um total por unidade não deve produzir um percentual maior que os valores explicitamente exibidos');
+const gloraRecurringAssets=generateAssets({product:'GloraMD',countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:gloraRecurring.packages});
+assert.equal(gloraRecurringAssets.bestDiscountPercent,70,'anúncios devem usar o maior selo coerente, sem promover o cálculo divergente');
+const gloraFicha=buildFicha({product:'GloraMD',countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:gloraRecurring.packages});
+assert.ok(gloraFicha.priceText.includes('quantity 3 units')&&!gloraFicha.priceText.includes('quantity 3 pairs'),'a ficha usa a unidade correta em vez da unidade herdada de pacotes de calçados');
+assert.ok(gloraFicha.priceText.includes('displayed package terms Received Every 90 Days + Free Shipping'),'a ficha preserva a condição recorrente exibida em cada cartão');
+assert.ok(gloraFicha.pending.some(item=>item.includes('discount badge does not match')),'a ficha deixa os cartões com divergência de percentual explicitamente pendentes de revisão');
+const gloraInlinePaste=gloraRecurringPaste.replace(/\$\n(42\.49|36\.52|32\.97|29\.48)\n\/each/g,(_,amount)=>`$${amount}/each`);
+assert.deepEqual(parseOfferText(gloraInlinePaste).packages.map(item=>[item.label,item.packageQuantity,item.promoPrice]),gloraRecurring.packages.map(item=>[item.label,item.packageQuantity,item.promoPrice]),'o parser também deve aceitar o preço e /each na mesma linha');
 const uncorroboratedFooter=parseOfferText(groundedFootwearPaste.replace('Grounded Barefoot Shoes','Traditional Barefoot Shoes'));
 assert.notEqual(uncorroboratedFooter.productCandidate,'Grounded Footwear','nome de rodapé sem termo distintivo no corpo não deve ser promovido');
 const groundedHeading=parseOfferText(groundedFootwearPaste.replace('A Complete Guide to Transitioning from Traditional to Grounded Barefoot Shoes','Grounded Footwear®\nBarefoot Shoes'),'https://offer.example/freedom/en/us/checkout');
@@ -289,7 +399,7 @@ const unconfirmed=generateAssets({...input,freeShipping:'pending',fastShipping:'
 assert.ok(!unconfirmed.headlines.some(item=>/shipping|guarantee/i.test(item)),'condições não confirmadas não devem entrar nos títulos');
 assert.ok(!unconfirmed.sitelinks.some(item=>/shipping|guarantee/i.test(`${item.text} ${item.line1} ${item.line2}`)),'condições não confirmadas não devem entrar nos sitelinks');
 
-assert.deepEqual(generationBlockers(input),['Urgência atual','Escassez atual'],'estados de urgência e escassez pendentes devem bloquear a geração');
+assert.deepEqual(generationBlockers(input),['Urgência atual: confirme se a oferta exibe uma condição válida ou marque para não usar','Escassez atual: confirme se a oferta exibe uma condição válida ou marque para não usar'],'estados de urgência e escassez pendentes devem bloquear a geração com instrução de resolução');
 const resolved={...input,urgencyConfirmed:'no',scarcityConfirmed:'no'};
 assert.deepEqual(generationBlockerFields({...resolved,freeShipping:'pending'}),['freeShipping'],'campo de frete grátis deve ser identificado para destaque visual');
 assert.deepEqual(generationBlockerFields({...resolved,guaranteeStatus:'confirmed',guaranteeDays:''}),['guaranteeDays'],'prazo ausente deve apontar o campo específico que falta');
@@ -303,6 +413,15 @@ assert.equal(buildFicha({...resolved,guaranteeDays:'',guaranteeStatus:'no'}).faq
 const declined={...resolved,freeShipping:'no',fastShipping:'no',guaranteeDays:'',guaranteeStatus:'no'};
 assert.deepEqual(generationBlockers(declined),[],'negações explícitas devem resolver confirmações sem evidência');
 assert.ok(!fichaJson(declined).includes('"CONFIRMAR"'),'ficha com condições explicitamente ausentes não pode conter placeholders');
+const gloraResolved={...resolved,product:'GloraMD',freeShipping:'confirmed',fastShipping:'no',guaranteeStatus:'confirmed',guaranteeDays:90,packages:gloraRecurring.packages};
+const gloraBlockers=generationBlockers(gloraResolved);
+assert.equal(gloraBlockers.length,1,'a divergência dos selos dos cartões deve ser consolidada em um bloqueio acionável');
+assert.match(gloraBlockers[0],/Pacotes: o desconto calculado diverge do selo informado em 1x GloraMD, 2x GloraMD e 3x GloraMD/,'a mensagem deve identificar os pacotes específicos que impedem gerar');
+assert.deepEqual(generationBlockerFields(gloraResolved),['packages'],'a divergência do selo deve destacar a área de pacotes');
+assert.deepEqual(generationBlockerPackageIndexes(gloraResolved),[0,1,2],'somente os cartões com divergência devem receber destaque');
+assert.deepEqual(generationBlockerFields({...resolved,product:'',countryCode:'',htmlLanguage:'',currency:''}),['product','countryCode','htmlLanguage','currency'],'campos obrigatórios ausentes devem ser enumerados para destaque');
+assert.deepEqual(generationBlockerFields({...resolved,product:'CONFIRMAR',countryCode:'CONFIRMAR',htmlLanguage:'CONFIRMAR',currency:'CONFIRMAR'}),['product','countryCode','htmlLanguage','currency'],'placeholders também devem ser tratados como campos sem confirmação');
+assert.ok(generationBlockers({...resolved,affiliateUrl:'sem-protocolo'}).some(item=>/URL de afiliação: informe uma URL completa/.test(item)),'URL inválida deve informar como corrigir e não ficar sem explicação');
 for(const unresolved of [
   {...resolved,freeShipping:'pending'},
   {...resolved,fastShipping:'pending'},

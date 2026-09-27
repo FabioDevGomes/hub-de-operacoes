@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,planDurationRemoval,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 const defaultItemsById=new Map(DEFAULT_ITEMS.map(item=>[item.id,item]));
 for(const id of BOOLEAN_ITEM_IDS)assert.equal(defaultItemsById.get(id)?.type,'boolean',`${id} deve usar campo Sim/Não`);
@@ -59,6 +59,23 @@ assert.equal(matrix.foot[1].productiveMinutes,0,'snapshot antigo não muda com a
 assert.equal(matrix.averages.productiveMinutes,52.5,'a média produtiva inclui dias sem tempo produtivo');
 assert.equal(matrix.averages.totalMinutes,92.5,'a média total inclui todos os dias do período');
 assert.deepEqual(comparisonMatrix([],[],[]).averages,{productiveMinutes:null,totalMinutes:null});
+assert.equal(PARTIALLY_PRODUCTIVE_ITEM_ID,'item-kakashi');
+assert.equal(PARTIAL_PRODUCTIVE_RATE,.1);
+const kakashiEntries=[
+  {id:'k1',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:120,productiveSnapshot:false},
+  {id:'k2',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:30,productiveSnapshot:true},
+  {id:'k3',date:'2026-09-20',itemId:'item-kakashi',type:'duration',minutes:50,productiveSnapshot:false},
+  {id:'k4',date:'2026-09-19',itemId:'other',type:'duration',minutes:30,productiveSnapshot:true}
+];
+assert.equal(productiveContributionMinutes(kakashiEntries[0]),12,'Kakashi contribui com exatamente 10% independentemente do snapshot antigo');
+assert.equal(productiveContributionMinutes(kakashiEntries[1]),3,'a regra de 10% permanece mesmo que snapshot do item esteja marcado');
+assert.equal(productiveContributionMinutes({type:'duration',itemId:'other',minutes:30,productiveSnapshot:true}),30,'outras atividades produtivas continuam contando integralmente');
+assert.equal(productiveContributionMinutes({type:'boolean',itemId:'item-kakashi',value:true}),0,'lançamentos que não são duração não entram na soma produtiva');
+assert.equal(productivityLabel(kakashiEntries[0]),'10% produtivo');
+assert.equal(productivityLabel(entries[0]),'Sim');
+assert.equal(productivityLabel(entries[2]),'Não');
+assert.equal(aggregateDay(kakashiEntries,'2026-09-19').productiveMinutes,45,'Diário e comparação somam a fração do Kakashi e o tempo integral das outras atividades');
+assert.equal(totalProductiveDuration(kakashiEntries,['2026-09-19','2026-09-20']),50,'Histórico soma 10% de Kakashi em cada dia sem alterar as durações registradas');
 const symptomMatrix=comparisonMatrix([defaultItemsById.get('item-garganta')],[{id:'s1',date:'2026-09-20',itemId:'item-garganta',type:'scale',value:3},{id:'s2',date:'2026-09-20',itemId:'item-garganta',type:'scale',value:1},{id:'s3',date:'2026-09-22',itemId:'item-garganta',type:'scale',value:0}],['2026-09-20','2026-09-21','2026-09-22']);
 assert.deepEqual(symptomMatrix.rows[0].cells.map(cell=>cell.values),[[1],[],[0]],'a comparação usa o último nível do dia e mantém ausências separadas de Inexistente');
 assert.equal(symptomMatrix.rows[0].average,.5,'a média do nível exclui dias sem registro e conta Inexistente apenas quando explicitamente lançado');

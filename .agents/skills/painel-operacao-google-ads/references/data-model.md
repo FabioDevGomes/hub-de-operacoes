@@ -2,15 +2,25 @@
 
 ## Base de campanhas
 
-O IndexedDB compartilhado `painel-campanhas` está na versão 3:
+O IndexedDB compartilhado `painel-campanhas` está na versão 5:
 
 - `bases`, chave `atual`: base `base_campanhas_v1` sem duplicar fisicamente o Event Log;
 - `catalogos`, chave `atual`: aliases, ocultações e datas oficiais dos Produtos Testados;
 - `events`, chave `event_id`: objetos de telemetria imutáveis, acrescentados com `add`.
 
-A migração para a versão 3 só acrescenta `events` em `onupgradeneeded`; não apaga nem recria stores existentes.
+A migração v3 acrescentou `events`; a migração v4 acrescentou stores do Faturamento; a migração v5 acrescenta stores próprias do Controle de gastos. As migrações são aditivas: preservam as stores existentes e não as recriam nem apagam.
 
 O objeto normalizado de base tem `campanhas`, `diario`, `campos_operacionais`, `importacoes`, `snapshots_campanhas`, `vendas_provisorias`, `manifesto_atual` e `event_log`. `event_log` é a visão em memória/exportação que une os eventos da store `events` e eventuais eventos de backups antigos. Persistência de campanha grava as demais propriedades em `bases` e mescla eventos novos à store dedicada sem atualizar ou remover IDs existentes.
+
+### Histórico legado consolidado — migração única de `totais`
+
+Não é uma store ou base nova: a migração v1 reutiliza `bases/atual` e acrescenta `legacy_totais_migration: {version, source, applied_at, report}` à base. Campanhas novas da carga usam `registro_origem: 'legacy_totais'`, `status: 'historico'`, nome completo em `nome_mcc`/`nome_exibicao` e `legacy_totais` com `schema`, `origin`, número histórico, `end_date`, `account_legacy`, métricas e valores derivados. Campanhas nativas inequívocas mantêm sua identidade/status e recebem apenas `legacy_totais`; seu histórico diário, MCC, D0/D−1, vendas e Event Log não são substituídos. Registros nativos sem marcador explícito continuam sendo considerados de origem `native` por compatibilidade.
+
+O resumo guarda `investment_brl`, `clicks`, `conversions` e `commission_brl` como `{value, state}`: zero observado é `0/observed`; célula vazia é `null/missing`; marcador textual não numérico é `null/unknown`. Conta antiga é texto literal, sem conversão automática para `conta_sufixo`. Data ausente fica `null`. Lucro é derivado somente quando investimento e comissão são observados; ROI somente quando a comissão e um investimento maior que zero são observados. O ROI da planilha, que é fórmula, não é outra fonte de verdade. Lucro não é inferido a partir de comissão ausente, ainda que uma fórmula antiga na planilha mostre um número.
+
+`src/legacy-totais-migration.mjs` valida o payload local, detecta nomes exatos duplicados, conta/nome conflitante, colisões e divergências nativas antes de modificar a cópia da base. Se qualquer associação ficar ambígua, não grava a migração nem seu marcador. Correspondência usa `nome_mcc` literal; conta só desempata quando o texto cru da conta coincide literalmente com metadado operacional disponível, sem reduzir ID a sufixo. O relatório v1 guarda linhas analisadas, campanhas válidas/criadas/já existentes, vínculos, duplicidades evitadas, ambiguidades, datas ausentes, linha(s) de resumo ignorada(s), divergências e totais por valores observados. O marcador torna reload/build idempotentes. O resumo legado só é mostrado ao abrir a campanha legada na seção Histórico; o renderizador da tabela diária permanece sem datas artificiais. `Produtos Testados` usa o agrupamento atual sobre a mesma coleção `campanhas`; sua coluna **Total faturado** agrega por produto a comissão histórica observada por campanha. Para evitar dupla contagem, só acrescenta diário e ajustes de vendas provisórias em datas estritamente posteriores ao `end_date` do resumo. Se houver comissão observada sem data final, usa essa comissão e não adiciona valores diários/provisórios sem período comprovadamente posterior; quando não houver comissão histórica observada, usa o diário e os ajustes provisórios disponíveis. Zero observado permanece válido; `missing`/`unknown` não é tratado como zero. Essa regra afeta apenas Produtos Testados: não altera dados diários/MCC nem o resumo da campanha na seção Histórico.
+
+O payload é o arquivo privado `data-local/legacy-totais-migration-v1.json`, ignorado pelo Git e copiado para `dist/` apenas durante o build local quando existe. Não versionar o XLSX nem o JSON de campanhas. Após a migração, `legacy_totais` viaja no backup normal da base JSON; `CampaignDatabase.normalize`/`mergeEventLogs` preservam propriedades aditivas. O runtime não contém parser de Excel nem mantém dependência da planilha.
 
 `controle_macro_historico` é um campo aditivo opcional na base existente (não uma nova store/schema). Guarda os dias importados da planilha de controle macro, com data, investimento, faturamento, cliques, vendas e observação. A agregação em `src/control-macro/domain.js` combina esse histórico com `diario` por métrica:
 
@@ -29,6 +39,10 @@ O Preparador MCC grava a base `atual` no mesmo IndexedDB `painel-campanhas` e em
 - **Limite importante:** o código atual ainda aplica a regra de precedência histórica acima se existir linha da planilha para a mesma data. A política futura de usar MCC como fonte em datas sobrepostas ainda não altera esse código. Se for necessário substituir valores históricos existentes por MCC, isso exige uma alteração de regra de negócio aprovada e testada; não presumir que uma nova carga MCC sobrescreveu a planilha.
 
 ## Diário A–Q
+
+O módulo é apresentado na interface como **Diário de campanha**: uma seleção abre o diário de uma campanha específica, não um diário consolidado de produto. O vínculo de produto é uma relação um-para-muitos na visão de Produtos Testados: a mesma família/identidade de produto pode listar várias campanhas relacionadas, e seus registros diários permanecem separados pela chave de campanha. Preserve nomes MCC completos e `campanha_id`; não funde métricas de campanhas só porque pertencem ao mesmo produto.
+
+Em **Produtos Testados**, a consolidação de apresentação reconhece uma série somente quando existem pelo menos duas iterações numéricas distintas com a mesma base, inclusive nomes no formato `Produto 1° [MS]`, `Produto 2° [MS]`. A coluna de produto usa a base (`Produto`) e as métricas agregáveis da tela somam as campanhas relacionadas, respeitando a precedência histórica da comissão descrita acima. O sufixo ordinal e um marcador final entre colchetes são tratados como identificação da iteração para esta listagem; a regra não altera `nome_mcc`, `campanha_id`, status, diário, MCC ou outras telas. Uma única campanha numerada sem outra iteração correspondente mantém o nome original, evitando remover uma numeração potencialmente parte do nome real do produto.
 
 | Campo | Conteúdo |
 |---|---|
@@ -57,6 +71,31 @@ Importações devem unir eventos por `event_id`. IDs são idempotentes e writes 
 - E-commerce GM: `radar-top-performance`.
 - Glimpse: `radar-glimpse`, compartilhado por `productKey`.
 - Radar SpyHero: `radar-curadoria`.
+
+## Faturamento — domínio financeiro independente
+
+O Faturamento usa stores próprias (`billing_sales`, `billing_movements`, `billing_audit`, `billing_meta`) no IndexedDB compartilhado `painel-campanhas`, atualmente schema versão 5. A migração também é declarada no artefato independente `dist/preparador-MCC/index.html`, que abre o mesmo banco. Não misture vendas/comissões com `vendas_provisorias`, `diario`, `controle_macro_historico` ou Event Log operacional. Regras de negócio, seed local versionado, índices, backups e cálculos estão documentados em [billing.md](billing.md).
+
+## Controle de gastos — domínio pessoal independente
+
+As regras de orçamento, reserva, competência e apresentação ficam em [Controle de gastos pessoais](../../controle-gastos-pessoal/SKILL.md) e [regras de domínio](../../controle-gastos-pessoal/references/regras-de-dominio.md). Esta seção permanece como referência do schema e da persistência.
+
+`/?view=personal-finance` é a tela Controle de gastos, no grupo Pessoal. Ela usa o mesmo IndexedDB local `painel-campanhas`, mas mantém domínio e stores próprios, separados do Faturamento, do Controle Macro e da operação MCC:
+
+- `personal_finance_groups`, chave `group_id`;
+- `personal_finance_categories`, chave `category_id`, índice por grupo e ordem;
+- `personal_finance_months`, chave `month_key` (`AAAA-MM`);
+- `personal_finance_entries`, chave `entry_id`, índices por mês, categoria e par mês/categoria;
+- `personal_finance_debts`, chave `snapshot_id`, índices por mês e item;
+- `personal_finance_funds`, chave `snapshot_id`, índices por mês, item e tipo (`available`/`reserve`).
+
+A versão 5 cria essas stores de modo aditivo nos três pontos que podem abrir o banco compartilhado: tela principal, Preparador MCC e armazenamento do Faturamento. Não rebaixar a versão nem excluir stores ao migrar.
+
+O mês corrente é o período inicial. Entradas mensais guardam cópias dos nomes, grupo e moeda vigentes naquele mês, além de planejado e realizado. `actual_amount: null` significa sem lançamento; `actual_amount: 0` é zero observado. Criar um mês copia apenas o planejado anterior ou usa os padrões vigentes das categorias, nunca os realizados. Dívidas em aberto, disponibilidade e reservas são copiadas como ponto inicial do snapshot mensal, sem modificar o mês de origem; uma dívida marcada paga deixa de ser carregada para meses novos.
+
+BRL e USD são dimensões independentes: somários, realizado, dívida, saldo e posição líquida são calculados separadamente. Não converter nem combinar moedas. Alterar/inativar categorias e grupos não reescreve snapshots antigos; um novo mês usa a configuração atual. A tela consulta somente os registros do mês escolhido por índice; leitura integral das stores ocorre apenas no backup explícito.
+
+O backup completo JSON inclui `personal_finance`. Restauração valida a estrutura e pede confirmação quando substituir dados locais existentes. Backup antigo sem essa propriedade continua válido e preserva integralmente as stores pessoais atuais. O domínio não importa a imagem de referência, não se conecta a bancos/cartões e não se integra ao Faturamento ou à MCC.
 
 Valide versões e stores antes de alterar qualquer banco local.
 

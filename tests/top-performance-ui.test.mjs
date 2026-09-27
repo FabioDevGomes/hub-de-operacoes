@@ -9,6 +9,9 @@ assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
 assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));
 assert.ok(html.includes('id="pasteArea"')&&html.includes('id="confirmImport"'));
 assert.ok(html.includes('id="movementFilter"'));
+assert.ok(html.includes('.filter-grid #countryFilter,.filter-grid #languageFilter{display:none!important}'),'os filtros de países e idiomas devem ficar fora da faixa visível de filtros da E-commerce GM');
+assert.ok(html.includes('.filter-grid input[type=number].control{width:100%;min-width:0}')&&html.includes('minmax(84px,.7fr) minmax(84px,.7fr) minmax(120px,1.1fr)'),'os filtros Payout mín., Payout máx. e Recursos devem caber nas próprias colunas sem sobreposição');
+assert.ok(html.includes('.filter-grid:has(.column-picker[open]){position:relative;z-index:20;overflow:visible}')&&html.includes('.filter-grid .column-menu{z-index:30}'),'o seletor de colunas deve se sobrepor à tabela e escapar do recorte da barra de filtros');
 assert.ok(html.includes('<option value="best">Best</option>')&&html.includes('badge-best'),'badges Best e Top não estão separados na interface');
 assert.ok(html.includes('data-panel="trends"')&&html.includes('data-panel="images"')&&html.includes('data-panel="history"'));
 assert.ok(html.includes('id="columnMenu"'));
@@ -21,6 +24,7 @@ assert.ok(html.includes("const HIDDEN_OFFERS_PREFS='top-performance-itens-oculto
 assert.ok(html.includes("visibility==='all'||(visibility==='hidden'?hidden:!hidden)"));
 assert.equal((html.match(/class="sort-btn"/g)||[]).length,13);
 assert.ok(html.includes('automaticSignalBadge')&&html.includes('data-sort="automaticSignal"'),'coluna de sinal automático não é montada ou ordenável');
+assert.ok(html.includes("input.oninput=()=>render()")&&html.includes("input.onchange=()=>render()"),'os filtros devem chamar o renderizador vigente para preservar as colunas dinâmicas, inclusive após filtrar');
 assert.ok(html.includes('data-sort="trends"')&&html.includes('data-sort="images"')&&html.includes('data-sort="lastSeen"'));
 assert.ok(html.includes("import * as TrendsUI from '../trends-ui.mjs'"));
 assert.ok(html.includes('id="topProductAgeActions"')&&html.includes('id="topTrendsResults"'));
@@ -48,6 +52,7 @@ assert.ok(html.includes('image-candidate-summary')&&html.includes('data-top-imag
 assert.ok(html.includes('data-top-image-candidates')&&html.includes('Images.imageSearchUrlExcluding(term,country,candidate)'),'candidatas a negativas não usam o termo do produto com exclusão nem preservam o país');
 assert.ok(html.includes('data-top-image-edit-candidates')&&html.includes('data-top-image-save-candidates'),'edição de candidatas negativas não está disponível para qualquer sinal visual');
 assert.ok(html.includes('negativeKeywordCandidates:imageCandidates({negativeKeywordCandidates:candidates})'),'candidatas devem ser salvas mesmo com resultado Dominante');
+assert.ok(html.includes("if(current?.status!=='mixed')await saveImage(selectedCountry,status,candidates)")&&html.includes('const offerId=activeOfferId,item=offers.find(x=>x.offerId===offerId)'),'selecionar Mista precisa persistir a avaliação sem candidatas antes de abrir o editor opcional, usando a oferta capturada antes do write');
 assert.ok(html.includes("const term=$('#imagesTerm').value.trim()||item.productName,tab=window.open(Images.imageSearchUrlExcluding(term,country,candidate)"),'busca de negativa da E-commerce GM não parte do termo da oferta');
 assert.ok(html.includes('badge-summary')&&html.includes("labels.join(' · ')")&&html.includes("tone=b.new?'new':b.top?'top':b.brandOk?'brand':''"),'badges não foram consolidados em uma pílula compacta');
 assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Payout não inicia ordenado do maior para o menor');

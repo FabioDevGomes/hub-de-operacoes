@@ -1,5 +1,6 @@
-export const PARSER_VERSION='1.1.0';
-export const ANALYZER_VERSION='1.0.0';
+export const PARSER_VERSION='1.2.0';
+export const ANALYZER_VERSION='2.0.0';
+export const GLIMPSE_RULE_VERSION='glimpse-signal-v2';
 
 const NOISE=/^(?:set alert|tracking|forecast|export data|file_download|code|share|more_vert|help_outline|previous|next|upgrade|compare|all searches|topic map|refreshes in|\d+\s*\/\s*\d+|searches left)$/i;
 const HEADINGS=['People Also Search','Related Trends','Channel','Interesse por região','Related Topics','Related Queries','Assuntos relacionados','Pesquisas relacionadas'];
@@ -50,7 +51,27 @@ function detectBasic(lines){
 }
 function detectVolume(lines){for(let i=0;i<lines.length;i++){const match=lines[i].match(/^(<\s*)?[\d.,]+\s*[KMB]?\s+searches past month$/i);if(!match)continue;const display=lines[i].replace(/\s+searches past month/i,'').replace(/\s/g,''),parsed=parseCompactNumber(display);return parsed?{...parsed,period:'past_month',state:'available'}:null}return{value:null,operator:null,display:null,period:'past_month',state:'not_detected'}}
 function normalizeMovementSign(value){return String(value).replace(/[−‒–﹣－]/g,'-')}
-function detectMovement(lines){for(let i=0;i<lines.length;i++){const line=normalizeMovementSign(lines[i]),inline=line.match(/([+-]?\s*\d+(?:[.,]\d+)?)%\s*(past week|past month|última semana|último mês)?/i);if(inline)return{percent:Number(inline[1].replace(/\s/g,'').replace(',','.')),period:inline[2]||lines[i+1]||null,state:'available'};if(/^[+-]?\s*\d+(?:[.,]\d+)?%$/.test(line)&&/past week|past month|semana|mês/i.test(lines[i+1]||''))return{percent:Number(line.replace('%','').replace(/\s/g,'').replace(',','.')),period:lines[i+1],state:'available'}}return{percent:null,period:null,state:'not_detected'}}
+const MOVEMENT_WINDOWS=[
+  {period:'past_week',label:'última semana',pattern:/\b(?:past|last)\s+(?:week|7\s+days)\b|última semana|últimos? 7 dias/i},
+  {period:'past_month',label:'último mês',pattern:/\b(?:past|last)\s+(?:month|30\s+days)\b|último mês|último mes|últimos? 30 dias/i},
+  {period:'past_quarter',label:'último trimestre',pattern:/\b(?:past|last)\s+(?:quarter|3\s+months)\b|último trimestre|últimos? 3 meses/i},
+  {period:'past_year',label:'último ano',pattern:/\b(?:past|last)\s+(?:year|12\s+months)\b|último ano|últimos? 12 meses/i}
+];
+function movementWindow(text=''){return MOVEMENT_WINDOWS.find(window=>window.pattern.test(String(text)))||null}
+function isMovementWindowOnly(text=''){return /^(?:past|last)\s+(?:week|month|quarter|year|7\s+days|30\s+days|3\s+months|12\s+months)$|^(?:última semana|último mês|último mes|último trimestre|último ano|últimos? (?:7 dias|30 dias|3 meses|12 meses))$/i.test(String(text).trim())}
+function detectMovement(lines){
+  const candidates=[];
+  for(let index=0;index<lines.length;index++){
+    const line=normalizeMovementSign(lines[index]),match=line.match(/([+-]?\s*\d+(?:[.,]\d+)?)\s*%/);
+    if(!match)continue;
+    const previous=lines[index-1]||'',contexts=[lines[index],lines[index+1]||'',isMovementWindowOnly(previous)?previous:''];
+    const window=contexts.map(movementWindow).find(Boolean);
+    if(!window)continue;
+    const percent=Number(match[1].replace(/\s/g,'').replace(',','.'));
+    if(Number.isFinite(percent))candidates.push({percent,period:window.period,periodLabel:window.label,state:'available'});
+  }
+  return candidates[0]||{percent:null,period:null,periodLabel:null,state:'not_detected'};
+}
 
 export function parseGlimpse(raw=''){
   const sanitizedRaw=sanitizeRaw(raw),lines=linesFrom(raw),basic=detectBasic(lines),volume=detectVolume(lines),movement=detectMovement(lines),seasonality={state:/not enough data|não há dados de pesquisa suficientes/i.test(lines.join(' '))?'insufficient_data':headingIndex(lines,'Seasonality')>=0?'available':'not_detected'},channel={state:/Channel breakdown is unavailable for low volume/i.test(lines.join(' '))?'unavailable_low_volume':headingIndex(lines,'Channel')>=0?'available':'not_detected'};
@@ -62,20 +83,114 @@ export function classifyQuery(text='',searchTerm=''){
   const normalized=normalize(text);let category='Outros',confidence=.58;for(const [label,rule]of CATEGORY_RULES)if(rule.test(normalized)){category=label;confidence=.88;break}
   const related=tokenOverlap(text,searchTerm),relevance=related?'high':category==='Técnico'||category==='Navegacional'?'medium':category==='Outros'?'unclear':'medium';return{text,category,confidence,relevance};
 }
-function coverage(parsed){const checks=[parsed.volume.state==='available',parsed.movement.state==='available',parsed.regions.items.length>0,parsed.peopleAlsoSearch.items.length>0,parsed.relatedTrends.items.length>0,parsed.relatedTopics.items.length>0,parsed.relatedQueries.items.length>0,parsed.seasonality.state==='available',parsed.channel.state==='available'],score=checks.filter(Boolean).length;return{level:score>=6?'high':score>=3?'medium':'low',score,availableSources:checks.filter(Boolean).length,totalSources:checks.length}}
-function contamination(classified){if(!classified.length)return{level:'unclear',ratio:null};const low=classified.filter(item=>item.relevance==='low'||item.relevance==='unclear').length,ratio=low/classified.length;return{level:ratio>.45?'high':ratio>.2?'medium':'low',ratio}}
-function signalFor(parsed,classified,cov,cont){let score=0;if(parsed.volume.state==='available')score+=parsed.volume.operator==='<'?6:parsed.volume.value>=100000?32:parsed.volume.value>=10000?24:parsed.volume.value>=1000?16:8;if(parsed.movement.percent>0)score+=Math.min(18,parsed.movement.percent/10);score+=classified.filter(item=>['BOFU / Reviews','Compra / Preço','Confiança / Objeção'].includes(item.category)).length*3;score+=cov.score*2;if(cont.level==='high')score-=12;const level=parsed.volume.operator==='<'&&cov.level==='low'?'limited':score>=50?'strong':score>=25?'medium':'limited';return{level,score:Math.round(score),rulesVersion:'glimpse-signal-v1'}}
+function coverage(parsed){const checks=[parsed.volume.state==='available',parsed.movement.state==='available',parsed.regions.items.length>0,parsed.peopleAlsoSearch.items.length>0,parsed.relatedTrends.items.length>0,parsed.relatedTopics.items.length>0,parsed.relatedQueries.items.length>0,parsed.seasonality.state==='available',parsed.channel.state==='available'],score=checks.filter(Boolean).length;return{level:score>=6?'high':score>=3?'medium':'low',score,availableSources:score,totalSources:checks.length}}
+export function isContaminated(item){return item?.relevance==='unclear'}
+function contamination(classified){const evaluated=classified.filter(item=>['high','medium','unclear'].includes(item.relevance));if(!evaluated.length)return{level:'unclear',ratio:null,contaminatedCount:0,totalCount:0};const contaminatedCount=evaluated.filter(isContaminated).length,ratio=contaminatedCount/evaluated.length;return{level:ratio>.45?'high':ratio>.2?'medium':'low',ratio,contaminatedCount,totalCount:evaluated.length}}
+const COMMERCIAL_CATEGORIES=new Set(['BOFU / Reviews','Compra / Preço','Confiança / Objeção']);
+const SOURCE_NAMES=['peopleAlsoSearch','relatedQueries','relatedTrends','relatedTopics'];
+function itemText(item){return typeof item==='string'?item:String(item?.text||'')}
+function mergeClassifiedSources(parsed,term){
+  const sourceItems={peopleAlsoSearch:parsed.peopleAlsoSearch.items,relatedQueries:parsed.relatedQueries.items,relatedTrends:parsed.relatedTrends.items,relatedTopics:parsed.relatedTopics.items},uniqueByTerm=new Map();
+  for(const source of SOURCE_NAMES)for(const rawItem of sourceItems[source]){
+    const text=itemText(rawItem),key=normalize(text);if(!key)continue;
+    let classified=uniqueByTerm.get(key);
+    if(!classified){classified={...(typeof rawItem==='object'?rawItem:{}),...classifyQuery(text,term),sources:[]};uniqueByTerm.set(key,classified)}
+    if(!classified.sources.includes(source))classified.sources.push(source);
+  }
+  const unique=[...uniqueByTerm.values()];
+  const bySource=Object.fromEntries(SOURCE_NAMES.map(source=>[source,unique.filter(item=>item.sources.includes(source))]));
+  return{unique,bySource,duplicateOccurrences:Object.values(sourceItems).reduce((total,items)=>total+items.length,0)-unique.length};
+}
+function intentionSummary(unique){
+  const commercial=unique.filter(item=>COMMERCIAL_CATEGORIES.has(item.category)),count=commercial.length,total=unique.length;
+  const level=total===0?'not_evaluable':count>=5?'strong':count>=2?'moderate':count===1?'low':'none';
+  return{level,commercialCount:count,uniqueTermCount:total,commercialRate:total?count/total:null,duplicateOccurrences:0};
+}
+function demandDimension(parsed){
+  const volume=parsed.volume;
+  if(volume.state!=='available'||volume.value===null)return{level:'unknown',value:null,operator:null,period:volume.period||'past_month'};
+  const level=volume.operator==='<'?'limited':volume.value>=10000?'high':volume.value>=1000?'moderate':'low';
+  return{level,value:volume.value,operator:volume.operator,period:volume.period||'past_month',display:volume.display||null};
+}
+function movementDimension(parsed){
+  const movement=parsed.movement;
+  if(movement.state!=='available'||movement.percent===null)return{level:'unknown',value:null,direction:'unknown',period:null,periodLabel:null};
+  const direction=movement.percent>0?'rising':movement.percent<0?'falling':'stable';
+  return{level:direction,value:movement.percent,direction,period:movement.period||null,periodLabel:movement.periodLabel||movementPeriodLabel(movement.period)};
+}
+function movementPeriodLabel(period){return MOVEMENT_WINDOWS.find(item=>item.period===period)?.label||period||'janela não identificada'}
+function relevanceDimension(cont){return{level:cont.level==='low'?'good':cont.level==='medium'?'mixed':cont.level==='high'?'poor':'unknown',contaminationLevel:cont.level,contaminatedCount:cont.contaminatedCount,totalCount:cont.totalCount,ratio:cont.ratio}}
+function geographyDimension(parsed,geo){
+  const capturedCount=parsed.regions.items.length,reportedCount=parsed.regions.reportedTotal??null,coverageState=capturedCount===0?'not_detected':reportedCount!==null&&reportedCount>capturedCount?'partial':'complete';
+  return{level:geo.level,capturedCount,reportedCount,coverage:coverageState,interpretation:'Índice relativo de interesse; não representa volume de buscas.'};
+}
+function confidenceFor(parsed,cov,cont,unique,geography){
+  const reasons=[];
+  if(cov.level==='low'||unique.length<3){reasons.push('Poucas fontes ou itens únicos para sustentar uma leitura robusta.');return{level:'low',reasons}}
+  if(cov.level==='high'&&unique.length>=5&&cont.level!=='high'&&geography.coverage!=='partial'&&(parsed.volume.state==='available'||parsed.movement.state==='available')){
+    reasons.push('Cobertura alta, múltiplos itens observáveis e ruído semântico não severo.');return{level:'high',reasons}
+  }
+  if(cont.level==='high')reasons.push('A proporção de itens semanticamente incertos reduz a confiabilidade da leitura.');
+  if(geography.coverage==='partial')reasons.push('A lista regional capturada é parcial em relação ao total informado.');
+  if(cov.level!=='high')reasons.push(`Cobertura ${coverageLabel(cov.level).toLowerCase()} das fontes.`);
+  if(unique.length<5)reasons.push('Poucos termos únicos foram capturados.');
+  if(!reasons.length)reasons.push('Há evidência utilizável, mas com limitações para uma conclusão robusta.');
+  return{level:'medium',reasons};
+}
+function alertsFor({movement,intent,relevance,geography}){
+  const alerts=[];
+  if(movement.value!==null&&movement.value<=-100)alerts.push({id:'extreme_decline',severity:'critical',message:`Queda extrema de ${movement.value}% detectada (janela: ${movementPeriodLabel(movement.period)}).`,evidence:{value:movement.value,period:movement.period}});
+  if(relevance.contaminationLevel==='high')alerts.push({id:'high_semantic_contamination',severity:'critical',message:`Contaminação semântica alta: ${Math.round((relevance.ratio||0)*100)}% dos itens avaliados.`,evidence:{ratio:relevance.ratio,contaminatedCount:relevance.contaminatedCount,totalCount:relevance.totalCount}});
+  if(intent.uniqueTermCount>=3&&intent.commercialCount<=1)alerts.push({id:'low_commercial_intent',severity:'warning',message:'Intenção comercial escassa entre os termos únicos avaliados.',evidence:{commercialCount:intent.commercialCount,uniqueTermCount:intent.uniqueTermCount}});
+  if(geography.level==='limited')alerts.push({id:'limited_geography',severity:'info',message:'Apenas uma região foi capturada; a distribuição geográfica é limitada.',evidence:{capturedCount:geography.capturedCount,reportedCount:geography.reportedCount}});
+  return alerts;
+}
+function insufficientEvidence(parsed,cov,unique){const reliableVolume=parsed.volume.state==='available'&&parsed.volume.operator!=='<',reliableMovement=parsed.movement.state==='available'&&parsed.movement.period;return !reliableVolume&&!reliableMovement&&(cov.level==='low'||unique.length<5)}
+function signalForV2({confidence,alerts,demand,movement,intent,relevance,insufficient}){
+  if(insufficient)return{level:'insufficient_data',rulesVersion:GLIMPSE_RULE_VERSION,reasons:['A cobertura ou o volume de itens avaliáveis é insuficiente para uma conclusão.']};
+  const positive=[],negative=[];
+  if(['moderate','high'].includes(demand.level))positive.push('demanda');
+  if(movement.direction==='rising')positive.push('movimento');
+  if(['moderate','strong'].includes(intent.level))positive.push('intenção');
+  if(demand.level==='low'||demand.level==='limited')negative.push('demanda');
+  if(movement.direction==='falling')negative.push('movimento');
+  if(intent.uniqueTermCount>=3&&intent.commercialCount<=1)negative.push('intenção');
+  if(relevance.level==='poor')negative.push('relevância');
+  const critical=alerts.some(alert=>alert.severity==='critical'),strongEligible=demand.level==='moderate'||demand.level==='high';
+  let level;
+  if(positive.length&&negative.length)level='mixed';
+  else if(positive.length&&critical)level='mixed';
+  else if(strongEligible&&movement.direction==='stable'&&intent.level==='strong'&&relevance.level==='good'&&confidence.level==='high'&&!critical)level='strong';
+  else if(positive.length)level='positive';
+  else level='weak';
+  const reasons=level==='mixed'?[positive.length?`Sinais favoráveis: ${positive.join(', ')}.`:null,negative.length?`Sinais desfavoráveis: ${negative.join(', ')}.`:null,...alerts.filter(alert=>alert.severity==='critical').map(alert=>alert.message)].filter(Boolean):level==='strong'?['Demanda, intenção e relevância são consistentes, com confiança alta e sem alerta crítico.']:level==='positive'?[`Sinais favoráveis: ${positive.join(', ')}. Ainda não há convergência suficiente para Forte.`]:[`Sinais desfavoráveis: ${negative.join(', ')||'não há eixos favoráveis suficientes'}.`];
+  if(confidence.level==='low'&&level==='strong')level='positive';
+  return{level,rulesVersion:GLIMPSE_RULE_VERSION,reasons};
+}
 export function movementValueLabel(percent){return `${percent>0?'+':''}${percent}%`}
-function operationalReading(parsed,signal,cov,cont,classified){const volume=parsed.volume.display?`${parsed.volume.display} buscas/mês`:'volume não detectado',movement=parsed.movement.percent===null?'movimento não detectado':`${movementValueLabel(parsed.movement.percent)} no período recente`,commercial=classified.filter(item=>['BOFU / Reviews','Compra / Preço','Confiança / Objeção'].includes(item.category)).length;return `${volume}; ${movement}. Foram encontrados ${commercial} sinais de intenção comercial. Cobertura ${coverageLabel(cov.level).toLowerCase()} e contaminação semântica ${contaminationLabel(cont.level).toLowerCase()}. ${parsed.regions.items.length<=1?'A leitura geográfica é limitada.':'A distribuição geográfica deve ser interpretada pelo índice relativo, não como volume de buscas.'}`}
+function operationalReading(parsed,signal,dimensions,alerts,confidence){
+  const demand=dimensions.demand.level==='unknown'?'volume não detectado':`${parsed.volume.display||parsed.volume.value} buscas/mês (${dimensions.demand.level})`;
+  const movement=dimensions.movement.value===null?'movimento não detectado':`${movementValueLabel(dimensions.movement.value)} (janela: ${movementPeriodLabel(dimensions.movement.period)})`;
+  const intention=`${dimensions.intention.commercialCount} termos comerciais únicos de ${dimensions.intention.uniqueTermCount}`;
+  const relevance=dimensions.relevance.ratio===null?'relevância sem itens avaliáveis':`${Math.round(dimensions.relevance.ratio*100)}% de contaminação semântica`;
+  const geography=dimensions.geography.level==='not_detected'?'geografia não capturada':dimensions.geography.level==='limited'?'geografia limitada':`geografia ${dimensions.geography.level}`;
+  return `Sinal ${signalLabel(signal.level)}; demanda ${demand}; movimento ${movement}; intenção ${intention}; relevância ${relevance}; ${geography}; confiança ${confidenceLabel(confidence.level).toLowerCase()}.${alerts.length?` Alertas: ${alerts.map(alert=>alert.message).join(' ')}`:''}`;
+}
 export function analyzeGlimpse(parsed){
-  const term=parsed.basic.searchTerm,people=parsed.peopleAlsoSearch.items.map(item=>classifyQuery(item,term)),trends=parsed.relatedTrends.items.map(item=>classifyQuery(item,term)),topics=parsed.relatedTopics.items.map(item=>({...item,...classifyQuery(item.text,term)})),queries=parsed.relatedQueries.items.map(item=>({...item,...classifyQuery(item.text,term)})),classified=[...people,...trends,...topics,...queries],cov=coverage(parsed),cont=contamination(classified),signal=signalFor(parsed,classified,cov,cont);
-  const categoryCounts=classified.reduce((map,item)=>(map[item.category]=(map[item.category]||0)+1,map),{}),geo=parsed.regions.items.length>1?{level:parsed.regions.items[0].interestIndex>=parsed.regions.items[1].interestIndex*2?'concentrated':'distributed'}:{level:parsed.regions.items.length?'limited':'not_detected'};
-  return {analyzerVersion:ANALYZER_VERSION,classified:{peopleAlsoSearch:people,relatedTrends:trends,relatedTopics:topics,relatedQueries:queries},indicators:{coverage:cov,contamination:cont,categoryCounts,geography:geo},signal,operationalReading:operationalReading(parsed,signal,cov,cont,classified)};
+  const term=parsed.basic.searchTerm,{unique,bySource,duplicateOccurrences}=mergeClassifiedSources(parsed,term),cov=coverage(parsed),cont=contamination(unique),intention=intentionSummary(unique),geo=parsed.regions.items.length>1?{level:parsed.regions.items[0].interestIndex>=parsed.regions.items[1].interestIndex*2?'concentrated':'distributed'}:{level:parsed.regions.items.length?'limited':'not_detected'},demand=demandDimension(parsed),movement=movementDimension(parsed),relevance=relevanceDimension(cont),geography=geographyDimension(parsed,geo),confidence=confidenceFor(parsed,cov,cont,unique,geography);
+  intention.duplicateOccurrences=duplicateOccurrences;
+  const dimensions={demand,movement,intention,relevance,geography},alerts=alertsFor({movement,intent:intention,relevance,geography}),insufficient=insufficientEvidence(parsed,cov,unique);
+  if(confidence.level==='low'&&!insufficient)alerts.push({id:'low_confidence',severity:'warning',message:'A confiança geral da análise é baixa.',evidence:{coverage:cov.score,totalSources:cov.totalSources,uniqueItems:unique.length}});
+  const signal=signalForV2({confidence,alerts,demand,movement,intent:intention,relevance,insufficient}),categoryCounts=unique.reduce((map,item)=>(map[item.category]=(map[item.category]||0)+1,map),{});
+  const indicators={coverage:cov,contamination:cont,categoryCounts,geography:geo,intent:intention};
+  return{analyzerVersion:ANALYZER_VERSION,classified:bySource,indicators,dimensions,alerts,confidence,signal,operationalReading:operationalReading(parsed,signal,dimensions,alerts,confidence)};
 }
 export function createAnalysis(raw,context={},capturedAt=new Date().toISOString()){const parsed=parseGlimpse(raw),derived=analyzeGlimpse(parsed);return{analysisId:crypto.randomUUID(),productKey:normalize(context.productKey||context.productName||parsed.basic.searchTerm),productName:context.productName||parsed.basic.searchTerm||'Produto sem nome',offerIds:[...new Set((context.offerIds||[]).map(String).filter(Boolean))],capturedAt,parserVersion:PARSER_VERSION,analyzerVersion:ANALYZER_VERSION,rawSanitized:parsed.sanitizedRaw,parsed:{...parsed,sanitizedRaw:undefined},classified:derived.classified,indicators:derived.indicators,signal:derived.signal,operationalReading:derived.operationalReading}}
-export function signalLabel(value){return value==='strong'?'Forte':value==='medium'?'Médio':value==='limited'?'Dados limitados':'Sem análise'}
+export function signalLabel(value){return({strong:'Forte',positive:'Positivo',mixed:'Misto',weak:'Fraco',insufficient_data:'Dados insuficientes',medium:'Médio',limited:'Dados limitados'})[value]||'Sem análise'}
 export function coverageLabel(value){return value==='high'?'Alta':value==='medium'?'Média':value==='low'?'Baixa':'Não detectada'}
 export function contaminationLabel(value){return value==='high'?'Alta':value==='medium'?'Média':value==='low'?'Baixa':'Indefinida'}
+export function confidenceLabel(value){return({high:'Alta',medium:'Média',low:'Baixa'})[value]||'Não avaliada'}
+export function dimensionLabel(value){return({high:'Alta',moderate:'Moderada',low:'Baixa',limited:'Limitada',unknown:'Não detectada',rising:'Em alta',falling:'Em queda',stable:'Estável',strong:'Forte',medium:'Média',good:'Boa',mixed:'Mista',poor:'Ruim',distributed:'Distribuída',concentrated:'Concentrada',not_detected:'Não detectada',partial:'Parcial',complete:'Completa',none:'Nenhuma',not_evaluable:'Não avaliável'})[value]||String(value||'Não avaliada')}
 export function stateLabel(value){return{available:'Disponível',insufficient_data:'Sem dados suficientes',unavailable_low_volume:'Indisponível por baixo volume',not_available:'Dados indisponíveis',not_detected:'Não detectado'}[value]||'Não detectado'}
-export function compactSummary(analysis){if(!analysis)return'Pesquisar';const volume=analysis.parsed?.volume?.display||'Sem volume',label=analysis.parsed?.volume?.operator==='<'?'Limitado':signalLabel(analysis.signal?.level);return`${volume} · ${label}`}
-export function analysisRank(analysis){if(!analysis)return 0;return({strong:3,medium:2,limited:1}[analysis.signal?.level]||0)*1e9+(analysis.parsed?.volume?.value||0)}
+export function compactSummary(analysis){if(!analysis)return'Pesquisar';const volume=analysis.parsed?.volume?.display||'Sem volume',isV2=analysis.analyzerVersion===ANALYZER_VERSION||analysis.signal?.rulesVersion===GLIMPSE_RULE_VERSION,label=!isV2&&analysis.parsed?.volume?.operator==='<'?'Limitado':signalLabel(analysis.signal?.level);return`${volume} · ${label}`}
+export function analysisRank(analysis){if(!analysis)return 0;const rank=analysis.analyzerVersion===ANALYZER_VERSION||analysis.signal?.rulesVersion===GLIMPSE_RULE_VERSION?{strong:5,positive:4,mixed:3,weak:2,insufficient_data:1}:{strong:3,medium:2,limited:1};return(rank[analysis.signal?.level]||0)*1e9+(analysis.parsed?.volume?.value||0)}

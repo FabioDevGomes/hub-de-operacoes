@@ -150,6 +150,12 @@
     const investment=sum('investment'),revenue=sum('revenue'),clicks=sum('clicks'),sales=sum('sales'),profit=investment!=null&&revenue!=null?revenue-investment:null;
     return{investment,revenue,profit,roi:profit!=null&&investment>0?profit/investment*100:null,clicks,sales,clicksPerSale:clicks!=null&&sales>0?clicks/sales:null};
   }
+  function lifetimeSummary(rows=[]){
+    const revenueRows=(rows||[]).filter(row=>parseNumber(row?.revenue)!=null),pairedRows=(rows||[]).filter(row=>parseNumber(row?.investment)!=null&&parseNumber(row?.revenue)!=null);
+    const revenue=revenueRows.length?revenueRows.reduce((total,row)=>total+parseNumber(row.revenue),0):null;
+    const profit=pairedRows.length?pairedRows.reduce((total,row)=>total+parseNumber(row.revenue)-parseNumber(row.investment),0):null;
+    return{revenue,profit,revenueDays:revenueRows.length,profitDays:pairedRows.length};
+  }
   function localIsoDate(date=new Date()){return`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
   function observedSum(rows,key){const values=(rows||[]).map(row=>parseNumber(row?.[key])).filter(value=>value!=null);return values.length?values.reduce((total,value)=>total+value,0):null}
   function monthDayCount(month){const bounds=monthBounds(month);return bounds?Number(bounds.end.slice(-2)):0}
@@ -173,5 +179,5 @@
     while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month);output.push(trendBucket(month,byMonth.get(month)||[],days));month=shiftMonth(month,1)}
     return output;
   }
-  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,summarize,dailyTrendBuckets,monthlyTrendBuckets});
+  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,summarize,lifetimeSummary,dailyTrendBuckets,monthlyTrendBuckets});
 });

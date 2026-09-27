@@ -9,6 +9,7 @@ import { D0_FIELDS, HEADER_ALIASES } from '../extensions/mcc-d0-bridge/mcc-grid-
 
 const root = new URL('../', import.meta.url);
 const html = await readFile(new URL('dist/preparador-MCC/index.html', root), 'utf8');
+const popupHtml = await readFile(new URL('extensions/mcc-d0-bridge/popup.html', root), 'utf8');
 const popup = await readFile(new URL('extensions/mcc-d0-bridge/popup.js', root), 'utf8');
 const background = await readFile(new URL('extensions/mcc-d0-bridge/background.js', root), 'utf8');
 const manifest = JSON.parse(await readFile(new URL('extensions/mcc-d0-bridge/manifest.json', root), 'utf8'));
@@ -321,6 +322,7 @@ assert.ok(html.includes('data-sort-key="abs_top_share"') && html.includes('data-
 assert.ok(html.includes('1ª posição<span class="sort-arrow"'), 'a prévia expõe uma coluna ordenável para primeira posição');
 assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'"));
 assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"));
+assert.ok(popupHtml.indexOf('id="capture-d1"') < popupHtml.indexOf('id="capture-d0"'), 'o botão Capturar D−1 deve aparecer antes do Capturar D0');
 assert.ok(popup.includes('Aguardando D0 para gerar a prévia.'));
 assert.ok(background.includes('validateMccD0Capture(snapshot)'));
 assert.ok(background.includes('validateMccD1Capture(snapshot)'));

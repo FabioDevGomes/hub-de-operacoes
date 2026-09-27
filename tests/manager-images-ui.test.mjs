@@ -33,6 +33,7 @@ assert.ok(html.includes('ImagesDomain.imageSearchUrlExcluding(term,country,candi
 assert.ok(html.includes('data-manager-image-candidates'),'recipiente compartilhado das candidatas negativas ausente');
 assert.ok(html.includes('data-manager-image-edit-candidates')&&html.includes('data-manager-image-save-candidates'),'edição de candidatas negativas não está disponível para qualquer sinal visual');
 assert.ok(html.includes('negativeKeywordCandidates:imageCandidates({negativeKeywordCandidates})'),'candidatas devem ser salvas mesmo com resultado Dominante');
+assert.ok(html.includes("if(current?.status!=='mixed')await saveManagerImageResult(selectedCountry,status,candidates)")&&html.includes('const productKey=activeKey,product=productIndex.get(productKey)'),'selecionar Mista precisa persistir a avaliação sem candidatas antes de abrir o editor opcional, usando a chave capturada antes do write');
 assert.ok(css.includes('.image-candidate.saved'),'destaque das candidatas salvas ausente');
 assert.ok(css.includes('#productSheet #managerImagesPanel button')&&css.includes('#productSheet #managerImagesTab{font-weight:400}'),'botões azuis da aba Google Imagens ainda estão em negrito');
 assert.ok(css.includes('#offerSheet:has([data-panel="images"]:not(.hidden)) button,#productSheet:has(#managerImagesPanel:not(.hidden)) button{font-weight:400}'),'os demais botões da tela de Imagens devem usar peso normal');

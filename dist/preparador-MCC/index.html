@@ -164,7 +164,7 @@
       .summary-grid { grid-template-columns: 1fr; }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css">
+  <link rel="stylesheet" href="/sidebar-component.css?v=5">
   <link rel="stylesheet" href="/table-headers.css?v=1">
 </head>
 <body>
@@ -313,7 +313,7 @@
     let previewSort = { key:null, direction:null };
     let currentFilename = 'manifesto_mcc.json';
     const PANEL_DB_NAME = 'painel-campanhas';
-    const PANEL_DB_VERSION = 3;
+    const PANEL_DB_VERSION = 5;
     const PANEL_BASE_STORE = 'bases';
     const PANEL_EVENT_STORE = 'events';
     const PANEL_BASE_KEY = 'atual';
@@ -377,11 +377,29 @@
       return new Promise((resolve, reject) => {
         const request = indexedDB.open(PANEL_DB_NAME, PANEL_DB_VERSION);
         request.onupgradeneeded = () => {
+          const upgradeDb = request.result, upgradeTx = request.transaction;
           if (!request.result.objectStoreNames.contains(PANEL_BASE_STORE)) request.result.createObjectStore(PANEL_BASE_STORE);
           if (!request.result.objectStoreNames.contains('catalogos')) request.result.createObjectStore('catalogos');
           if (!request.result.objectStoreNames.contains(PANEL_EVENT_STORE)) request.result.createObjectStore(PANEL_EVENT_STORE, { keyPath:'event_id' });
+          const definitions = {
+            billing_sales: ['sale_id', { sale_date:'sale_date', product:'product', platform:'platform', account:'account', payment_status:'payment_status', external_id:'external_id' }],
+            billing_movements: ['movement_id', { sale_id:'sale_id', effective_date:'effective_date', type:'type' }],
+            billing_audit: ['audit_id', { sale_id:'entity_id', created_at:'created_at', entity:'entity' }],
+            billing_meta: ['key', {}],
+            personal_finance_groups: ['group_id', { sort_order:'sort_order' }],
+            personal_finance_categories: ['category_id', { group_id:'group_id', sort_order:'sort_order' }],
+            personal_finance_months: ['month_key', { created_at:'created_at' }],
+            personal_finance_entries: ['entry_id', { month_key:'month_key', category_id:'category_id', month_category:['month_key','category_id'] }],
+            personal_finance_debts: ['snapshot_id', { month_key:'month_key', item_id:'item_id', month_item:['month_key','item_id'] }],
+            personal_finance_funds: ['snapshot_id', { month_key:'month_key', item_id:'item_id', month_item:['month_key','item_id'], type:'type' }],
+          };
+          Object.entries(definitions).forEach(([name, schema]) => {
+            const keyPath = schema[0], indexes = schema[1];
+            const store = upgradeDb.objectStoreNames.contains(name) ? upgradeTx.objectStore(name) : upgradeDb.createObjectStore(name, { keyPath });
+            Object.entries(indexes).forEach(([indexName, indexPath]) => { if (!store.indexNames.contains(indexName)) store.createIndex(indexName, indexPath, { unique:false }); });
+          });
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
         request.onerror = () => reject(request.error);
       });
     }
@@ -404,13 +422,16 @@
       });
     }
 
-    function writePanelBase(db, base) {
+    function writePanelBase(db, base, { billingStorage=null, provisionalSales=[], mccSales=[] }={}) {
       return new Promise((resolve, reject) => {
-        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE], 'readwrite');
+        const billingNames=billingStorage&&(provisionalSales.length||mccSales.length)?billingStorage.BILLING_STORE_NAMES:[];
+        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE, ...billingNames], 'readwrite');
         const persistedBase = panelClone(base), eventStore = transaction.objectStore(PANEL_EVENT_STORE);
         const events = persistedBase.event_log || [];
         delete persistedBase.event_log;
         transaction.objectStore(PANEL_BASE_STORE).put(persistedBase, PANEL_BASE_KEY);
+        if (billingNames.length) billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales);
+        if (billingNames.length) billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales);
         const keys = eventStore.getAllKeys();
         keys.onsuccess = () => {
           const existing = new Set(keys.result.map(String));
@@ -531,9 +552,12 @@
         delete base.produtos_aliases;
         base.manifesto_atual = structuredClone(manifest);
         base.atualizado_em = new Date().toISOString();
-        await writePanelBase(db, base);
-        if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em }); channel.close(); }
-        return { base, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null };
+        const linkedSales=applied.reconciledSales||[];
+        const mccSales=applied.mccBillingSales||[];
+        const billingStorage=linkedSales.length||mccSales.length?await import('../billing/billing-storage.mjs?v=3'):null;
+        await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales });
+        if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em, provisionalSaleIds:linkedSales.map(sale=>String(sale.id)) }); channel.close(); }
+        return { base, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };
       } finally {
         db.close();
       }
@@ -1226,7 +1250,8 @@
         const result = await applyManifestToPanel(currentResult.manifest);
         const paused = result.movimentos?.pausadas?.length || 0, reactivated = result.movimentos?.reativadas?.length || 0, newCount = result.movimentos?.novas?.length || 0;
         const movements = ` ${paused} pausada(s) por ausência, ${newCount} nova(s) e ${reactivated} reativada(s).`;
-        q('#apply-note').textContent = `Base atualizada com ${currentResult.manifest.campanhas.length} campanha(s).${movements}`;
+        const billingNote=result.billingSalesSynced?` ${result.billingSalesSynced} lançamento(s) manual(is) atualizado(s) no Faturamento.`:'';
+        q('#apply-note').textContent = `Base atualizada com ${currentResult.manifest.campanhas.length} campanha(s).${movements}${billingNote}`;
         feedback.className = 'apply-feedback success'; feedback.textContent = 'SUCESSO — A base foi atualizada. Você já pode abrir a Visão Geral.'; feedback.hidden = false;
         q('#announcer').textContent = 'Base do Painel de Campanhas atualizada com sucesso.';
         button.textContent = 'Atualizada ✓';

@@ -2,6 +2,7 @@
 data-local/*
 !data-local/.gitkeep
 dist/catalogo-produtos-oficial.json
+dist/legacy-totais-migration-v1.json
 *.xlsx
 *.xls
 *.csv

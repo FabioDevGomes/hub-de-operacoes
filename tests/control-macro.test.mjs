@@ -80,6 +80,13 @@ assert.equal(combined.find(row => row.date === '2026-06-10').investment, null);
 assert.equal(combined.find(row => row.date === '2026-06-10').observation, 'Operação fora do ar devido a suspensões.');
 assert.equal(domain.summarize(mcc).sales, 3);
 assert.equal(domain.summarize(mcc).clicksPerSale, 20 / 3);
+const lifetime = domain.lifetimeSummary([
+  { date: '2026-04-01', investment: 100, revenue: 160, profit: 60 },
+  { date: '2026-05-01', investment: 50, revenue: null, profit: null },
+  { date: '2026-06-01', investment: null, revenue: 40, profit: null },
+  { date: '2026-07-01', investment: 80, revenue: 20, profit: -60 },
+]);
+assert.deepEqual(lifetime, { revenue: 220, profit: 0, revenueDays: 3, profitDays: 2 }, 'o total de todos os meses soma o faturamento observado e calcula lucro só nos dias pareados');
 
 const trendRows = [
   { date: '2026-04-01', investment: 100, revenue: 150, clicks: 10, sales: 2, pendingSales: 1 },
@@ -129,6 +136,11 @@ const template = await readFile(new URL('../src/index.template.html', import.met
 const styles = await readFile(new URL('../src/control-macro/control-macro.css', import.meta.url), 'utf8');
 assert.match(template, /Number\(row\.sales\)>0\?'macro-sales-row':''/);
 assert.match(template, /isSuspensionDate\(row\.date\)\?'macro-suspension-row'/);
+assert.match(template, /macro-lifetime-summary/);
+assert.match(template, /lifetimeSummary\(all\)/);
+assert.match(template, /Faturamento total/);
+assert.match(template, /Lucro total/);
+assert.match(styles, /\.macro-lifetime-summary\{/);
 assert.match(styles, /\.macro-table tr\.macro-sales-row td\{background:rgba\(52,211,153,.075\)\}/);
 assert.match(styles, /\.macro-table tr\.macro-suspension-row td\{background:rgba\(248,113,113,.075\)\}/);
 

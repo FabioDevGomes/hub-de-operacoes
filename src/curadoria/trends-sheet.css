@@ -69,3 +69,9 @@ button.btn.image-result-action{min-height:34px;padding:5px 6px;font-size:.74rem;
 .image-candidate-summary-head b,.image-mixed-copy b{font-weight:400}
 .keyword-candidate-marker{display:inline-flex;gap:.16em;margin-left:.3em;font-weight:400;white-space:nowrap;vertical-align:baseline}.keyword-candidate-marker-dot{color:inherit}.keyword-candidate-marker.positive .keyword-candidate-marker-exclamation{color:#34d399}.keyword-candidate-marker.negative .keyword-candidate-marker-exclamation{color:#fb7185}
 body:has(nav[data-hub-sidebar-active="manager"]) #rows td,body:has(nav[data-hub-sidebar-active="ecommerce"]) #rows td,body:has(nav[data-hub-sidebar-active="manager"]) #rows td *,body:has(nav[data-hub-sidebar-active="ecommerce"]) #rows td *{font-weight:400!important}
+
+/* Google Trends: pico pontual é um sinal isolado, não uma tendência sustentada. */
+.trends-result-actions{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.trends-result-action{min-width:0;padding:6px 5px;font-size:.74rem;white-space:nowrap}
+.trends-result-action.point_peak,.trends-badge.point_peak{border-color:#65538f;background:#211b38;color:#d4c4ff}
+@media(max-width:700px){.trends-result-actions{grid-template-columns:repeat(7,minmax(104px,1fr));overflow-x:auto;padding:2px 3px 8px}}

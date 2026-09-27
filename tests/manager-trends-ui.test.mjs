@@ -23,7 +23,8 @@ assert.ok(!html.includes('Visão Clássica')&&!html.includes('Visão Moderna'),'
 assert.ok(html.includes("TrendsUI.renderResultButtons($('#managerTrendsResults'),latest?.status"),'último resultado não volta destacado pelo componente compartilhado');
 assert.ok(trendsUi.includes("selectedValue === value ? 'selected' : ''"),'componente compartilhado não aplica a seleção visual');
 assert.ok(css.includes('.trends-result-action.selected'),'destaque visual do último resultado ausente');
-assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr))'),'botões de resultado não foram compactados');
+assert.ok(trendsUi.includes("{ value: 'point_peak', label: 'Pico pontual' }"),'opção Pico pontual não está no seletor compartilhado');
+assert.ok(css.includes('grid-template-columns:repeat(7,minmax(0,1fr))')&&css.includes('.trends-result-action.point_peak,.trends-badge.point_peak'),'botões de resultado não ficam em uma linha compacta nem estilizam Pico pontual');
 assert.ok(html.includes('Candidatas à palavra-chave'),'campo de candidatas do Google Trends ausente');
 assert.ok(html.includes('id="managerTrendsKeywordInput"')&&html.includes('Digite uma ideia e pressione Enter'),'campo de candidata não está sempre disponível no quadro de pesquisa');
 assert.ok(html.includes("if(event.key==='Enter'){event.preventDefault();addManagerTrendKeywordCandidate(product)}"),'Enter não adiciona a candidata à palavra-chave');

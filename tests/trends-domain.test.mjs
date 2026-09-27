@@ -27,5 +27,6 @@ const auditTrail = appendAssessment(
 assert.equal(auditTrail.length, 2);
 assert.equal(latestAssessment(auditTrail).status, RESULT_TYPES.DOWN);
 assert.equal(resultLabel(RESULT_TYPES.LOW_VOLUME), 'Volume baixo');
+assert.equal(resultLabel(RESULT_TYPES.POINT_PEAK), 'Pico pontual');
 assert.match(exploreUrl('Water Freedom System'), /q=Water%20Freedom%20System/);
 console.log('trends domain ok');

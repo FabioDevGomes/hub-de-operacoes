@@ -23,6 +23,8 @@ const resultContainer = fakeContainer([resultButton]);
 renderResultButtons(resultContainer, 'stable', value => { selectedResult = value; });
 assert.match(resultContainer.innerHTML, /trends-result-action stable selected/);
 assert.match(resultContainer.innerHTML, /trends-result-action up/);
+assert.match(resultContainer.innerHTML, /trends-result-action point_peak/);
+assert.match(resultContainer.innerHTML, /Pico pontual/);
 resultButton.onclick();
 assert.equal(selectedResult, 'stable');
 

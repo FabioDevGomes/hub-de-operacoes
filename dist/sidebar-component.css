@@ -1,5 +1,8 @@
 .hub-menu,
 .hub-menu-products { display: grid; gap: 5px; min-width: 0; }
+.hub-menu { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #52657d transparent; }
+.hub-menu::-webkit-scrollbar { width: 7px; }
+.hub-menu::-webkit-scrollbar-thumb { background: #52657d; border-radius: 8px; }
 .hub-menu-group { min-width: 0; }
 .hub-menu-toggle,
 .hub-menu-link {
@@ -41,9 +44,59 @@
 .hub-menu .hub-menu-link.active,
 .hub-menu-products .hub-menu-link.active { background: #18304d; color: #fff; }
 .hub-menu-subhead { padding: 7px 9px 2px; color: #8298b2; text-transform: uppercase; letter-spacing: .07em; font-size: .61rem; font-weight: 800; }
-.hub-menu-products:not(.collapsed) { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
-.hub-menu-products > .hub-menu-body { min-height: 0; }
-.hub-menu-products:not(.collapsed) > .hub-menu-body { display: flex; flex: 1 1 auto; flex-direction: column; }
-.hub-menu-products #campaignList { flex: 1 1 auto; min-height: 0; }
-.hub-menu-products #search { flex: 0 0 auto; }
+.hub-menu-products #campaignList { flex: 0 1 auto; min-height: 0; max-height: clamp(120px, 30vh, 280px); }
+.hub-menu-products .list-tabs { gap: 3px; margin-bottom: 5px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.hub-menu-products .list-tabs button { min-height: 28px; padding: 5px 7px; border-radius: 6px; font-size: .71rem; line-height: 1.1; }
+.hub-menu-products #search { min-height: 31px; padding: 6px 8px; border-radius: 7px; font-size: .75rem; line-height: 1.2; }
+.hub-menu-products #campaignList { grid-auto-rows: minmax(28px, auto); gap: 1px; }
+.hub-menu-products #campaignList .campaign-btn { min-height: 28px; padding: 5px 8px; font-size: .74rem; line-height: 1.15; }
+.hub-menu-products .sidebar-empty { padding: 7px 8px; font-size: .72rem; line-height: 1.3; }
+.hub-sidebar-aside { min-width: 0; }
+.hub-sidebar-collapse-toggle {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 9px;
+  border: 1px solid #263d59;
+  border-radius: 8px;
+  background: #0d192b;
+  color: #a9bdd4;
+  font: inherit;
+  font-size: .75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.hub-sidebar-collapse-toggle:hover { border-color: #4d789b; background: #13263e; color: #fff; }
+.hub-sidebar-collapse-toggle:focus-visible { outline: 2px solid #5ab1ff; outline-offset: 2px; }
+.hub-sidebar-collapse-icon { width: 14px; flex: 0 0 14px; text-align: center; font-size: 1.25rem; line-height: .8; }
+.hub-sidebar-layout.hub-sidebar-collapsed { grid-template-columns: 42px minmax(0, 1fr) !important; }
+.hub-sidebar-layout.hub-sidebar-collapsed > .hub-sidebar-aside {
+  width: 42px;
+  min-width: 42px;
+  align-items: center !important;
+  padding: 8px 5px !important;
+  overflow: hidden;
+  border-right: 1px solid #263d59;
+  border-bottom: 0;
+}
+.hub-sidebar-layout.hub-sidebar-collapsed > .hub-sidebar-aside > :not(.hub-sidebar-collapse-toggle) { display: none !important; }
+.hub-sidebar-layout.hub-sidebar-collapsed > .hub-sidebar-aside > .hub-sidebar-collapse-toggle {
+  width: 32px;
+  min-height: 34px;
+  justify-content: center;
+  gap: 0;
+  margin: 0;
+  padding: 5px 2px;
+  border-color: transparent;
+  background: transparent;
+}
+.hub-sidebar-layout.hub-sidebar-collapsed > .hub-sidebar-aside > .hub-sidebar-collapse-toggle:hover { border-color: #263d59; background: #13263e; }
+.hub-sidebar-layout.hub-sidebar-collapsed .hub-sidebar-collapse-label { display: none; }
+@media (max-width: 980px) { .hub-menu-products #campaignList { max-height: 180px; } }
 @media (prefers-reduced-motion: reduce) { .hub-menu-chevron { transition: none; } }

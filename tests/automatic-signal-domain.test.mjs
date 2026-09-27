@@ -29,14 +29,28 @@ assert.equal(computeAutomaticSignal({images: i('absent'), trends: t('stable')}).
 assert.equal(computeAutomaticSignal({trends: t('no_data')}).coverage.label, '1/3', 'uma avaliação salva sem dados conta como pilar avaliado, mas insuficiente');
 assert.equal(computeAutomaticSignal({trends: t('inconclusive')}).components.trends.classification, 'insufficient');
 assert.equal(computeAutomaticSignal({trends: t('down')}).components.trends.classification, 'caution');
+assert.deepEqual(computeAutomaticSignal({trends: t('point_peak')}).components.trends,{available:true,status:'point_peak',label:'Pico pontual',classification:'caution',capturedAt:'2026-09-22T10:00:00.000Z',searchTerm:null,countries:[]},'pico pontual deve ser exibido como sinal de cautela, não como alta sustentada');
 assert.equal(computeAutomaticSignal({trends: t('stable')}).components.trends.classification, 'favorable');
 assert.equal(computeAutomaticSignal({images: i('ambiguous')}).components.images.classification, 'insufficient');
 assert.equal(computeAutomaticSignal({images: i('absent')}).components.images.classification, 'unfavorable');
 const glimpse = computeAutomaticSignal({glimpse: g('strong')});
 assert.equal(glimpse.components.glimpse.label, 'Forte');
 assert.equal(glimpse.components.glimpse.monthlyVolume, '8K');
+assert.equal(AUTOMATIC_SIGNAL_VERSION,'1.1.0');
 assert.equal(computeAutomaticSignal({glimpse: g('medium')}).components.glimpse.classification, 'caution');
 assert.equal(computeAutomaticSignal({glimpse: g('limited')}).components.glimpse.classification, 'insufficient');
+assert.equal(computeAutomaticSignal({glimpse: g('positive')}).components.glimpse.classification,'favorable');
+assert.equal(computeAutomaticSignal({glimpse: g('mixed')}).components.glimpse.classification,'caution');
+assert.equal(computeAutomaticSignal({glimpse: g('weak')}).components.glimpse.classification,'unfavorable');
+assert.equal(computeAutomaticSignal({glimpse: g('insufficient_data')}).components.glimpse.classification,'insufficient');
+const v2Glimpse=computeAutomaticSignal({glimpse:{...g('mixed'),analyzerVersion:'2.0.0',signal:{level:'mixed',rulesVersion:'glimpse-signal-v2'},confidence:{level:'medium'},alerts:[{id:'high_semantic_contamination',severity:'critical',message:'Contaminação alta'}],dimensions:{relevance:{level:'poor'}}}}).components.glimpse;
+assert.equal(v2Glimpse.analyzerVersion,'2.0.0');
+assert.equal(v2Glimpse.ruleVersion,'glimpse-signal-v2');
+assert.equal(v2Glimpse.confidence,'medium');
+assert.equal(v2Glimpse.alerts[0].id,'high_semantic_contamination');
+assert.equal(v2Glimpse.dimensions.relevance.level,'poor');
+const lowConfidencePositive=computeAutomaticSignal({glimpse:{...g('positive'),confidence:{level:'low'}}}).components.glimpse;
+assert.equal(lowConfidencePositive.classification,'favorable','confiança baixa não é convertida em evidência desfavorável');
 assert.equal(computeAutomaticSignal({images: {currentByCountry: [{status: 'dominant', country: 'US', capturedAt: '2026-09-20', refinementOf: 'consulta anterior'}]}}).components.images.dominanceContext, 'after_refinement');
 assert.equal(computeAutomaticSignal({trends: {assessments: [{status: 'up', capturedAt: '2026-09-20'}, {status: 'down', capturedAt: '2026-09-22'}]}}).components.trends.status, 'down', 'a avaliação mais recente prevalece mesmo se a ordem do histórico não for cronológica');
 

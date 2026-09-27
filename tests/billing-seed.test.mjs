@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { planSeedImport } from '../src/billing/billing-storage.mjs';
+
+const seed = JSON.parse(await readFile(new URL('../src/billing/seed-v1.json', import.meta.url), 'utf8'));
+assert.equal(seed.schema, 'billing_seed_v1');
+assert.equal(seed.version, 1);
+assert.equal(seed.sales.length, 172);
+assert.equal(seed.validation.sales, 172);
+assert.equal(seed.validation.paid_without_known_date, 127);
+assert.equal(seed.validation.paid_with_known_date, 27);
+assert.equal(seed.validation.payments.pending, 6);
+assert.equal(seed.validation.unknown_payment_status_without_refund, 8);
+assert.equal(seed.validation.refund_movements, 4);
+assert.equal(seed.validation.refund_usd_missing, 4);
+assert.equal(seed.validation.usd_missing_sales, 6);
+assert.equal(seed.validation.ambiguous_rows, 0);
+assert.equal(seed.validation.ignored_source_rows.titles_or_summary_area + seed.validation.ignored_source_rows.headers + seed.validation.ignored_source_rows.totals_or_status_summaries, 28);
+assert.equal(seed.movements.filter(move => move.type === 'receipt').length, 27);
+assert.equal(seed.movements.filter(move => move.type === 'refund').length, 4);
+assert.ok(seed.sales.every(sale => sale.sale_id.startsWith('legacy-sale-') && sale.source_ref.startsWith('fatur.#')));
+assert.equal(new Set(seed.sales.map(sale => sale.sale_id)).size, seed.sales.length, 'IDs estáveis não colidem mesmo se vendas legítimas tiverem valores iguais');
+assert.ok(seed.sales.every(sale => sale.value_brl === null || typeof sale.value_brl === 'number'));
+assert.ok(seed.movements.filter(move => move.type === 'refund').every(move => move.value_usd === null), 'não inventar reembolso em USD');
+const undatedPaid = seed.sales.filter(sale => sale.payment_status === 'paid' && !seed.movements.some(move => move.sale_id === sale.sale_id && move.type === 'receipt'));
+assert.equal(undatedPaid.length, 127, 'pagamento sem data continua pago sem movimento fictício');
+assert.deepEqual(seed.validation.monthly_validation.filter(row => row.brl_difference !== 0).map(row => [row.month, Math.round(row.brl_difference * 100) / 100]), [['2025-11',0.51],['2025-12',0.64]]);
+assert.equal(seed.validation.gross_totals.brl > 0, true);
+assert.equal(seed.validation.gross_totals.usd > 0, true);
+
+const plan1 = planSeedImport(seed);
+assert.equal(plan1.sales.length, 172);
+assert.equal(plan1.movements.length, 31);
+const planAfterRestart = planSeedImport(seed, { installedVersion:1, existingSales:seed.sales.map(sale => sale.sale_id), existingMovements:seed.movements.map(move => move.movement_id) });
+assert.deepEqual(planAfterRestart, { alreadyApplied:true, sales:[], movements:[] });
+console.log('billing seed ok');

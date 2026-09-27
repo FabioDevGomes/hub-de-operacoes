@@ -1,4 +1,4 @@
-export const AUTOMATIC_SIGNAL_VERSION = '1.0.0';
+export const AUTOMATIC_SIGNAL_VERSION = '1.1.0';
 export const PILLAR_COUNT = 3;
 
 const RESULT_LABELS = Object.freeze({
@@ -31,6 +31,7 @@ function trendsComponent(record) {
     up: ['Em alta', 'favorable'],
     stable: ['Estável', 'favorable'],
     down: ['Em queda', 'caution'],
+    point_peak: ['Pico pontual', 'caution'],
     low_volume: ['Volume baixo', 'caution'],
     no_data: ['Sem dados', 'insufficient'],
     inconclusive: ['Inconclusivo', 'insufficient'],
@@ -67,11 +68,16 @@ function glimpseComponent(analysis) {
   const status = analysis.signal?.level || null;
   const map = {
     strong: ['Forte', 'favorable'],
+    positive: ['Positivo', 'favorable'],
+    mixed: ['Misto', 'caution'],
+    weak: ['Fraco', 'unfavorable'],
+    insufficient_data: ['Dados insuficientes', 'insufficient'],
+    // Compatibilidade de leitura para análises V1 já persistidas.
     medium: ['Médio', 'caution'],
     limited: ['Dados limitados', 'insufficient'],
   };
   const [label, classification] = map[status] || ['Sinal não reconhecido', 'insufficient'];
-  return component({available: true, status, label, classification, capturedAt: timestamp(analysis), analysisId: analysis.analysisId || null, monthlyVolume: analysis.parsed?.volume?.display || null});
+  return component({available: true, status, label, classification, capturedAt: timestamp(analysis), analysisId: analysis.analysisId || null, monthlyVolume: analysis.parsed?.volume?.display || null, analyzerVersion: analysis.analyzerVersion || null, ruleVersion: analysis.signal?.rulesVersion || null, confidence: analysis.confidence?.level || null, alerts: Array.isArray(analysis.alerts) ? analysis.alerts.map(alert => ({id: alert.id, severity: alert.severity, message: alert.message})) : [], dimensions: analysis.dimensions || null});
 }
 
 function aggregate(components) {

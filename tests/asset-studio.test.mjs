@@ -25,5 +25,7 @@ assert.ok(html.includes('id="openFolder"')&&html.includes('hidden>Abrir pasta</b
 assert.ok(app.includes("$('#openFolder').hidden = false")&&app.includes('state.outputDirectory = assetsDirectory'),'pasta de saída só fica disponível após geração');
 assert.ok(app.includes('startIn: state.outputDirectory')&&app.includes("id: 'asset-studio-output'"),'Abrir pasta deve posicionar o seletor nativo na pasta assets gerada');
 assert.ok(app.includes('O File System Access API não expõe o caminho local nem permite abrir o Explorer'),'limitação de abertura direta do Explorer deve ser documentada no código');
+assert.ok(app.includes('window.showDirectoryPicker({ mode: \'readwrite\' })'),'Selecionar pasta deve abrir o seletor de diretórios do navegador em modo de leitura e escrita');
+assert.ok(app.includes("state.directory.getDirectoryHandle('assets', { create: true })")&&app.includes('await writable.write(blob)'),'os arquivos processados devem ser gravados na pasta assets selecionada');
 assert.ok(css.includes('color-scheme: dark')&&css.includes('grid-template-columns: 224px minmax(0, 1fr)'),'tema escuro ou largura do menu lateral ausente');
 console.log('asset studio ok');

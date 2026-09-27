@@ -6,4 +6,11 @@
 .copy-ficha-warning-list li::marker{color:#ffd16f;font-weight:850}
 .copy-ficha-warning-listing.is-blocked{border-color:#a87524;background:linear-gradient(145deg,#33250f,#261f17);color:#ffe2a0}
 .copy-ficha-warning-listing.is-blocked .copy-ficha-warning-heading strong{color:#ffe2a0}
+.copy-ficha-package.is-pending{border-color:#ff5867!important;box-shadow:0 0 0 2px rgba(255,88,103,.17)}
+.copy-ficha-package.is-pending .copy-ficha-input[data-field="regularPrice"],.copy-ficha-package.is-pending .copy-ficha-input[data-field="promoPrice"]{border-color:#ff5867!important;box-shadow:0 0 0 2px rgba(255,88,103,.14)}
+.copy-ficha-warning-listing.is-blocked{border-color:#a83e4c;background:linear-gradient(145deg,#321820,#26171c);color:#ffd5da}
+.copy-ficha-warning-listing.is-blocked .copy-ficha-warning-heading strong{color:#ffd5da}
+.copy-ficha-warning-listing.is-blocked .copy-ficha-warning-count{border-color:#a83e4c;background:#401d25;color:#ffd5da}
+.copy-ficha-warning-listing.is-blocked .copy-ficha-warning-list li{border-color:rgba(205,73,88,.55);background:rgba(40,15,21,.62);color:#ffd5da}
+.copy-ficha-warning-listing.is-blocked .copy-ficha-warning-list li::marker{color:#ff8390}
 @media(max-width:620px){.copy-ficha-warning-listing{padding:10px}.copy-ficha-warning-heading{align-items:flex-start;font-size:.8rem}.copy-ficha-warning-list{padding-left:1.7rem}.copy-ficha-warning-list li{padding:8px 9px}}

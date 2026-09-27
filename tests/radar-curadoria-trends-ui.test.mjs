@@ -5,6 +5,7 @@ const html = await readFile(new URL('../dist/curadoria/index.html', import.meta.
 assert.ok(html.includes("import * as KeywordCandidatesUI from './keyword-candidates-ui.mjs?v=1'"));
 assert.ok(html.includes('id="spyHeroTrendKeywordInput"') && html.includes('id="spyHeroTrendKeywordAdd"'));
 assert.ok(html.includes('id="spyHeroTrendKeywordList"') && html.includes('Candidatas à palavra-chave'));
+assert.ok(html.includes('data-trends-result="point_peak"') && html.includes('Pico pontual'));
 assert.ok(html.includes("if(event.key==='Enter'){event.preventDefault();addRadarTrendKeywordCandidate(record)}"));
 assert.ok(html.includes('TrendsDomain.exploreUrl(term),\'google-trends-radar\''));
 assert.ok(html.includes('variant:\'positive\''));

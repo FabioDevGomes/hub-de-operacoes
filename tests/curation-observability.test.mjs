@@ -9,6 +9,16 @@ assert.equal(eventA.event.eventId,eventB.event.eventId,'mesma avaliação reproc
 assert.equal(eventA.event.productNameKey,'produto a','filtro indexado normaliza acento/capitalização');
 assert.equal(eventA.detail.payload.assessmentId,'assess-1');
 assert.deepEqual(eventA.event.offerRefs,[]);
+const glimpseV2={analysisId:'glimpse-v2-1',capturedAt:'2026-09-20T10:30:00.000Z',analyzerVersion:'2.0.0',signal:{level:'mixed',rulesVersion:'glimpse-signal-v2'},parsed:{volume:{display:'9K'},movement:{percent:-100,period:'past_year'}},classified:{peopleAlsoSearch:[],relatedQueries:[],relatedTrends:[],relatedTopics:[]},indicators:{coverage:{level:'high'},intent:{level:'low',commercialCount:1,uniqueTermCount:10}},confidence:{level:'medium'},alerts:[{id:'extreme_decline',severity:'critical',message:'Queda extrema'}],dimensions:{movement:{direction:'falling',period:'past_year'}}};
+const glimpseEvent=Domain.createGlimpseEvent({origin:'guru-media-ecommerce-gm',subjectId:'offer:42',productKey:'prod-1',productName:'Produto Á',analysis:glimpseV2});
+assert.deepEqual(glimpseEvent.event.summary.intent,{level:'low',commercialCount:1,uniqueTermCount:10},'evento lê o contrato V2 real de indicadores.intent');
+assert.equal(glimpseEvent.event.summary.glimpse,'mixed','a coluna de Glimpse do histórico também recebe o nível atual');
+assert.equal(glimpseEvent.event.summary.analyzerVersion,'2.0.0');
+assert.equal(glimpseEvent.event.summary.ruleVersion,'glimpse-signal-v2');
+assert.equal(glimpseEvent.event.summary.movementPeriod,'past_year');
+assert.equal(glimpseEvent.event.summary.alerts[0].id,'extreme_decline');
+assert.deepEqual(glimpseEvent.event.summary.dimensions,glimpseV2.dimensions);
+assert.equal(glimpseEvent.detail,null,'evento mantém detalhe pesado por referência ao registro Glimpse');
 assert.equal(Domain.decisionNeedsSnapshot('Revisar','Subir campanha'),true);
 assert.equal(Domain.decisionNeedsSnapshot('Subir campanha','Subir campanha'),false);
 assert.equal(Domain.decisionNeedsSnapshot('Subir campanha','Campanha no ar'),false);
@@ -27,7 +37,7 @@ assert.deepEqual(bundle.snapshot.signals.images.currentByCountry.map(item=>item.
 assert.equal(bundle.snapshot.signals.glimpse.analysisId,'glimpse-1');
 assert.equal(bundle.snapshot.automatic_signal,'Positivo','snapshot congela o resultado que corresponde aos três componentes favoráveis');
 assert.deepEqual(bundle.snapshot.automatic_signal_coverage,{available:3,total:3,label:'3/3'});
-assert.equal(bundle.snapshot.automatic_signal_version,'1.0.0');
+assert.equal(bundle.snapshot.automatic_signal_version,'1.1.0');
 assert.deepEqual(Object.keys(bundle.snapshot.automatic_signal_components),['trends','images','glimpse']);
 assert.equal(bundle.snapshot.automatic_signal_components.trends.status,'stable');
 assert.equal(bundle.snapshot.automatic_signal_captured_at,'2026-09-20T11:00:00.000Z');
@@ -49,6 +59,22 @@ assert.equal(legacySnapshot.automatic_signal_components.trends.status,'down','sn
 assert.equal(legacySnapshot.decision.status,'Subir campanha','sinal automático não substitui decisão manual');
 const noSnapshot=Domain.createDecisionBundle({...input,previousStatus:'Subir campanha'});
 assert.equal(noSnapshot.snapshot,null,'evento posterior não recria snapshot sem nova transição para Subir campanha');
+
+const v2Decision=Domain.createDecisionBundle({...input,glimpse:glimpseV2,previousStatus:'Revisar'});
+assert.equal(v2Decision.snapshot.signals.glimpse.analyzerVersion,'2.0.0');
+assert.equal(v2Decision.snapshot.signals.glimpse.signal.rulesVersion,'glimpse-signal-v2');
+assert.equal(v2Decision.snapshot.signals.glimpse.alerts[0].id,'extreme_decline');
+assert.equal(v2Decision.snapshot.signals.glimpse.confidence.level,'medium');
+assert.equal(v2Decision.snapshot.signals.glimpse.dimensions.movement.period,'past_year');
+assert.equal(v2Decision.snapshot.signals.glimpse.indicators.intent.commercialCount,1);
+assert.equal(v2Decision.snapshot.automatic_signal_components.glimpse.status,'mixed');
+assert.equal(v2Decision.snapshot.automatic_signal_version,'1.1.0');
+assert.equal(v2Decision.snapshotEvent.summary.glimpse,'mixed','coluna compacta do evento continua legível');
+assert.equal(v2Decision.snapshotEvent.summary.glimpseDetails.analyzerVersion,'2.0.0');
+assert.equal(v2Decision.snapshotEvent.summary.glimpseDetails.ruleVersion,'glimpse-signal-v2');
+assert.equal(v2Decision.snapshotEvent.summary.glimpseDetails.alerts[0].id,'extreme_decline');
+assert.equal(v2Decision.snapshotEvent.summary.glimpseDetails.confidence.level,'medium');
+assert.equal(JSON.stringify(v2Decision.snapshot).includes('rawSanitized'),false,'snapshot V2 continua compacto, sem copiar texto bruto');
 
 const candidates=Domain.summarizeOperationalCandidates([
   {product_id:'p-1',product_name:'Produto A',test_id:'test-a',account_id:'6497',campaign_id:'c-1'},
@@ -76,6 +102,7 @@ assert.equal(recordActionSource.includes('getAll'),false,'salvar evento não lê
 assert.equal(recordDecisionSource.includes('getAll'),false,'salvar snapshot não lê stores inteiras');
 assert.ok(view.includes("limit:30,scanLimit:600")&&view.includes('Repository.listEventsPage'),'tela busca página limitada, não histórico completo');
 assert.ok(view.includes('Repository.getEventDetail(event.detailId)')&&view.includes('Repository.getSnapshot(event.snapshotId)'),'detalhes pesados só são lidos ao expandir linha');
+assert.ok(view.includes('glimpseSignalLabel')&&view.includes('glimpse.alerts')&&view.includes('glimpse.confidence'),'tela traduz os estados V2 e apresenta metadados/alertas do snapshot quando disponíveis');
 assert.ok(view.includes('getOperationalEvents()')&&view.includes('data-find-candidates'),'correlação operacional é buscada sob demanda, não em cada abertura/salvamento');
 assert.equal(view.includes('Repository.exportBackup()'),true);
 assert.ok(manager.includes('setTimeout(()=>void captureManagerPersistedWrite(detail),0)')&&top.includes('setTimeout(()=>void captureTopPersistedWrite(detail),0'),'captura observacional não bloqueia o salvamento/fechamento principal');

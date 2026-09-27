@@ -7,6 +7,7 @@ export const RESULT_OPTIONS = Object.freeze([
   { value: 'up', label: 'Em alta' },
   { value: 'stable', label: 'Estável' },
   { value: 'down', label: 'Em queda' },
+  { value: 'point_peak', label: 'Pico pontual' },
   { value: 'low_volume', label: 'Volume baixo' },
   { value: 'no_data', label: 'Sem dados' },
   { value: 'inconclusive', label: 'Inconclusivo' },

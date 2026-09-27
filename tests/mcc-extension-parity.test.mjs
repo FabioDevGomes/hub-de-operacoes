@@ -9,12 +9,17 @@ import {deliverD0CsvToPreparador} from '../extensions/mcc-d0-bridge/bridge.mjs';
 const root = new URL('../', import.meta.url);
 const html = await readFile(new URL('dist/preparador-MCC/index.html', root), 'utf8');
 const manifest = JSON.parse(await readFile(new URL('extensions/mcc-d0-bridge/manifest.json', root), 'utf8'));
+const extensionIcon = await readFile(new URL('extensions/mcc-d0-bridge/icon.png', root));
+const systemIcon = await readFile(new URL('dist/favicon.png', root));
 const extensionFiles = ['popup.js', 'background.js', 'bridge.mjs', 'payload.mjs', 'mcc-grid-reader.mjs', 'mcc-grid-domain.mjs'];
 const extensionSource = (await Promise.all(extensionFiles.map(file => readFile(new URL(`extensions/mcc-d0-bridge/${file}`, root), 'utf8')))).join('\n');
 const backgroundSource = await readFile(new URL('extensions/mcc-d0-bridge/background.js', root), 'utf8');
 
 assert.deepEqual(manifest.permissions, ['scripting', 'activeTab'], 'activeTab deve ser a única permissão adicional para leitura sob ação explícita');
 assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*'], 'o acesso de host deve ficar restrito à rota local do Preparador');
+assert.equal(manifest.action.default_icon, 'icon.png', 'a ação da extensão deve usar a marca do Hub');
+assert.deepEqual(manifest.icons, {'64':'icon.png'}, 'a extensão deve declarar a mesma marca para sua identidade');
+assert.deepEqual(extensionIcon, systemIcon, 'o ícone da extensão deve ser uma cópia exata do favicon do sistema');
 assert.ok(!/function\s+(?:parseSource|buildManifest)\b/.test(extensionSource), 'o comparador diagnóstico não pode incluir o parser do Hub nem gerar manifesto');
 assert.ok(extensionSource.includes("type: 'READ_ACTIVE_MCC_GRID'") && extensionSource.includes("type: 'FORWARD_D0_CSV'"), 'a leitura experimental deve ser paralela e o fluxo de CSV existente deve permanecer');
 const readHandler = backgroundSource.slice(backgroundSource.indexOf('async function readActiveMccGrid'), backgroundSource.indexOf('chrome.runtime.onMessage.addListener'));

@@ -1,4 +1,4 @@
-import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor,generationBlockers,generationBlockerFields} from './copy-ficha-domain.mjs?v=7';
+import {parseOfferText,generateAssets,fichaJson,formatSitelinks,dictionaryFor,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from './copy-ficha-domain.mjs?v=10';
 
 let mounted=false;
 const STORAGE_KEY='copy-ficha-draft-v1';
@@ -25,18 +25,29 @@ export function restoreAutoFilledFieldIds(fields,ids=[]){
   }
 }
 
+export function shouldReplaceDetectedPackages(currentPackages=[],{listEdited=false}={}){
+  if(listEdited||currentPackages.some(item=>item?.userEdited))return false;
+  const hasPackageData=currentPackages.some(item=>['label','regularPrice','promoPrice','contents'].some(key=>String(item?.[key]??'').trim()!==''));
+  return !hasPackageData||currentPackages.every(item=>item?.autoDetected===true);
+}
+
 function packageValues(root){
   return [...root.querySelectorAll('.copy-ficha-package')].map(row=>{
     const regularPrice=row.querySelector('[data-field="regularPrice"]').value,promoPrice=row.querySelector('[data-field="promoPrice"]').value;
-    const edited=row.dataset.priceMode==='quantity_bundle'&&(regularPrice!==row.dataset.initialRegular||promoPrice!==row.dataset.initialPromo),priceNote=row.dataset.priceNote||'';
+    const edited=row.dataset.userEdited==='true'||(row.dataset.priceMode==='quantity_bundle'&&(regularPrice!==row.dataset.initialRegular||promoPrice!==row.dataset.initialPromo)),priceNote=row.dataset.priceNote||'';
+    const autoDetected=row.dataset.autoDetected==='true'||(row.dataset.autoDetected!=='false'&&Boolean(row.dataset.confidence));
     return {
       label:row.querySelector('[data-field="label"]').value,
       regularPrice,
       promoPrice,
       contents:row.querySelector('[data-field="contents"]').value,
       confidence:edited?'review':row.dataset.confidence||'',
+      autoDetected,
+      userEdited:edited,
       priceMode:row.dataset.priceMode||'',
       packageQuantity:row.dataset.packageQuantity||'',
+      quantityUnit:row.dataset.quantityUnit||'',
+      packageDescriptor:row.dataset.packageDescriptor||'',
       displayedUnitPrice:row.dataset.displayedUnitPrice||'',
       regularDisplayedTotal:row.dataset.regularDisplayedTotal||'',
       promoTotalCalculated:!edited&&row.dataset.promoTotalCalculated==='true',
@@ -46,12 +57,12 @@ function packageValues(root){
   });
 }
 
-function updatePendingHighlights(root){
-  const data=payload(root),pending=new Set(generationBlockerFields(data)),fieldIds={
+function updatePendingHighlights(root,{fields:extraFields=[],packageIndexes:extraPackageIndexes=[]}={}){
+  const data=payload(root),pending=new Set([...generationBlockerFields(data),...extraFields]),fieldIds={
     product:'copyProduct',countryCode:'copyCountry',htmlLanguage:'copyLanguage',currency:'copyCurrency',
     freeShipping:'copyFreeShipping',fastShipping:'copyFastShipping',guaranteeStatus:'copyGuaranteeStatus',
     guaranteeDays:'copyGuarantee',urgencyConfirmed:'copyUrgency',scarcityConfirmed:'copyScarcity',
-    affiliateUrl:'copyAffiliateUrl',destination:'copyDestination'
+    affiliateUrl:'copyAffiliateUrl',destination:'copyDestination',pageTitle:'copyPageTitle',assetFolder:'copyAssetFolder'
   };
   root.querySelectorAll('.is-pending').forEach(field=>{field.classList.remove('is-pending');field.removeAttribute('aria-invalid')});
   for(const [key,id] of Object.entries(fieldIds)){
@@ -59,16 +70,28 @@ function updatePendingHighlights(root){
     if(pending.has(key)&&field){field.classList.add('is-pending');field.setAttribute('aria-invalid','true')}
   }
   const packages=by(root,'copyPackages'),packagesPending=pending.has('packages');
-  packages?.classList.toggle('is-pending',packagesPending);
+  const hasPromoPrice=data.packages.some(item=>String(item.promoPrice??'').trim()!==''&&Number.isFinite(Number(item.promoPrice)));
+  const missingPackagePrice=packagesPending&&!hasPromoPrice;
+  packages?.classList.toggle('is-pending',missingPackagePrice);
   packages?.querySelectorAll('[data-field="promoPrice"]').forEach(field=>{
-    field.classList.toggle('is-pending',packagesPending);
-    if(packagesPending)field.setAttribute('aria-invalid','true');else field.removeAttribute('aria-invalid');
+    const empty=String(field.value??'').trim()==='';
+    field.classList.toggle('is-pending',missingPackagePrice&&empty);
+    if(missingPackagePrice&&empty)field.setAttribute('aria-invalid','true');else field.removeAttribute('aria-invalid');
   });
+  const mismatchIndexes=new Set([...generationBlockerPackageIndexes(data),...extraPackageIndexes]);
+  for(const index of mismatchIndexes){
+    const row=packages?.querySelector(`.copy-ficha-package[data-index="${index}"]`);
+    row?.classList.add('is-pending');
+    row?.setAttribute('aria-invalid','true');
+    row?.querySelectorAll('[data-field="regularPrice"],[data-field="promoPrice"]').forEach(field=>{
+      field.classList.add('is-pending');field.setAttribute('aria-invalid','true');
+    });
+  }
 }
 
 function renderPackages(root){
   const host=by(root,'copyPackages');
-  host.innerHTML=state.packages.map((item,index)=>`<div class="copy-ficha-package ${item.confidence?'is-autofilled':''}" data-index="${index}" data-confidence="${esc(item.confidence||'')}" data-price-mode="${esc(item.priceMode||'')}" data-package-quantity="${esc(item.packageQuantity??'')}" data-displayed-unit-price="${esc(item.displayedUnitPrice??'')}" data-regular-displayed-total="${esc(item.regularDisplayedTotal??'')}" data-promo-total-calculated="${item.promoTotalCalculated?'true':'false'}" data-discount-badge-percent="${esc(item.discountBadgePercent??'')}" data-price-note="${esc(item.priceNote||'')}" data-initial-regular="${esc(item.regularPrice??'')}" data-initial-promo="${esc(item.promoPrice??'')}">
+  host.innerHTML=state.packages.map((item,index)=>`<div class="copy-ficha-package ${item.confidence?'is-autofilled':''}" data-index="${index}" data-confidence="${esc(item.confidence||'')}" data-auto-detected="${item.autoDetected===true||(!Object.hasOwn(item,'autoDetected')&&Boolean(item.confidence))?'true':'false'}" data-user-edited="${item.userEdited?'true':'false'}" data-price-mode="${esc(item.priceMode||'')}" data-package-quantity="${esc(item.packageQuantity??'')}" data-quantity-unit="${esc(item.quantityUnit)}" data-package-descriptor="${esc(item.packageDescriptor)}" data-displayed-unit-price="${esc(item.displayedUnitPrice??'')}" data-regular-displayed-total="${esc(item.regularDisplayedTotal??'')}" data-promo-total-calculated="${item.promoTotalCalculated?'true':'false'}" data-discount-badge-percent="${esc(item.discountBadgePercent??'')}" data-price-note="${esc(item.priceNote||'')}" data-initial-regular="${esc(item.regularPrice??'')}" data-initial-promo="${esc(item.promoPrice??'')}">
     <div class="copy-ficha-field"><label>Nome do pacote${item.confidence?` <span class="copy-ficha-auto-tag">${item.confidence==='high'?'Detectado':'Revisar'}</span>`:''}</label><input class="copy-ficha-input" data-field="label" value="${esc(item.label)}" placeholder="Ex.: 6-month bundle"></div>
     <div class="copy-ficha-field"><label>Preço original${item.priceMode==='quantity_bundle'?' (total exibido)':''}</label><input class="copy-ficha-input" data-field="regularPrice" inputmode="decimal" value="${esc(item.regularPrice)}" placeholder="199.00"></div>
     <div class="copy-ficha-field"><label>Preço promocional${item.promoTotalCalculated?' (total calculado)':''}</label><input class="copy-ficha-input" data-field="promoPrice" inputmode="decimal" value="${esc(item.promoPrice)}" placeholder="79.00"></div>
@@ -77,9 +100,11 @@ function renderPackages(root){
     ${item.priceNote?`<div class="copy-ficha-field span-4 copy-ficha-note">${esc(item.priceNote)}</div>`:''}
   </div>`).join('');
   host.querySelectorAll('[data-remove-package]').forEach(button=>button.onclick=()=>{
+    host.dataset.userEdited='true';
     state.packages=packageValues(root).filter((_,index)=>index!==Number(button.dataset.removePackage));
     if(!state.packages.length)state.packages=[{label:'',regularPrice:'',promoPrice:'',contents:''}];
     renderPackages(root);
+    saveDraft(root);
   });
   updatePendingHighlights(root);
 }
@@ -113,7 +138,7 @@ function payload(root){
 }
 function saveDraft(root){
   try{
-    const draft={...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))};
+    const draft={...payload(root),packagesManuallyEdited:by(root,'copyPackages')?.dataset.userEdited==='true',autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))};
     localStorage.setItem(STORAGE_KEY,JSON.stringify(draft));
   }catch{}
 }
@@ -124,6 +149,7 @@ function restoreDraft(root){
     const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyGuaranteeStatus:draft.guaranteeStatus,copyFreeShipping:draft.freeShipping,copyFastShipping:draft.fastShipping,copyUrgency:draft.urgencyConfirmed,copyScarcity:draft.scarcityConfirmed};
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
     if(draft.guaranteeStatus===undefined&&draft.guaranteeDays)by(root,'copyGuaranteeStatus').value='confirmed';
+    by(root,'copyPackages').dataset.userEdited=draft.packagesManuallyEdited?'true':'';
     if(Array.isArray(draft.packages)&&draft.packages.length){state.packages=draft.packages;renderPackages(root)}
     restoreAutoFilledFieldIds(root.querySelectorAll('input,select,textarea'),draft.autoFilledFields);
   }catch{}
@@ -137,6 +163,7 @@ function resetCollection(root,toast){
   const pendingFields=['copyFreeShipping','copyFastShipping','copyGuaranteeStatus','copyUrgency','copyScarcity'];
   pendingFields.forEach(id=>{const field=by(root,id);if(field)field.value='pending'});
   by(root,'copyAssetFolder').value='assets';
+  by(root,'copyPackages').dataset.userEdited='';
   root.querySelectorAll('[data-auto-filled],.is-autofilled').forEach(field=>{delete field.dataset.autoFilled;field.classList.remove('is-autofilled')});
   state.packages=[{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''},{label:'',regularPrice:'',promoPrice:'',contents:''}];
   renderPackages(root);
@@ -192,8 +219,12 @@ function analyze(root){
   if(applyDetected(root,'copyPageTitle',titleCandidate))applied.push('título da página');
   if(result.freeShippingCandidate&&applyDetected(root,'copyFreeShipping','confirmed',{force:inputValue(root,'copyFreeShipping')==='pending'}))applied.push('frete grátis');
   if(result.fastShippingCandidate&&applyDetected(root,'copyFastShipping','confirmed',{force:inputValue(root,'copyFastShipping')==='pending'}))applied.push('envio rápido');
-  const currentPackages=packageValues(root),hasPackageData=currentPackages.some(item=>Object.values(item).some(Boolean));
-  if(result.packages.length&&!hasPackageData){state.packages=result.packages;renderPackages(root);applied.push(`${result.packages.length} pacote(s)`)}
+  const currentPackages=packageValues(root),packageHost=by(root,'copyPackages'),packageListEdited=packageHost.dataset.userEdited==='true';
+  if(result.packages.length&&shouldReplaceDetectedPackages(currentPackages,{listEdited:packageListEdited})){
+    state.packages=result.packages.map(item=>({...item,autoDetected:true,userEdited:false}));
+    packageHost.dataset.userEdited='';
+    renderPackages(root);applied.push(`${result.packages.length} pacote(s)`);
+  }
   const chips=[];
   if(result.productCandidate)chips.push(`${result.productCandidateNeedsReview?productSuggestionLabel:'Produto'}: ${result.productCandidate}`);
   if(result.countryCode)chips.push(`País: ${result.countryCode}`);
@@ -245,18 +276,52 @@ function renderWarnings(root,warnings,{blocked=false}={}){
   for(const warning of warnings){const item=document.createElement('li');item.textContent=warning;list.append(item)}
   host.append(list);
 }
+function confirmationPaths(value,path=[],result=[]){
+  if(value==='CONFIRMAR'){result.push(path);return result}
+  if(Array.isArray(value))value.forEach((item,index)=>confirmationPaths(item,[...path,index],result));
+  else if(value&&typeof value==='object')Object.entries(value).forEach(([key,item])=>confirmationPaths(item,[...path,key],result));
+  return result;
+}
+function finalFichaDiagnostics(data,ficha){
+  const blockers=[...generationBlockers(data)],mismatchIndexes=generationBlockerPackageIndexes(data);
+  for(const pending of ficha.pending||[]){
+    if(/discount badge does not match/i.test(pending)&&mismatchIndexes.length)continue;
+    if(/free shipping/i.test(pending))blockers.push('Frete grátis: confirme se aparece na oferta ou marque como não exibido');
+    else if(/fast shipping/i.test(pending))blockers.push('Envio rápido: confirme se pode ser anunciado ou marque como não usar');
+    else if(/guarantee/i.test(pending))blockers.push('Garantia: confirme o prazo ou marque que não há garantia exibida');
+    else if(/urgency/i.test(pending))blockers.push('Urgência atual: confirme se a oferta exibe uma condição válida ou marque para não usar');
+    else if(/scarcity/i.test(pending))blockers.push('Escassez atual: confirme se a oferta exibe uma condição válida ou marque para não usar');
+    else blockers.push(`Ficha: ${pending}`);
+  }
+  const fieldLabels={destination:'Diretório da Pre-Sell',assetFolder:'Pasta de assets',htmlLanguage:'Idioma HTML',countryCode:'País',pageTitle:'Título da página',affiliateUrl:'URL de afiliação',priceText:'Preços dos pacotes',shippingGuaranteeText:'Envio e garantia',mustContain:'Conteúdo obrigatório',faqs:'Perguntas frequentes'};
+  const placeholderFields=[],placeholderPackageIndexes=[];
+  for(const path of confirmationPaths(ficha)){
+    const [key,index,field]=path;
+    if(key==='packages'&&Number.isInteger(index)){
+      placeholderPackageIndexes.push(index);
+      const names={label:'nome',regularPrice:'preço original',promoPrice:'preço promocional',contents:'conteúdo'};
+      blockers.push(`Pacote ${index+1}: preencha ou confirme ${names[field]||'os dados'}.`);
+    }else if(key==='faqs')blockers.push(`Perguntas frequentes: falta confirmar a resposta do item ${Number(index)+1}.`);
+    else{
+      const label=fieldLabels[key]||key;
+      blockers.push(`${label}: há um campo sem confirmação na ficha.`);
+      const formField={destination:'destination',assetFolder:'assetFolder',htmlLanguage:'htmlLanguage',countryCode:'countryCode',pageTitle:'pageTitle',affiliateUrl:'affiliateUrl',priceText:'packages'}[key];
+      if(formField)placeholderFields.push(formField);
+    }
+  }
+  if(!blockers.length)blockers.push('Ficha: há um campo de confirmação pendente; revise os campos da validação estruturada.');
+  return {blockers:[...new Set(blockers)],fields:[...new Set([...generationBlockerFields(data),...placeholderFields])],packageIndexes:[...new Set([...mismatchIndexes,...placeholderPackageIndexes])]};
+}
 function generate(root,toast){
   updatePendingHighlights(root);
   const data=payload(root);
-  if(!data.product)throw new Error('Informe o nome do produto.');
-  if(!data.countryCode)throw new Error('Informe o país (código de duas letras).');
-  if(!data.htmlLanguage)throw new Error('Informe o idioma HTML.');
-  if(!data.currency)throw new Error('Informe a moeda da oferta.');
   const blockers=generationBlockers(data);
   if(blockers.length){const error=new Error(`Geração bloqueada por ${blockers.length} ${blockers.length===1?'item pendente':'itens pendentes'}.`);error.blockers=blockers;throw error}
-  if(data.affiliateUrl&&data.affiliateUrl!=='CONFIRMAR'&&!/^https?:\/\//i.test(data.affiliateUrl))throw new Error('A URL de afiliação precisa ser uma URL completa.');
   const json=fichaJson(data),ficha=JSON.parse(json);
-  if(ficha.pending.length||json.includes('"CONFIRMAR"'))throw new Error('Geração bloqueada: a ficha ainda contém confirmações ou campos sem preencher.');
+  if(ficha.pending.length||json.includes('"CONFIRMAR"')){
+    const diagnostics=finalFichaDiagnostics(data,ficha),error=new Error('Geração bloqueada. Revise os campos e pacotes indicados abaixo.');
+    error.blockers=diagnostics.blockers;error.fields=diagnostics.fields;error.packageIndexes=diagnostics.packageIndexes;error.blocked=true;throw error;
+  }
   const assets=generateAssets(data);
   setOutput(root,'copyHeadlines',assets.headlines.join('\n'));
   setOutput(root,'copyDescriptions',assets.descriptions.join('\n'));
@@ -324,12 +389,14 @@ export async function mount({root,toast}={}){
     renderPackages(root);restoreDraft(root);
     by(root,'copyAnalyze').onclick=()=>analyze(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
-    by(root,'copyAddPackage').onclick=()=>{state.packages=packageValues(root);state.packages.push({label:'',regularPrice:'',promoPrice:'',contents:''});renderPackages(root)};
-    by(root,'copyGenerate').onclick=()=>{try{generate(root,toast)}catch(error){clearGeneratedOutputs(root);const blockers=Array.isArray(error?.blockers)?error.blockers:null;renderWarnings(root,blockers||[error.message],{blocked:Boolean(blockers)});toast?.(error.message)}};
+    by(root,'copyAddPackage').onclick=()=>{state.packages=packageValues(root);state.packages.push({label:'',regularPrice:'',promoPrice:'',contents:''});by(root,'copyPackages').dataset.userEdited='true';renderPackages(root);saveDraft(root)};
+    by(root,'copyGenerate').onclick=()=>{try{generate(root,toast)}catch(error){clearGeneratedOutputs(root);const blockers=Array.isArray(error?.blockers)?error.blockers:null;updatePendingHighlights(root,{fields:error?.fields,packageIndexes:error?.packageIndexes});renderWarnings(root,blockers||[error.message],{blocked:Boolean(error?.blocked||blockers)});toast?.(error.message)}};
     by(root,'copyDownloadFicha').onclick=()=>downloadFicha(root);
     root.querySelectorAll('[data-copy-output]').forEach(button=>button.onclick=()=>copyOutput(root,button.dataset.copyOutput,toast));
     const markManual=event=>{
       if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
+      const packageRow=event.target.closest?.('.copy-ficha-package');
+      if(packageRow){packageRow.dataset.userEdited='true';saveDraft(root)}
       if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise as confirmações e gere novamente.');
     };
     root.addEventListener('input',event=>{markManual(event);updatePendingHighlights(root)});root.addEventListener('change',event=>{markManual(event);updatePendingHighlights(root)});

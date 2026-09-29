@@ -103,6 +103,77 @@ export function upsertProvisionalSalesToTransaction(transaction, provisionalSale
   return entries.length;
 }
 
+export function correctProvisionalSaleValuesToTransaction(transaction, provisionalSales, { now = new Date().toISOString() } = {}) {
+  const entries = (provisionalSales || []).map(source => {
+    if (!source?.id || !source?.billing_sale_id || !Number.isFinite(Number(source.valor_brl)) || Number(source.valor_brl) <= 0) return null;
+    return { source, incoming: provisionalSaleToBilling(source, { now }) };
+  }).filter(Boolean);
+  if (!entries.length) throw new Error('Nenhum lançamento manual válido foi informado para corrigir.');
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  for (const { source, incoming } of entries) {
+    const request = sales.get(incoming.sale_id);
+    request.onsuccess = () => {
+      const existing = request.result;
+      if (!existing || existing.source !== 'hub_manual_capture' || existing.source_ref !== String(source.id)) {
+        transaction.abort();
+        return;
+      }
+      if (Object.is(Number(existing.value_brl), Number(incoming.value_brl))) return;
+      const updated = normalizeSale({ ...existing, value_brl: incoming.value_brl, updated_at: now }, { now });
+      sales.put(updated);
+      audit.add(makeAudit('financial_value_corrected', 'sale', incoming.sale_id, [
+        { field: 'value_brl', old_value: existing.value_brl ?? null, new_value: updated.value_brl },
+      ], { now }));
+    };
+    request.onerror = () => transaction.abort();
+  }
+  return entries.length;
+}
+
+export function syncEditedProvisionalSalesToTransaction(transaction, provisionalSales, { now = new Date().toISOString() } = {}) {
+  const entries = (provisionalSales || []).map(source => {
+    if (!source?.id || !source?.billing_sale_id || !source?.campanha_id || !Number.isFinite(Number(source.valor_brl)) || Number(source.valor_brl) <= 0) return null;
+    return { source, incoming: provisionalSaleToBilling(source, { now }) };
+  }).filter(Boolean);
+  if (!entries.length) throw new Error('Nenhum lançamento provisório válido foi informado para sincronizar.');
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  for (const { source, incoming } of entries) {
+    const request = sales.get(incoming.sale_id);
+    request.onsuccess = () => {
+      const existing = request.result;
+      if (!existing || existing.source !== 'hub_manual_capture' || existing.source_ref !== String(source.id)) {
+        transaction.abort();
+        return;
+      }
+      const patch = {
+        sale_date:incoming.sale_date,
+        product:incoming.product,
+        platform:incoming.platform,
+        account:incoming.account,
+        value_brl:incoming.value_brl,
+        campaign_id:incoming.campaign_id,
+        country_code:incoming.country_code,
+        sale_time:incoming.sale_time,
+        confirmation_status:incoming.confirmation_status,
+        confirmation_source:incoming.confirmation_source,
+        confirmed_at:incoming.confirmed_at,
+        notes:incoming.notes,
+      };
+      const changed = Object.keys(patch).filter(field => !Object.is(existing[field] ?? null, patch[field] ?? null));
+      if (!changed.length) return;
+      const updated = normalizeSale({ ...existing, ...patch, updated_at:now }, { now });
+      sales.put(updated);
+      const action = changed.length === 1 && changed[0] === 'value_brl' ? 'financial_value_corrected' : 'provisional_sale_updated';
+      audit.add(makeAudit(action, 'sale', incoming.sale_id,
+        changed.map(field => ({ field, old_value:existing[field] ?? null, new_value:updated[field] ?? null })), { now }));
+    };
+    request.onerror = () => transaction.abort();
+  }
+  return entries.length;
+}
+
 function reconcileMccAggregateForManualSale(transaction, sales, audit, manual, source, now) {
   if (!source?.campanha_id || !source?.data) return;
   const request = sales.get(mccConversionSaleId(source.campanha_id, source.data));
@@ -274,6 +345,17 @@ export async function queryByDate(storeName, indexName, start, end) {
 
 export async function querySalesByDate(start, end) {
   return queryByDate(BILLING_STORES.sales, 'sale_date', start, end);
+}
+
+export async function queryAllSales() {
+  const db = await openBillingDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BILLING_STORES.sales, 'readonly');
+    const request = tx.objectStore(BILLING_STORES.sales).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
 }
 
 export async function queryMovementsByDate(start, end) {

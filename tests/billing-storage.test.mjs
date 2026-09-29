@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { adjacentRecordedMonth, ensureBillingStores, planSeedImport, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
+import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, planSeedImport, syncEditedProvisionalSalesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
   constructor() { this.values = new Set(); }
@@ -119,9 +119,37 @@ assert.equal(syncedSale.confirmation_status,'confirmed');
 assert.equal(syncedSale.confirmation_source,'MCC D−1');
 assert.equal(syncedSale.payment_status,'pending','sync não altera status de pagamento');
 assert.equal(syncStores.get('billing_audit').rows.length,2,'confirmação gera trilha auditável');
+correctProvisionalSaleValuesToTransaction(syncTx,[{...provisional,valor_brl:235.12}]);
+await new Promise(resolve=>setImmediate(resolve));
+const correctedSyncedSale=syncStores.get('billing_sales').rows[0];
+assert.equal(correctedSyncedSale.value_brl,235.12,'correção de uma venda vinculada atualiza o espelho financeiro');
+assert.equal(correctedSyncedSale.product,'Produto A','a correção preserva o produto');
+assert.equal(correctedSyncedSale.confirmation_status,'confirmed','a correção preserva a confirmação existente');
+assert.equal(correctedSyncedSale.payment_status,'pending','a correção preserva o status de pagamento');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'financial_value_corrected','a correção financeira gera auditoria');
+assert.deepEqual(syncStores.get('billing_audit').rows.at(-1).changes,[{field:'value_brl',old_value:229.5,new_value:235.12}],'a auditoria registra somente a alteração do valor em reais');
 upsertProvisionalSalesToTransaction(syncTx,[{...provisional,status:'conciliada',conciliada_em:'2026-09-24T12:00:00Z'}]);
 await new Promise(resolve=>setImmediate(resolve));
-assert.equal(syncStores.get('billing_audit').rows.length,2,'repetir importação é idempotente');
+assert.equal(syncStores.get('billing_audit').rows.length,3,'repetir importação é idempotente após correção financeira');
+syncStores.get('billing_sales').put({...correctedSyncedSale,payment_status:'paid',observed_payment_status:'paid'});
+const editedProvisional={...provisional,campanha_id:'cmp-2',conta:'9827',data:'2026-09-25',hora:'18:20',produto:'Produto atualizado',plataforma:'Plataforma atualizada',valor_brl:250,pais_codigo:'AU',status:'conciliada',conciliada_em:'2026-09-24T12:00:00Z'};
+assert.equal(syncEditedProvisionalSalesToTransaction(syncTx,[editedProvisional]),1,'edição vinculada atualiza o espelho financeiro dentro da transação principal');
+await new Promise(resolve=>setImmediate(resolve));
+const editedBillingSale=syncStores.get('billing_sales').rows[0];
+assert.equal(editedBillingSale.sale_id,provisional.billing_sale_id,'a edição mantém a chave estável para preservar movimentos vinculados');
+assert.equal(editedBillingSale.source_ref,provisional.id,'a edição mantém o vínculo com a venda original');
+assert.equal(editedBillingSale.sale_date,'2026-09-25');
+assert.equal(editedBillingSale.campaign_id,'cmp-2');
+assert.equal(editedBillingSale.account,'9827');
+assert.equal(editedBillingSale.product,'Produto atualizado');
+assert.equal(editedBillingSale.platform,'Plataforma atualizada');
+assert.equal(editedBillingSale.value_brl,250);
+assert.equal(editedBillingSale.country_code,'AU');
+assert.equal(editedBillingSale.sale_time,'18:20');
+assert.equal(editedBillingSale.confirmation_status,'confirmed');
+assert.equal(editedBillingSale.payment_status,'paid','editar dados da venda não altera o status de recebimento');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'provisional_sale_updated');
+assert.ok(syncStores.get('billing_audit').rows.at(-1).changes.some(change=>change.field==='value_brl'&&change.old_value===235.12&&change.new_value===250),'a auditoria registra a alteração financeira');
 const legacyManual={id:'sale_legacy42',campanha_id:'cmp-1',data:'2026-09-24',produto:'Produto A',plataforma:'FlowTracking',conta:'',valor_brl:233.18,status:'conciliada',conciliacao_origem:'mcc_d1',conciliada_em:'2026-09-25T12:00:00Z'};
 assert.equal(upsertProvisionalSalesToTransaction(syncTx,[legacyManual]),1,'registro legado recebe vínculo de Faturamento determinístico a partir do ID local');
 await new Promise(resolve=>setImmediate(resolve));
@@ -184,6 +212,6 @@ assert.equal(aggregate.value_brl,null);
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'billing'\)/, 'backup antigo sem faturamento preserva as stores financeiras');
-assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,provisionalBillingSales=\[\],mccBillingSales=\[\]\}=\{\}\)/, 'base, Faturamento e Controle de gastos compartilham transação local sem acoplamento de domínio');
+assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\]\}=\{\}\)/, 'edição do lançamento na base e no espelho financeiro compartilha uma transação local');
 assert.match(template, /await persistLocalBase\(\{provisionalBillingSales:\[result\.sale\]\}\)/, 'venda manual D0 é espelhada em Faturamento no mesmo salvamento');
 console.log('billing storage and backup ok');

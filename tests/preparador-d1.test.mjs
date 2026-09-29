@@ -139,5 +139,7 @@ assert.ok(receiver.includes("installParsedSource('d1', parsed)"));
 assert.ok(receiver.includes('waitingForD0:true'));
 assert.ok(!receiver.includes('applyManifestToPanel'), 'receptor D−1 não grava a base');
 assert.ok(html.includes('D−1 recebido e validado. Aguardando D0 para gerar a prévia.'));
+assert.ok(html.includes('detectPendingD1DateChanges(source)'), 'D−1 sozinho também verifica mudança de data do nome');
+assert.ok(html.includes('a correção só será aplicada após confirmação em Atualizar base'), 'a prévia D−1 não deve gravar a correção');
 
 console.log('Preparador D−1: contrato, fuso, datas consecutivas, espera por D0, prévia sem autoaplicação e zero×ausência ok');

@@ -51,6 +51,8 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     confirmation_source: text(input.confirmation_source) || null,
     confirmed_at: input.confirmed_at || null,
     campaign_id: text(input.campaign_id) || null,
+    country_code: /^[A-Z]{2}$/.test(text(input.country_code).toUpperCase()) ? text(input.country_code).toUpperCase() : null,
+    sale_time: text(input.sale_time) || null,
     conversion_count: input.conversion_count == null ? 1 : Math.max(0, Number.isFinite(Number(input.conversion_count)) ? Number(input.conversion_count) : 1),
     notes: text(input.notes),
     source: text(input.source) || 'manual',
@@ -83,6 +85,8 @@ export function provisionalSaleToBilling(input, { now = new Date().toISOString()
     confirmation_source: confirmed ? (input.conciliacao_origem === 'excel_legacy' ? 'Histórico Excel' : 'MCC D−1') : null,
     confirmed_at: confirmed ? (input.conciliada_em || now) : null,
     campaign_id: input.campanha_id,
+    country_code: input.pais_codigo || null,
+    sale_time: input.hora || null,
     source: 'hub_manual_capture',
     source_ref: input.id,
     notes: input.identificador_mascarado ? `ID manual: ${input.identificador_mascarado}` : '',
@@ -263,6 +267,18 @@ export function monthlyFinancialSeries({ sales = [], movements = [], salesById =
     ? aggregateCashBy(movements, salesById, 'month')
     : aggregateBy(sales, movements, 'month');
   const byMonth = new Map(aggregates.map(item => [item.key, item]));
+  const manualByMonth = new Map();
+  if (mode !== 'cash') {
+    for (const sale of sales) {
+      if (sale.active === false || !(sale.confirmation_status === 'manual' || sale.source === 'hub_manual_capture')) continue;
+      const key = String(sale.sale_date || '').slice(0, 7);
+      if (!manualByMonth.has(key)) manualByMonth.set(key, { amount:0, records:0, missing:0 });
+      const manual = manualByMonth.get(key);
+      manual.records += 1;
+      if (typeof sale.value_brl === 'number' && Number.isFinite(sale.value_brl)) manual.amount += sale.value_brl;
+      else manual.missing += 1;
+    }
+  }
   const cursor = new Date(`${start.slice(0, 7)}-01T00:00:00Z`);
   const last = new Date(`${end.slice(0, 7)}-01T00:00:00Z`);
   const series = [];
@@ -270,12 +286,14 @@ export function monthlyFinancialSeries({ sales = [], movements = [], salesById =
   while (cursor <= last) {
     const key = cursor.toISOString().slice(0, 7);
     const item = byMonth.get(key);
+    const manual = manualByMonth.get(key);
     const amount = mode === 'cash' ? item?.netBrl : item?.grossBrl;
     series.push({
       key,
       value: item ? amount?.amount ?? null : 0,
       complete: item ? amount?.complete ?? false : true,
       records: mode === 'cash' ? item?.movements ?? 0 : item?.sales ?? 0,
+      manualBrl: manual ? { amount:manual.records > manual.missing ? manual.amount : null, records:manual.records, missing:manual.missing } : null,
     });
     cursor.setUTCMonth(cursor.getUTCMonth() + 1);
   }

@@ -217,11 +217,10 @@ export function monthlyAmountRemaining(plannedAmount, actualAmount) {
   return Math.round((planned - actual + Number.EPSILON) * 100) / 100;
 }
 
-export function reserveAndNubankMinusOpenExpenses(openExpenses, reserveBalance, nubankBalance = 0) {
+export function reserveMinusOpenExpenses(openExpenses, reserveBalance) {
   const open = amountOrNull(openExpenses, 'Despesas previstas em aberto') ?? 0;
   const reserve = amountOrNull(reserveBalance, 'Reserva global') ?? 0;
-  const nubank = amountOrNull(nubankBalance, 'Saldo disponível Nubank') ?? 0;
-  return Math.round((reserve + nubank - open + Number.EPSILON) * 100) / 100;
+  return Math.round((reserve - open + Number.EPSILON) * 100) / 100;
 }
 
 function isGlobalExpenseInScope(entry, now) {

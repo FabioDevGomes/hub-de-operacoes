@@ -46,6 +46,15 @@ export async function snapshot(){
 
 export async function saveCategory(category){const row={id:category.id||makeId('cat'),name:String(category.name||'').trim(),order:Number(category.order)||0,active:category.active!==false};if(!row.name)throw new Error('Informe o nome da categoria.');await withDb(['categories'],'readwrite',tx=>{tx.objectStore('categories').put(row)});return row}
 export async function saveItem(item){const row={...item,id:item.id||makeId('item'),name:String(item.name||'').trim(),categoryId:item.categoryId,type:item.type||'duration',order:Number(item.order)||0,active:item.active!==false,productive:Boolean(item.productive),showInCharts:item.showInCharts!==false,chartType:item.chartType||'bar',aggregation:item.aggregation||((item.type||'duration')==='duration'?'sum':'average'),durationMode:(item.type||'duration')==='duration'?(item.durationMode||'both'):null,updatedAt:new Date().toISOString()};if(!row.name)throw new Error('Informe o nome do item.');await withDb(['items'],'readwrite',tx=>{tx.objectStore('items').put(row)});return row}
+export async function reorderItems(orderedIds){
+  if(!Array.isArray(orderedIds)||new Set(orderedIds).size!==orderedIds.length)throw new Error('A nova ordem das atividades é inválida.');
+  return withDb(['items'],'readwrite',async tx=>{
+    const store=tx.objectStore('items'),items=await requestResult(store.getAll()),byId=new Map(items.map(item=>[item.id,item]));
+    if(orderedIds.length!==items.length||items.some(item=>!orderedIds.includes(item.id)))throw new Error('A lista de atividades mudou. Atualize a tela e tente novamente.');
+    orderedIds.forEach((id,index)=>store.put({...byId.get(id),order:(index+1)*10}));
+    return true;
+  });
+}
 export async function setItemProductivity(item,productive){if(!item?.id||item.type!=='duration')throw new Error('Somente atividades de duração podem ser classificadas como produtivas.');const value=Boolean(productive),now=new Date().toISOString(),updatedItem={...item,productive:value,updatedAt:now};return withDb(['items','entries'],'readwrite',async tx=>{tx.objectStore('items').put(updatedItem);const store=tx.objectStore('entries'),entries=await requestResult(store.index('itemId').getAll(item.id));let updatedEntries=0;for(const entry of entries)if(entry.type==='duration'){store.put({...entry,productiveSnapshot:value,updatedAt:now});updatedEntries++}return{item:updatedItem,updatedEntries}})}
 export async function deleteItem(id){return withDb(['items','entries'],'readwrite',async tx=>{const used=await requestResult(tx.objectStore('entries').index('itemId').count(id));if(used)throw new Error('Este item possui histórico e só pode ser desativado.');tx.objectStore('items').delete(id);return true})}
 

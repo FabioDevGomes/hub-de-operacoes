@@ -73,12 +73,15 @@ const cashByMonth = aggregateCashBy(movements.filter(move => move.effective_date
 assert.equal(cashByMonth.length, 1);
 assert.equal(cashByMonth[0].key, '2026-09');
 const chartSales = [...sales, normalizeSale({ sale_id:'s5', sale_date:'2026-09-25', product:'Produto D', platform:'Hotmart', value_brl:null, value_usd:10 })];
-const monthlyCompetence = monthlyFinancialSeries({ sales:chartSales, movements, start:'2026-08-20', end:'2026-10-02' });
+const chartManualSale = provisionalSaleToBilling({id:'sale-chart',billing_sale_id:'manual-sale:cmp-chart',campanha_id:'cmp-chart',data:'2026-09-29',produto:'Produto E',plataforma:'FlowTracking',valor_brl:235.12,status:'provisoria'});
+const chartConfirmedManualSale = provisionalSaleToBilling({id:'sale-chart-confirmed',billing_sale_id:'manual-sale:cmp-chart-confirmed',campanha_id:'cmp-chart',data:'2026-09-30',produto:'Produto F',plataforma:'FlowTracking',valor_brl:20,status:'conciliada'});
+const monthlyCompetence = monthlyFinancialSeries({ sales:[...chartSales, chartManualSale, chartConfirmedManualSale], movements, start:'2026-08-20', end:'2026-10-02' });
 assert.deepEqual(monthlyCompetence.map(({ key, value, records, complete }) => ({ key, value, records, complete })), [
   { key:'2026-08', value:0, records:0, complete:true },
-  { key:'2026-09', value:175, records:4, complete:false },
+  { key:'2026-09', value:430.12, records:6, complete:false },
   { key:'2026-10', value:0, records:0, complete:true },
 ], 'série mensal inclui meses sem venda como zero e preserva mês com valores ausentes como parcial');
+assert.deepEqual(monthlyCompetence[1].manualBrl, { amount:255.12, records:2, missing:0 }, 'o subtotal manual, inclusive os lançamentos já conciliados, aparece separado no tooltip e já está incluído uma única vez no total mensal');
 const missingBrlMovement = normalizeMovement({ movement_id:'m4', sale_id:'s1', type:'receipt', effective_date:'2026-09-20', value_brl:null, value_usd:10 });
 const monthlyCash = monthlyFinancialSeries({ movements:[...movements.filter(move => move.effective_date), missingBrlMovement], salesById:new Map(sales.map(sale => [sale.sale_id, sale])), start:'2026-09-01', end:'2026-10-01', mode:'cash' });
 assert.deepEqual(monthlyCash.map(({ key, value, complete }) => ({ key, value, complete })), [

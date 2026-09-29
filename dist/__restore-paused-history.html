@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restauração aditiva do histórico</title>
+<style>
+  body{margin:0;background:#081322;color:#edf4ff;font:16px Segoe UI,Arial,sans-serif;padding:32px}
+  main{max-width:760px;margin:auto;background:#0e1d30;border:1px solid #29435f;border-radius:14px;padding:24px}
+  h1{font-size:22px;margin:0 0 12px}p{line-height:1.5;color:#b8cde5}
+  input,button{font:inherit;border-radius:8px;padding:10px 14px}
+  input{display:block;margin:18px 0;background:#0a1727;color:#fff;max-width:100%}
+  button{border:0;background:#38d3a6;color:#071322;cursor:pointer;font-weight:600}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #report{white-space:pre-wrap;border:1px solid #29435f;border-radius:10px;background:#0a1727;padding:14px;margin:18px 0;color:#d8e7f8}
+  .warning{color:#ffd28a}.ok{color:#57e0b1}.error{color:#ff8d98}
+</style>
+<main>
+  <h1>Mesclar histórico de campanhas sem substituir a base</h1>
+  <p>Esta ferramenta considera somente o Diário de campanhas pausadas. Ela exige ID e nome de campanha compatíveis, inclui apenas combinações campanha/data ausentes e não altera nenhuma linha já existente. Outros dados do arquivo de backup não são importados.</p>
+  <button id="analyze" type="button">Analisar backup local</button>
+  <div id="report" role="status">Selecione o backup para conferir a prévia. Nada será gravado antes de você clicar em Restaurar.</div>
+  <button id="restore" type="button" disabled>Restaurar somente linhas ausentes</button>
+</main>
+<script>
+(() => {
+  'use strict';
+  const dbName='painel-campanhas',dbVersion=5;
+  const analyzeButton=document.querySelector('#analyze'),report=document.querySelector('#report'),restoreButton=document.querySelector('#restore');
+  let backup=null,lastPreview=null;
+  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function openExistingDb(){
+    return new Promise((resolve,reject)=>{
+      if(!indexedDB.databases){reject(new Error('O navegador não permite verificar a existência da base local.'));return}
+      indexedDB.databases().then(list=>{
+        const known=list.find(item=>item.name===dbName);
+        if(!known||known.version!==dbVersion){reject(new Error('A base local esperada não foi encontrada na versão atual; nada foi alterado.'));return}
+        const request=indexedDB.open(dbName,dbVersion);
+        request.onupgradeneeded=()=>{request.transaction.abort();reject(new Error('A base exigiria uma migração; nada foi alterado.'))};
+        request.onsuccess=()=>{
+          const db=request.result;
+          if(!db.objectStoreNames.contains('bases')){db.close();reject(new Error('A store de bases não existe; nada foi alterado.'));return}
+          resolve(db);
+        };
+        request.onerror=()=>reject(request.error||new Error('Não foi possível abrir a base local.'));
+      }).catch(reject);
+    });
+  }
+  function readCurrentBase(){
+    return openExistingDb().then(db=>new Promise((resolve,reject)=>{
+      const tx=db.transaction('bases','readonly'),request=tx.objectStore('bases').get('atual');
+      request.onsuccess=()=>resolve(request.result||null);
+      request.onerror=()=>reject(request.error);
+      tx.oncomplete=()=>db.close();tx.onerror=()=>{db.close();reject(tx.error)};
+    }));
+  }
+  function validDate(value){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return false;
+    const date=new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;
+  }
+  function plan(current,source){
+    if(current?.schema!=='base_campanhas_v1'||!Array.isArray(current.campanhas)||!Array.isArray(current.diario))throw new Error('A base local atual não tem a estrutura esperada; nada foi alterado.');
+    if(source?.schema!=='base_campanhas_v1'||!Array.isArray(source.campanhas)||!Array.isArray(source.diario))throw new Error('O arquivo selecionado não contém um backup de campanhas compatível.');
+    const currentById=new Map(current.campanhas.map(campaign=>[String(campaign.id),campaign]));
+    const sourceById=new Map(source.campanhas.map(campaign=>[String(campaign.id),campaign]));
+    const paused=new Map([...currentById].filter(([,campaign])=>campaign.status==='pausada'));
+    const matched=new Map(),unmatched=[];
+    for(const [id,oldCampaign] of sourceById){
+      const live=paused.get(id);
+      if(!live)continue;
+      const identityMatches=oldCampaign.nome_mcc&&live.nome_mcc
+        ? oldCampaign.nome_mcc===live.nome_mcc
+        : Boolean(oldCampaign.nome_exibicao&&live.nome_exibicao&&oldCampaign.nome_exibicao===live.nome_exibicao);
+      if(identityMatches)matched.set(id,live);
+      else unmatched.push({name:live.nome_exibicao||live.nome_mcc||id,reason:'ID coincide, mas o nome completo diverge'});
+    }
+    const rowsByKey=new Map(),currentRowsByKey=new Map();
+    for(const row of current.diario||[]){const key=`${row.campanha_id}|${row.data}`;currentRowsByKey.set(key,[...(currentRowsByKey.get(key)||[]),row]);}
+    for(const row of source.diario||[]){
+      if(!matched.has(String(row?.campanha_id)))continue;
+      const key=`${row.campanha_id}|${row.data}`;
+      rowsByKey.set(key,[...(rowsByKey.get(key)||[]),row]);
+    }
+    const add=[],fills=[],metricColumns=['B','C','F','O','P'],metricCounts={backup:Object.fromEntries(metricColumns.map(column=>[column,0])),local:Object.fromEntries(metricColumns.map(column=>[column,0]))};let existingCount=0,duplicateCount=0,invalidCount=0,conflictingCells=0,recoveredCells=0;
+    for(const [key,rows] of rowsByKey){
+      if(rows.length!==1){duplicateCount+=rows.length;continue}
+      const row=rows[0];
+      if(!validDate(row.data)||!row.celulas||typeof row.celulas!=='object'||Array.isArray(row.celulas)){invalidCount++;continue}
+      const existingRows=currentRowsByKey.get(key)||[];
+      for(const column of metricColumns)if(row.celulas[column]?.value!=null&&row.celulas[column].value!=='')metricCounts.backup[column]++;
+      if(existingRows.length>1){duplicateCount++;continue}
+      if(existingRows.length===1){
+        const target=existingRows[0],missing={};
+        for(const column of metricColumns)if(target.celulas?.[column]?.value!=null&&target.celulas[column].value!=='')metricCounts.local[column]++;
+        for(const [column,incoming] of Object.entries(row.celulas)){
+          if(!incoming||incoming.value==null||incoming.value==='')continue;
+          const previous=target.celulas?.[column];
+          if(!previous||previous.value==null||previous.value===''){missing[column]=structuredClone(incoming);continue}
+          if(JSON.stringify(previous.value)!==JSON.stringify(incoming.value))conflictingCells++;
+        }
+        if(Object.keys(missing).length){fills.push({key,cells:missing});recoveredCells+=Object.keys(missing).length;}
+        else existingCount++;
+        continue;
+      }
+      add.push(structuredClone(row));
+    }
+    return {add,fills,matchedCampaigns:matched.size,existingCount,duplicateCount,invalidCount,conflictingCells,recoveredCells,metricCounts,unmatched,backupDiaryRows:source.diario.length};
+  }
+  function renderPreview(preview){
+    lastPreview=preview;
+    const names=[...new Set(preview.add.map(row=>row.campanha_id))].map(id=>{
+      const campaign=backup.campanhas.find(item=>String(item.id)===String(id));return campaign?.nome_exibicao||campaign?.nome_mcc||id;
+    });
+    report.className='';
+    const metricLabel={B:'Impressões',C:'Cliques',F:'Conversões',O:'Investimento',P:'Comissão'};
+    const metricSummary=Object.keys(metricLabel).map(column=>`${metricLabel[column]} ${preview.metricCounts.backup[column]} no backup / ${preview.metricCounts.local[column]} na base`).join(' · ');
+    report.textContent=`Prévia segura\nCampanhas pausadas vinculadas por ID e nome: ${preview.matchedCampaigns}\nNovas linhas campanha/data: ${preview.add.length}\nLinhas existentes com células vazias a recuperar: ${preview.fills.length}\nCélulas vazias que serão preenchidas: ${preview.recoveredCells}\nLinhas sem lacunas, preservadas: ${preview.existingCount}\nValores diferentes já existentes, preservados: ${preview.conflictingCells}\nMétricas preenchidas (backup / base): ${metricSummary}\nDuplicidades ignoradas: ${preview.duplicateCount}\nLinhas inválidas ignoradas: ${preview.invalidCount}\nCampanhas com nome divergente: ${preview.unmatched.length}${names.length?`\n\nCampanhas com linhas novas:\n• ${names.join('\n• ')}`:''}${preview.unmatched.length?`\n\nVínculos pendentes (não serão importados):\n• ${preview.unmatched.slice(0,10).map(item=>`${item.name} — ${item.reason}`).join('\n• ')}`:''}`;
+    if(preview.unmatched.length||preview.duplicateCount||preview.invalidCount)report.classList.add('warning');
+    const hasRecovery=preview.add.length>0||preview.fills.length>0;
+    restoreButton.disabled=!hasRecovery;
+    restoreButton.textContent=hasRecovery?'Restaurar somente dados ausentes':'Nenhum dado ausente para restaurar';
+  }
+  analyzeButton.addEventListener('click',async()=>{
+    restoreButton.disabled=true;backup=null;lastPreview=null;analyzeButton.disabled=true;
+    try{const response=await fetch('./__paused-history-source.json',{cache:'no-store'});if(!response.ok)throw new Error('A cópia temporária do backup não foi encontrada.');backup=await response.json();const current=await readCurrentBase();if(!current)throw new Error('Não há base local para mesclar; nada foi alterado.');renderPreview(plan(current,backup));}
+    catch(error){report.className='error';report.textContent=`Prévia não disponível: ${error.message}`;}
+    finally{analyzeButton.disabled=false;}
+  });
+  restoreButton.addEventListener('click',async()=>{
+    if(!backup||(!lastPreview?.add.length&&!lastPreview?.fills.length))return;
+    restoreButton.disabled=true;
+    let db;
+    try{
+      db=await openExistingDb();
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction('bases','readwrite'),store=tx.objectStore('bases'),request=store.get('atual');
+        request.onsuccess=()=>{
+          const current=request.result;
+          try{
+            const fresh=plan(current,backup),next=structuredClone(current);
+            next.diario.push(...fresh.add);
+            for(const fill of fresh.fills){
+              const row=next.diario.find(item=>`${item.campanha_id}|${item.data}`===fill.key);
+              if(!row)continue;
+              row.celulas??={};
+              for(const [column,incoming] of Object.entries(fill.cells)){
+                const previous=row.celulas[column];
+                if(!previous||previous.value==null||previous.value==='')row.celulas[column]=structuredClone(incoming);
+              }
+            }
+            next.importacoes??=[];
+            next.importacoes.push({tipo:'restauracao_aditiva_backup',executada_em:new Date().toISOString(),registros:fresh.add.length,campanhas:fresh.matchedCampaigns,celulas_recuperadas:fresh.recoveredCells,conflitos:fresh.conflictingCells});
+            next.atualizado_em=new Date().toISOString();
+            store.put(next,'atual');
+            lastPreview=fresh;
+          }catch(error){tx.abort();reject(error);}
+        };
+        request.onerror=()=>{tx.abort();reject(request.error)};
+        tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('A gravação foi cancelada; nenhum registro foi alterado.'));
+      });
+      report.className='ok';
+      report.textContent=`Restauração concluída: ${lastPreview.add.length} linhas novas e ${lastPreview.recoveredCells} células vazias recuperadas em ${lastPreview.matchedCampaigns} campanhas. Nenhum valor existente foi substituído. Somente a base de campanhas foi atualizada. Recarregue o Hub para ver o Diário atualizado.`;
+      restoreButton.textContent='Restauração concluída';
+    }catch(error){report.className='error';report.textContent=`Restauração não aplicada: ${error.message}`;restoreButton.disabled=false;}
+    finally{db?.close();}
+  });
+})();
+</script>
+</html>

@@ -20,6 +20,8 @@ assert.ok(html.includes('eventStore.add(event)'),'Preparador MCC não persiste e
 assert.ok(html.includes("source:'preparador_mcc'"),'importação do Preparador MCC não identifica a origem dos eventos');
 const applyFlow=html.match(/async function applyManifestToPanel\(manifest\) \{[\s\S]*?\n    \}/)?.[0]||'';
 assert.ok(applyFlow.includes('const databaseApi = window.CampaignDatabase;'),'aplicação D0/D-1 deve usar o módulo central, não uma implementação paralela');
+assert.ok(applyFlow.includes('${item.shortName}: ${item.oldDate} → ${item.newDate}'),'confirmação de mudança de data deve mostrar somente a campanha curta e as datas antes/depois');
+assert.ok(!applyFlow.includes('${item.oldName} → ${item.newName}'),'confirmação não deve repetir os nomes completos da campanha');
 assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"),'Preparador deve bloquear atualização se o módulo central não estiver disponível');
 assert.ok(applyFlow.includes('applied.reconciledSales'),'o Preparador envia apenas as vendas manuais cujo estado mudou na importação');
 assert.ok(!applyFlow.includes('.filter(sale=>sale.billing_sale_id)'),'o Preparador não deve descartar lançamentos legados sem o vínculo novo do Faturamento');
@@ -50,6 +52,7 @@ assert.ok(sidebar.includes('Preparador MCC')&&sidebar.includes('Controle Macro')
 assert.ok(sidebar.includes('setOpenGroup')&&sidebar.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado expansível do menu não é compartilhado com as demais telas');
 assert.ok(sidebar.includes('body.animate(')&&sidebar.includes('body.inert = !expanded')&&sidebar.includes('prefers-reduced-motion: reduce'),'menu compartilhado não anima a abertura/retração com acessibilidade');
 assert.ok(html.includes('validatePreparedNumbering(result)'),'validação de numeração não ocorre ao carregar o CSV');
+assert.ok(html.includes('confirmedAliases.has(nameKey) && !incomingKeys.has(nameKey)'),'fallback do Preparador deve ignorar somente nomes históricos cuja correção de data foi confirmada');
 assert.ok(html.includes('BASE NÃO ATUALIZADA — Renumere:'),'alerta claro de renumeração ausente');
 assert.ok(html.includes("error.code = 'CAMPAIGN_NUMBER_REUSE'"),'aplicação não possui bloqueio defensivo para numeração reutilizada');
 assert.ok(!html.includes('function confirmPanelConflicts('),'confirmação antiga de divergências ainda aparece durante a atualização');

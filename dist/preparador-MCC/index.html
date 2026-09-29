@@ -459,6 +459,16 @@
     }
     function panelCampaignNumberReuseIssues(baseInput, manifest) {
       const base = normalizePanelBase(baseInput), incoming = panelManifestNames(manifest), incomingKeys = new Set(incoming.map(name => name.toLocaleLowerCase('pt-BR'))), known = new Set(incoming);
+      const currentNames = new Set((base.campanhas || []).map(item => String(item.nome_mcc || '').trim().toLocaleLowerCase('pt-BR'))), confirmedAliases = new Set();
+      const dateParts = name => { const match = String(name || '').trim().match(/^(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?)\s*[–—-]\s*(.+)$/); return match ? { date:match[1], suffix:match[2].trim().toLocaleLowerCase('pt-BR') } : null; };
+      for (const campaign of base.campanhas || []) {
+        if (!campaign.nome_mcc_corrigido_em) continue;
+        const current = dateParts(campaign.nome_mcc); if (!current) continue;
+        for (const previousName of [campaign.nome_mcc_anterior, ...(campaign.nome_mcc_anteriores || [])]) {
+          const previous = dateParts(previousName), key = String(previousName || '').trim().toLocaleLowerCase('pt-BR');
+          if (previous && previous.suffix === current.suffix && previous.date !== current.date && !currentNames.has(key)) confirmedAliases.add(key);
+        }
+      }
       for (const campaign of base.campanhas || []) if (campaign.nome_mcc) known.add(String(campaign.nome_mcc).trim());
       for (const snapshot of base.snapshots_campanhas || []) for (const name of snapshot.campanhas || []) if (String(name || '').trim()) known.add(String(name).trim());
       for (const campaign of base.manifesto_atual?.campanhas || []) if (campaign.nome_campanha_exato) known.add(String(campaign.nome_campanha_exato).trim());
@@ -467,6 +477,7 @@
         const group = panelDisplayName(name);
         if (group.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR')) continue;
         const key = group.toLocaleLowerCase('pt-BR'), nameKey = name.toLocaleLowerCase('pt-BR'), entry = groups.get(key) || { group, names:new Map(), incomingNames:new Map() };
+        if (confirmedAliases.has(nameKey) && !incomingKeys.has(nameKey)) continue;
         entry.names.set(nameKey, name); if (incomingKeys.has(nameKey)) entry.incomingNames.set(nameKey, name); groups.set(key, entry);
       }
       return [...groups.values()].filter(entry => entry.incomingNames.size && entry.names.size > 1).map(entry => ({ group:entry.group, incomingNames:[...entry.incomingNames.values()], knownNames:[...entry.names.values()] }));
@@ -543,7 +554,14 @@
         const original = databaseApi.normalize(await readPanelBase(db));
         const reuseIssues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(original, manifest);
         if (reuseIssues.length) { const error = new Error('Há campanha usando uma numeração que já pertenceu a outro nome. Corrija o nome na MCC e importe um novo CSV.'); error.code = 'CAMPAIGN_NUMBER_REUSE'; error.numberingIssues = reuseIssues; throw error; }
-        const importOptions = { source:'preparador_mcc' };
+        const dateChanges = databaseApi.campaignDateChangeCandidates(original, manifest);
+        if (dateChanges.length) {
+          const summary = dateChanges.map(item => `${item.shortName}: ${item.oldDate} → ${item.newDate}`).join('\n');
+          if (!confirm(`A MCC mudou apenas a data de ${dateChanges.length} campanha(s):\n\n${summary}\n\nConfirmar que são as mesmas campanhas? O ID, as métricas e o Diário serão preservados. Um backup da base será baixado antes de gravar.`)) throw new Error('Alteração de data não confirmada; a base não foi atualizada.');
+          const blob = new Blob([JSON.stringify(original)], { type:'application/json' }), url = URL.createObjectURL(blob), link = document.createElement('a');
+          link.href = url; link.download = `base-painel-antes-correcao-data-${new Date().toISOString().slice(0,10)}.json`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+        const importOptions = { source:'preparador_mcc', confirmedDateChanges:dateChanges };
         const preview = databaseApi.importManifest(original, manifest, panelManifestRow, importOptions);
         const overwrite = preview.conflicts.length > 0;
         const applied = overwrite ? databaseApi.importManifest(original, manifest, panelManifestRow, { ...importOptions, overwrite:true }) : preview;
@@ -1106,10 +1124,10 @@
 
     async function validatePreparedNumbering(result) {
       const token = ++numberingValidationToken, databaseApi = window.CampaignDatabase || fallbackPanelDatabase;
-      let issues = [];
+      let issues = [], dateChanges = [];
       try {
         const db = await openPanelDatabase();
-        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); }
+        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); dateChanges = databaseApi.campaignDateChangeCandidates?.(base, result.manifest) || []; }
         finally { db.close(); }
       } catch (error) {
         if (token !== numberingValidationToken || currentResult !== result) return;
@@ -1121,6 +1139,8 @@
       if (token !== numberingValidationToken || currentResult !== result) return;
       numberingIssues = issues;
       const issueList = q('#issues'); issueList.querySelectorAll('[data-numbering-issue]').forEach(item => item.remove());
+      issueList.querySelectorAll('[data-date-change]').forEach(item => item.remove());
+      for (const item of dateChanges) { const li = document.createElement('li'); li.className = 'issue warn'; li.dataset.dateChange = 'true'; li.textContent = `Mudança de data detectada: ${item.oldName} → ${item.newName}. Você poderá confirmar antes de gravar.`; issueList.prepend(li); }
       if (issues.length) {
         for (const issue of issues) { const li = document.createElement('li'); li.className = 'issue fail'; li.dataset.numberingIssue = 'true'; li.textContent = `${issue.group}: a numeração aparece em mais de um nome de campanha. Renomeie a campanha nova na MCC e exporte novamente o CSV.`; issueList.prepend(li); }
         const names = issues.flatMap(issue => issue.incomingNames).join(' | '), feedback = q('#apply-feedback');
@@ -1154,6 +1174,18 @@
       q('#issues').replaceChildren(); q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
     }
 
+    async function detectPendingD1DateChanges(source) {
+      const token=numberingValidationToken, databaseApi=window.CampaignDatabase;
+      if (!databaseApi?.campaignDateChangeCandidates || !source?.records?.length) return;
+      try {
+        const db=await openPanelDatabase(); let base;
+        try { base=databaseApi.normalize(await readPanelBase(db)); } finally { db.close(); }
+        if (token!==numberingValidationToken || slots.d0 || slots.d1!==source) return;
+        const partial={campanhas:source.records.map(record=>({nome_campanha_exato:record.nome_campanha_exato,metricas_D_menos_1:{conta:{valor:record.conta}}}))};
+        for (const item of databaseApi.campaignDateChangeCandidates(base,partial)) { const li=document.createElement('li'); li.className='issue warn'; li.textContent=`Possível mudança de data detectada no D−1: ${item.oldName} → ${item.newName}. Aguarde o D0; a correção só será aplicada após confirmação em Atualizar base.`; q('#issues').append(li); }
+      } catch { /* D−1 continua aguardando D0; a validação completa ocorre ao montar o manifesto. */ }
+    }
+
     function attemptBuild() {
       if (!slots.d0) { if (slots.d1 && !slots.d1.error) showWaitingForD0(); else resetResults(); return; }
       if (slots.d0.error || slots.d1?.error) { showInputBlock(slots.d0.error ? 'O CSV de D0 contém erro e precisa ser corrigido.' : 'O CSV de D−1 informado contém erro. Corrija-o ou limpe tudo e envie somente o D0.'); return; }
@@ -1182,6 +1214,7 @@
       previewSort = { key:null, direction:null };
       renderSlot(slot);
       attemptBuild();
+      if (slot === 'd1' && !slots.d0) detectPendingD1DateChanges(source);
     }
 
     qa('.paste-box').forEach(box => {

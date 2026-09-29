@@ -100,3 +100,14 @@
 .hub-sidebar-layout.hub-sidebar-collapsed .hub-sidebar-collapse-label { display: none; }
 @media (max-width: 980px) { .hub-menu-products #campaignList { max-height: 180px; } }
 @media (prefers-reduced-motion: reduce) { .hub-menu-chevron { transition: none; } }
+
+/* Keep page-heading typography consistent across the shared Hub routes. */
+.main > header.topbar .eyebrow,
+.shell > main > header.topbar .eyebrow,
+.shell > main > header.top .eyebrow,
+.app-shell > main.shell > header.hero .eyebrow { font-weight: 400; }
+.main > header.topbar #pageTitle { font-size: clamp(.96rem, 1.8vw, 1.41rem); }
+.shell > main > header.topbar h1 { font-size: clamp(.93rem, 1.8vw, 1.41rem); }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main > header.top h1 { font-size: clamp(.96rem, 1.8vw, 1.41rem); }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="ecommerce"]) > main > header.top h1 { font-size: 1.2rem; }
+.app-shell > main.shell > header.hero h1 { font-size: clamp(19.2px, 3vw, 31.2px); }

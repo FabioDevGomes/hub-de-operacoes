@@ -126,8 +126,31 @@ assert.equal(ambiguousEvent.metadata.identity_confidence,'ambiguous_numbered_tit
 
 const absentNextDay=db.importManifest(withSibling.base,manifest([campaign('20/09 - VitaSlimex 02 (GM) 60% - U$ 60')],'2026-09-21'),rowFactory,{source:'preparador_mcc'});
 assert.equal(absentNextDay.events.some(event=>event.event_type==='campaign_status_changed'&&event.campaign_id===iteration.campaign_id),false,'ausência na próxima lista não deve ser tratada como estado explícito da campanha');
+const genericPause=absentNextDay.events.find(event=>event.event_type==='campaign_pause_detected'&&event.campaign_id===iteration.campaign_id);
+assert.equal(genericPause.metadata.pause_label,'Pausada','sem motivo explícito, a pausa deve ficar genérica');
+assert.equal(genericPause.metadata.pause_detection_method,'ausencia_na_coleta_ativa','o Event Log deve distinguir detecção por ausência de status MCC explícito');
 assert.equal(absentNextDay.events.some(event=>event.event_type==='account_suspension_detected'),false,'a MCC não fornece evidência explícita de suspensão da conta');
 assert.equal(absentNextDay.events.some(event=>event.event_type==='campaign_delivery_stopped'),false,'zero/ausência de dados não deve ser inferido como fim de entrega');
+
+const rejectedBaseline=db.importManifest(db.create(),manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{qualification:'Disapproved'})]),rowFactory,{source:'preparador_mcc'});
+assert.equal(rejectedBaseline.base.campanhas[0].status_qualificacao_observado,'Disapproved','última qualificação explícita deve permanecer associada à campanha');
+const rejectedPause=db.importManifest(rejectedBaseline.base,manifest([],'2026-09-21'),rowFactory,{source:'preparador_mcc'});
+const rejectedPauseEvent=rejectedPause.events.find(event=>event.event_type==='campaign_pause_detected');
+assert.equal(rejectedPause.base.campanhas[0].motivo_pausa,'reprovacao','motivo de reprovação observado antes da ausência deve permanecer na campanha pausada');
+assert.equal(rejectedPauseEvent.metadata.pause_reason,'reprovacao');
+assert.equal(rejectedPauseEvent.metadata.pause_label,'Pausada por reprovação');
+assert.equal(rejectedPauseEvent.snapshot.status_qualificacao,'Disapproved','evento de pausa deve preservar a última qualificação da MCC');
+assert.ok(rejectedPause.base.event_log.some(event=>event.event_id===rejectedPauseEvent.event_id),'evento de pausa precisa integrar o Event Log persistido');
+assert.equal(db.importManifest(rejectedPause.base,manifest([],'2026-09-21'),rowFactory,{source:'preparador_mcc'}).events.some(event=>event.event_type==='campaign_pause_detected'),false,'a reimportação do mesmo estado pausado não deve duplicar evento');
+const reactivatedRejected=db.importManifest(rejectedPause.base,manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{qualification:'Eligible'})],'2026-09-22'),rowFactory,{source:'preparador_mcc'});
+assert.equal(reactivatedRejected.base.campanhas[0].status,'ativa');
+assert.equal(reactivatedRejected.base.campanhas[0].motivo_pausa,undefined,'reativação deve limpar motivo de pausa anterior');
+
+const sameDayActive=db.importManifest(db.create(),manifest([campaign('19/09 - VitaSlimex 01 (GM) 45% - U$ 60',{qualification:'Não qualificada'})],'2026-09-22'),rowFactory,{source:'preparador_mcc'});
+const sameDayPaused=db.importManifest(sameDayActive.base,manifest([],'2026-09-22'),rowFactory,{source:'preparador_mcc'});
+assert.equal(sameDayPaused.base.campanhas[0].status,'pausada','uma campanha retirada após uma coleta D0 no mesmo dia deve ser reconhecida como pausada');
+assert.equal(sameDayPaused.base.campanhas[0].motivo_pausa,'reprovacao');
+assert.equal(sameDayPaused.events[0].metadata.pause_label,'Pausada por reprovação');
 
 const legacy=db.normalize({schema:db.SCHEMA,campanhas:[],diario:[],importacoes:[]});
 assert.deepEqual(JSON.parse(JSON.stringify(legacy.event_log)),[],'bases antigas recebem uma coleção vazia sem gerar telemetria retroativa');

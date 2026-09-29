@@ -26,6 +26,7 @@ await writeFile(resolve(root, "dist/database.js"), databaseModule, "utf8");
 await writeFile(resolve(root, "dist/favicon.png"), Buffer.from(faviconBase64, "base64"));
 await cp(resolve(root, "src/brand-logo.png"), resolve(root, "dist/brand-logo.png"));
 await cp(resolve(root, "src/flowtracking-copy-guide.png"), resolve(root, "dist/flowtracking-copy-guide.png"));
+await cp(resolve(root, "src/overview-info-icon.png"), resolve(root, "dist/overview-info-icon.png"));
 await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-component.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));

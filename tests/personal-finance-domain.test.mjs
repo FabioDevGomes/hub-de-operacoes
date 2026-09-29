@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, overlayCurrentCategoryNames, quarterPeriod, reserveAndNubankMinusOpenExpenses, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
+  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
 } from '../src/personal-finance/personal-finance-domain.mjs';
 
 assert.equal(DEFAULT_CONSOLIDATED_MONTH_COUNT, 8, 'o consolidado abre com oito meses por padrão');
@@ -68,9 +68,10 @@ assert.equal(monthlyAmountRemaining(100, 70), 30, 'o restante mensal mantém o c
 assert.equal(monthlyAmountRemaining(1250, null), null, 'sem gasto informado, não inventa um saldo restante realizado');
 assert.equal(monthlyAmountRemaining(1250, 0), 1250, 'zero explícito de gasto mantém todo o orçamento disponível');
 assert.equal(monthlyAmountRemaining(1250, 1300), -50, 'gasto acima do orçamento é exibido como excedente negativo');
-assert.equal(reserveAndNubankMinusOpenExpenses(45850, 45125, 615), -110, 'a diferença acompanha a planilha: reserva mais saldo Nubank menos despesas em aberto');
-assert.equal(reserveAndNubankMinusOpenExpenses(100, 80, 5), -15, 'despesa em aberto acima da reserva e Nubank fica negativa');
-assert.equal(reserveAndNubankMinusOpenExpenses(null, null, null), 0, 'valores globais ausentes são tratados como zero nessa diferença');
+assert.equal(reserveMinusOpenExpenses(45850, 45125), -725, 'a diferença compara a reserva global com despesas em aberto, sem incluir saldo Nubank');
+assert.equal(reserveMinusOpenExpenses(100, 80), -20, 'despesa em aberto acima da reserva fica negativa');
+assert.equal(reserveMinusOpenExpenses(80, 100), 20, 'reserva acima das despesas em aberto fica positiva');
+assert.equal(reserveMinusOpenExpenses(null, null), 0, 'valores globais ausentes são tratados como zero nessa diferença');
 assert.equal(dailyBudgetPace({ category_name:'Almoço e janta', currency:'BRL', planned_amount:1250, actual_amount:1100 }, '2026-09', today).status, 'overspent', 'gasto maior que a meta acumulada é acima do ritmo planejado');
 assert.equal(dailyBudgetPace({ category_name:'Almoço e janta', currency:'BRL', planned_amount:1250, actual_amount:null }, '2026-09', today).status, 'missing', 'gasto não lançado continua distinto de zero');
 assert.equal(dailyBudgetPace({ category_name:'Almoço e janta', currency:'BRL', planned_amount:1250, actual_amount:1300 }, '2026-08', today).status, 'overspent', 'mês passado compara o realizado com o orçamento mensal completo');
@@ -277,7 +278,7 @@ futureOnlyExpenses.add({ month_key:'2026-08', category_id:'past-month', category
 futureOnlyExpenses.add({ month_key:'2026-09', category_id:'current-month', category_name:'Conta mensal', currency:'BRL', planned_amount:300, actual_amount:200 });
 futureOnlyExpenses.add({ month_key:'2026-10', category_id:'future-week1', category_name:'Lazer semana 1', currency:'BRL', planned_amount:300, actual_amount:null });
 assert.deepEqual(futureOnlyExpenses.result().BRL, { planned:600, actual:200, remaining:400 }, 'o total global exclui competências passadas e semanas atuais encerradas, preservando o saldo do mês e as competências futuras');
-assert.equal(reserveAndNubankMinusOpenExpenses(45850, 45740), -110, 'com as semanas históricas excluídas, R$ 45.740 de reserva menos R$ 45.850 de despesas futuras resulta em -R$ 110');
+assert.equal(reserveMinusOpenExpenses(45850, 45740), -110, 'com as semanas históricas excluídas, R$ 45.740 de reserva menos R$ 45.850 de despesas futuras resulta em -R$ 110');
 
 const cleanBundle = validateBundle({ schema:'personal_finance_v1', groups, categories, months:[first.month], entries:first.entries, debts:[], funds:[] });
 assert.equal(cleanBundle.categories.length, 4);

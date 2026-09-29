@@ -29,7 +29,8 @@ function Read-Ficha {
         if (-not (Test-Path -LiteralPath $FichaPath -PathType Leaf)) {
             throw "Arquivo da ficha não encontrado: $FichaPath"
         }
-        return (Get-Content -LiteralPath $FichaPath -Raw | ConvertFrom-Json)
+        $fichaText = [System.IO.File]::ReadAllText($FichaPath, [System.Text.Encoding]::UTF8)
+        return ($fichaText | ConvertFrom-Json)
     }
     if (-not [string]::IsNullOrWhiteSpace($FichaJson)) {
         return ($FichaJson | ConvertFrom-Json)
@@ -140,7 +141,7 @@ foreach ($targetName in $targetNames) {
     }
 }
 
-$indexTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'index.html'))
+$indexTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'index.html'), [System.Text.Encoding]::UTF8)
 $faqItems = @($ficha.faqs)
 $replacements = [ordered]@{
     HTML_LANG                 = $htmlLanguage
@@ -180,8 +181,15 @@ $indexOutput = $indexOutput.Replace('./background/03.png', "./$assetFolder/03.pn
 if ($indexOutput -match '\{\{[^}]+\}\}') {
     throw 'O template contém placeholders sem valor na ficha.'
 }
+$charsetMetaPattern = '(?is)<meta\b(?=[^>]*(?:\scharset\s*=|\shttp-equiv\s*=\s*["'']?content-type\b))[^>]*>'
+$indexOutput = [regex]::Replace($indexOutput, $charsetMetaPattern, '')
+$headMatch = [regex]::Match($indexOutput, '(?is)<head\b[^>]*>')
+if (-not $headMatch.Success) {
+    throw 'O template HTML precisa conter <head> para declarar a codificação UTF-8.'
+}
+$indexOutput = $indexOutput.Insert($headMatch.Index + $headMatch.Length, "`r`n    <meta charset=`"UTF-8`">")
 
-$stylesTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'styles.css'))
+$stylesTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'styles.css'), [System.Text.Encoding]::UTF8)
 $stylesOutput = Get-SafeStylesheet $stylesTemplate
 $stylesOutput += @"
 
@@ -250,7 +258,7 @@ if (-not [string]::IsNullOrWhiteSpace($primaryButtonColor)) {
 }
 "@
 }
-$scriptsTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'scripts.js'))
+$scriptsTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'scripts.js'), [System.Text.Encoding]::UTF8)
 $scriptWithoutComments = [regex]::Replace($scriptsTemplate, '/\*.*?\*/', '', [System.Text.RegularExpressions.RegexOptions]::Singleline).Trim()
 $scriptsOutput = if ([string]::IsNullOrWhiteSpace($scriptWithoutComments)) {
     '/* Intencionalmente vazio: esta página não inclui scripts de terceiros. */'

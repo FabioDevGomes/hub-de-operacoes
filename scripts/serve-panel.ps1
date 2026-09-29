@@ -8,16 +8,20 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $siteDirectory = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist'))
 $engineRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'presell-engine'))
+$productsRootConfig = Join-Path $projectRoot 'data-local\products-root.txt'
 if ([string]::IsNullOrWhiteSpace($ProductsRoot)) {
-    if ($projectRoot -match '^(?<Profile>[A-Za-z]:\\Users\\[^\\]+)(?:\\|$)') {
+    if (Test-Path -LiteralPath $productsRootConfig -PathType Leaf) {
+        $ProductsRoot = [IO.File]::ReadAllText($productsRootConfig).Trim()
+        if ([string]::IsNullOrWhiteSpace($ProductsRoot)) {
+            throw "A configuração $productsRootConfig está vazia. Informe o caminho da pasta local de produtos."
+        }
+    } elseif ($projectRoot -match '^(?<Profile>[A-Za-z]:\\Users\\[^\\]+)(?:\\|$)') {
         $trafficFolder = 'tr' + [char]0x00E1 + 'fego pago'
         $ProductsRoot = Join-Path $Matches.Profile (Join-Path 'OneDrive' (Join-Path $trafficFolder 'produtos'))
-    } else {
-        throw 'Informe ProductsRoot explicitamente; não foi possível identificar o perfil proprietário do projeto.'
     }
 }
-$resolvedProductsRoot = [IO.Path]::GetFullPath($ProductsRoot)
-$templateRoot = Join-Path $resolvedProductsRoot 'template\presell-cookie-base'
+$resolvedProductsRoot = if ([string]::IsNullOrWhiteSpace($ProductsRoot)) { $null } else { [IO.Path]::GetFullPath($ProductsRoot) }
+$templateRoot = if ($resolvedProductsRoot) { Join-Path $resolvedProductsRoot 'template\presell-cookie-base' } else { $null }
 
 function Get-StatusReason {
     param([int]$StatusCode)
@@ -106,6 +110,9 @@ function Read-HttpRequest {
 
 function Resolve-SafeDestination {
     param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($resolvedProductsRoot)) {
+        throw "A pasta de produtos não está configurada. Crie data-local\products-root.txt com o caminho da pasta local de produtos ou inicie serve-panel.ps1 com -ProductsRoot."
+    }
     if ([string]::IsNullOrWhiteSpace($Value)) { throw 'O diretório de destino é obrigatório.' }
     $destination = [IO.Path]::GetFullPath($Value)
     $rootPrefix = $resolvedProductsRoot.TrimEnd('\') + '\'
@@ -138,6 +145,9 @@ function Invoke-PresellApi {
     if ($null -eq $payload.ficha) { throw 'Envie uma ficha JSON válida.' }
     $rawDestination = if ($payload.destination) { [string]$payload.destination } else { [string]$payload.ficha.destination }
     $destination = Resolve-SafeDestination $rawDestination
+    if ($Produce -and -not (Test-Path -LiteralPath $templateRoot -PathType Container)) {
+        throw "O modelo de Pre-Sell não foi encontrado em $templateRoot. Confira se ProductsRoot aponta para a pasta correta de produtos."
+    }
     $fichaJson = $payload.ficha | ConvertTo-Json -Depth 30 -Compress
     $assetFolder = if ($payload.ficha.assetFolder) { [string]$payload.ficha.assetFolder } else { 'assets' }
     $workflow = Join-Path $engineRoot 'tools\Invoke-PresellWorkflow.ps1'

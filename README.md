@@ -13,6 +13,10 @@ navegador é isolado por origem; trocar a porta faria a base existente parecer v
 
 Dê um duplo clique em `iniciar-painel.cmd`. O iniciador liga o servidor somente no próprio computador e abre o endereço local no navegador. O Codex pode permanecer fechado.
 
+### ZIP executado fora de `C:\Users\<perfil>`
+
+O painel pode iniciar mesmo quando o projeto foi extraído em outro local. A pasta de produtos continua sendo detectada automaticamente no caminho padrão do usuário; para recursos de Pre-Sell em instalações fora desse padrão, crie `data-local\products-root.txt` ao lado de `iniciar-painel.cmd` e informe nele o caminho completo da pasta local de produtos. Essa pasta deve conter `template\presell-cookie-base`. Não informe a pasta `template` diretamente. Sem essa configuração, o painel e as demais telas continuam disponíveis, mas as operações de Pre-Sell que dependem dessa pasta informarão como configurá-la.
+
 ## Fluxo
 
 1. **Atualizar base pelo Excel** importa a carga histórica inicial, incluindo abas visíveis e ocultas.

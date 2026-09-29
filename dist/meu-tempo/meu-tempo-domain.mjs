@@ -11,52 +11,17 @@ export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
 ]);
 
 export const DEFAULT_CATEGORIES=Object.freeze([
-  {id:'cat-trabalho',name:'Trabalho',order:10,active:true},
-  {id:'cat-rotina',name:'Rotina',order:20,active:true},
-  {id:'cat-saude',name:'Saúde',order:30,active:true},
-  {id:'cat-lazer',name:'Lazer',order:40,active:true},
-  {id:'cat-outros',name:'Outros',order:50,active:true}
+  {id:'cat-exemplos',name:'Exemplos',order:10,active:true}
 ]);
 
 const seed=(id,name,categoryId,type='duration',order=10,extra={})=>({id,name,categoryId,type,order,active:true,productive:false,showInCharts:type!=='text',chartType:type==='duration'?'bar':'line',aggregation:type==='duration'?'sum':'average',durationMode:type==='duration'?'both':null,...extra});
+// Only neutral starter examples belong in source control. Personal categories,
+// activities, and history live in the user's local IndexedDB and are not reseeded.
 export const DEFAULT_ITEMS=Object.freeze([
-  seed('item-dormindo','Dormindo','cat-rotina','duration',10),
-  seed('item-cama-acordar','Na cama após acordar','cat-rotina','duration',20),
-  seed('item-preparo-levantar','Preparo após levantar','cat-rotina','duration',30),
-  seed('item-cafe','Café','cat-rotina','duration',40),
-  seed('item-kakashi','Kakashi','cat-outros','duration',50),
-  seed('item-almoco','Almoço','cat-rotina','duration',60),
-  seed('item-janta','Janta','cat-rotina','duration',70),
-  seed('item-mentalizacao','Mentalização / autossugestão','cat-saude','duration',80),
-  seed('item-treino','Treino','cat-saude','duration',90),
-  seed('item-ads-aplicando','Ads — aplicando','cat-trabalho','duration',100),
-  seed('item-ads-estudos','Ads — estudos / mentoria','cat-trabalho','duration',110),
-  seed('item-reflexao','Importante / reflexão','cat-trabalho','duration',120),
-  seed('item-ia','IA — implementação','cat-trabalho','duration',130),
-  seed('item-insights','Insights / call / podcast / networking','cat-trabalho','duration',140),
-  seed('item-networking','Novas pessoas para networking','cat-trabalho','duration',150,{active:false}),
-  seed('item-familia','Comunicação com a família','cat-rotina','duration',160,{active:false}),
-  seed('item-despesas','Organização / controle de despesas','cat-trabalho','duration',170),
-  seed('item-conteudo','Publicar conteúdo','cat-trabalho','duration',180),
-  seed('item-livros','Livros','cat-lazer','duration',190),
-  seed('item-praia','Praia / sair de casa','cat-lazer','duration',200),
-  seed('item-entretenimento','Entretenimento','cat-lazer','duration',210,{active:false}),
-  seed('item-youtube','YouTube','cat-lazer','duration',220),
-  seed('item-instagram','Instagram','cat-lazer','duration',230),
-  seed('item-verde','Verde','cat-saude','duration',240),
-  seed('item-edonismo','Edonismo / atenção M','cat-outros','duration',250),
-  seed('item-moto','Moto','cat-outros','duration',260),
-  seed('item-outros','Outros','cat-outros','duration',270),
-  seed('item-alcool','Bebida alcoólica','cat-saude','boolean',280),
-  seed('item-refrigerante','Refrigerante','cat-saude','boolean',290),
-  seed('item-acucar','Açúcar / sabor doce','cat-saude','boolean',300),
-  seed('item-sodio','Sódio / embutidos / burger','cat-saude','boolean',310),
-  seed('item-agua','Água','cat-saude','number',320,{unit:'ml',inputUnit:'water_unit',aggregation:'sum'}),
-  seed('item-verde-horario','Verde 16:20...','cat-saude','boolean',330,{showInCharts:false}),
-  seed('item-garganta','Incômodo na garganta','cat-saude','scale',340),
-  seed('item-rim','Incômodo no rim','cat-saude','scale',350),
-  seed('item-metalico','Gosto metálico','cat-saude','scale',360),
-  seed('item-clareza','Clareza mental','cat-saude','scale',370)
+  seed('item-dormindo','Dormindo','cat-exemplos','duration',10),
+  seed('item-cama-acordar','Na cama após acordar','cat-exemplos','duration',20),
+  seed('item-preparo-levantar','Preparo após levantar','cat-exemplos','duration',30),
+  seed('item-cafe','Café','cat-exemplos','duration',40)
 ]);
 
 export function parseQuickDuration(raw){

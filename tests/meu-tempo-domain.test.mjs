@@ -1,18 +1,24 @@
 import assert from'node:assert/strict';
-import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
-const defaultItemsById=new Map(DEFAULT_ITEMS.map(item=>[item.id,item]));
-for(const id of BOOLEAN_ITEM_IDS)assert.equal(defaultItemsById.get(id)?.type,'boolean',`${id} deve usar campo Sim/Não`);
+assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
+assert.deepEqual(DEFAULT_ITEMS.map(({id,name,categoryId})=>({id,name,categoryId})),[
+  {id:'item-dormindo',name:'Dormindo',categoryId:'cat-exemplos'},
+  {id:'item-cama-acordar',name:'Na cama após acordar',categoryId:'cat-exemplos'},
+  {id:'item-preparo-levantar',name:'Preparo após levantar',categoryId:'cat-exemplos'},
+  {id:'item-cafe',name:'Café',categoryId:'cat-exemplos'}
+],'somente os quatro exemplos são semeados em um banco de navegador vazio');
+for(const id of BOOLEAN_ITEM_IDS)assert.equal(booleanHistoryValue({id,type:'boolean'},1),'Sim',`${id} deve continuar aceitando o histórico Sim/Não`);
 for(const id of['item-refrigerante','item-acucar','item-sodio']){
-  const item=defaultItemsById.get(id);
+  const item={id,type:'boolean'};
   assert.equal(booleanHistoryValue(item,1),'Sim',`${id}: valor 1 deve aparecer como Sim no Histórico`);
   assert.equal(booleanHistoryValue(item,0),'Não',`${id}: valor 0 deve aparecer como Não no Histórico`);
 }
-assert.equal(booleanHistoryValue(defaultItemsById.get('item-sodio'),null),'—','valor ausente não deve ser confundido com zero');
+assert.equal(booleanHistoryValue({id:'item-sodio',type:'boolean'},null),'—','valor ausente não deve ser confundido com zero');
 assert.equal(booleanHistoryValue({id:'item-agua',type:'number'},1),null,'valores numéricos de outros itens não devem virar Sim/Não');
 assert.deepEqual(SYMPTOM_SCALE_OPTIONS.map(option=>[option.value,option.label]),[[3,'Alto'],[2,'Médio'],[1,'Baixo'],[0,'Inexistente']]);
-for(const id of SYMPTOM_SCALE_ITEM_IDS){const item=defaultItemsById.get(id);assert.equal(item?.type,'scale',`${id} continua uma escala`);assert.deepEqual([3,2,1,0].map(value=>symptomScaleHistoryValue(item,value)),['Alto','Médio','Baixo','Inexistente'],`${id} mostra níveis rotulados no histórico`);assert.equal(symptomScaleHistoryValue(item,null),'—',`${id}: ausência de registro não equivale a Inexistente`)}
-assert.equal(symptomScaleHistoryValue(defaultItemsById.get('item-clareza'),3),null,'a nova escala não altera outros itens scale');
+for(const id of SYMPTOM_SCALE_ITEM_IDS){const item={id,type:'scale'};assert.deepEqual([3,2,1,0].map(value=>symptomScaleHistoryValue(item,value)),['Alto','Médio','Baixo','Inexistente'],`${id} mostra níveis rotulados no histórico`);assert.equal(symptomScaleHistoryValue(item,null),'—',`${id}: ausência de registro não equivale a Inexistente`)}
+assert.equal(symptomScaleHistoryValue({id:'other-scale',type:'scale'},3),null,'a escala de sintomas não altera outros itens scale');
 
 for(const[input,expected]of[['5',5],['10',10],['45',45],['110',70],['230',150],['1230',750]])assert.equal(parseQuickDuration(input),expected,input);
 for(const invalid of['75','160','275','abc','0'])assert.throws(()=>parseQuickDuration(invalid),undefined,invalid);
@@ -76,7 +82,7 @@ assert.equal(productivityLabel(entries[0]),'Sim');
 assert.equal(productivityLabel(entries[2]),'Não');
 assert.equal(aggregateDay(kakashiEntries,'2026-09-19').productiveMinutes,45,'Diário e comparação somam a fração do Kakashi e o tempo integral das outras atividades');
 assert.equal(totalProductiveDuration(kakashiEntries,['2026-09-19','2026-09-20']),50,'Histórico soma 10% de Kakashi em cada dia sem alterar as durações registradas');
-const symptomMatrix=comparisonMatrix([defaultItemsById.get('item-garganta')],[{id:'s1',date:'2026-09-20',itemId:'item-garganta',type:'scale',value:3},{id:'s2',date:'2026-09-20',itemId:'item-garganta',type:'scale',value:1},{id:'s3',date:'2026-09-22',itemId:'item-garganta',type:'scale',value:0}],['2026-09-20','2026-09-21','2026-09-22']);
+const symptomMatrix=comparisonMatrix([{id:SYMPTOM_SCALE_ITEM_IDS[0],name:'Indicador',type:'scale'}],[{id:'s1',date:'2026-09-20',itemId:SYMPTOM_SCALE_ITEM_IDS[0],type:'scale',value:3},{id:'s2',date:'2026-09-20',itemId:SYMPTOM_SCALE_ITEM_IDS[0],type:'scale',value:1},{id:'s3',date:'2026-09-22',itemId:SYMPTOM_SCALE_ITEM_IDS[0],type:'scale',value:0}],['2026-09-20','2026-09-21','2026-09-22']);
 assert.deepEqual(symptomMatrix.rows[0].cells.map(cell=>cell.values),[[1],[],[0]],'a comparação usa o último nível do dia e mantém ausências separadas de Inexistente');
 assert.equal(symptomMatrix.rows[0].average,.5,'a média do nível exclui dias sem registro e conta Inexistente apenas quando explicitamente lançado');
 assert.equal(totalDurationForCategory([...entries,{id:'5',date:'2026-09-20',itemId:'ads',type:'duration',minutes:30,categoryIdSnapshot:'work'},{id:'6',date:'2026-09-19',itemId:'habit',type:'boolean',value:true,categoryIdSnapshot:'work'}],[{id:'ads',categoryId:'other'},{id:'habit',categoryId:'work'}],'work',['2026-09-19','2026-09-20']),30,'considera snapshots da categoria, só durações e só datas selecionadas');

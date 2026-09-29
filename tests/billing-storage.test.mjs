@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, planSeedImport, syncEditedProvisionalSalesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
+import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
   constructor() { this.values = new Set(); }
@@ -100,6 +100,23 @@ writeBillingBundleToTransaction(fakeTx, bundle);
 assert.equal(targetStores.get('billing_sales').rows.length, 1);
 assert.equal(targetStores.get('billing_movements').rows[0].effective_date, null);
 assert.equal(targetStores.get('billing_audit').rows.length, 1);
+
+const accountRows=[
+  {sale_id:'linked',campaign_id:'cmp-1',account:'1234',value_brl:90,payment_status:'paid'},
+  {sale_id:'unlinked',campaign_id:'cmp-2',account:'1234',value_brl:40,payment_status:'pending'}
+];
+const accountAudit=[];
+const accountSales={openCursor(){const request={};let index=0;const next=()=>queueMicrotask(()=>{request.result=index<accountRows.length?{
+  value:accountRows[index],update(row){accountRows[index]=row},continue(){index++;next()}
+}:null;request.onsuccess?.()});next();return request}};
+const accountTransaction={objectStore:name=>name==='billing_sales'?accountSales:{add:row=>accountAudit.push(row)},abort(){throw new Error('transação abortada')}};
+migrateAccountAliasesToTransaction(accountTransaction,{'1234':'111-222-3333'},{'cmp-1':'111-222-3333'});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(accountRows[0].account,'111-222-3333');
+assert.equal(accountRows[0].value_brl,90,'a migração da conta preserva o valor financeiro');
+assert.equal(accountRows[0].payment_status,'paid','a migração preserva o recebimento');
+assert.equal(accountRows[1].account,'1234','sem campanha vinculada à conta completa, o registro não é associado por coincidência');
+assert.equal(accountAudit.length,1,'a associação histórica gera auditoria');
 
 const syncStores = new Map([
   ['billing_sales', { rows:[], get(id){const request={};queueMicrotask(()=>{request.result=this.rows.find(row=>row.sale_id===id);request.onsuccess?.()});return request}, add(row){this.rows.push(row)}, put(row){const index=this.rows.findIndex(item=>item.sale_id===row.sale_id);if(index<0)this.rows.push(row);else this.rows[index]=row} }],

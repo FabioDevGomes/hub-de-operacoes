@@ -29,7 +29,7 @@ export async function deliverD0GridToPreparador(capture) {
   if (location.origin !== 'http://127.0.0.1:8765' || !location.pathname.startsWith('/preparador-MCC/')) {
     return fail('A aba de destino não é o Preparador MCC local.');
   }
-  if (!capture || capture.schema !== 'mcc-d0-grid-v1' || capture.source !== 'mcc_chrome_extension' || !Array.isArray(capture.records)) {
+  if (!capture || capture.schema !== 'mcc-d0-grid-v2' || capture.source !== 'mcc_chrome_extension' || !Array.isArray(capture.records)) {
     return fail('A captura estrutural D0 chegou incompleta ou em formato incompatível.');
   }
   if (typeof window.__hubReceiveMccD0Grid !== 'function') {
@@ -47,7 +47,7 @@ export async function deliverD1GridToPreparador(capture) {
   if (location.origin !== 'http://127.0.0.1:8765' || !location.pathname.startsWith('/preparador-MCC/')) {
     return fail('A aba de destino não é o Preparador MCC local.');
   }
-  if (!capture || capture.schema !== 'mcc-d1-grid-v1' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension' || !Array.isArray(capture.records)) {
+  if (!capture || capture.schema !== 'mcc-d1-grid-v2' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension' || !Array.isArray(capture.records)) {
     return fail('A captura estrutural D−1 chegou incompleta ou em formato incompatível.');
   }
   if (typeof window.__hubReceiveMccD1Grid !== 'function') {

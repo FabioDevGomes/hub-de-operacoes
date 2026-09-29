@@ -16,7 +16,7 @@ Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
 1. Abra na MCC a visão de campanhas, selecione um único dia D0 explícito e aguarde a grade completa carregar. Deixe visíveis as colunas obrigatórias: campanha, conta, status de qualificação, impressões, cliques, conversões, custo médio, impr. primeira posição, impr. parte superior, orçamento, estratégia de lance e custo.
 2. Clique no ícone da extensão e em **Capturar D0 da MCC**. Uma ação captura, valida, abre/foca o Preparador e entrega os dados.
-3. A extensão associa semanticamente cabeçalhos e células. Só envia quando paginação/contagem indicam a lista completa, as campanhas são únicas, a associação linha/campanha é estrutural e os campos obrigatórios são legíveis. Se a MCC estiver incompleta, ambígua, truncada/virtualizada, sem data única explícita ou sem moeda identificável, a captura é bloqueada.
+3. A extensão associa semanticamente cabeçalhos e células e lê o número completo da conta na mesma célula do nome. Só envia quando paginação/contagem indicam a lista completa, as campanhas são únicas, a associação linha/campanha é estrutural e os campos obrigatórios são legíveis. Se a MCC estiver incompleta, ambígua, truncada/virtualizada, sem data única explícita, sem número completo da conta ou sem moeda identificável, a captura é bloqueada.
 4. O Preparador adapta a captura ao parser D0 existente, roda as validações usuais e deixa a prévia pronta para revisão. Confira os dados e alertas.
 5. A base permanece inalterada até você clicar manualmente em **Atualizar base**.
 
@@ -24,7 +24,7 @@ Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
 1. Na MCC, selecione uma única data explícita correspondente a ontem no fuso `America/Sao_Paulo`; texto relativo como “Yesterday” sem a data resolvida não é aceito.
 2. Role manualmente a grade até o final para que todas as campanhas estejam materializadas e clique em **Capturar D−1 da MCC**. A extensão não rola nem pagina automaticamente.
-3. A captura usa o mesmo leitor semântico e os mesmos 13 campos obrigatórios de D0, mas envia o contrato adicional `mcc-d1-grid-v1`. Data errada, intervalo, grade incompleta, cabeçalho ausente, nome duplicado, conta ilegível ou moeda ambígua bloqueiam a entrega.
+3. A captura usa o mesmo leitor semântico e os mesmos campos obrigatórios de D0, mas envia o contrato `mcc-d1-grid-v2`. Data errada, intervalo, grade incompleta, cabeçalho ausente, nome duplicado, número completo da conta ilegível ou moeda ambígua bloqueiam a entrega.
 4. O Preparador instala os dados no slot D−1 existente. Se D0 ainda não estiver carregado, mostra “D−1 recebido e validado. Aguardando D0 para gerar a prévia.” Não é criado manifesto aplicável nem gravação isolada.
 5. Quando D0 estiver carregado, o Preparador exige uma única data em cada período e que D0 seja o dia imediatamente seguinte a D−1. Nomes, contas, moedas e percentuais seguem as validações normais do manifesto `manifesto_mcc_v2`.
 6. Revise a prévia combinada. A base continua inalterada até clicar manualmente em **Atualizar base**.
@@ -86,7 +86,9 @@ O parser D0 atual consome 18 campos (`data`, `campanha`, `conta`, `target_geo`, 
 
 No caminho CSV, o popup lê os bytes do arquivo escolhido para transportá-los sem alterar o conteúdo, e o service worker abre/ativa a rota local específica do Preparador. Um script isolado reconstrói um `File` com o mesmo nome e bytes e o atribui ao campo existente do slot D0. No caminho de grade, o service worker envia somente a captura validada e chama `window.__hubReceiveMccD0Grid` ou `window.__hubReceiveMccD1Grid`, sempre em `world: 'MAIN'`: o mundo `ISOLATED` padrão compartilha o DOM, mas não vê as funções registradas em `window` pela página. O adaptador cria uma representação tabular em memória e usa `parseSource` com o papel D0/D−1 existente. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub. Nenhum dos caminhos grava até o usuário acionar `Atualizar base`.
 
-O contrato estável `mcc-d0-grid-v1` não mudou. D−1 acrescenta `mcc-d1-grid-v1` com `periodRole: 'd1'`, os mesmos metadados/células e validação de data esperada no fuso `America/Sao_Paulo`. Se D0 já estiver no Preparador, a data D0 deve ser exatamente o dia seguinte; a mesma verificação é aplicada ao carregar D0 depois de D−1. A origem continua sendo `mcc_chrome_extension`, e o papel é preservado pelo slot/parsing existente.
+Os contratos `mcc-d0-grid-v2` e `mcc-d1-grid-v2` exigem `account_id` no formato `000-000-0000` em cada campanha. O nome visível da conta permanece em `account`. D−1 inclui `periodRole: 'd1'` e valida a data esperada no fuso `America/Sao_Paulo`. Se D0 já estiver no Preparador, a data D0 deve ser exatamente o dia seguinte; a mesma verificação é aplicada ao carregar D0 depois de D−1. Para usar a captura direta após atualizar o projeto, recarregue a extensão em `chrome://extensions`. O fluxo manual de CSV continua disponível.
+
+Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Campanhas históricas que guardam apenas o prefixo são vinculadas a esse número quando o prefixo aponta para um único ID observado e não há conflito com o domínio histórico. Linhas diárias permanecem associadas à mesma campanha; vendas vinculadas recebem o ID completo sem alteração de valores. Prefixos ambíguos continuam sem vínculo automático. O texto colado de uma página MCC serve para diagnosticar o formato, mas não é importado como captura estrutural.
 
 ## Permissões
 

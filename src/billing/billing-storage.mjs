@@ -60,6 +60,29 @@ export function writeBillingBundleToTransaction(transaction, bundle) {
   for (const item of normalized.meta) meta.put(item);
 }
 
+export function migrateAccountAliasesToTransaction(transaction, aliases, campaignAccounts, { now = new Date().toISOString() } = {}) {
+  const resolved = new Map(Object.entries(aliases || {}).filter(([suffix, id]) => /^\d{4}$/.test(suffix) && /^\d{3}-\d{3}-\d{4}$/.test(String(id))));
+  if (!resolved.size) return;
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  const request = sales.openCursor();
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    const previous = cursor.value;
+    const account = resolved.get(String(previous.account || '').trim());
+    const linkedAccount = campaignAccounts?.[String(previous.campaign_id || '')];
+    if (account && account === linkedAccount && account !== previous.account) {
+      cursor.update({ ...previous, account, updated_at:now });
+      audit.add(makeAudit('account_id_linked_from_mcc', 'sale', previous.sale_id, [
+        { field:'account', old_value:previous.account, new_value:account }
+      ], { now }));
+    }
+    cursor.continue();
+  };
+  request.onerror = () => transaction.abort();
+}
+
 export function upsertProvisionalSalesToTransaction(transaction, provisionalSales, { now = new Date().toISOString() } = {}) {
   const entries = (provisionalSales || []).map(item => {
     const legacyId = String(item?.id || '').match(/^sale_([a-z0-9]+)$/i)?.[1];

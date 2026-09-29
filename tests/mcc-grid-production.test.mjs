@@ -61,8 +61,8 @@ const headers = [
   'Custo médio', '% de impr. (1ª posição) help_outline', 'Search top IS', 'Orçamento', 'Estratégia de lance', 'Custo'
 ];
 const rowValues = [
-  ['Oferta Zero', '7527', 'Qualificada', '0', '0', '0.00', '—', '0%', '—', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 0.00'],
-  ['Oferta Ativa', '7527', 'Qualificada', '1,234', '10', '0.00', 'US$ 1.25', '75%', '20%', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 12.50']
+  ['Oferta Zero', '7527 - Conta Alpha\n111-222-3333', 'Qualificada', '0', '0', '0.00', '—', '0%', '—', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 0.00'],
+  ['Oferta Ativa', '7527 - Conta Alpha\n111-222-3333', 'Qualificada', '1,234', '10', '0.00', 'US$ 1.25', '75%', '20%', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 12.50']
 ];
 
 function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length + ' de ' + rowValues.length, dateRange = 'Sep 23, 2026 – Sep 23, 2026', linkedColumns = [0], leadingCell = true, leadingCellCounts = null, leadingCellLink = false, leadingCellText = '' } = {}) {
@@ -76,7 +76,7 @@ function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length +
       prefixIndex === 0 ? leadingCellText : '',
       { role: 'gridcell', link: prefixIndex === 0 && leadingCellLink }
     ));
-    valuesRow.forEach((value, column) => cells.push(new Cell(value, { role: 'gridcell', link: linkedColumns.includes(column) })));
+    valuesRow.forEach((value, column) => cells.push(new Cell(value, { role: 'gridcell', link: linkedColumns.includes(column), linkText:column===1 ? String(value).split('\n')[0] : value })));
     return new Row(cells, false, index + 2);
   });
   const grid = new Grid([header, ...rows]);
@@ -113,7 +113,15 @@ const linkedAccount = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ l
 assert.equal(linkedAccount.ok, true, linkedAccount.error || 'links em outras colunas não devem criar deslocamentos concorrentes');
 assert.equal(linkedAccount.cellOffset, 1, 'usa o deslocamento estrutural consistente, não o link da Conta');
 assert.equal(linkedAccount.records[0].campaign, 'Oferta Zero');
-assert.equal(linkedAccount.records[0].account, '7527');
+assert.equal(linkedAccount.records[0].account, '7527 - Conta Alpha');
+assert.equal(linkedAccount.records[0].account_id, '111-222-3333');
+const accountWithoutPrefix = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
+  values:[[rowValues[0][0], 'Conta sem prefixo\n111-222-3333', ...rowValues[0].slice(2)], rowValues[1]],
+  linkedColumns:[0, 1]
+}).doc);
+assert.equal(accountWithoutPrefix.records[0].account,'Conta sem prefixo');
+assert.equal(accountWithoutPrefix.records[0].account_id,'111-222-3333');
+assert.equal(validateMccD0Capture(accountWithoutPrefix).ok,true,'o nome da conta pode não ter prefixo');
 assert.equal(linkedAccount.records[1].impressions, '1,234');
 
 const variableRowWidths = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ leadingCellCounts: [1, 2] }).doc);
@@ -122,7 +130,7 @@ assert.equal(variableRowWidths.cellOffset, null, 'expõe que o deslocamento vari
 assert.deepEqual(variableRowWidths.cellOffsets, [1, 2]);
 assert.equal(variableRowWidths.records[0].campaign, 'Oferta Zero');
 assert.equal(variableRowWidths.records[1].campaign, 'Oferta Ativa');
-assert.equal(variableRowWidths.records[1].account, '7527');
+assert.equal(variableRowWidths.records[1].account, '7527 - Conta Alpha');
 
 const competingCampaignAlignment = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
   leadingCellLink: true,
@@ -138,7 +146,7 @@ const alignedGridWithOtherLinks = collectMccGrid(D0_FIELDS, HEADER_ALIASES, make
 assert.equal(alignedGridWithOtherLinks.ok, true, alignedGridWithOtherLinks.error || 'com cabeçalho e células alinhados, links em outras colunas são irrelevantes');
 assert.equal(alignedGridWithOtherLinks.cellOffset, 0);
 assert.equal(alignedGridWithOtherLinks.records[0].campaign, 'Oferta Zero');
-assert.equal(alignedGridWithOtherLinks.records[0].account, '7527');
+assert.equal(alignedGridWithOtherLinks.records[0].account, '7527 - Conta Alpha');
 
 // Forma observada na MCC: as células compartilham essfield com os cabeçalhos;
 // o link da campanha não possui href e o texto da célula inclui controles extras.
@@ -154,7 +162,7 @@ function makeEssfieldDocument(footer = '1 - 2 de 2') {
   const header = new Row(columns.map(([text, essfield]) => new Cell(text, { role:'columnheader', essfield })), true, 1);
   const makeCampaignRow = (name, index) => {
     const values = [
-      '', '', `${name}\nsettings`, 'Conta Alpha\n0001', 'Qualificada\nDetalhes da qualificação',
+      '', '', `${name}\nsettings`, 'Conta Alpha\n111-222-3333', 'Qualificada\nDetalhes da qualificação',
       index ? '1,234' : '0', index ? '10' : '0', '0.00', '—', '0%', '—',
       'US$ 45.00/day', 'Maximizar conversões', index ? 'US$ 12.50' : 'US$ 0.00'
     ];
@@ -189,6 +197,7 @@ assert.equal(essfieldSnapshot.virtualized, false, 'linha de resumo não signific
 assert.equal(essfieldSnapshot.completeness, 'current-page-matches-apparent-total');
 assert.equal(essfieldSnapshot.records[0].campaign, 'Oferta Zero', 'controle de edição não contamina o nome');
 assert.equal(essfieldSnapshot.records[0].account, 'Conta Alpha', 'ID adicional não contamina o nome da conta');
+assert.equal(essfieldSnapshot.records[0].account_id, '111-222-3333', 'o número completo é lido da célula da conta');
 assert.equal(essfieldSnapshot.records[0].status, 'Qualificada', 'usa somente a primeira linha do status');
 assert.equal(essfieldSnapshot.fields.status.ambiguous, false, 'primary_status identifica a qualificação');
 assert.equal(validateMccD0Capture(essfieldSnapshot).ok, true, JSON.stringify(validateMccD0Capture(essfieldSnapshot).errors));
@@ -204,10 +213,18 @@ const dateOnlyButtonSnapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, visible
 assert.equal(dateOnlyButtonSnapshot.reportDate.value, '2026-09-23', 'aceita datas explícitas no texto visível de um botão, mesmo sem aria-label descritivo');
 const valid = validateMccD0Capture(snapshot);
 assert.equal(valid.ok, true, JSON.stringify(valid.errors));
-assert.equal(valid.capture.schema, 'mcc-d0-grid-v1', 'o contrato D0 estável permanece sem alteração');
+assert.equal(valid.capture.schema, 'mcc-d0-grid-v2', 'o contrato D0 exige o número completo da conta');
 assert.equal(valid.capture.records[0].currency, 'USD', 'extrai a moeda somente de código/símbolo explícito');
 assert.equal(valid.capture.records[0].impressions, '0', 'zero permanece explícito');
 assert.equal(valid.capture.records[0].avg_cost, '—', 'traço permanece ausência, não zero');
+const missingAccountId = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
+  values:[[rowValues[0][0], '7527 - Conta Alpha', ...rowValues[0].slice(2)], rowValues[1]]
+}).doc);
+assert.ok(validateMccD0Capture(missingAccountId).errors.some(error => error.code === 'account_id'), 'a captura para se o número completo estiver ausente');
+const ambiguousAccountId = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
+  values:[[rowValues[0][0], '7527 - Conta Alpha\n111-222-3333\n999-888-7777', ...rowValues[0].slice(2)], rowValues[1]]
+}).doc);
+assert.ok(validateMccD0Capture(ambiguousAccountId).errors.some(error => error.code === 'account_id'), 'a captura para se a célula contiver dois números de conta');
 
 const referenceNow = new Date('2026-09-24T15:00:00.000Z');
 assert.equal(expectedMccD1Date(referenceNow), '2026-09-23', 'ontem é calculado no fuso operacional, não em UTC');
@@ -215,7 +232,7 @@ assert.equal(expectedMccD1Date(new Date('2026-09-24T02:30:00.000Z')), '2026-09-2
 const d1Snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 23, 2026' }).doc);
 const validD1 = validateMccD1Capture(d1Snapshot, { now:referenceNow });
 assert.equal(validD1.ok, true, JSON.stringify(validD1.errors));
-assert.equal(validD1.capture.schema, 'mcc-d1-grid-v1');
+assert.equal(validD1.capture.schema, 'mcc-d1-grid-v2');
 assert.equal(validD1.capture.periodRole, 'd1');
 assert.equal(validD1.capture.records[0].impressions, '0', 'D−1 preserva zero confirmado');
 assert.equal(validD1.capture.records[0].avg_cost, '—', 'D−1 preserva ausência sem convertê-la em zero');
@@ -288,6 +305,7 @@ assert.equal(parsedGrid.source, 'mcc_chrome_extension');
 assert.deepEqual(Array.from(parsedGrid.dates), ['2026-09-23']);
 assert.equal(parsedGrid.records.length, 2);
 assert.equal(parsedGrid.records[0].moeda, 'USD');
+assert.equal(parsedGrid.records[0].conta_id, '111-222-3333');
 assert.equal(parsedGrid.records[0].raw.impressions, '0');
 assert.equal(parsedGrid.records[0].raw.avg_cost, '—');
 assert.equal(parsedGrid.records[0].raw.abs_top_share, '0');
@@ -410,7 +428,7 @@ try {
   const deliveredD1 = await deliverD1GridToPreparador(validD1.capture);
   assert.equal(deliveredD1.ok, true);
   assert.equal(deliveredD1.waitingForD0, true);
-  assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v1');
+  assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v2');
 } finally {
   for (const [key, descriptor] of previous) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);

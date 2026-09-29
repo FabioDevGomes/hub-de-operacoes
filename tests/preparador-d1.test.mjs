@@ -19,6 +19,8 @@ assert.match(dateTools.reportDatePairIssue({ dates:['2026-09-23','2026-09-24'] }
 
 const decoderStart = html.indexOf('    const MCC_GRID_COLUMNS = [');
 const decoderEnd = html.indexOf('    function uniqueRecord(', decoderStart);
+const accountIdStart = html.indexOf('    function canonicalAccountId(');
+const accountIdEnd = html.indexOf('    function currencyFromText(', accountIdStart);
 assert.ok(decoderStart >= 0 && decoderEnd > decoderStart, 'adaptadores estruturais do Preparador não encontrados');
 const decoderContext = vm.createContext({
   ABSENT:new Set(['', '--', '—', '-', 'n/a']),
@@ -31,14 +33,14 @@ const decoderContext = vm.createContext({
   TextEncoder,
   Uint8Array
 });
-vm.runInContext(`${html.slice(decoderStart, decoderEnd)}\nglobalThis.__decodeD1 = decodeMccD1GridCapture;`, decoderContext);
+vm.runInContext(`${html.slice(accountIdStart, accountIdEnd)}${html.slice(decoderStart, decoderEnd)}\nglobalThis.__decodeD1 = decodeMccD1GridCapture;`, decoderContext);
 const requiredFields = ['campaign','account','status','impressions','clicks','conversions','avg_cost','abs_top_share','top_share','budget','bid_strategy','cost'];
 const captureDate = expectedMccD1Date();
 const capture = {
-  schema:'mcc-d1-grid-v1', periodRole:'d1', source:'mcc_chrome_extension', reportDate:captureDate, locale:'en-US',
+  schema:'mcc-d1-grid-v2', periodRole:'d1', source:'mcc_chrome_extension', reportDate:captureDate, locale:'en-US',
   pagination:{ first:1, last:1, total:1 }, campaignCount:1,
   fields:Object.fromEntries(requiredFields.map(key=>[key,{found:true,hidden:false,ambiguous:false}])),
-  records:[{campaign:'Campanha D1',account:'Conta Alpha',status:'Qualificada',currency:'USD',impressions:'0',clicks:'—',conversions:'0',avg_cost:'US$ 0.00',abs_top_share:'0%',top_share:'—',budget:'US$ 45.00/day',bid_strategy:'Maximizar conversões',cost:'US$ 0.00'}]
+  records:[{campaign:'Campanha D1',account:'Conta Alpha',account_id:'111-222-3333',status:'Qualificada',currency:'USD',impressions:'0',clicks:'—',conversions:'0',avg_cost:'US$ 0.00',abs_top_share:'0%',top_share:'—',budget:'US$ 45.00/day',bid_strategy:'Maximizar conversões',cost:'US$ 0.00'}]
 };
 const decoded = await decoderContext.__decodeD1(capture);
 assert.equal(decoded.source, 'mcc_chrome_extension');
@@ -83,8 +85,12 @@ const d1Projection = manifest => ({
 });
 assert.deepEqual(JSON.parse(JSON.stringify(d1Projection(directManifest))),JSON.parse(JSON.stringify(d1Projection(manualManifest))), 'a origem direta e CSV equivalente geram as mesmas métricas D−1 no manifesto');
 const offerOne = directManifest.campanhas.find(campaign=>campaign.nome_campanha_exato==='Oferta um');
+assert.equal(offerOne.metricas_D_menos_1.conta_id.valor,'111-222-3333');
+assert.equal(offerOne.metricas_D_zero.conta_id.valor,'111-222-3333');
 assert.equal(offerOne.metricas_D_menos_1.impressoes.estado, 'zero_confirmado');
 assert.equal(offerOne.metricas_D_menos_1.cliques_google.estado, 'ausente');
+const accountConflictSource={...d0Source,records:d0Source.records.map((record,index)=>index===0?{...record,conta_id:'999-888-7777'}:record)};
+assert.ok(businessContext.__buildManifest(directD1Source,accountConflictSource).critical.includes('Há associação financeira ambígua.'),'IDs de conta diferentes em D−1 e D0 bloqueiam a associação');
 
 const attemptStart = html.indexOf('    function attemptBuild() {');
 const attemptEnd = html.indexOf('    async function loadDecoded(', attemptStart);

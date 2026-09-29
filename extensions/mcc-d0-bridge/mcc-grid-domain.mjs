@@ -101,10 +101,12 @@ export function validateMccD0Capture(snapshot) {
   if (currencyMissing.length) errors.push({ code: 'currency', message: `Moeda não identificável por código/símbolo explícito em ${currencyMissing.length} campanha(s): ${currencyMissing.slice(0, 5).join(', ')}. Símbolo $ sem código é ambíguo.` });
   const accountMissing = records.filter(record => !String(record.account || '').trim()).map(record => record.campaign);
   if (accountMissing.length) errors.push({ code: 'account', message: `Conta ausente em ${accountMissing.length} campanha(s): ${accountMissing.slice(0, 5).join(', ')}.` });
+  const accountIdsMissing = records.filter(record => !/^\d{3}-\d{3}-\d{4}$/.test(String(record.account_id || ''))).map(record => record.campaign);
+  if (accountIdsMissing.length) errors.push({ code: 'account_id', message: `Número completo da conta ausente ou ambíguo em ${accountIdsMissing.length} campanha(s): ${accountIdsMissing.slice(0, 5).join(', ')}. Confira se o número aparece abaixo do nome da conta na grade MCC.` });
   return errors.length ? { ok: false, errors } : {
     ok: true,
     capture: {
-      schema: 'mcc-d0-grid-v1',
+      schema: 'mcc-d0-grid-v2',
       source: 'mcc_chrome_extension',
       reportDate: snapshot.reportDate.value,
       locale: snapshot.locale || 'en-US',
@@ -156,7 +158,7 @@ export function validateMccD1Capture(snapshot, { now = new Date() } = {}) {
     ok: true,
     capture: {
       ...validation.capture,
-      schema: 'mcc-d1-grid-v1',
+      schema: 'mcc-d1-grid-v2',
       periodRole: 'd1'
     }
   };

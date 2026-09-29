@@ -33,6 +33,12 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
   };
   const all = (root, selector) => [...(root?.querySelectorAll?.(selector) || [])];
   const namedLinks = cell => all(cell, 'a, [role="link"]').filter(link => displayedText(link));
+  const accountIdIn = cell => {
+    const values = [cell?.innerText, cell?.textContent, cell?.getAttribute?.('aria-label')];
+    const ids = new Set(values.flatMap(value => [...String(value ?? '').matchAll(/\b\d{3}[-‐‑–]\d{3}[-‐‑–]\d{4}\b/g)]
+      .map(match => match[0].replace(/[-‐‑–]/g, '-'))));
+    return ids.size === 1 ? [...ids][0] : null;
+  };
   const cellsIn = (row, selector) => all(row, selector);
   const candidateSelector = '[role="grid"], [role="table"], table';
   const candidates = all(doc, candidateSelector);
@@ -147,7 +153,12 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
     const record = {};
     for (const [field, cell] of fieldCells) {
       if (field === 'campaign') record[field] = name;
-      else if (field === 'account' && namedLinks(cell).length === 1) record[field] = displayedText(namedLinks(cell)[0]);
+      else if (field === 'account') {
+        record.account_id = accountIdIn(cell);
+        const label = displayedText(cell).replace(record.account_id || '', '').trim();
+        const linkedLabel = namedLinks(cell).length === 1 ? displayedText(namedLinks(cell)[0]).replace(record.account_id || '', '').trim() : '';
+        record[field] = linkedLabel || label || displayedText(cell);
+      }
       else if (field === 'status') record[field] = String(cell?.innerText || '').split(/\r?\n/).map(cleanDecorative).find(Boolean) || displayedText(cell);
       else record[field] = displayedText(cell);
     }

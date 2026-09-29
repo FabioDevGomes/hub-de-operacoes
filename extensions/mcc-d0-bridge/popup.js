@@ -203,7 +203,7 @@ function formatSnapshot(snapshot) {
   if (snapshot.unknownHeaders.length) lines.push('', `Cabeçalhos não mapeados: ${snapshot.unknownHeaders.join(' | ')}`);
   lines.push('', 'AMOSTRA DE ATÉ 5 LINHAS:');
   for (const record of snapshot.records.slice(0, 5)) {
-    lines.push(`- ${record.campaign || '(sem campanha)'} | conta: ${record.account || '—'} | impressões: ${record.impressions || '—'} | cliques: ${record.clicks || '—'} | conversões: ${record.conversions || '—'} | custo: ${record.cost || '—'}`);
+    lines.push(`- ${record.campaign || '(sem campanha)'} | conta: ${record.account || '—'} · ${record.account_id || 'ID ausente'} | impressões: ${record.impressions || '—'} | cliques: ${record.clicks || '—'} | conversões: ${record.conversions || '—'} | custo: ${record.cost || '—'}`);
   }
   lines.push('', 'LIMITAÇÕES:');
   snapshot.limitations.forEach(item => lines.push(`- ${item}`));

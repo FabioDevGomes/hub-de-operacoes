@@ -292,4 +292,38 @@ assert.equal(editedSaleResult.sale.pais_codigo,'AU');
 assert.equal(db.salesAdjustmentMap(editedSaleResult.base).get('cmp_sale_2').commissionAdjustment,250,'a edição atualiza o valor usado pelos ajustes da campanha');
 const collisionBase=db.addProvisionalSale(editedSaleResult.base,{campanha_id:'cmp_sale',data:'2026-09-26',valor_brl:30,pais_codigo:'DE',chave_duplicidade:'another-sale-key'}).base;
 assert.throws(()=>db.updateProvisionalSale(collisionBase,{id:saleResult.sale.id,campanha_id:'cmp_sale',data:'2026-09-26',hora:'',produto:'Outro produto',plataforma:'Gurumedia',valor_brl:30,pais_codigo:'DE',chave_duplicidade:'another-sale-key'}),/outro lançamento já registrado/,'edição não pode colidir com uma venda ativa existente');
+
+const oldAccounts=db.create();
+oldAccounts.campanhas.push(
+  {id:'old-a',nome_mcc:'Campanha antiga A',nome_exibicao:'Campanha antiga A',status:'ativa',conta_sufixo:'1234'},
+  {id:'old-b',nome_mcc:'Campanha antiga B',nome_exibicao:'Campanha antiga B',status:'pausada',conta_sufixo:'1234'},
+  {id:'old-other-domain',nome_mcc:'Campanha antiga de outra loja',nome_exibicao:'Outra loja',status:'pausada',conta_sufixo:'1234',conta_dominio:'.other.shop'}
+);
+oldAccounts.diario.push({campanha_id:'old-b',data:'2026-09-20',celulas:{B:{value:7}},fontes:['manifesto']});
+oldAccounts.vendas_provisorias.push({id:'old-sale',campanha_id:'old-b',conta:'1234',data:'2026-09-20',valor_brl:50,status:'provisoria'});
+const fullAccountManifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-09-29']}},campanhas:[{
+  nome_campanha_exato:'Campanha antiga A',
+  metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Loja A .example.shop'},conta_id:{valor:'111-222-3333'}}
+}]};
+const linkedAccounts=db.importManifest(oldAccounts,fullAccountManifest,()=>[],{trackEvents:false}).base;
+assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-a').conta_id,'111-222-3333');
+assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-b').conta_id,'111-222-3333','campanha histórica da mesma conta ganha o ID completo');
+assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-other-domain').conta_id,undefined,'domínio histórico conflitante impede uma associação presumida');
+assert.equal(linkedAccounts.contas_identidade['1234'],'111-222-3333');
+assert.equal(linkedAccounts.diario.find(item=>item.campanha_id==='old-b').celulas.B.value,7,'métricas históricas continuam ligadas à campanha original');
+assert.equal(linkedAccounts.vendas_provisorias[0].conta,'111-222-3333','venda histórica ligada à campanha usa o ID completo');
+assert.equal(oldAccounts.campanhas[1].conta_id,undefined,'a importação não modifica a base de entrada');
+assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campanhas:[{...fullAccountManifest.campanhas[0],metricas_D_zero:{...fullAccountManifest.campanhas[0].metricas_D_zero,conta_id:{valor:'999-888-7777'}}}]},()=>[]),/outra conta completa/);
+assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha de outra conta',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Outra loja'},conta_id:{valor:'999-888-7777'}}}]},()=>[],{trackEvents:false}),/prefixo histórico 1234/,'um conflito posterior bloqueia associação histórica já estabelecida');
+
+const noPrefix=db.importManifest(db.create(),{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha sem prefixo',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'Loja sem prefixo'},conta_id:{valor:'444-555-6666'}}}]},()=>[],{trackEvents:false}).base;
+assert.equal(noPrefix.campanhas[0].conta_id,'444-555-6666');
+assert.equal(noPrefix.campanhas[0].conta_sufixo,undefined,'novas contas não dependem do prefixo');
+
+const ambiguousBase=db.create();
+ambiguousBase.campanhas.push({id:'old-c',nome_mcc:'Campanha antiga C',nome_exibicao:'Campanha antiga C',status:'pausada',conta_sufixo:'1234'});
+const ambiguousManifest={...fullAccountManifest,campanhas:[fullAccountManifest.campanhas[0],{nome_campanha_exato:'Campanha outra conta',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Outra loja'},conta_id:{valor:'999-888-7777'}}}]};
+const ambiguousResult=db.importManifest(ambiguousBase,ambiguousManifest,()=>[],{trackEvents:false}).base;
+assert.equal(ambiguousResult.campanhas.find(item=>item.id==='old-c').conta_id,undefined,'prefixo ambíguo não reatribui campanha histórica');
+assert.equal(ambiguousResult.contas_identidade['1234'],undefined);
 console.log('database module ok');

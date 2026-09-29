@@ -285,6 +285,7 @@
       date: ['data', 'dia', 'day', 'date'],
       campaign: ['campanha', 'nome da campanha', 'campaign', 'campaign name'],
       account: ['conta', 'nome da conta', 'account', 'account name', 'cliente', 'nome do cliente'],
+      account_id: ['id da conta', 'numero da conta', 'customer id', 'account id', 'customer number'],
       target_geo: ['target geo', 'targeting geo', 'geo codes', 'codigos geo'],
       campaign_state: ['status da campanha', 'estado da campanha', 'campaign status', 'campaign state'],
       status: ['status', 'estado', 'status de qualificacao', 'qualification status'],
@@ -422,14 +423,15 @@
       });
     }
 
-    function writePanelBase(db, base, { billingStorage=null, provisionalSales=[], mccSales=[] }={}) {
+    function writePanelBase(db, base, { billingStorage=null, provisionalSales=[], mccSales=[], accountAliases={} }={}) {
       return new Promise((resolve, reject) => {
-        const billingNames=billingStorage&&(provisionalSales.length||mccSales.length)?billingStorage.BILLING_STORE_NAMES:[];
+        const billingNames=billingStorage&&(provisionalSales.length||mccSales.length||Object.keys(accountAliases).length)?billingStorage.BILLING_STORE_NAMES:[];
         const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE, ...billingNames], 'readwrite');
         const persistedBase = panelClone(base), eventStore = transaction.objectStore(PANEL_EVENT_STORE);
         const events = persistedBase.event_log || [];
         delete persistedBase.event_log;
         transaction.objectStore(PANEL_BASE_STORE).put(persistedBase, PANEL_BASE_KEY);
+        if (billingNames.length && Object.keys(accountAliases).length) billingStorage.migrateAccountAliasesToTransaction(transaction, accountAliases, Object.fromEntries((base.campanhas||[]).filter(campaign=>campaign.conta_id).map(campaign=>[campaign.id,campaign.conta_id])));
         if (billingNames.length) billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales);
         if (billingNames.length) billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales);
         const keys = eventStore.getAllKeys();
@@ -516,8 +518,9 @@
       base.manifesto_atual = panelClone(manifest);
       const rows = new Map(base.diario.map(item => [`${item.campanha_id}|${item.data}`, item]));
       for (const source of manifest?.campanhas || []) {
-        const campaign = ensurePanelCampaign(base, source.nome_campanha_exato), accountPrefix = String(panelValue(source.metricas_D_zero?.conta) ?? panelValue(source.metricas_D_menos_1?.conta) ?? '').trim().match(/^(\d{4})(?!\d)/)?.[1] ?? null, made = rowFactory(source), incomingRows = Array.isArray(made) ? made : [made];
-        if (accountPrefix) campaign.conta_sufixo = accountPrefix;
+        const campaign = ensurePanelCampaign(base, source.nome_campanha_exato), accountId = canonicalAccountId(panelValue(source.metricas_D_zero?.conta_id) ?? panelValue(source.metricas_D_menos_1?.conta_id)), accountPrefix = String(panelValue(source.metricas_D_zero?.conta) ?? panelValue(source.metricas_D_menos_1?.conta) ?? '').trim().match(/^(\d{4})(?!\d)/)?.[1] ?? null, made = rowFactory(source), incomingRows = Array.isArray(made) ? made : [made];
+        if (accountId) campaign.conta_id = accountId;
+        if (accountPrefix && !campaign.conta_sufixo) campaign.conta_sufixo = accountPrefix;
         for (const row of incomingRows.filter(Boolean)) {
           const date = row.date || source.metricas_D_menos_1?.data?.valor || manifest?.separacao_temporal?.D_menos_1?.datas_detectadas?.[0];
           if (!date) continue;
@@ -572,8 +575,9 @@
         base.atualizado_em = new Date().toISOString();
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
-        const billingStorage=linkedSales.length||mccSales.length?await import('../billing/billing-storage.mjs?v=3'):null;
-        await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales });
+        const accountAliases=base.contas_identidade||{};
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=3'):null;
+        await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em, provisionalSaleIds:linkedSales.map(sale=>String(sale.id)) }); channel.close(); }
         return { base, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };
       } finally {
@@ -698,6 +702,13 @@
       } catch { return { valor:null, estado:'invalido', original:String(raw) }; }
     }
 
+    function canonicalAccountId(raw) {
+      const value = String(raw ?? '').trim();
+      if (/^\d{3}-\d{3}-\d{4}$/.test(value)) return value;
+      if (/^\d{10}$/.test(value)) return `${value.slice(0, 3)}-${value.slice(3, 6)}-${value.slice(6)}`;
+      return null;
+    }
+
     function currencyFromText(raw) {
       const text = String(raw ?? '').toUpperCase().trim();
       for (const code of ['BRL','USD','EUR','GBP','CAD','AUD','MXN']) if (new RegExp(`\\b${code}\\b`).test(text)) return code;
@@ -746,9 +757,11 @@
         rowDates.forEach(d => dates.add(d));
         const raw = {};
         Object.entries(mapping).forEach(([key, index]) => raw[key] = row[index]);
+        const accountId = canonicalAccountId(raw.account_id);
+        if (raw.account_id?.trim() && !accountId) throw new Error(`Número completo da conta inválido na linha ${line}.`);
         let currency = currencyFromText(raw.currency);
         if (!currency) for (const key of ['cost','avg_cost','budget']) { currency = currencyFromText(raw[key]); if (currency) break; }
-        records.push({ linha_origem:line, nome_campanha_exato:campaign, data_linha:rowDates.length === 1 ? rowDates[0] : null, conta:raw.account?.trim() || null, estado_campanha:raw.campaign_state?.trim() || null, status_qualificacao:raw.status?.trim() || null, status_campanha:raw.status?.trim() || raw.campaign_state?.trim() || null, geo:raw.target_geo?.trim() || null, moeda:currency || raw.currency?.trim() || null, raw });
+        records.push({ linha_origem:line, nome_campanha_exato:campaign, data_linha:rowDates.length === 1 ? rowDates[0] : null, conta:raw.account?.trim() || null, conta_id:accountId, estado_campanha:raw.campaign_state?.trim() || null, status_qualificacao:raw.status?.trim() || null, status_campanha:raw.status?.trim() || raw.campaign_state?.trim() || null, geo:raw.target_geo?.trim() || null, moeda:currency || raw.currency?.trim() || null, raw });
       });
       const byName = new Map();
       records.forEach(record => { const arr = byName.get(record.nome_campanha_exato) || []; arr.push(record.linha_origem); byName.set(record.nome_campanha_exato, arr); });
@@ -759,7 +772,7 @@
     }
 
     const MCC_GRID_COLUMNS = [
-      ['campaign','Campaign'], ['account','Account'], ['status','Status de qualificação'], ['currency','Currency code'],
+      ['campaign','Campaign'], ['account','Account'], ['account_id','Customer ID'], ['status','Status de qualificação'], ['currency','Currency code'],
       ['impressions','Impressions'], ['clicks','Clicks'], ['conversions','Conversions'], ['avg_cost','Average cost'],
       ['abs_top_share','Search absolute top impression share'], ['top_share','Search top impression share'],
       ['budget','Budget'], ['bid_strategy','Bid strategy type'], ['cost','Cost']
@@ -800,7 +813,7 @@
     function csvCell(value) { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
 
     async function decodeMccGridCapture(capture) {
-      if (!capture || capture.schema !== 'mcc-d0-grid-v1' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem ou versão da captura MCC incompatível.');
+      if (!capture || capture.schema !== 'mcc-d0-grid-v2' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem ou versão da captura MCC incompatível. Atualize a extensão e tente novamente.');
       if (!Array.isArray(capture.records) || capture.records.length !== capture.campaignCount || !capture.records.length) throw new Error('A contagem de campanhas da captura não confere.');
       if (!capture.pagination || capture.pagination.first !== 1 || capture.pagination.last !== capture.pagination.total || capture.records.length !== capture.pagination.total) throw new Error('A captura recebida não contém a página completa da MCC.');
       const requiredFields = ['campaign','account','status','impressions','clicks','conversions','avg_cost','abs_top_share','top_share','budget','bid_strategy','cost'];
@@ -811,6 +824,8 @@
       if (names.some(name => !name) || new Set(names).size !== names.length) throw new Error('Há nome de campanha vazio ou duplicado; não associei linhas arbitrariamente.');
       const accountMissing = capture.records.filter(record => !String(record.account || '').trim());
       if (accountMissing.length) throw new Error(`Conta ilegível em ${accountMissing.length} campanha(s); a captura não foi aceita.`);
+      const accountIdMissing = capture.records.filter(record => !canonicalAccountId(record.account_id));
+      if (accountIdMissing.length) throw new Error(`Número completo da conta ilegível em ${accountIdMissing.length} campanha(s); a captura não foi aceita.`);
       const headers = [...MCC_GRID_COLUMNS];
       for (const [fieldName, header] of MCC_GRID_OPTIONAL_COLUMNS) {
         if (capture.fields?.[fieldName]?.found && !capture.fields?.[fieldName]?.ambiguous) headers.push([fieldName, header]);
@@ -835,11 +850,11 @@
     }
 
     async function decodeMccD1GridCapture(capture) {
-      if (!capture || capture.schema !== 'mcc-d1-grid-v1' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem, papel ou versão da captura MCC D−1 incompatível.');
+      if (!capture || capture.schema !== 'mcc-d1-grid-v2' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem, papel ou versão da captura MCC D−1 incompatível. Atualize a extensão e tente novamente.');
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(capture.reportDate || '') || extractDates(capture.reportDate).length !== 1) throw new Error('D−1 precisa conter uma única data explícita da MCC.');
       const expectedDate = expectedMccD1ReportDate();
       if (capture.reportDate !== expectedDate) throw new Error(`A data capturada foi ${capture.reportDate}, mas D−1 esperado para hoje é ${expectedDate} (${MCC_OPERATIONAL_TIME_ZONE}). A captura não foi instalada.`);
-      const decoded = await decodeMccGridCapture({ ...capture, schema:'mcc-d0-grid-v1' });
+      const decoded = await decodeMccGridCapture({ ...capture, schema:'mcc-d0-grid-v2' });
       const text = decoded.text.replace(/^Relatório D0:/, 'Relatório D−1:');
       const bytes = new TextEncoder().encode(text);
       const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -976,12 +991,14 @@
         if (d0.duplicateNames[name]) observations.push('Campanha duplicada em D0; métricas não associadas.');
         if (hasD1 && !names1.has(name)) observations.push('Campanha presente apenas em D0.');
         if (hasD1 && !names0.has(name)) observations.push('Campanha presente apenas em D−1.');
-        if (r1 && r0 && r1.conta && r0.conta && r1.conta !== r0.conta) { pending = true; observations.push('Mesmo nome exato, mas contas diferentes entre D−1 e D0.'); }
+        if (r1 && r0 && (r1.conta_id && r0.conta_id ? r1.conta_id !== r0.conta_id : r1.conta && r0.conta && r1.conta !== r0.conta)) { pending = true; observations.push('Mesmo nome exato, mas contas diferentes entre D−1 e D0.'); }
         if (r1 && r0 && r1.moeda && r0.moeda && r1.moeda !== r0.moeda) { pending = true; observations.push('Mesmo nome exato, mas moedas diferentes entre D−1 e D0.'); }
         const date1 = r1?.data_linha || (d1?.dates.length === 1 ? d1.dates[0] : null);
         const date0 = r0?.data_linha || (d0.dates.length === 1 ? d0.dates[0] : null);
         const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), estado_campanha:stateValue(r1?.estado_campanha), status_qualificacao:stateValue(r1?.status_qualificacao), status_campanha:stateValue(r1?.status_campanha), geo:stateValue(r1?.geo), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
         const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
+        metrics.conta_id = stateValue(r1?.conta_id);
+        metrics0.conta_id = stateValue(r0?.conta_id);
         const todayCost = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), custo_total_destino_totais_coluna_M:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
         if ([metrics.impressoes, metrics.cliques_google, metrics.conversoes, metrics.valor_conversao].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D−1.'); }
         if ([metrics0.impressoes, metrics0.cliques_google, metrics0.conversoes, metrics0.valor_conversao, metrics0.custo_medio, metrics0.porcentagem_impressao_primeira_posicao, metrics0.porcentagem_impressao_parte_superior, metrics0.orcamento_diario, metrics0.custo_total].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D0.'); }
@@ -1046,14 +1063,15 @@
 
     function buildPreviewRows(manifest, role, d1Source, d0Source) {
       const source = role === 'd1' ? d1Source : d0Source;
+      const previewAccount = data => data.conta_id?.valor ? { ...data.conta, valor:`${data.conta?.valor || 'Conta'} · ${data.conta_id.valor}` } : data.conta;
       return manifest.campanhas.map(campaign => {
         const record = uniqueRecord(source, campaign.nome_campanha_exato);
         if (role === 'd1') {
           const data = campaign.metricas_D_menos_1;
-          return { campanha:campaign.nome_campanha_exato, conta:data.conta, status:data.status_campanha, impressoes:data.impressoes, cliques:data.cliques_google, conversoes:data.conversoes, primeira_posicao:data.porcentagem_impressao_primeira_posicao, parte_superior:data.porcentagem_impressao_parte_superior, custo:data.custo_total };
+          return { campanha:campaign.nome_campanha_exato, conta:previewAccount(data), status:data.status_campanha, impressoes:data.impressoes, cliques:data.cliques_google, conversoes:data.conversoes, primeira_posicao:data.porcentagem_impressao_primeira_posicao, parte_superior:data.porcentagem_impressao_parte_superior, custo:data.custo_total };
         }
         const data = campaign.metricas_D_zero;
-        return { campanha:campaign.nome_campanha_exato, conta:data.conta, status:data.status_campanha, impressoes:data.impressoes, cliques:data.cliques_google, conversoes:data.conversoes, primeira_posicao:data.porcentagem_impressao_primeira_posicao, parte_superior:data.porcentagem_impressao_parte_superior, custo:data.custo_total };
+        return { campanha:campaign.nome_campanha_exato, conta:previewAccount(data), status:data.status_campanha, impressoes:data.impressoes, cliques:data.cliques_google, conversoes:data.conversoes, primeira_posicao:data.porcentagem_impressao_primeira_posicao, parte_superior:data.porcentagem_impressao_parte_superior, custo:data.custo_total };
       });
     }
 

@@ -128,7 +128,7 @@ function bind(root, toast) {
     if (!event.target.matches('[name="source_campaign_id"]')) return;
     const form = root.querySelector('#billingForm');
     const campaign = form.__manualSaleCampaigns?.find(item => item.id === event.target.value);
-    if (campaign) form.elements.account.value = campaign.conta_sufixo || '';
+    if (campaign) form.elements.account.value = campaign.conta_id || campaign.conta_sufixo || '';
   });
   root.querySelector('#billingMovementForm').addEventListener('submit', event => saveMovementForm(event, root, toast));
   root.querySelector('#billingModal').addEventListener('click', event => { if (event.target.id === 'billingModal') closeSaleModal(root); });
@@ -493,7 +493,7 @@ function openSaleModal(root, sale = null) {
     const campaigns = Array.isArray(options.campaigns) ? options.campaigns : [];
     const countries = Array.isArray(options.countries) ? options.countries : [];
     form.__manualSaleCampaigns = campaigns;
-    form.elements.source_campaign_id.innerHTML = campaigns.map(item => `<option value="${esc(item.id)}">${esc(item.nome_exibicao || item.nome_mcc || item.id)}${item.conta_sufixo ? ` · conta ${esc(item.conta_sufixo)}` : ''}</option>`).join('');
+    form.elements.source_campaign_id.innerHTML = campaigns.map(item => `<option value="${esc(item.id)}">${esc(item.nome_exibicao || item.nome_mcc || item.id)}${item.conta_id || item.conta_sufixo ? ` · conta ${esc(item.conta_id || item.conta_sufixo)}` : ''}</option>`).join('');
     form.elements.source_country_code.innerHTML = countries.map(item => `<option value="${esc(item.code)}">${esc(item.name)} · ${esc(item.code)}</option>`).join('');
     for (const field of form.querySelectorAll('input, textarea, select')) {
       if (!['sale_id','sale_date','product','platform','value_brl','source_campaign_id','source_country_code','source_sale_time'].includes(field.name)) field.disabled = true;
@@ -516,7 +516,7 @@ function openSaleModal(root, sale = null) {
     form.elements.source_country_code.value = sale.country_code || 'ZZ';
     form.elements.source_sale_time.value = sale.sale_time || '';
     const campaign = form.__manualSaleCampaigns?.find(item => item.id === form.elements.source_campaign_id.value);
-    if (campaign) form.elements.account.value = campaign.conta_sufixo || '';
+    if (campaign) form.elements.account.value = campaign.conta_id || campaign.conta_sufixo || '';
   } else {
     form.elements.source_campaign_id.value = '';
     form.elements.source_country_code.value = '';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {access,readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
@@ -14,6 +14,7 @@ const timeCss=await readFile(new URL('../dist/meu-tempo/meu-tempo.css',import.me
 const copyFichaView=await readFile(new URL('../dist/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
 const copyFichaDomain=await readFile(new URL('../dist/copy-ficha/copy-ficha-domain.mjs',import.meta.url),'utf8');
 const copyFichaCss=await readFile(new URL('../dist/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
+const copyFichaOutputCss=await readFile(new URL('../dist/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
 const copyFichaPendingCss=await readFile(new URL('../dist/copy-ficha/copy-ficha-pending.css',import.meta.url),'utf8');
 const macroDomain=await readFile(new URL('../dist/control-macro/domain.js',import.meta.url),'utf8');
 const macroCss=await readFile(new URL('../dist/control-macro/control-macro.css',import.meta.url),'utf8');
@@ -27,7 +28,6 @@ const personalFinanceView=await readFile(new URL('../dist/personal-finance/perso
 const personalFinanceSync=await readFile(new URL('../dist/personal-finance/personal-finance-sync.mjs',import.meta.url),'utf8');
 const waterReminder=await readFile(new URL('../dist/meu-tempo/water-reminder.mjs',import.meta.url),'utf8');
 const personalFinanceCss=await readFile(new URL('../dist/personal-finance/personal-finance.css',import.meta.url),'utf8');
-const billingSeed=JSON.parse(await readFile(new URL('../dist/billing/seed-v1.json',import.meta.url),'utf8'));
 assert.ok(html.includes('data:image/png;base64,'),'favicon ausente');
 assert.ok(html.includes('Carregar base JSON'),'controle de base ausente');
 assert.ok(!html.includes('id="manifestInput"')&&!html.includes('Carregar manifesto')&&!html.includes('async function loadManifest(file)')&&!html.includes("source:'hub_manifest_upload'"),'importação manual de manifesto MCC pelo Hub deve ficar removida; usar o Preparador MCC');
@@ -57,7 +57,8 @@ assert.ok(billingStorage.includes("const BILLING_SEED_KEY = 'seed:legacy-faturam
 assert.ok(billingStorage.includes('onlyIfMissing = false'),'sincronização de recuperação deve ser idempotente e não substituir dados financeiros já sincronizados');
 assert.ok(billingView.includes('Competência')&&billingView.includes('Caixa')&&billingView.includes('Registrar recebimento')&&billingView.includes('Reembolso'),'interface do módulo financeiro incompleta');
 assert.ok(html.includes('billing/billing-shell.css')&&html.includes("classList.add('billing-page')")&&billingShell.includes('body.billing-page .actions'),'isolamento visual da página de Faturamento ausente');
-assert.equal(billingSeed.sales.length,172,'seed histórico não chegou ao dist');
+assert.ok(!billingView.includes('seed-v1.json')&&!billingView.includes('installBillingSeed'),'Faturamento não deve importar dados pessoais empacotados');
+for(const privateArtifact of ['../dist/billing/seed-v1.json','../dist/campaign-snapshot-seed.json','../dist/__paused-history-source.json'])await assert.rejects(access(new URL(privateArtifact,import.meta.url)),error=>error?.code==='ENOENT',`${privateArtifact} não pode ser publicado no dist`);
 assert.ok(!billingView.includes('input type="file"')&&!billingView.includes('Importar Excel'),'a view de Faturamento não deve incluir importador XLSX');
 assert.ok(html.includes('id="controlMacroView"')&&html.includes('id="macroDailyBody"'),'tela/tabela do Controle Macro ausente');
 assert.ok(html.includes("query:'personal-finance'")&&html.includes('id="personalFinanceView"')&&html.includes("import('./personal-finance/personal-finance-view.mjs?v=65')")&&html.includes('personal-finance/personal-finance.css?v=33'),'rota nativa e assets atualizados do Controle de gastos ausentes');
@@ -131,21 +132,23 @@ assert.ok(html.includes('<style id="product-diary-summary-compact-style">')&&htm
 assert.ok(sidebarComponent.includes("key: 'accounts'")&&sidebarComponent.includes('Mapa por conta'),'menu do relatório por conta ausente');
 assert.ok(html.includes('id="accountReportView"'),'tela do relatório por conta ausente');
 assert.ok(sidebarComponent.includes("key: 'time'")&&sidebarComponent.includes('Meu Tempo'),'menu Meu Tempo ausente');
-assert.ok(sidebarComponent.includes("key: 'presell'")&&sidebarComponent.includes('Gerador de Pre-Sell'),'menu Gerador de Pre-Sell ausente');
-assert.ok(sidebarComponent.includes("key: 'copy'")&&sidebarComponent.includes('Copy e Ficha'),'menu Copy e Ficha ausente');
-assert.ok(html.includes('id="copyFichaView"'),'tela Copy e Ficha ausente');
-assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=10')"),'módulo Copy e Ficha não é carregado sob demanda ou usa versão antiga');
-assert.ok(copyFichaView.includes('Gerar copy e ficha')&&copyFichaView.includes('URL de afiliação (sempre separada)'),'fluxo Copy e Ficha não foi copiado para dist');
-assert.ok(copyFichaView.includes("applyDetected(root,'copyProduct',result.productCandidate)")&&copyFichaView.includes('shouldReplaceDetectedPackages(currentPackages')&&copyFichaView.includes('state.packages=result.packages.map(item=>({...item,autoDetected:true,userEdited:false}))'),'análise não atualiza pacotes detectados ou respeita edições manuais');
+assert.ok(sidebarComponent.includes("key: 'copy'")&&sidebarComponent.includes('Ficha e Precel')&&!sidebarComponent.includes("key: 'presell'"),'menu deve apresentar apenas a tela unificada Ficha e Precel');
+assert.ok(html.includes('id="copyFichaView"'),'tela Ficha e Precel ausente');
+assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=29')")&&html.includes('copy-ficha/copy-ficha-output.css?v=7')&&copyFichaView.includes("copy-ficha-domain.mjs?v=20"),'módulo Ficha e Precel ou estilos não invalidam o cache');
+assert.ok(!copyFichaView.includes('Gerar copy')&&copyFichaView.includes('Gerar perguntas e respostas')&&copyFichaView.includes('Validar ficha e criar Precel')&&copyFichaView.includes('copyFichaSource')&&copyFichaView.includes('URL de afiliação (sempre separada)')&&copyFichaView.includes('createPresellFromFicha(ficha)'),'a tela deve manter perguntas e respostas independentes e validar/criar a Precel a partir da ficha obrigatória');
+assert.ok((await readFile(new URL('../dist/copy-ficha/copy-ficha-structured.mjs',import.meta.url),'utf8')).includes('export function buildStructuredFicha'),'parser estruturado deve estar disponível no artefato servido');
+assert.ok(copyFichaView.includes("applyDetected(root,'copyProduct',result.productCandidate)")&&copyFichaView.includes('result.highestSavingsAmount')&&!copyFichaView.includes('copyPackages')&&!copyFichaView.includes('Pacotes para a ficha'),'análise prioriza o maior desconto sem exigir quadros de pacotes');
 assert.ok(copyFichaView.includes('autoFilledFields:collectAutoFilledFieldIds(')&&copyFichaView.includes('restoreAutoFilledFieldIds(root.querySelectorAll(\'input,select,textarea\'),draft.autoFilledFields)')&&copyFichaView.includes('Usar sugestão de produto:'),'rascunhos Copy e Ficha não preservam a origem automática nem permitem aplicar uma sugestão ao campo manual');
-assert.ok(copyFichaDomain.includes('function parsePairQuantityPackages')&&copyFichaDomain.includes('function parseRecurringEachPackages')&&copyFichaDomain.includes('function parseDurationBundlePackages')&&copyFichaDomain.includes('function footerProductCandidate')&&copyFichaDomain.includes('productCandidateNeedsReview'),'parser da Copy e Ficha não inclui os reconhecedores aditivos de pacotes e nome de produto');
-assert.ok(copyFichaDomain.includes("quantityUnit:'unit'")&&copyFichaDomain.includes('displayed package terms')&&copyFichaView.includes('data-package-descriptor='),'build da Copy e Ficha não preserva unidade e termos do novo cartão recorrente');
-assert.ok(copyFichaView.includes('total calculado')&&copyFichaView.includes('Produto sugerido pelo rodapé (revisar)')&&copyFichaView.includes('Preços editados manualmente; revise unidade e total.'),'Copy e Ficha não sinaliza preço derivado e candidato de produto que exige revisão');
-assert.ok(copyFichaView.includes('generationBlockers(data)')&&copyFichaView.includes('error.blockers=diagnostics.blockers')&&copyFichaView.includes('updatePendingHighlights(root,{fields:error?.fields,packageIndexes:error?.packageIndexes})')&&copyFichaView.includes('{blocked:Boolean(error?.blocked||blockers)}'),'Copy e Ficha permite gerar com confirmações pendentes ou não destaca os campos bloqueadores');
-assert.ok(copyFichaView.includes('generationBlockerPackageIndexes(data)')&&copyFichaDomain.includes('o desconto calculado diverge do selo informado')&&copyFichaPendingCss.includes('.copy-ficha-package.is-pending'),'divergência em pacote não é descrita nem destaca a linha/preços envolvidos');
-assert.ok(copyFichaView.includes('generationBlockerFields(data)')&&copyFichaCss.includes('.copy-ficha-select.is-pending')&&copyFichaCss.includes('.copy-ficha-packages.is-pending')&&html.includes('copy-ficha/copy-ficha.css?v=2'),'campos pendentes da Copy e Ficha não recebem borda vermelha acessível');
-assert.ok(copyFichaView.includes("invalidateGeneratedOutputs(root,'Dados alterados. Revise as confirmações e gere novamente.')")&&!copyFichaView.includes("applyDetected(root,'copyUrgency'")&&!copyFichaView.includes("applyDetected(root,'copyScarcity'"),'edições mantêm saídas antigas ou urgência e escassez são aceitas sem validação');
-assert.ok(copyFichaView.includes('id="copyGuaranteeStatus"')&&copyFichaView.includes('Não usar / não confirmada'),'interface não permite resolver explicitamente garantias, urgência e escassez ausentes');
+assert.ok(copyFichaDomain.includes('function parsePairQuantityPackages')&&copyFichaDomain.includes('function parseQuantityEachPackages')&&copyFichaDomain.includes('function parseDurationBundlePackages')&&copyFichaDomain.includes('function footerProductCandidate')&&copyFichaDomain.includes('productCandidateNeedsReview'),'parser da Copy e Ficha não inclui os reconhecedores aditivos de pacotes e nome de produto');
+assert.ok(copyFichaDomain.includes("quantityUnit:'unit'")&&copyFichaDomain.includes('displayed package terms')&&copyFichaDomain.includes('PACKAGE_FREE_COPY'),'o parser mantém os sinais de quantidade, mas a ficha sem lista usa conteúdo neutro');
+assert.ok(copyFichaView.includes('result.highestSavingsAmount')&&copyFichaView.includes('Produto sugerido pelo rodapé (revisar)'),'Copy e Ficha não associa o valor do maior desconto ou não sinaliza candidato de produto');
+assert.ok(!copyFichaView.includes('generationBlockers(data,{scope:\'copy\'})')&&copyFichaView.includes('updatePendingHighlights(root,{fields:error?.fields})')&&copyFichaView.includes('error.blockers||[error.message]'),'a tela remove os bloqueios da geração de copy e continua destacando erros da ficha');
+assert.ok(copyFichaDomain.includes('o desconto calculado diverge do selo informado')&&copyFichaDomain.includes('export function generationBlockerPackageIndexes'),'a validação de consistência do parser deixa de estar coberta');
+assert.ok(!copyFichaView.includes('generationBlockerFields(data,{scope})')&&copyFichaCss.includes('.copy-ficha-select.is-pending')&&copyFichaCss.includes('.copy-ficha-textarea.is-pending')&&html.includes('copy-ficha/copy-ficha.css?v=5'),'campos pendentes da ficha não recebem borda vermelha acessível');
+assert.ok(copyFichaView.includes('id="copyDiscountAmount"')&&copyFichaDomain.includes('export function discountAmountForPercent')&&copyFichaCss.includes('.copy-ficha-discount-pair{grid-column:span 2'),'valor de desconto confirmado ou layout compacto ausente no build');
+assert.ok(!copyFichaView.includes('copyAssetsTabs')&&!copyFichaView.includes('copyAssetsPanel')&&!copyFichaOutputCss.includes('.copy-ficha-tabs')&&html.includes('copy-ficha/copy-ficha-output.css?v=7'),'a interface remove as saídas e estilos de anúncios');
+assert.ok(copyFichaView.includes('Dados alterados. Revise e gere novamente as perguntas e respostas ou a ficha.')&&!copyFichaView.includes('copyUrgency')&&!copyFichaView.includes('copyScarcity'),'campos exclusivos da geração de copy foram removidos');
+assert.ok(copyFichaView.includes('id="copyGuaranteeStatus"')&&copyFichaView.includes('id="copyFreeShipping"'),'perguntas e respostas continuam com dados de garantia e frete');
 assert.ok(copyFichaDomain.includes('export function buildFicha')&&copyFichaDomain.includes('mustContain'),'contrato JSON da ficha não foi copiado para dist');
 assert.ok(copyFichaDomain.includes('export function generationBlockers'),'validação de bloqueios não foi copiada para dist');
 assert.ok(copyFichaCss.includes('.copy-ficha-shell'),'CSS da tela Copy e Ficha não foi copiado para dist');
@@ -167,7 +170,7 @@ assert.ok(sidebarComponent.includes("id: 'curation'")&&sidebarComponent.includes
 assert.ok(html.includes("$('#curationObservabilityNav').onclick=showCurationObservability")&&html.includes("PanelViews.urlFor(view.id,location.pathname)"),'Observabilidade da Curadoria não está ligada à navegação central do Hub');
 assert.ok(sidebarComponent.includes('data-sidebar-group="products"'),'grupo expansível Produtos ausente');
 assert.ok(sidebarComponent.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''" )&&sidebarComponent.includes("const topName = name === 'products' ? 'operation' : name"),'Produtos não está implementado como subcategoria expansível da Operação');
-assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto');
+assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Ficha e Precel')&&!sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto ou com tela antiga duplicada');
 assert.ok(sidebarComponent.includes('setOpenGroup(isProductsSubgroup')&&sidebarComponent.includes("group.classList.contains('collapsed') ? toggle.dataset.sidebarToggle : ''"),'acordeão lateral não preserva a hierarquia do submenu Produtos');
 assert.ok(sidebarComponent.includes('body.animate(')&&sidebarComponent.includes('body.inert = !expanded')&&sidebarComponent.includes('prefers-reduced-motion: reduce'),'menu lateral não anima a abertura/retração nem impede foco em grupos recolhidos');
 assert.ok(sidebarComponent.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado do menu expansível não é preservado');
@@ -242,7 +245,7 @@ assert.ok(html.includes("accountReportStatus:'ativa'"),'Mapa por Conta não abre
 assert.ok(html.includes('Quantidade de produtos por faixa de CPA')&&html.includes('id="accountCpaRangeBars"'),'quadro de quantidade de produtos por faixa de CPA ausente');
 assert.ok(!html.includes('Distribuição de campanhas'),'quadro antigo de distribuição de campanhas ainda aparece no Mapa por Conta');
 assert.ok(html.includes('function accountProductsByCpaRange(rows)')&&html.includes('productKeys:new Set()')&&html.includes('group.productKeys.add(row.productKey)'),'produtos não são contados de forma única por faixa de CPA');
-assert.ok(html.includes('Cobertura por faixa de CPA')&&html.includes('Inclui campanhas ativas e pausadas, mesmo fora do filtro Situação.')&&html.includes('id="accountCpaGapHead"')&&html.includes('id="accountCpaGapBody"'),'matriz de cobertura de faixas de CPA ausente ou sem explicar o escopo de campanhas pausadas');
+assert.ok(html.includes('Cobertura por faixa de CPA')&&html.includes('id="accountCpaCoverageStatus"')&&html.includes('Respeita os filtros de Situação e Conta; Produto limita apenas as linhas exibidas.')&&html.includes('id="accountCpaGapHead"')&&html.includes('id="accountCpaGapBody"'),'matriz de cobertura de faixas de CPA sem filtro de situação sincronizado');
 assert.ok(html.indexOf('class="card panel account-detail"')<html.indexOf('class="card panel account-cpa-gaps"'),'quadro Cobertura por faixa de CPA deve ser o último cartão da tela Mapa por Conta');
 assert.ok(html.includes('.account-matrix tbody tr.selected .account-cell.has-campaigns{background:linear-gradient('),'células de conta do produto selecionado não mantêm destaque persistente');
 assert.ok(html.includes('.account-matrix tbody td{padding-top:5.12px;padding-bottom:5.12px}'),'linhas da matriz por conta não tiveram o espaçamento vertical reduzido mais 20%');
@@ -255,7 +258,7 @@ assert.ok(html.includes('<div class="panel-controls account-detail-controls"><se
 assert.ok(html.includes("const sortKeys=['account','domain','campaign','campaignDate','zeroDays','status','investment','impressions','clicks','conversions','roi']")&&html.includes("state.accountDetailSortDir==='asc'?'desc':'asc'")&&html.includes("button.setAttribute('aria-label',`Ordenar por ${label}"),'cabeçalhos de Campanhas do produto não oferecem ordenação acessível crescente/decrescente');
 assert.ok(html.includes('if(left==null||right==null)return left==null?(right==null?0:1):-1'),'valores ausentes da ordenação devem permanecer distintos de zero e no fim');
 assert.ok(html.includes("empty.colSpan=11")&&html.includes('function enhanceAccountReportDetail()')&&html.includes("if(key==='campaignDate')return campaignIdentity(row.campaign).dateSort"),'estado vazio, ordenação da data e colunas de domínio/datas/dias sem impressão não está consistente');
-assert.ok(html.includes('function accountCpaCoverage(rows,ranges)')&&html.includes("state.accountReportProduct==='all'||x.product===state.accountReportProduct"),'cobertura de CPA por produto não respeita o recorte do relatório');
+assert.ok(html.includes('function accountCpaCoverage(rows,ranges)')&&html.includes("state.accountReportProduct==='all'||x.product===state.accountReportProduct")&&html.includes('function filterAccountCpaCoverageRows(rows,status,account)')&&html.includes('filterAccountCpaCoverageRows(allRows,state.accountReportStatus,state.accountReportAccount)')&&html.includes("$('#accountCpaCoverageStatus').value=state.accountReportStatus")&&html.includes("$('#accountCpaCoverageStatus').onchange=e=>{state.accountReportStatus=e.target.value;renderAccountReport()}"),'cobertura de CPA não acompanha o filtro compartilhado de situação ou o recorte da conta');
 assert.ok(html.includes("const counts=product.ranges.get(range)")&&html.includes("status=row.status==='pausada'?'paused':'active'")&&html.includes("state.accountReportAccount==='all'||x.account===state.accountReportAccount"),'cobertura por faixa não distingue campanhas ativas e pausadas dentro do recorte da conta');
 assert.ok(html.includes('class="cpa-missing">Não testada')&&html.includes('class="cpa-paused"')&&html.includes('Testada · pausada')&&html.includes('class="cpa-mixed"')&&html.includes('Ativa · pausada')&&html.includes('class="cpa-explored"'),'estados de faixa não testada, testada e pausada não estão destacados');
 assert.ok(html.includes('.account-cpa-gap-table tbody td,.account-cpa-gap-table tbody td strong,.account-cpa-gap-table tbody td.cpa-explored,.account-cpa-gap-table tbody td.cpa-paused,.account-cpa-gap-table tbody td.cpa-mixed,.account-cpa-gap-table tbody td.cpa-missing,.account-cpa-gap-table tbody td.cpa-coverage{font-weight:400}'),'matriz de cobertura por faixa de CPA deve exibir nomes e resultados sem negrito');
@@ -383,7 +386,7 @@ assert.ok(databaseModule.includes('salesAdjustmentMap'),'conciliação de venda 
 assert.ok(databaseModule.includes('reconcileProvisionalSales'),'persistência da conciliação oficial da venda manual ausente');
 assert.ok(html.includes('productDiaryRowsWithManualSales')&&html.includes('+${count} manual · provisória')&&html.includes('aguardando confirmação MCC D−1'),'venda manual provisória não foi projetada claramente no Diário de campanha sem ser contada como conversão oficial');
 assert.ok(!html.includes('MedicGLP 4'),'a distribuição limpa contém dados reais');
-assert.ok(copyFichaView.includes('id="copyReset"')&&copyFichaView.includes('localStorage.removeItem(STORAGE_KEY)')&&copyFichaView.includes('Limpar todos os campos, pacotes e resultados desta coleta?'),'controle de nova coleta não limpa o rascunho com confirmação');
+assert.ok(copyFichaView.includes('id="copyReset"')&&copyFichaView.includes('localStorage.removeItem(STORAGE_KEY)')&&copyFichaView.includes('Limpar todos os campos e resultados desta coleta?'),'controle de nova coleta não limpa o rascunho com confirmação');
 assert.ok(copyFichaView.includes('<option value="">Selecionar</option><option value="en-US">')&&copyFichaView.includes('<option value="">Selecionar</option><option value="USD">'),'nova coleta não permite deixar idioma e moeda pendentes para outra DTC');
 for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 console.log('clean build ok');

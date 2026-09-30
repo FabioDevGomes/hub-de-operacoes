@@ -97,6 +97,13 @@ export function validateMccD0Capture(snapshot) {
     ...record,
     currency: record.currency || currencyFromVisibleText(record.cost, record.avg_cost, record.budget)
   }));
+  const campaignStateHeader = snapshot.fields?.campaign_state;
+  if (campaignStateHeader?.found || campaignStateHeader?.hidden || campaignStateHeader?.ambiguous) {
+    const missingStates = records.filter(record => !String(record.campaign_state || '').trim());
+    if (campaignStateHeader.hidden || campaignStateHeader.ambiguous || missingStates.length) {
+      errors.push({ code:'campaign_state', field:'campaign_state', message:'A coluna Status da campanha está presente, mas seus ícones não puderam ser lidos sem ambiguidade em todas as linhas. Confira a coluna de estado e tente novamente.' });
+    }
+  }
   const currencyMissing = records.filter(record => !record.currency).map(record => record.campaign);
   if (currencyMissing.length) errors.push({ code: 'currency', message: `Moeda não identificável por código/símbolo explícito em ${currencyMissing.length} campanha(s): ${currencyMissing.slice(0, 5).join(', ')}. Símbolo $ sem código é ambíguo.` });
   const accountMissing = records.filter(record => !String(record.account || '').trim()).map(record => record.campaign);

@@ -30,7 +30,7 @@ Essa é uma carga única, não uma função de importação XLSX. A lógica pura
 
 ### Faturamento
 
-O módulo é `src/billing/` e sua rota é `/?view=billing`. A planilha histórica só alimenta `src/billing/seed-v1.json`, produzido deliberadamente por `scripts/generate-billing-seed.py`; o runtime e o build não abrem XLSX. Seed versionado deve ser instalável uma única vez/idempotente (`billing_meta`), sem substituir vendas ou movimentos locais existentes. Não importar planilha pela UI, não converter moedas, não inferir datas de pagamento e não atribuir destino bancário.
+O módulo é `src/billing/` e sua rota é `/?view=billing`. Vendas, movimentos e auditoria ficam somente no IndexedDB local; não versione nem empacote seed financeiro. `scripts/generate-billing-seed.py` é uma ferramenta privada de recuperação/migração e só pode gerar em `data-local/` ou fora do repositório. A tela não busca nem instala seed ao abrir. A chave histórica em `billing_meta` permanece apenas por compatibilidade com bancos já migrados. Não importar planilha pela UI, não converter moedas, não inferir datas de pagamento e não atribuir destino bancário.
 
 Ao alterar o domínio, persistência, seed, agregações, backup ou tela, leia [billing.md](billing.md), rode `tests/billing-domain.test.mjs`, `tests/billing-storage.test.mjs`, `tests/billing-seed.test.mjs`, depois `node build.mjs` e a suíte completa. A view usa filtros e agregações dentro do intervalo escolhido, e pagina a tabela; backups integrais só ocorrem por ação explícita. Para validação visual, use origem IndexedDB isolada/temporária, sem gravar fixtures no perfil local real.
 

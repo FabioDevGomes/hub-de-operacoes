@@ -29,13 +29,10 @@ export async function mount({ root, toast = () => {}, onUpdateManualSale = null,
     mounted.add(root);
   }
   const status = root.querySelector('#billingLoadStatus');
-  status.textContent = 'Preparando o histórico financeiro…';
+  status.textContent = 'Abrindo o histórico financeiro local…';
   try {
-    const response = await fetch(new URL('./seed-v1.json', import.meta.url));
-    if (!response.ok) throw new Error('Não foi possível carregar a carga inicial do Faturamento.');
-    const seed = await response.json();
-    const seedResult = await Storage.installBillingSeed(seed);
-    status.textContent = seedResult.applied ? `Carga inicial aplicada: ${seedResult.salesAdded} vendas e ${seedResult.movementsAdded} movimentos.` : 'Histórico local pronto.';
+    const counts = await Storage.countBillingData();
+    status.textContent = counts.sales ? 'Histórico local pronto.' : 'Nenhum lançamento salvo neste navegador.';
     await refresh(root);
   } catch (error) {
     status.textContent = `Não foi possível abrir o Faturamento: ${error.message}`;

@@ -22,7 +22,7 @@ assert.equal(views.resolveRoute('/?view=time').id,'time');
 assert.equal(views.resolveRoute('/?view=personal-finance').id,'personal-finance');
 assert.equal(views.resolveRoute('/?view=personal-finance').title,'Controle de gastos');
 assert.equal(views.resolveRoute('/?view=copy').id,'copy');
-assert.equal(views.resolveRoute('/?view=presell').id,'presell');
+assert.equal(views.resolveRoute('/?view=presell').id,'copy');
 assert.equal(views.resolveRoute('/?view=desconhecida').id,'totals');
 
 assert.equal(views.urlFor('totals','/'),'/');
@@ -36,13 +36,14 @@ assert.equal(views.urlFor('curation-observability','/'),'/?view=curation-observa
 assert.equal(views.urlFor('time','/'),'/?view=time');
 assert.equal(views.urlFor('personal-finance','/'),'/?view=personal-finance');
 assert.equal(views.urlFor('copy','/'),'/?view=copy');
-assert.equal(views.urlFor('presell','/'),'/?view=presell');
+assert.equal(views.urlFor('presell','/'),'/?view=copy');
 
 assert.equal(views.isReserved('time'),false);
 assert.equal(views.definition('time').enabled,true);
 assert.equal(views.definition('time').sectionId,'timeView');
 assert.equal(views.definition('copy').sectionId,'copyFichaView');
-assert.equal(views.definition('presell').sectionId,'presellView');
+assert.equal(views.definition('presell').sectionId,'copyFichaView');
+assert.equal(views.definition('presell').title,'Ficha e Precel');
 assert.equal(views.definition('personal-finance').sectionId,'personalFinanceView');
 assert.equal(views.definition('personal-finance').navId,'personalFinanceNav');
 assert.equal(views.definition('observability').sectionId,'observabilityView');

@@ -6,6 +6,7 @@ const server=await readFile(new URL('../scripts/serve-panel.ps1',import.meta.url
 const presellCommon=await readFile(new URL('../presell-engine/modules/Presell.Validation.Common.psm1',import.meta.url),'utf8');
 const presellWorkflow=await readFile(new URL('../presell-engine/tools/Invoke-PresellWorkflow.ps1',import.meta.url),'utf8');
 const presellStructure=await readFile(new URL('../presell-engine/tools/Test-PresellStructure.ps1',import.meta.url),'utf8');
+const presellProducer=await readFile(new URL('../presell-engine/tools/New-PresellFromFicha.ps1',import.meta.url),'utf8');
 
 assert.doesNotMatch(launcher,/codex-runtimes|serve_panel\.py|python\.exe/i);
 assert.match(launcher,/serve-panel\.ps1/);
@@ -38,6 +39,8 @@ assert.match(presellCommon,/\$powerShellExecutable -NoProfile -ExecutionPolicy B
 assert.match(presellWorkflow,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File \$ProductionScript/);
 assert.doesNotMatch(presellCommon,/&\s*pwsh\b/i,'validadores não devem depender de pwsh estar no PATH');
 assert.doesNotMatch(presellWorkflow,/&\s*pwsh\b/i,'produção do workflow não deve depender de pwsh estar no PATH');
+assert.match(presellProducer,/\[Parameter\(Mandatory\s*=\s*\$true\)\]\s*\[string\]\$TemplateRoot/,'o template deve ser informado pelo servidor, sem caminho pessoal versionado');
+assert.doesNotMatch(presellProducer,/C:\\Users\\|OneDrive/i,'o produtor não deve conter diretório pessoal');
 assert.match(presellStructure,/\[string\]\$RulesPath,/);
 assert.match(presellStructure,/if \(\[string\]::IsNullOrWhiteSpace\(\$RulesPath\)\)\s*\{\s*\$RulesPath = Join-Path -Path \$PSScriptRoot/);
 assert.doesNotMatch(presellStructure,/\$RulesPath\s*=\s*\(Join-Path\s+\$PSScriptRoot/,'RulesPath não deve usar PSScriptRoot no bloco param');

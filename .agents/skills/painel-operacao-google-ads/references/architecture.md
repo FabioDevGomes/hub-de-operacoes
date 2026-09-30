@@ -29,8 +29,8 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 - `/?view=curation-observability`: Observabilidade da Curadoria (domínio pré-teste, separado da operação).
 - `/?view=time`: Meu Tempo.
 - `/?view=personal-finance`: Controle de gastos pessoais (skill dedicada `../../controle-gastos-pessoal/SKILL.md`).
-- `/?view=copy`: Copy e Ficha.
-- `/?view=presell`: Gerador de Pre-Sell.
+- `/?view=copy`: Ficha e Precel; reúne perguntas e respostas, ficha estruturada obrigatória e criação local da Precel.
+- `/?view=presell`: alias compatível que redireciona para Ficha e Precel.
 - `/preparador-MCC/`: Preparador MCC.
 - `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/glimpse/`: módulos de curadoria.
 - `/asset-studio/`: preparação local de assets.
@@ -57,7 +57,7 @@ Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.j
 - Financeiro: Controle Macro e Faturamento.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
 - Curadoria: Radar SpyHero, Lista de Gerente e E-commerce GM.
-- Criação de ofertas: Copy e Ficha, Gerador de Pre-Sell e Asset Studio.
+- Criação de ofertas: Ficha e Precel e Asset Studio.
 - Pessoal: Meu Tempo e Controle de gastos pessoais.
 - Produtos: Produtos Testados e acesso ao Diário de campanha; a lista de campanhas permanece no painel principal.
 

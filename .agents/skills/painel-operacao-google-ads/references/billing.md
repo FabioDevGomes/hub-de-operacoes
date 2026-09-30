@@ -40,11 +40,11 @@ Não mudar de versão apagando/recriando stores. Não varrer stores financeiras 
 
 Correções de valores/status de pagamento e mudanças no estado de confirmação devem gerar auditoria com antes/depois. Movimentos de recebimento/refund são registros independentes, cada um com data efetiva, valor/moeda, origem e notas. Não alterar/apagar o histórico de auditoria. `confirmation_status` (manual/provisional/confirmed/not_confirmed/represented_by_manual) e `payment_status` (pending/paid/partially_paid/unknown) são eixos diferentes.
 
-## Seed histórico
+## Histórico privado e seed de recuperação
 
-O seed inicial está em `src/billing/seed-v1.json` e contém os registros históricos necessários para iniciar a tela. Ele não é recalculado no build. O script offline `scripts/generate-billing-seed.py` pode regenerá-lo a partir de uma planilha fornecida explicitamente; não hardcode caminho local, credenciais ou arquivo XLSX no repositório. Use somente `data_only=True` e preserve células sem valor como ausentes; jamais invente data de pagamento ou conversão entre moedas.
+O histórico de Faturamento vive somente nas stores locais do IndexedDB. Não existe seed financeiro em `src/` ou `dist/`, e abrir a tela nunca importa uma carga empacotada. Uma instalação ou navegador novo começa sem lançamentos financeiros.
 
-O seed inclui referências de origem por linha para rastreabilidade, versão, validações e contagens de valores ausentes/linhas ignoradas. `planSeedImport` e a chave `seed:legacy-faturamento:v1` em `billing_meta` tornam a carga idempotente: instalação repetida não deve duplicar nem sobrescrever registros do usuário. Não colocar a planilha original, caminho absoluto, nome de usuário ou outros dados de ambiente em Git. O JSON do seed é dado financeiro local; qualquer publicação/compartilhamento externo exige autorização específica.
+O script offline `scripts/generate-billing-seed.py` permanece apenas como ferramenta privada de recuperação/migração. Sua saída deve ficar em `data-local/` (ignorado pelo Git) ou fora do repositório; o script bloqueia destinos dentro de `src/` e `dist/`. Não colocar a planilha original, JSON gerado, caminho absoluto, nome de usuário ou outros dados de ambiente no Git. `planSeedImport` e a chave histórica em `billing_meta` continuam legíveis por compatibilidade com bancos locais que receberam a migração antiga, mas o runtime não procura nem instala seed automaticamente.
 
 ## Backup e compatibilidade
 

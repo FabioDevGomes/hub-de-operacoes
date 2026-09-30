@@ -15,7 +15,7 @@ const background = await readFile(new URL('extensions/mcc-d0-bridge/background.j
 const manifest = JSON.parse(await readFile(new URL('extensions/mcc-d0-bridge/manifest.json', root), 'utf8'));
 
 class Cell {
-  constructor(text, { role = 'gridcell', ariaLabel = '', link = false, linkText = text, essfield = null } = {}) {
+  constructor(text, { role = 'gridcell', ariaLabel = '', link = false, linkText = text, essfield = null, iconLabels = [] } = {}) {
     this.innerText = text;
     this.textContent = text;
     this.role = role;
@@ -23,6 +23,7 @@ class Cell {
     this.link = link;
     this.linkText = linkText;
     this.essfield = essfield;
+    this.iconLabels = iconLabels;
   }
   getAttribute(name) {
     if (name === 'role') return this.role;
@@ -32,6 +33,7 @@ class Cell {
   }
   getClientRects() { return [{}]; }
   querySelectorAll(selector) {
+    if (selector.includes('[role="img"]')) return this.iconLabels.map(label => new Cell('', { role:'img', ariaLabel:label }));
     return this.link && (selector.includes('a,') || selector.includes('a[href]'))
       ? [{ innerText: this.linkText, textContent: this.linkText, getAttribute: () => null }] : [];
   }
@@ -150,7 +152,7 @@ assert.equal(alignedGridWithOtherLinks.records[0].account, '7527 - Conta Alpha')
 
 // Forma observada na MCC: as células compartilham essfield com os cabeçalhos;
 // o link da campanha não possui href e o texto da célula inclui controles extras.
-function makeEssfieldDocument(footer = '1 - 2 de 2') {
+function makeEssfieldDocument(footer = '1 - 2 de 2', { statuses = ['Qualificada', 'Qualificada'], states = ['Ativado', 'Ativado'] } = {}) {
   const columns = [
     ['', 'selection'], ['', 'status'], ['Campanha', 'name'], ['Conta', 'entity_owner_info.descriptive_name'],
     ['Status', 'primary_status'], ['Impr. help_outline', 'stats.impressions'], ['Cliques', 'stats.clicks'],
@@ -162,7 +164,7 @@ function makeEssfieldDocument(footer = '1 - 2 de 2') {
   const header = new Row(columns.map(([text, essfield]) => new Cell(text, { role:'columnheader', essfield })), true, 1);
   const makeCampaignRow = (name, index) => {
     const values = [
-      '', '', `${name}\nsettings`, 'Conta Alpha\n111-222-3333', 'Qualificada\nDetalhes da qualificação',
+      '', '', `${name}\nsettings`, 'Conta Alpha\n111-222-3333', `${statuses[index]}\nDetalhes da qualificação`,
       index ? '1,234' : '0', index ? '10' : '0', '0.00', '—', '0%', '—',
       'US$ 45.00/day', 'Maximizar conversões', index ? 'US$ 12.50' : 'US$ 0.00'
     ];
@@ -171,7 +173,8 @@ function makeEssfieldDocument(footer = '1 - 2 de 2') {
       ...values.map((value, column) => new Cell(value, {
         essfield: columns[column][1],
         link: column === 2 || column === 3,
-        linkText: column === 2 ? name : column === 3 ? 'Conta Alpha' : value
+        linkText: column === 2 ? name : column === 3 ? 'Conta Alpha' : value,
+        iconLabels: column === 1 ? [states[index]] : []
       }))
     ], false, index + 2);
   };
@@ -201,6 +204,25 @@ assert.equal(essfieldSnapshot.records[0].account_id, '111-222-3333', 'o número 
 assert.equal(essfieldSnapshot.records[0].status, 'Qualificada', 'usa somente a primeira linha do status');
 assert.equal(essfieldSnapshot.fields.status.ambiguous, false, 'primary_status identifica a qualificação');
 assert.equal(validateMccD0Capture(essfieldSnapshot).ok, true, JSON.stringify(validateMccD0Capture(essfieldSnapshot).errors));
+const pausedGrid = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeEssfieldDocument('1 - 2 de 2', {
+  statuses:['Pausada', 'Qualificada (aprendizado)'], states:['Pausado', 'Ativado']
+}));
+assert.equal(pausedGrid.fields.status.ambiguous, false, 'primary_status permanece inequívoco quando inclui campanhas pausadas');
+assert.equal(pausedGrid.fields.campaign_state.found, true, 'o cabeçalho operacional com ícone é identificado por essfield');
+assert.equal(pausedGrid.records[0].status, 'Pausada');
+assert.equal(pausedGrid.records[0].campaign_state, 'Pausado', 'o estado vem do rótulo acessível do ícone operacional');
+assert.equal(pausedGrid.records[1].campaign_state, 'Ativado');
+assert.equal(validateMccD0Capture(pausedGrid).ok, true, JSON.stringify(validateMccD0Capture(pausedGrid).errors));
+assert.equal(validateMccD1Capture(pausedGrid, { now:new Date('2026-09-24T15:00:00Z') }).ok, true, 'a correção também permite a captura D−1');
+const removedGrid = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeEssfieldDocument('1 - 2 de 2', {
+  statuses:['Removida', 'Pendente'], states:['Removido', 'Ativado']
+}));
+assert.equal(validateMccD0Capture(removedGrid).ok, true, 'a identificação estrutural aceita outros valores legítimos da coluna Status');
+assert.equal(removedGrid.records[0].campaign_state, 'Removido');
+const unreadableState = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeEssfieldDocument('1 - 2 de 2', {
+  statuses:['Pausada', 'Qualificada'], states:['', 'Ativado']
+}));
+assert.ok(validateMccD0Capture(unreadableState).errors.some(error => error.code === 'campaign_state'), 'ícone ilegível não pode transformar uma pausada em ativa');
 const essfieldPartial = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeEssfieldDocument('1 - 2 de 3'));
 assert.equal(essfieldPartial.completeness, 'unverified');
 assert.equal(validateMccD0Capture(essfieldPartial).ok, false, 'a grade incompleta continua bloqueada');

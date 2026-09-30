@@ -8,6 +8,7 @@ assert.equal(rules.visualRules.preserveMobileBackgroundFramingWhenDetailsOpen,tr
 assert.equal(rules.visualRules.mobileBackgroundSizing,'width-locked');
 assert.equal(rules.visualRules.expandedDetailsSurface,'neutral-gray');
 assert.match(producer,/@media \(max-width: 767px\)[\s\S]*background-size: 100% auto;/);
-assert.match(producer,/#glp-faq \.faq-content \{[\s\S]*background: rgba\(242, 244, 246, 0\.98\);[\s\S]*color: #1f2933;/);
+assert.equal(rules.templateIdentifiers.detailsId,'offer-details');
+assert.match(producer,/#\$\{detailsId\} \.faq-content \{[\s\S]*background: rgba\(242, 244, 246, 0\.98\);[\s\S]*color: #1f2933;/);
 
 console.log('presell responsive background ok');

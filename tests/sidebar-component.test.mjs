@@ -36,7 +36,7 @@ for (const group of groupOrder) {
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
   'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
-  'E-commerce GM', 'Asset Studio', 'Copy e Ficha', 'Gerador de Pre-Sell', 'Meu Tempo', 'Controle de gastos',
+  'E-commerce GM', 'Asset Studio', 'Ficha e Precel', 'Meu Tempo', 'Controle de gastos',
   'Produtos testados', 'Diário de campanha',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.ok(source.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''"), 'submenu Produtos não é inserido dentro do grupo Operação');
@@ -52,7 +52,8 @@ assert.ok(source.includes('const isProductsSubgroup = group.dataset.sidebarGroup
 const creationStart = source.indexOf("{ id: 'creation'");
 const creationEnd = source.indexOf("{ id: 'personal'", creationStart);
 const creationItems = source.slice(creationStart, creationEnd);
-assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'") && creationItems.indexOf("key: 'copy'") < creationItems.indexOf("key: 'presell'"), 'Asset Studio deve aparecer antes de Copy e Ficha e Gerador de Pre-Sell no grupo Criação de ofertas');
+assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'"), 'Asset Studio deve aparecer antes de Ficha e Precel no grupo Criação de ofertas');
+assert.ok(!creationItems.includes("key: 'presell'"), 'Gerador de Pre-Sell não deve aparecer como tela separada');
 for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'testedProductsNav', 'timeNav', 'copyFichaNav', 'presellNav']) {
   assert.ok(viewRegistry.includes(id) || source.includes(id), `ID de navegação SPA ${id} não foi preservado no registro`);
 }

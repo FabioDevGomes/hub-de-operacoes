@@ -19,6 +19,11 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
     return inner || content || aria;
   };
   const mappedHeader = cell => {
+    // A MCC expõe o estado operacional só como ícone; primary_status é a
+    // coluna textual, inclusive quando seu valor é “Pausada”.
+    const id = collapse(cell?.getAttribute?.('essfield'));
+    if (id === 'status') return 'campaign_state';
+    if (id === 'primary_status') return 'status';
     const choices = [cell?.getAttribute?.('aria-label'), cell?.innerText, cell?.textContent].map(cleanDecorative).filter(Boolean);
     for (const choice of choices) {
       const field = aliasLookup.get(normalize(choice));
@@ -160,6 +165,14 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
         record[field] = linkedLabel || label || displayedText(cell);
       }
       else if (field === 'status') record[field] = String(cell?.innerText || '').split(/\r?\n/).map(cleanDecorative).find(Boolean) || displayedText(cell);
+      else if (field === 'campaign_state') {
+        const labels = [cell?.getAttribute?.('aria-label'), ...all(cell, '[role="img"][aria-label], img[aria-label]')
+          .filter(visible).map(icon => icon.getAttribute?.('aria-label')),
+          String(cell?.innerText || '').split(/\r?\n/)[0]].map(cleanDecorative)
+          .filter(label => /^(?:ativad[oa]|ativ[oa]|pausad[oa]|removid[oa]|excluid[oa]|inativ[oa]|enabled|activated|active|paused|removed|disabled)$/i.test(label));
+        const states = [...new Set(labels.map(normalize))];
+        record[field] = states.length === 1 ? labels[0] : null;
+      }
       else record[field] = displayedText(cell);
     }
     const campaign = collapse(record.campaign);
@@ -188,9 +201,7 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
   const pageSuggestsMissingRows = pagination != null && recordRows.length < pagination.last - pagination.first + 1;
   const truncatedByCap = campaignRows.length > maxRecords;
   const virtualized = rowIndexGaps || ariaSuggestsVirtual || pageSuggestsMissingRows || truncatedByCap;
-  const qualificationStatusConfirmed = useFieldIds && headerInfo[mapping.status]?.essfield === 'primary_status'
-    && headerInfo.some(header => header.essfield === 'status') && recordRows.length > 0
-    && recordRows.every(record => /^(?:qualificad[oa]|nao qualificad[oa]|reprovad[oa]|em revisao|pendente|eligible|not eligible|limited|disapproved)\b/.test(normalize(record.status)));
+  const qualificationStatusConfirmed = useFieldIds && headerInfo[mapping.status]?.essfield === 'primary_status';
   const fieldResults = {};
   for (const field of fields || []) {
     const headers = headerInfo.filter(header => header.field === field);

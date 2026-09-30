@@ -92,6 +92,21 @@ assert.equal(offerOne.metricas_D_menos_1.cliques_google.estado, 'ausente');
 const accountConflictSource={...d0Source,records:d0Source.records.map((record,index)=>index===0?{...record,conta_id:'999-888-7777'}:record)};
 assert.ok(businessContext.__buildManifest(directD1Source,accountConflictSource).critical.includes('Há associação financeira ambígua.'),'IDs de conta diferentes em D−1 e D0 bloqueiam a associação');
 
+const allCampaignsCapture = { ...parityCapture,
+  fields:{ ...parityCapture.fields, campaign_state:{ found:true, hidden:false, ambiguous:false } },
+  records:parityRecords.map((record,index) => ({ ...record, campaign_state:index === 0 ? 'Pausada' : 'Ativada' })),
+};
+const allCampaignsDecoded = await decoderContext.__decodeD1(allCampaignsCapture);
+const allCampaignsD1 = businessContext.__parseSource(allCampaignsDecoded, 'd1');
+const allCampaignsD0 = businessContext.__parseSource({ ...allCampaignsDecoded,
+  text:allCampaignsDecoded.text.replace(/^Relatório D−1:/, 'Relatório D0:').replace(captureDate, new Date(Date.parse(`${captureDate}T00:00:00Z`) + 86400000).toISOString().slice(0,10)),
+}, 'd0');
+const allCampaignsResult = businessContext.__buildManifest(allCampaignsD1, allCampaignsD0);
+assert.equal(allCampaignsResult.manifest.campanhas.length, 3, 'captura de todas as campanhas não descarta as pausadas');
+assert.equal(allCampaignsResult.manifest.campanhas.find(item => item.nome_campanha_exato === 'Oferta um').metricas_D_zero.estado_campanha.valor, 'Pausada');
+assert.equal(allCampaignsResult.manifest.campanhas.find(item => item.nome_campanha_exato === 'Oferta dois').metricas_D_zero.estado_campanha.valor, 'Ativada');
+assert.equal(allCampaignsResult.critical.length, 0);
+
 const attemptStart = html.indexOf('    function attemptBuild() {');
 const attemptEnd = html.indexOf('    async function loadDecoded(', attemptStart);
 assert.ok(attemptStart >= 0 && attemptEnd > attemptStart, 'orquestração da prévia não encontrada');

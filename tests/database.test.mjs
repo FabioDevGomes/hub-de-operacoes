@@ -8,8 +8,8 @@ vm.runInContext(source,context);
 const db=context.window.CampaignDatabase;
 assert.equal(db.accountDomain('7890 - 4ª CNPJ .exemplo.shop'),'.exemplo.shop','o domínio com ponto inicial deve ser extraído do nome completo da conta');
 assert.equal(db.accountDomain('7890 - CNPJ .empresa.co.uk'),'.empresa.co.uk','extensões compostas também devem ser reconhecidas');
-assert.equal(db.accountDomain('7441- PP[Des] .trustedfocus.shop\u202c - Google Ads'),'.trustedfocus.shop','marcadores Unicode invisíveis no texto da MCC não devem impedir a extração do domínio');
-assert.equal(db.accountDomain('7890 - Fabio.dev.gomes@gmail.com keravox.shop'),null,'não inferir domínio de e-mail nem de host sem o ponto inicial usado pela conta');
+assert.equal(db.accountDomain('7441- PP[Des] .dominio-teste.shop\u202c - Google Ads'),'.dominio-teste.shop','marcadores Unicode invisíveis no texto da MCC não devem impedir a extração do domínio');
+assert.equal(db.accountDomain('7890 - usuario.teste@example.com loja-exemplo.shop'),null,'não inferir domínio de e-mail nem de host sem o ponto inicial usado pela conta');
 
 const workbook={fileName:'produtos.xlsx',sheets:[
   {name:'MagicGLP 4',visible:true,rows:[{cells:{A:{value:45912},B:{value:21},C:{value:2}}}]},
@@ -38,11 +38,11 @@ assert.equal(repeated.conflicts.length,0);
 const noDomainManifest={...manifest,campanhas:[{...manifest.campanhas[0],metricas_D_menos_1:{...manifest.campanhas[0].metricas_D_menos_1,conta:{valor:'7890'}}}]};
 const keepsDomain=db.importManifest(result.base,noDomainManifest,rowFactory);
 assert.equal(keepsDomain.base.campanhas.find(x=>x.nome_mcc===manifest.campanhas[0].nome_campanha_exato).conta_dominio,'.exemplo.shop','ausência de domínio em coleta posterior não deve apagar o dado já conhecido');
-const formattedAccountManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2025-09-14']}},campanhas:[{nome_campanha_exato:'Campanha da conta 7441',metricas_D_menos_1:{data:{valor:'2025-09-14'},conta:{valor:'7441- PP[Des] .trustedfocus.shop\u202c'}}}]};
+const formattedAccountManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2025-09-14']}},campanhas:[{nome_campanha_exato:'Campanha da conta 7441',metricas_D_menos_1:{data:{valor:'2025-09-14'},conta:{valor:'7441- PP[Des] .dominio-teste.shop\u202c'}}}]};
 const formattedAccountImport=db.importManifest(db.create(),formattedAccountManifest,rowFactory);
 const formattedAccount=formattedAccountImport.base.campanhas.find(x=>x.nome_mcc===formattedAccountManifest.campanhas[0].nome_campanha_exato);
 assert.equal(formattedAccount.conta_sufixo,'7441');
-assert.equal(formattedAccount.conta_dominio,'.trustedfocus.shop','o manifesto deve persistir o domínio mesmo quando a MCC inclui formatação direcional invisível');
+assert.equal(formattedAccount.conta_dominio,'.dominio-teste.shop','o manifesto deve persistir o domínio mesmo quando a MCC inclui formatação direcional invisível');
 const changed=db.importManifest(repeated.base,manifest,()=>({cells:{A:{value:45913},B:{value:31},C:{value:3}}}));
 assert.equal(changed.conflicts.length,1);
 changed.base.diario.find(x=>x.campanha_id===changed.base.campanhas.find(c=>c.nome_exibicao==='MagicGLP 4').id).celulas.O={value:12.5};
@@ -152,12 +152,15 @@ const dailyRow=source=>({cells:{A:{value:Date.parse(source.metricas_D_menos_1.da
 const oldMedic6='05/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 70% - U$ 60';
 const newMedic6='16/09 - MedicGLP 6 (GM-BB-FR, BE, CH) 85% - U$ 60';
 let reusedNumber=db.importManifest(db.create(),dailyManifest('2026-09-15',[oldMedic6]),()=>({date:'2026-09-15',cells:{A:{value:46280},B:{value:0}}})).base;
-const numberingIssues=db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[newMedic6]));
+const numberingIssues=db.campaignNumberHistoryWarnings(reusedNumber,dailyManifest('2026-09-16',[newMedic6]));
 assert.equal(numberingIssues.length,1);
 assert.equal(numberingIssues[0].group,'MagicGLP 6');
 assert.equal(numberingIssues[0].incomingNames.length,1);
 assert.equal(numberingIssues[0].incomingNames[0],newMedic6);
 assert.ok(numberingIssues[0].knownNames.includes(oldMedic6));
+assert.ok(numberingIssues[0].historicalNames.includes(oldMedic6));
+assert.equal(db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[newMedic6])).length,0,'nome diferente apenas no histórico gera aviso, não duplicidade na coleta atual');
+assert.equal(db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[oldMedic6,newMedic6])).length,1,'dois nomes com a mesma numeração na coleta atual continuam bloqueados');
 assert.equal(db.campaignNumberReuseIssues(reusedNumber,dailyManifest('2026-09-16',[oldMedic6])).length,0,'reimportar o mesmo nome não deve exigir renumeração');
 const oldSlim='07/09 - SlimQA 13 (GM-BB-SE) 80% - U$ 42',newSlim='26/09 - SlimQA 13 (GM-BB-SE) 80% - U$ 42';
 const slimOriginal=db.importManifest(db.create(),dailyManifest('2026-09-27',[oldSlim]),()=>({date:'2026-09-27',cells:{B:{value:12},C:{value:2}}})).base;
@@ -192,7 +195,8 @@ assert.equal(twiceCorrectedIssues.length,0,'histórico de múltiplas correções
 assert.equal(twiceCorrected.campanhas.length,1,'correção posterior da data não separa a campanha confirmada em outro ID');
 assert.equal(twiceCorrected.diario.every(row=>row.campanha_id===slimCampaign.id),true,'o Diário permanece associado ao ID original');
 const differentSlim='30/09 - SlimQA 13 (GM-BB-SE) 90% - U$ 42';
-assert.equal(db.campaignNumberReuseIssues(twiceCorrected,dailyManifest('2026-09-30',[differentSlim])).length,1,'mudança além da data continua bloqueada como reutilização real da numeração');
+assert.equal(db.campaignNumberHistoryWarnings(twiceCorrected,dailyManifest('2026-09-30',[differentSlim])).length,1,'mudança além da data gera aviso histórico sem associação automática');
+assert.equal(db.campaignNumberReuseIssues(twiceCorrected,dailyManifest('2026-09-30',[nextSlim,differentSlim])).length,1,'nomes distintos presentes na coleta continuam bloqueados, mesmo com aliases históricos');
 assert.equal(slimApplied.campanhas[0].movimento_status,'manteve','renomear somente a data não cria uma campanha nova');
 assert.equal(slimApplied.event_log.filter(event=>event.event_type==='test_iteration_created').length,1,'renomear a data não cria nova iteração na observabilidade');
 assert.equal(slimApplied.diario.length,2);

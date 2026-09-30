@@ -1,18 +1,19 @@
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 
-function reportHtml(report){
+export function reportHtml(report){
   const phases=report?.phases||[];
   const overall=report?.overall||'SEM RESULTADO';
   const lines=phases.flatMap(phase=>(phase.report?.checks||[]).map(check=>`<li><b>${escapeHtml(check.status)}</b> · ${escapeHtml(phase.name)} / ${escapeHtml(check.name)} — ${escapeHtml(check.message)}${check.items?.length?` <span>${escapeHtml(check.items.join(', '))}</span>`:''}</li>`));
   return `<div class="presell-result ${overall==='BLOCKED'?'is-error':overall==='PASS'?'is-pass':'is-warn'}"><strong>${escapeHtml(overall)}</strong><ul>${lines.join('')||'<li>Nenhum detalhe retornado.</li>'}</ul></div>`;
 }
 
-function parseFicha(text){
+export function parseFicha(text){
   let ficha;
   try{ficha=JSON.parse(text)}catch{throw new Error('A ficha precisa estar em JSON válido.')}
   if(!ficha||typeof ficha!=='object'||Array.isArray(ficha))throw new Error('A ficha precisa ser um objeto JSON.');
   for(const field of['destination','htmlLanguage','countryCode','pageTitle','affiliateUrl'])if(!String(ficha[field]||'').trim())throw new Error(`Campo obrigatório ausente: ${field}.`);
-  if(!Array.isArray(ficha.faqs)||ficha.faqs.length!==4)throw new Error('A ficha deve conter exatamente quatro FAQs.');
+  if(!Array.isArray(ficha.faqs)||![3,4].includes(ficha.faqs.length))throw new Error('A ficha deve conter três ou quatro FAQs.');
+  if(ficha.faqs.some(faq=>!String(faq?.question||'').trim()||!String(faq?.answer||'').trim()))throw new Error('Cada FAQ deve conter pergunta e resposta preenchidas.');
   ficha.assetFolder=String(ficha.assetFolder||'assets');
   return ficha;
 }
@@ -22,6 +23,13 @@ async function callApi(path,ficha){
   const result=await response.json().catch(()=>({error:'Resposta inválida do serviço local.'}));
   if(!response.ok)throw new Error(result.error||'O serviço local recusou a operação.');
   return result;
+}
+
+export async function createPresellFromFicha(ficha,{confirmCreate=message=>window.confirm(message)}={}){
+  const normalized=parseFicha(JSON.stringify(ficha));
+  if(!confirmCreate('O conteúdo obrigatório da ficha está válido. Criar a Precel no destino informado? A criação será interrompida se algum arquivo de saída já existir ou se os assets/template não passarem na validação.'))return {cancelled:true};
+  const production=await callApi('/api/presell/produce',normalized);
+  return {production};
 }
 
 export async function mount({root,toast}){

@@ -7,10 +7,30 @@ param(
 
     [string]$FichaJson,
 
-    [string]$TemplateRoot = 'C:\Users\Fabio-Vaio\OneDrive\tráfego pago\produtos\template\presell-cookie-base'
+    [Parameter(Mandatory = $true)]
+    [string]$TemplateRoot
 )
 
 $ErrorActionPreference = 'Stop'
+
+$rulesPath = Join-Path $PSScriptRoot '..\config\presell-rules.json'
+$rules = [System.IO.File]::ReadAllText($rulesPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+$detailsId = [string]$rules.templateIdentifiers.detailsId
+if ($detailsId -notmatch '^[A-Za-z][A-Za-z0-9_-]*$') {
+    throw 'Identificador dos detalhes da oferta inválido nas regras do template.'
+}
+
+function Convert-TemplateIdentifiers {
+    param([string]$Template)
+
+    # Normalize only template identifiers, before inserting factual offer content.
+    foreach ($legacyId in @($rules.templateIdentifiers.legacyDetailsIds)) {
+        if ([string]::IsNullOrWhiteSpace([string]$legacyId)) { continue }
+        $pattern = '(?<![A-Za-z0-9_-])' + [regex]::Escape([string]$legacyId) + '(?![A-Za-z0-9_-])'
+        $Template = [regex]::Replace($Template, $pattern, $detailsId, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    return $Template
+}
 
 function Get-FichaValue {
     param([object]$Ficha, [string]$Name)
@@ -43,7 +63,7 @@ function Get-SafeStylesheet {
 
     $clean = [regex]::Replace(
         $Stylesheet,
-        '@font-face\{[^}]*https://hume\.trustedfocus\.shop[^}]*\}',
+        '@font-face\{[^}]*https?://[^}]*\}',
         '',
         [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
     )
@@ -58,7 +78,7 @@ function Get-SafeStylesheet {
     }
 
     $unsafePatterns = @(
-        'hume\.trustedfocus\.shop',
+        '@font-face\{[^}]*https?://',
         '<script\b',
         'google-analytics',
         'gtag\s*\(',
@@ -90,8 +110,8 @@ $missingFields = @(
 if ($missingFields.Count -gt 0) {
     throw ('Campos obrigatórios ausentes na ficha: ' + ($missingFields -join ', '))
 }
-if (@($ficha.faqs).Count -ne 4) {
-    throw 'A ficha deve conter exatamente quatro itens em faqs.'
+if (@($ficha.faqs).Count -notin @($rules.acceptedFaqCounts)) {
+    throw 'A ficha deve conter três ou quatro itens em faqs.'
 }
 foreach ($faq in @($ficha.faqs)) {
     if ([string]::IsNullOrWhiteSpace([string]$faq.question) -or [string]::IsNullOrWhiteSpace([string]$faq.answer)) {
@@ -142,7 +162,16 @@ foreach ($targetName in $targetNames) {
 }
 
 $indexTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'index.html'), [System.Text.Encoding]::UTF8)
+$indexTemplate = Convert-TemplateIdentifiers $indexTemplate
 $faqItems = @($ficha.faqs)
+if ($faqItems.Count -eq 3) {
+    # Omit only the template's optional fourth pair, before inserting supplied text.
+    $fourthFaqPattern = '(?is)<h3\b[^>]*>\s*\{\{FAQ_4_QUESTION\}\}\s*</h3>\s*<p\b[^>]*>\s*\{\{FAQ_4_ANSWER\}\}\s*</p>'
+    $indexTemplate = [regex]::Replace($indexTemplate, $fourthFaqPattern, '')
+    if ($indexTemplate -match '\{\{FAQ_4_(?:QUESTION|ANSWER)\}\}') {
+        throw 'O template não permite omitir com segurança a quarta FAQ.'
+    }
+}
 $replacements = [ordered]@{
     HTML_LANG                 = $htmlLanguage
     PAGE_TITLE               = Encode-Html (Get-FichaValue $ficha 'pageTitle')
@@ -169,8 +198,10 @@ $replacements = [ordered]@{
     FAQ_2_ANSWER             = Encode-Html ([string]$faqItems[1].answer)
     FAQ_3_QUESTION           = Encode-Html ([string]$faqItems[2].question)
     FAQ_3_ANSWER             = Encode-Html ([string]$faqItems[2].answer)
-    FAQ_4_QUESTION           = Encode-Html ([string]$faqItems[3].question)
-    FAQ_4_ANSWER             = Encode-Html ([string]$faqItems[3].answer)
+}
+if ($faqItems.Count -eq 4) {
+    $replacements['FAQ_4_QUESTION'] = Encode-Html ([string]$faqItems[3].question)
+    $replacements['FAQ_4_ANSWER'] = Encode-Html ([string]$faqItems[3].answer)
 }
 
 $indexOutput = $indexTemplate
@@ -190,6 +221,7 @@ if (-not $headMatch.Success) {
 $indexOutput = $indexOutput.Insert($headMatch.Index + $headMatch.Length, "`r`n    <meta charset=`"UTF-8`">")
 
 $stylesTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'styles.css'), [System.Text.Encoding]::UTF8)
+$stylesTemplate = Convert-TemplateIdentifiers $stylesTemplate
 $stylesOutput = Get-SafeStylesheet $stylesTemplate
 $stylesOutput += @"
 
@@ -214,7 +246,7 @@ body {
     background-color: #d9dde2;
   }
 
-  #glp-faq .faq-content {
+  #${detailsId} .faq-content {
     max-width: none;
     margin: 10px 12px 0;
     padding: 16px;
@@ -259,6 +291,7 @@ if (-not [string]::IsNullOrWhiteSpace($primaryButtonColor)) {
 "@
 }
 $scriptsTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'scripts.js'), [System.Text.Encoding]::UTF8)
+$scriptsTemplate = Convert-TemplateIdentifiers $scriptsTemplate
 $scriptWithoutComments = [regex]::Replace($scriptsTemplate, '/\*.*?\*/', '', [System.Text.RegularExpressions.RegexOptions]::Singleline).Trim()
 $scriptsOutput = if ([string]::IsNullOrWhiteSpace($scriptWithoutComments)) {
     '/* Intencionalmente vazio: esta página não inclui scripts de terceiros. */'

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hub MCC D0",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Captura a grade D0 da MCC ou encaminha um CSV manual ao Preparador local.",
   "icons": {
     "64": "icon.png"

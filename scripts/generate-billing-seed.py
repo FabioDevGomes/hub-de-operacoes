@@ -1,7 +1,7 @@
-"""Convert the corrected legacy faturamento worksheet to the versioned Hub seed.
+"""Convert the corrected legacy faturamento worksheet to a private local seed.
 
-Developer-only tool: the application and build consume the generated JSON and do
-not require XLSX, Python, or openpyxl at runtime.
+Developer-only recovery/migration tool. Its output must stay outside ``src/`` and
+``dist/``; the application keeps financial records only in browser IndexedDB.
 """
 from __future__ import annotations
 
@@ -73,8 +73,18 @@ def stable_id(prefix: str, fingerprint: str, occurrence: int = 1) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="Workbook original corrigido")
-    parser.add_argument("--output", required=True, type=Path, help="Destino do JSON de seed")
+    parser.add_argument("--output", required=True, type=Path, help="Destino privado do JSON (prefira data-local/)")
     args = parser.parse_args()
+
+    repository_root = Path(__file__).resolve().parents[1]
+    output_path = args.output.resolve()
+    for shared_root_name in ("src", "dist"):
+        shared_root = (repository_root / shared_root_name).resolve()
+        try:
+            output_path.relative_to(shared_root)
+        except ValueError:
+            continue
+        raise SystemExit(f"Dados financeiros privados não podem ser gravados em {shared_root_name}/. Use data-local/ ou um caminho externo.")
 
     workbook = load_workbook(args.input, data_only=True, read_only=True)
     if "fatur." not in workbook.sheetnames:
@@ -289,10 +299,10 @@ def main() -> None:
         "audit": [],
         "meta": [{"key": "seed:legacy-faturamento:v1", "version": SEED_VERSION, "source": SOURCE, "sales_total": len(sales), "movements_total": len(movements)}],
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(seed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(seed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(seed["validation"], ensure_ascii=False, indent=2))
-    print(f"seed escrito: {args.output}")
+    print(f"seed privado escrito: {output_path}")
 
 
 if __name__ == "__main__":

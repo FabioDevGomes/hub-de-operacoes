@@ -25,6 +25,16 @@
 - Não sobrescrever conflitos financeiros silenciosamente fora do fluxo de confirmação já existente.
 - Após build, validar importação em memória ou teste. Não aplicar manifesto sintético nem importar CSV real para a base ativa.
 
+## Numeração atual versus histórico
+
+- `CampaignDatabase.campaignNumberReuseIssues(base, manifesto)` bloqueia apenas quando a coleta D−1/D0 recebida contém mais de um nome exato distinto com a mesma numeração de produto. A verificação ocorre na prévia e novamente imediatamente antes da escrita; o erro mostra os nomes atuais envolvidos.
+- Um nome diferente apenas em campanhas persistidas, snapshots ou manifesto anterior não prova duplicidade na MCC atual. `campaignNumberHistoryWarnings` retorna essas divergências como avisos não bloqueantes, com `incomingNames` e `historicalNames`; a prévia identifica claramente coleta atual e histórico.
+- Reimportar um nome exato já conhecido não deve ser bloqueado pelo nome de outra campanha histórica, independentemente de estar ativa, pausada ou histórica. Comparação é insensível a caixa, sem associação por nome reduzido.
+- Nomes exatos diferentes continuam com IDs e diários separados. Não renomear, mesclar nem remover registros para resolver um aviso histórico; uma renumeração aparente não comprova que é a mesma campanha.
+- Correções apenas da data continuam no fluxo existente de confirmação explícita, preservando ID e aliases confirmados. Avisos históricos não substituem essa confirmação.
+- O fallback de prévia no Preparador deve manter a distinção entre erro atual e aviso histórico. Gravações continuam exigindo o domínio central; não habilitar importação por um fallback sem observabilidade.
+- Regressões: `node tests/mcc-numbering.test.mjs`, `node tests/database.test.mjs`, `node tests/preparador-d0.test.mjs` e `node tests/preparador-d1.test.mjs`. Cobrir duplicidade real em base vazia, reimportação com colisão antiga, snapshots antigos, renumeração sem fusão de histórico, botão habilitado para aviso e bloqueio defensivo antes de gravar.
+
 ## Reflexo no Controle Macro
 
 - Política operacional acordada: não pedir nova importação da planilha para atualizações diárias; usar MCC D0 como parcial e D−1 como fechamento do dia anterior. Preservar o histórico da planilha já gravado.

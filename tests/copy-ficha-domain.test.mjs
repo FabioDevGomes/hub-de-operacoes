@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import {calculateDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from '../src/copy-ficha/copy-ficha-domain.mjs';
+import {calculateDiscount,discountAmountForPercent,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from '../src/copy-ficha/copy-ficha-domain.mjs';
 
 const input={
   product:'MyoGlow',countryCode:'US',htmlLanguage:'en-US',currency:'USD',
-  destination:'C:\\Users\\Fabio-Vaio\\OneDrive\\tráfego pago\\produtos\\MyoGlow\\pag01',assetFolder:'assets',
+  destination:'C:\\Users\\usuario-teste\\produtos\\Produto Exemplo\\pag01',assetFolder:'assets',
   affiliateUrl:'https://www.fasttrack20.com/example/',freeShipping:'confirmed',fastShipping:'confirmed',guaranteeDays:90,
   urgencyConfirmed:'pending',scarcityConfirmed:'pending',
   packages:[
@@ -136,7 +136,7 @@ const checkoutDetected=parseOfferText(checkoutPaste);
 assert.equal(checkoutDetected.productCandidate,'GoGo Heater','produto repetido no checkout deve prevalecer sobre rótulos de interface e produto citado no rodapé');
 assert.equal(checkoutDetected.countryCode,'US','país não deve ser inferido da seleção de país do navegador/checkout quando a página está em inglês');
 assert.equal(checkoutDetected.htmlLanguage,'en-US','idioma HTML deve acompanhar o idioma principal em inglês');
-assert.equal(checkoutDetected.pageTitleCandidate,'GoGo Heater | Packages','título sugerido deve usar o nome repetido do produto e o idioma da página');
+assert.equal(checkoutDetected.pageTitleCandidate,'GoGo Heater | Offer','título sugerido não pressupõe um campo de pacotes na ficha');
 const checkoutPackages=parseOfferText(`Secure Checkout
 GoGo Heater - 3
 +10% OFF
@@ -255,11 +255,12 @@ assert.equal(generateAssets({packages:[mismatchedPairBadge.packages[1]]}).bestDi
 const groundedAssets=generateAssets({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
 assert.equal(groundedAssets.bestDiscountPercent,60);
 assert.deepEqual(groundedAssets.packages.map(item=>item.discountPercent),[50,55,60],'descontos são calculados usando totais comparáveis para cada quantidade');
-assert.ok(groundedAssets.sitelinks.some(item=>item.text==='3 Pairs'&&item.line1.includes('$55.99/ea')),'sitelinks usam o preço por unidade realmente exibido');
+assert.ok(!groundedAssets.sitelinks.some(item=>`${item.text} ${item.line1} ${item.line2}`.includes('$55.99/ea')),'a copy não deve expor o preço unitário do pacote');
 assert.ok(!groundedAssets.sitelinks.some(item=>item.line1.includes('$167.97')),'copy de anúncio não apresenta total promocional calculado como se estivesse diretamente exibido');
 const groundedFicha=buildFicha({product:groundedFootwear.productCandidate,countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:groundedFootwear.packages});
-assert.ok(groundedFicha.priceText.includes('calculated promotional total $125.98')&&groundedFicha.priceText.includes('displayed unit price $62.99/ea'),'ficha registra explicitamente unidade exibida e total promocional calculado');
-assert.ok(groundedFicha.faqs[0].answer.includes('total calculated from $69.99/ea × 1'),'FAQ não confunde preço unitário com total do pacote');
+assert.ok(!groundedFicha.priceText.includes('$62.99/ea')&&!groundedFicha.priceText.includes('$125.98'),'o bloco de detalhes não inclui preços de pacote nem totais calculados');
+assert.match(groundedFicha.priceText,/60% off/,'o bloco de detalhes prioriza o maior percentual identificado');
+assert.match(groundedFicha.faqs[0].answer,/60% off/,'a FAQ acompanha o maior desconto sem exigir uma lista de pacotes');
 const gloraRecurringPaste=`A SPECIAL LIMITED-TIME OFFER | GET 70% OFF
 GloraMD
 Hurry! Your discount is reserved for 09:09 minutes!
@@ -320,12 +321,77 @@ assert.equal(gloraRecurring.packages[0].packageDescriptor,'Received Every 30 Day
 assert.ok(gloraRecurring.packages[0].priceNote.includes('Received Every 30 Days + Free Shipping'),'a frequência e a condição de envio exibidas devem permanecer associadas ao cartão');
 assert.ok(gloraRecurring.packages[0].priceNote.includes('diverge do selo'),'divergência entre cálculo e selo deve ficar visível para revisão');
 assert.equal(gloraRecurring.highestPercent,70,'o cálculo de um total por unidade não deve produzir um percentual maior que os valores explicitamente exibidos');
+assert.equal(gloraRecurring.highestSavingsAmount,282,'a economia deve vir do cartão associado ao maior percentual exibido');
 const gloraRecurringAssets=generateAssets({product:'GloraMD',countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:gloraRecurring.packages});
 assert.equal(gloraRecurringAssets.bestDiscountPercent,70,'anúncios devem usar o maior selo coerente, sem promover o cálculo divergente');
 const gloraFicha=buildFicha({product:'GloraMD',countryCode:'US',htmlLanguage:'en-US',currency:'USD',packages:gloraRecurring.packages});
-assert.ok(gloraFicha.priceText.includes('quantity 3 units')&&!gloraFicha.priceText.includes('quantity 3 pairs'),'a ficha usa a unidade correta em vez da unidade herdada de pacotes de calçados');
-assert.ok(gloraFicha.priceText.includes('displayed package terms Received Every 90 Days + Free Shipping'),'a ficha preserva a condição recorrente exibida em cada cartão');
+assert.match(gloraFicha.priceText,/70% off and \$282\.00 in savings/,'a ficha prioriza o maior desconto e o valor associado, sem reproduzir os cartões de pacote');
+assert.doesNotMatch(gloraFicha.priceText,/quantity 3 units|quantity 3 pairs|Received Every 90 Days/,'a ficha de detalhes não depende de uma lista de pacotes');
 assert.ok(gloraFicha.pending.some(item=>item.includes('discount badge does not match')),'a ficha deixa os cartões com divergência de percentual explicitamente pendentes de revisão');
+const resqVacPaste=`Choose your package
+1x ResQVac
+Save 50% Off + 10% OFF
+$99.98
+$
+44.99
+/each
+2x ResQVac
+Save 55% Off + 10% OFF
+$199.98
+$
+40.49
+/each
+3x ResQVac
+Save 60% Off + 10% OFF
+$299.97
+$
+35.99
+/each
+4x ResQVac
+Save 65% Off + 10% OFF
+$399.96
+$
+31.49
+/each
+5x ResQVac
+Save 70% Off + 10% OFF
+$499.95
+$
+26.99
+/each
+Shipping address
+Payment`;
+const resqVac=parseOfferText(resqVacPaste);
+assert.equal(resqVac.packages.length,5,'os cinco cartões do ResQVac são reconhecidos antes do endereço de entrega');
+assert.equal(resqVac.packages.at(-1).discountBadgeBasePercent,70,'o percentual-base do selo empilhado fica associado ao pacote');
+assert.equal(resqVac.packages.at(-1).discountBadgePercent,73,'o percentual combinado do selo permanece disponível sem substituir o percentual-base');
+assert.equal(resqVac.highestPercent,70,'a análise seleciona o maior percentual promocional exibido, não o percentual combinado calculado');
+assert.equal(resqVac.highestSavingsAmount,365,'a maior economia é calculada como US$ 499,95 menos 5 × US$ 26,99');
+assert.equal(resqVac.highestSavingsPackageLabel,'5x ResQVac','o valor de economia fica associado ao cartão que o originou');
+const resqVacPartialRead=parseOfferText(`ResQVac\n${resqVacPaste.replace(/(\d)x ResQVac/g,'Bundle $1x ResQVac')}`);
+assert.equal(resqVacPartialRead.packages.length,1,'a leitura estruturada pode reconhecer apenas um cartão sem limitar o detector do maior desconto');
+assert.equal(resqVacPartialRead.highestPercent,70,'o maior percentual continua sendo encontrado mesmo quando a lista estruturada está incompleta');
+assert.equal(resqVacPartialRead.highestSavingsAmount,365,'a economia correta é associada ao cartão de maior percentual, mesmo com leitura parcial da lista');
+const resqVacTimesPaste=resqVacPaste.replace(/(\d)x ResQVac/g,'$1×ResQVac');
+const resqVacTimes=parseOfferText(resqVacTimesPaste);
+assert.equal(resqVacTimes.highestPercent,70,'o percentual máximo também é encontrado com o símbolo de multiplicação e sem espaço no rótulo');
+assert.equal(resqVacTimes.highestSavingsAmount,365,'o valor associado continua vindo do cartão de maior percentual nesse formato');
+assert.equal(discountAmountForPercent(resqVac.packages,70)?.amount,365,'70% confirmado corresponde ao cartão cujo selo combina 70% + 10%');
+assert.equal(discountAmountForPercent(resqVac.packages,70)?.matchType,'stacked-base','a associação explica que foi usado o percentual-base do selo empilhado');
+const resqVacAssets=generateAssets({product:'ResQVac',htmlLanguage:'en-US',currency:'USD',confirmedDiscountPercent:'70',confirmedDiscountAmount:'365',guaranteeDays:90,guaranteeStatus:'confirmed',fastShipping:'confirmed',urgencyConfirmed:'confirmed',scarcityConfirmed:'confirmed',rawText:'Ends today',packages:resqVac.packages});
+assert.equal(resqVacAssets.bestDiscountPercent,70,'o percentual confirmado prevalece sobre o percentual efetivo do selo empilhado');
+assert.ok(resqVacAssets.headlines.some(item=>item.includes('$365.00'))&&resqVacAssets.descriptions.some(item=>item.includes('$365.00')&&item.includes('70%')),'a copy prioriza o valor informado junto ao percentual confirmado');
+const discountCopyStats={
+  headlines:resqVacAssets.headlines.filter(item=>item.includes('$365.00')&&item.includes('70%')).length,
+  descriptions:resqVacAssets.descriptions.filter(item=>item.includes('$365.00')&&item.includes('70%')).length,
+  callouts:resqVacAssets.callouts.filter(item=>item.includes('$365.00')&&item.includes('70%')).length,
+  sitelinks:resqVacAssets.sitelinks.filter(item=>`${item.text} ${item.line1} ${item.line2}`.includes('$365.00')&&`${item.text} ${item.line1} ${item.line2}`.includes('70%')).length
+};
+assert.ok(discountCopyStats.headlines>=8&&discountCopyStats.descriptions>=8&&discountCopyStats.callouts>=1&&discountCopyStats.sitelinks>=10,'as variações priorizadas de cada formato combinam o desconto confirmado e seu valor, incluindo garantia nos sitelinks');
+const generatedCopyText=[...resqVacAssets.headlines,...resqVacAssets.descriptions,...resqVacAssets.callouts,...resqVacAssets.sitelinks.flatMap(item=>[item.text,item.line1,item.line2])].join('\n');
+assert.ok(!generatedCopyText.includes('$499.95')&&!generatedCopyText.includes('$26.99'),'a copy usa a economia confirmada, não os preços original ou unitário do produto');
+const amountOnlyAssets=generateAssets({product:'ResQVac',htmlLanguage:'en-US',currency:'USD',confirmedDiscountPercent:'70',confirmedDiscountAmount:'365'});
+assert.ok(amountOnlyAssets.headlines.some(item=>item.includes('$365.00')&&item.includes('70%'))&&amountOnlyAssets.descriptions.some(item=>item.includes('$365.00')&&item.includes('70%'))&&amountOnlyAssets.sitelinks.some(item=>`${item.text} ${item.line1} ${item.line2}`.includes('$365.00')&&`${item.text} ${item.line1} ${item.line2}`.includes('70%')),'um percentual e valor confirmados bastam para gerar os formatos prioritários mesmo sem pacote associado');
 const gloraInlinePaste=gloraRecurringPaste.replace(/\$\n(42\.49|36\.52|32\.97|29\.48)\n\/each/g,(_,amount)=>`$${amount}/each`);
 assert.deepEqual(parseOfferText(gloraInlinePaste).packages.map(item=>[item.label,item.packageQuantity,item.promoPrice]),gloraRecurring.packages.map(item=>[item.label,item.packageQuantity,item.promoPrice]),'o parser também deve aceitar o preço e /each na mesma linha');
 const uncorroboratedFooter=parseOfferText(groundedFootwearPaste.replace('Grounded Barefoot Shoes','Traditional Barefoot Shoes'));
@@ -360,6 +426,14 @@ assert.ok(assets.sitelinks.some(item=>/Save \$120\.00/.test(`${item.text} ${item
 assert.ok(!assets.sitelinks.some(item=>item.text==='Offer Details'&&item.line1==='Offer'&&item.line2==='Packages'),'formato pobre mostrado na captura não pode voltar');
 assert.ok(formatSitelinks(assets.sitelinks).includes('\n\n'),'sitelinks devem sair em blocos sem rótulos internos');
 
+const confirmedDiscountAssets=generateAssets({...input,confirmedDiscountPercent:'45'});
+assert.equal(confirmedDiscountAssets.bestDiscountPercent,45,'o campo Desconto confirmado deve prevalecer sobre os descontos derivados dos pacotes');
+assert.ok(confirmedDiscountAssets.headlines.some(item=>item.includes('45%')),'headlines devem usar o percentual confirmado');
+assert.ok(confirmedDiscountAssets.descriptions.every(item=>item.includes('45%')),'descriptions devem usar o percentual confirmado');
+assert.ok(confirmedDiscountAssets.sitelinks.some(item=>/45%/.test(`${item.text} ${item.line1} ${item.line2}`)),'sitelinks devem usar o percentual confirmado');
+assert.ok(!JSON.stringify(confirmedDiscountAssets).includes('60.3%'),'o percentual calculado de outro pacote não deve substituir o confirmado nos ativos');
+assert.ok(!JSON.stringify(confirmedDiscountAssets).includes('$254.00'),'não associar a economia de um pacote ao percentual confirmado de outro');
+
 const localeCtas={
   'en-US':/choose|order|compare|select|shop|complete your order/i,
   'pt-BR':/escolha|peça|compre|compare|selecione|finalize/i,
@@ -390,7 +464,7 @@ assert.deepEqual(parsed,ficha);
 assert.equal(ficha.faqs.length,4);
 assert.equal(ficha.destination,input.destination);
 assert.equal(ficha.affiliateUrl,input.affiliateUrl);
-assert.ok(ficha.priceText.includes('60.3% discount'));
+assert.ok(ficha.priceText.includes('60.3% off'));
 assert.ok(ficha.shippingGuaranteeText.includes('free shipping'));
 assert.ok(ficha.shippingGuaranteeText.includes('Fast shipping'));
 assert.ok(!json.includes('[https://'),'URL de afiliação não deve sair em Markdown');
@@ -404,7 +478,7 @@ const resolved={...input,urgencyConfirmed:'no',scarcityConfirmed:'no'};
 assert.deepEqual(generationBlockerFields({...resolved,freeShipping:'pending'}),['freeShipping'],'campo de frete grátis deve ser identificado para destaque visual');
 assert.deepEqual(generationBlockerFields({...resolved,guaranteeStatus:'confirmed',guaranteeDays:''}),['guaranteeDays'],'prazo ausente deve apontar o campo específico que falta');
 assert.deepEqual(generationBlockerFields({...resolved,affiliateUrl:'not-a-url'}),['affiliateUrl'],'URL inválida deve ser identificada para destaque');
-assert.deepEqual(generationBlockerFields({...input,freeShipping:'pending',fastShipping:'pending',guaranteeStatus:'pending',urgencyConfirmed:'pending',scarcityConfirmed:'pending',affiliateUrl:'',destination:'',currency:'',packages:[]}),['freeShipping','fastShipping','guaranteeStatus','urgencyConfirmed','scarcityConfirmed','affiliateUrl','destination','currency','packages'],'todos os bloqueadores pendentes devem ser enumerados');
+assert.deepEqual(generationBlockerFields({...input,freeShipping:'pending',fastShipping:'pending',guaranteeStatus:'pending',urgencyConfirmed:'pending',scarcityConfirmed:'pending',affiliateUrl:'',destination:'',currency:'',packages:[]}),['freeShipping','fastShipping','guaranteeStatus','urgencyConfirmed','scarcityConfirmed','affiliateUrl','destination','currency'],'todos os bloqueadores pendentes devem ser enumerados sem exigir pacotes');
 assert.deepEqual(generationBlockerFields(resolved),[],'formulário sem bloqueios não deve manter campos sinalizados');
 assert.deepEqual(generationBlockers(resolved),[],'estados confirmados ou explicitamente recusados não devem bloquear');
 assert.equal(buildFicha(resolved).pending.length,0,'ficha resolvida não deve conter pendências');
@@ -413,6 +487,34 @@ assert.equal(buildFicha({...resolved,guaranteeDays:'',guaranteeStatus:'no'}).faq
 const declined={...resolved,freeShipping:'no',fastShipping:'no',guaranteeDays:'',guaranteeStatus:'no'};
 assert.deepEqual(generationBlockers(declined),[],'negações explícitas devem resolver confirmações sem evidência');
 assert.ok(!fichaJson(declined).includes('"CONFIRMAR"'),'ficha com condições explicitamente ausentes não pode conter placeholders');
+const packageFree={...declined,packages:[],confirmedDiscountPercent:'60',confirmedDiscountAmount:'90'};
+const packageFreeFicha=buildFicha(packageFree),packageFreeAssets=generateAssets(packageFree),packageFreeJson=fichaJson(packageFree);
+assert.deepEqual(generationBlockers(packageFree),[],'a ficha pode ser gerada sem nenhum pacote preenchido');
+assert.equal(packageFreeFicha.pending.length,0,'a ausência de preços/pacotes não cria pendências na ficha');
+assert.ok(!packageFreeJson.includes('"CONFIRMAR"'),'a ficha sem pacotes mantém todos os campos obrigatórios resolvidos');
+assert.equal(packageFreeFicha.detailsLabel,'View Offer Details','o botão segue o rótulo do modelo de detalhes');
+assert.equal(packageFreeFicha.offerMainTitle,'MyoGlow | 60% Off | Save $90.00','o título combina produto, maior desconto e economia confirmada');
+assert.equal(packageFreeFicha.offerOverviewTitle,'Offer Overview','a ficha segue a estrutura do modelo sem alegar que a loja é oficial');
+assert.equal(packageFreeFicha.priceTitle,'Pricing and Discount Details','a seção de preço segue o modelo de desconto');
+assert.match(packageFreeFicha.priceText,/60% off and \$90\.00 in savings/,'a seção usa o percentual e o valor de desconto associados');
+assert.match(packageFreeFicha.priceText,/current product pricing/,'o preço do produto é encaminhado à oferta original, sem inventar valor');
+assert.doesNotMatch(packageFreeFicha.priceText,/\$49\.99/,'a ficha não insere o preço de exemplo no bloco');
+assert.match(packageFreeFicha.faqs[0].answer,/60% off and \$90\.00 in savings/,'a FAQ de desconto usa os dados confirmados');
+assert.match(packageFreeFicha.faqs[3].answer,/current pricing/,'a quarta FAQ direciona aos termos vigentes, preservando o contrato da página');
+assert.ok(packageFreeFicha.mustContain.includes('60%')&&packageFreeFicha.mustContain.includes('$90.00'),'a validação da página exige que o desconto e a economia confirmados apareçam');
+assert.ok(packageFreeFicha.mustNotContain.includes('Money-back guarantee'),'a validação impede uma promessa de reembolso não confirmada');
+const moneyBackFicha=buildFicha({...packageFree,guaranteeStatus:'confirmed',guaranteeDays:30,rawText:'30-day money-back guarantee'});
+assert.match(moneyBackFicha.offerMainTitle,/30-Day Money-Back Guarantee/,'a garantia de reembolso só é indicada quando aparece no texto e o prazo está confirmado');
+assert.match(moneyBackFicha.faqs[2].question,/money-back/i,'a FAQ usa a pergunta específica apenas para garantia de reembolso confirmada');
+assert.ok(!moneyBackFicha.mustNotContain.includes('Money-back guarantee'),'garantia de reembolso confirmada não deve ser bloqueada pela validação');
+const portugueseOfferFicha=buildFicha({...packageFree,htmlLanguage:'pt-BR'});
+assert.equal(portugueseOfferFicha.detailsLabel,'Ver detalhes da oferta','o rótulo dos detalhes acompanha o idioma da página');
+assert.equal(portugueseOfferFicha.offerOverviewTitle,'Visão geral da oferta','a estrutura do modelo é localizada no idioma da oferta');
+assert.match(portugueseOfferFicha.priceText,/60% de desconto/,'desconto e economia são localizados sem alterar os dados');
+assert.doesNotMatch(portugueseOfferFicha.priceText,/MyoGlow.*\$49\.99/,'o bloco localizado também não acrescenta preço do produto');
+assert.ok(portugueseOfferFicha.mustNotContain.includes('garantia de reembolso'),'a ficha localizada também bloqueia tipo de garantia não confirmado');
+assert.equal(packageFreeAssets.bestDiscountPercent,60,'a copy sem pacotes usa o percentual confirmado');
+assert.ok(packageFreeAssets.callouts.some(item=>item.includes('$90.00')&&item.includes('60%')),'a copy sem pacotes usa o valor e o percentual de desconto confirmados');
 const gloraResolved={...resolved,product:'GloraMD',freeShipping:'confirmed',fastShipping:'no',guaranteeStatus:'confirmed',guaranteeDays:90,packages:gloraRecurring.packages};
 const gloraBlockers=generationBlockers(gloraResolved);
 assert.equal(gloraBlockers.length,1,'a divergência dos selos dos cartões deve ser consolidada em um bloqueio acionável');
@@ -430,8 +532,7 @@ for(const unresolved of [
   {...resolved,scarcityConfirmed:'pending'},
   {...resolved,affiliateUrl:''},
   {...resolved,destination:''},
-  {...resolved,currency:''},
-  {...resolved,packages:[]}
+  {...resolved,currency:''}
 ])assert.ok(generationBlockers(unresolved).length>0,'qualquer confirmação ou dado que causaria CONFIRMAR deve bloquear a geração');
 
 console.log('copy ficha domain ok');

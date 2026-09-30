@@ -180,7 +180,7 @@ if ($null -ne $resolvedDestination -and $null -ne $rules) {
     }
 
     $mandatoryForbiddenTokens = @(
-        'hume\.trustedfocus\.shop',
+        '@font-face\{[^}]*https?://',
         'google-analytics',
         'gtag\s*\(',
         'clarity',

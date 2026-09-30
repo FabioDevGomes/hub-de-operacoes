@@ -40,6 +40,13 @@ await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro")
 await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
 await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
 await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
+// Personal operational payloads belong only to browser IndexedDB or data-local/.
+// Remove stale copies so a build can never republish data left by an older version.
+for (const privateArtifact of [
+  "dist/billing/seed-v1.json",
+  "dist/campaign-snapshot-seed.json",
+  "dist/__paused-history-source.json",
+]) await rm(resolve(root, privateArtifact), { force: true });
 const legacyTotalsSeed = resolve(root, "data-local/legacy-totais-migration-v1.json");
 const legacyTotalsSeedOutput = resolve(root, "dist/legacy-totais-migration-v1.json");
 try {

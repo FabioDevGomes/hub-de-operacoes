@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {parseManagerEmail,groupProducts,baseProductName,compareProductLists,upsertObservation} from '../src/curadoria/gerentes/manager-list-domain.mjs';
 
-const sample=`GuruMedia New Offers Approved - Personalized For Fabio
+const sample=`GuruMedia New Offers Approved - Personalized For Test User
 11 de set. de 2026, 14:00
 33468 | GloveIt - CTC 29.99 GBP - Accepts Paypal - Direct Checkout Link - Including Checkout Event Tracking - (eCommerce / Product) - [UK]
 Payout: $38.00

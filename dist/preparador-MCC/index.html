@@ -192,6 +192,7 @@
           <button class="button ghost" id="clear-all" type="button">Limpar tudo</button>
         </div>
         <div class="panel-body">
+          <p class="helper">Exporte D−1 e D0 com o filtro <strong>Todas as campanhas</strong>, incluindo pausadas. Mantenha a coluna <strong>Status da campanha</strong>: o status do D0 define as ativas; as métricas das pausadas também entram no histórico e na conciliação.</p>
           <div class="upload-grid">
             <article class="paste-box" data-slot="d1">
               <div class="paste-label"><strong>CSV de D−1 (opcional)</strong><span class="status-pill">Aguardando</span></div>
@@ -459,7 +460,7 @@
     function panelManifestNames(manifest) {
       return [...new Set((manifest?.campanhas || []).map(item => String(item.nome_campanha_exato || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR', { numeric:true, sensitivity:'base' }));
     }
-    function panelCampaignNumberReuseIssues(baseInput, manifest) {
+    function panelCampaignNumberGroups(baseInput, manifest) {
       const base = normalizePanelBase(baseInput), incoming = panelManifestNames(manifest), incomingKeys = new Set(incoming.map(name => name.toLocaleLowerCase('pt-BR'))), known = new Set(incoming);
       const currentNames = new Set((base.campanhas || []).map(item => String(item.nome_mcc || '').trim().toLocaleLowerCase('pt-BR'))), confirmedAliases = new Set();
       const dateParts = name => { const match = String(name || '').trim().match(/^(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?)\s*[–—-]\s*(.+)$/); return match ? { date:match[1], suffix:match[2].trim().toLocaleLowerCase('pt-BR') } : null; };
@@ -483,6 +484,12 @@
         entry.names.set(nameKey, name); if (incomingKeys.has(nameKey)) entry.incomingNames.set(nameKey, name); groups.set(key, entry);
       }
       return [...groups.values()].filter(entry => entry.incomingNames.size && entry.names.size > 1).map(entry => ({ group:entry.group, incomingNames:[...entry.incomingNames.values()], knownNames:[...entry.names.values()] }));
+    }
+    function panelCampaignNumberReuseIssues(baseInput, manifest) {
+      return panelCampaignNumberGroups(baseInput, manifest).filter(item => item.incomingNames.length > 1);
+    }
+    function panelCampaignNumberHistoryWarnings(baseInput, manifest) {
+      return panelCampaignNumberGroups(baseInput, manifest).filter(item => item.incomingNames.length === 1).map(item => ({ ...item, historicalNames:item.knownNames.filter(name => !item.incomingNames.some(incoming => incoming.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) }));
     }
     function panelIdFor(value) {
       let hash = 2166136261;
@@ -538,7 +545,7 @@
       base.atualizado_em = new Date().toISOString();
       return { base, conflicts };
     }
-    const fallbackPanelDatabase = { normalize:normalizePanelBase, importManifest:importManifestIntoPanel, campaignNumberReuseIssues:panelCampaignNumberReuseIssues };
+    const fallbackPanelDatabase = { normalize:normalizePanelBase, importManifest:importManifestIntoPanel, campaignNumberReuseIssues:panelCampaignNumberReuseIssues, campaignNumberHistoryWarnings:panelCampaignNumberHistoryWarnings };
 
     function panelUpdateError(error) {
       if (error?.name === 'VersionError') return 'A base do painel usa uma versão mais nova. Recarregue o Hub e tente novamente.';
@@ -556,7 +563,7 @@
       try {
         const original = databaseApi.normalize(await readPanelBase(db));
         const reuseIssues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(original, manifest);
-        if (reuseIssues.length) { const error = new Error('Há campanha usando uma numeração que já pertenceu a outro nome. Corrija o nome na MCC e importe um novo CSV.'); error.code = 'CAMPAIGN_NUMBER_REUSE'; error.numberingIssues = reuseIssues; throw error; }
+        if (reuseIssues.length) { const error = new Error(`Há nomes diferentes com a mesma numeração na coleta atual: ${reuseIssues.map(item => `${item.group}: ${item.incomingNames.join(' | ')}`).join('; ')}. Corrija a numeração na MCC e faça uma nova captura ou exportação.`); error.code = 'CAMPAIGN_NUMBER_REUSE'; error.numberingIssues = reuseIssues; throw error; }
         const dateChanges = databaseApi.campaignDateChangeCandidates(original, manifest);
         if (dateChanges.length) {
           const summary = dateChanges.map(item => `${item.shortName}: ${item.oldDate} → ${item.newDate}`).join('\n');
@@ -1142,10 +1149,10 @@
 
     async function validatePreparedNumbering(result) {
       const token = ++numberingValidationToken, databaseApi = window.CampaignDatabase || fallbackPanelDatabase;
-      let issues = [], dateChanges = [];
+      let issues = [], dateChanges = [], historyWarnings = [];
       try {
         const db = await openPanelDatabase();
-        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); dateChanges = databaseApi.campaignDateChangeCandidates?.(base, result.manifest) || []; }
+        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); dateChanges = databaseApi.campaignDateChangeCandidates?.(base, result.manifest) || []; historyWarnings = (databaseApi.campaignNumberHistoryWarnings || panelCampaignNumberHistoryWarnings)(base, result.manifest); }
         finally { db.close(); }
       } catch (error) {
         if (token !== numberingValidationToken || currentResult !== result) return;
@@ -1157,10 +1164,12 @@
       if (token !== numberingValidationToken || currentResult !== result) return;
       numberingIssues = issues;
       const issueList = q('#issues'); issueList.querySelectorAll('[data-numbering-issue]').forEach(item => item.remove());
+      issueList.querySelectorAll('[data-numbering-history]').forEach(item => item.remove());
       issueList.querySelectorAll('[data-date-change]').forEach(item => item.remove());
+      for (const warning of historyWarnings) { const li = document.createElement('li'); li.className = 'issue warn'; li.dataset.numberingHistory = 'true'; li.textContent = `${warning.group}: divergência histórica (não bloqueia). Na coleta atual: ${warning.incomingNames.join(' | ')}. No histórico: ${warning.historicalNames.join(' | ')}. Os registros continuam separados pelo nome exato; nenhum histórico será mesclado por numeração.`; issueList.prepend(li); }
       for (const item of dateChanges) { const li = document.createElement('li'); li.className = 'issue warn'; li.dataset.dateChange = 'true'; li.textContent = `Mudança de data detectada: ${item.oldName} → ${item.newName}. Você poderá confirmar antes de gravar.`; issueList.prepend(li); }
       if (issues.length) {
-        for (const issue of issues) { const li = document.createElement('li'); li.className = 'issue fail'; li.dataset.numberingIssue = 'true'; li.textContent = `${issue.group}: a numeração aparece em mais de um nome de campanha. Renomeie a campanha nova na MCC e exporte novamente o CSV.`; issueList.prepend(li); }
+        for (const issue of issues) { const li = document.createElement('li'); li.className = 'issue fail'; li.dataset.numberingIssue = 'true'; li.textContent = `${issue.group}: a numeração aparece em mais de um nome na coleta atual: ${issue.incomingNames.join(' | ')}. Corrija a numeração na MCC e faça uma nova captura ou exportação.`; issueList.prepend(li); }
         const names = issues.flatMap(issue => issue.incomingNames).join(' | '), feedback = q('#apply-feedback');
         q('#validation-status').textContent = 'Correção de numeração necessária';
         q('#apply-note').textContent = 'Atualização bloqueada. Corrija a numeração na MCC e importe um novo CSV.';
@@ -1168,6 +1177,7 @@
         q('#apply-manifest').disabled = true; q('#announcer').textContent = 'Atualização bloqueada por reutilização de numeração de campanha.';
       } else {
         q('#apply-feedback').hidden = true;
+        q('#validation-status').textContent = result.critical.length ? `${result.critical.length} falha(s) crítica(s)` : (historyWarnings.length ? 'Validação concluída · avisos históricos' : 'Validação concluída');
         q('#apply-note').textContent = result.critical.length ? 'Corrija as falhas críticas antes de atualizar.' : (result.manifest.origem_geracao?.origem_entrada_D_zero === 'mcc_chrome_extension' ? 'A captura da MCC foi validada e pode atualizar a mesma base usada pela Visão Geral.' : 'O CSV foi validado e pode atualizar a mesma base usada pela Visão Geral.');
         q('#apply-manifest').disabled = result.critical.length > 0;
         q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : 'CSV validado e pronto para atualizar a base.';

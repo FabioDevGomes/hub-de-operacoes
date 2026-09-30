@@ -11,13 +11,13 @@
     'curation-observability':Object.freeze({id:'curation-observability',query:'curation-observability',enabled:true,activeView:'curation-observability',sectionId:'curationObservabilityView',navId:'curationObservabilityNav',title:'Observabilidade da Curadoria',subtitle:'Histórico independente dos sinais registrados antes do teste'}),
     time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'}),
     'personal-finance':Object.freeze({id:'personal-finance',query:'personal-finance',enabled:true,activeView:'personal-finance',sectionId:'personalFinanceView',navId:'personalFinanceNav',title:'Controle de gastos',subtitle:'Planejado e realizado por mês, trimestre ou consolidado'}),
-    copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Copy e Ficha',subtitle:'Cole a oferta, valide os dados e gere ativos e ficha JSON'}),
-    presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'presell',sectionId:'presellView',navId:'presellNav',title:'Gerador de Pre-Sell',subtitle:'Valide a ficha e crie arquivos locais com as proteções obrigatórias'})
+    copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Precel',subtitle:'Cole o conteúdo estruturado, valide a ficha e crie a Precel no fluxo local'}),
+    presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Precel',subtitle:'Atalho compatível para a tela unificada'})
   });
   function definition(id){return VIEWS[String(id||'')]||null}
   function enabledViews(){return Object.values(VIEWS).filter(view=>view.enabled)}
-  function resolveRoute(route='/'){const text=String(route||''),queryIndex=text.indexOf('?'),search=queryIndex>=0?text.slice(queryIndex+1):'',requested=new URLSearchParams(search).get('view'),match=enabledViews().find(view=>view.query===requested);return match||VIEWS[DEFAULT_VIEW_ID]}
-  function urlFor(id,pathname='/'){const view=definition(id),base=String(pathname||'/').split('?')[0]||'/';return view?.enabled&&view.query?`${base}?view=${encodeURIComponent(view.query)}`:base}
+  function resolveRoute(route='/'){const text=String(route||''),queryIndex=text.indexOf('?'),search=queryIndex>=0?text.slice(queryIndex+1):'',requested=new URLSearchParams(search).get('view');if(requested==='presell')return VIEWS.copy;const match=enabledViews().find(view=>view.query===requested);return match||VIEWS[DEFAULT_VIEW_ID]}
+  function urlFor(id,pathname='/'){if(id==='presell')return urlFor('copy',pathname);const view=definition(id),base=String(pathname||'/').split('?')[0]||'/';return view?.enabled&&view.query?`${base}?view=${encodeURIComponent(view.query)}`:base}
   function isReserved(id){const view=definition(id);return Boolean(view&&!view.enabled)}
   window.PanelViews=Object.freeze({DEFAULT_VIEW_ID,VIEWS,definition,enabledViews,resolveRoute,urlFor,isReserved});
 })();

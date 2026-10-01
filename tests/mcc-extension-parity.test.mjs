@@ -33,6 +33,7 @@ const parserEnd = html.indexOf('    function uniqueRecord(', parserStart);
 assert.ok(parserStart >= 0 && parserEnd > parserStart, 'não foi possível localizar o decodificador/parser atual para teste de paridade');
 const parserSource = `${html.slice(parserStart, parserEnd)}\nglobalThis.__mccParity = { decodeFile, parseSource };`;
 const parserContext = vm.createContext({ crypto: webcrypto, TextDecoder });
+vm.runInContext(await readFile(new URL('../src/storage/hub-database.js', import.meta.url),'utf8'), parserContext);
 vm.runInContext(parserSource, parserContext, { filename: 'preparador-mcc-parser.js' });
 const {decodeFile, parseSource} = parserContext.__mccParity;
 

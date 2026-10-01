@@ -1,26 +1,15 @@
 import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs';
-import { ensurePersonalFinanceStores } from '../personal-finance/personal-finance-storage.mjs';
+import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
-export const BILLING_DB_NAME = 'painel-campanhas';
-export const BILLING_DB_VERSION = 5;
+export const BILLING_DB_NAME = DB_NAME;
+export const BILLING_DB_VERSION = DB_VERSION;
 export const BILLING_STORES = Object.freeze({ sales: 'billing_sales', movements: 'billing_movements', audit: 'billing_audit', meta: 'billing_meta' });
 export const BILLING_STORE_NAMES = Object.freeze(Object.values(BILLING_STORES));
 export const BILLING_SEED_KEY = 'seed:legacy-faturamento:v1';
-const schemas = Object.freeze({
-  billing_sales: { keyPath: 'sale_id', indexes: { sale_date: 'sale_date', product: 'product', platform: 'platform', account: 'account', payment_status: 'payment_status', external_id: 'external_id' } },
-  billing_movements: { keyPath: 'movement_id', indexes: { sale_id: 'sale_id', effective_date: 'effective_date', type: 'type' } },
-  billing_audit: { keyPath: 'audit_id', indexes: { sale_id: 'entity_id', created_at: 'created_at', entity: 'entity' } },
-  billing_meta: { keyPath: 'key', indexes: {} },
-});
 
+// Retain the public compatibility helper without another schema declaration.
 export function ensureBillingStores(db, transaction) {
-  for (const [name, schema] of Object.entries(schemas)) {
-    const store = db.objectStoreNames.contains(name)
-      ? transaction.objectStore(name)
-      : db.createObjectStore(name, { keyPath: schema.keyPath });
-    for (const [indexName, keyPath] of Object.entries(schema.indexes)) if (!store.indexNames.contains(indexName)) store.createIndex(indexName, keyPath, { unique: false });
-  }
-  ensurePersonalFinanceStores(db, transaction);
+  ensureStores(db, transaction, [...SCHEMA_BILLING_STORES, ...PERSONAL_FINANCE_STORES]);
 }
 
 export function validateBillingBundle(bundle) {
@@ -263,18 +252,7 @@ export function upsertMccConversionSalesToTransaction(transaction, mccSales, { n
   return entries.length;
 }
 
-export function openBillingDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(BILLING_DB_NAME, BILLING_DB_VERSION);
-    request.onupgradeneeded = () => ensureBillingStores(request.result, request.transaction);
-    request.onsuccess = () => {
-      request.result.onversionchange = () => request.result.close();
-      resolve(request.result);
-    };
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Feche outras abas antigas do Hub e tente novamente para concluir a atualização do banco local.'));
-  });
-}
+export function openBillingDatabase() { return openDatabase(); }
 
 export async function installBillingSeed(seed) {
   if (!seed || seed.schema !== 'billing_seed_v1' || !Number.isInteger(seed.version)) throw new Error('Carga inicial do Faturamento inválida.');

@@ -3,6 +3,8 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 const html=await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8');
+const infrastructure=await readFile(new URL('../dist/storage/hub-database.js',import.meta.url),'utf8');
+assert.ok(html.includes('/storage/hub-database.js?v=1')&&html.includes('HubDatabase.openDatabase()'));
 const sidebar=await readFile(new URL('../dist/sidebar-component.js',import.meta.url),'utf8');
 assert.ok(html.includes("'D0_metricas_parciais'"),'D0 ainda não é classificado como métricas parciais');
 assert.ok(html.includes('metricas_D_zero:metrics0'),'manifesto não contém as métricas completas de D0');
@@ -22,9 +24,9 @@ assert.ok(html.includes('Campanha duplicada em D0; métricas não associadas.'),
 assert.ok(html.includes('function panelStatusObservation(field)'),'normalização do status da MCC ausente no Preparador');
 assert.ok(html.includes("const disqualified = search.includes('nao qualificad')"),'Preparador não reconhece “Não qualificado” no masculino');
 assert.ok(html.includes("new BroadcastChannel('painel-campanhas')"),'Preparador não avisa a Visão Geral após atualizar a base');
-assert.ok(html.includes('const PANEL_DB_VERSION = 5;'),'Preparador MCC não participa da migração aditiva do Hub');
-for (const store of ['billing_sales','billing_movements','billing_audit','billing_meta']) assert.ok(html.includes(store),`Preparador MCC não cria a store aditiva ${store}`);
-assert.ok(html.includes("createObjectStore(PANEL_EVENT_STORE, { keyPath:'event_id' })"),'Preparador MCC não cria o armazenamento append-only dos eventos');
+assert.ok(html.includes('const PANEL_DB_VERSION = HubDatabase.DB_VERSION;'),'Preparador MCC não participa da migração aditiva do Hub');
+for (const store of ['billing_sales','billing_movements','billing_audit','billing_meta']) assert.ok(infrastructure.includes(store),`Preparador MCC não cria a store aditiva ${store}`);
+assert.ok(infrastructure.includes("events: {keyPath:'event_id'}"),'Preparador MCC não cria o armazenamento append-only dos eventos');
 assert.ok(html.includes('transaction.objectStore(PANEL_EVENT_STORE).getAll()'),'Preparador MCC não mescla o Event Log ao ler a base compartilhada');
 assert.ok(html.includes('eventStore.add(event)'),'Preparador MCC não persiste eventos sem sobrescrever registros anteriores');
 assert.ok(html.includes("source:'preparador_mcc'"),'importação do Preparador MCC não identifica a origem dos eventos');
@@ -36,7 +38,7 @@ assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"
 assert.ok(applyFlow.includes('applied.reconciledSales'),'o Preparador envia apenas as vendas manuais cujo estado mudou na importação');
 assert.ok(!applyFlow.includes('.filter(sale=>sale.billing_sale_id)'),'o Preparador não deve descartar lançamentos legados sem o vínculo novo do Faturamento');
 assert.ok(applyFlow.includes('provisionalSaleIds:linkedSales.map(sale=>String(sale.id))'),'o Preparador deve avisar a tela aberta quais vendas manuais foram conciliadas');
-assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=3')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
+assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=5')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
 assert.ok(html.includes('billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales)'),'base MCC e conciliação financeira são gravadas na mesma transação local');
 assert.ok(html.includes('billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales)'),'agregados D0/D−1 do MCC também são gravados atomicamente no Faturamento');
 assert.ok(!applyFlow.includes('fallbackPanelDatabase'),'Preparador não pode atualizar silenciosamente sem Event Log');

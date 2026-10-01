@@ -3,7 +3,7 @@
 ## Caminhos de importação
 
 - Visão Geral/Excel e upload de manifesto usam `CampaignDatabase.importManifest()` em `src/database.js`.
-- Preparador MCC é editado em `dist/preparador-MCC/index.html`, lê e grava o mesmo `painel-campanhas` e chama `/database.js` compartilhado.
+- Preparador MCC é editado em `src/preparador-MCC/index.html`; `node build.mjs` publica a página em `dist/preparador-MCC/index.html`. A rota `/preparador-MCC/`, o banco `painel-campanhas` e `/database.js` compartilhado permanecem iguais.
 - Ambos devem chamar o mesmo domínio; use `source` explícito (`hub_manifest_upload`, `hub_excel_sync`, `preparador_mcc`) para identificar origem dos eventos.
 - O Preparador incrementa sua versão IndexedDB junto com a versão principal e deve ler eventos antes de importar e persistir eventos sem sobrescrita.
 
@@ -112,7 +112,7 @@ Implementação em `sortPreviewRows`/`renderPreviewTable` no Preparador: compara
 - A leitura usa `activeTab` concedida pela ação explícita do usuário, `scripting` já existente e seletores semânticos ARIA/HTML (`grid`, `table`, `row`, `columnheader`, `cell`/`gridcell`, `tr`/`th`/`td`). Grades ambíguas ou incompatíveis falham de forma segura. Não adicionar permissões amplas nem seletores CSS obfuscados.
 - `mcc-grid-domain.mjs` contém o esquema estrutural compartilhado e as validações de captura; o modo de comparação permanece diagnóstico, sem enviar sua saída ao Preparador.
 - O leitor não rola nem pagina a MCC. `aria-rowcount`, índices ARIA e a contagem aparente do rodapé ajudam a sinalizar capturas parciais, mas ausência de detecção não prova ausência de virtualização/lazy loading. Shadow roots fechados e dados que não foram materializados ficam fora do alcance.
-- O inventário do parser D0 é de 18 campos, com 13 obrigatórios (ver `sourceDescriptor()` em `dist/preparador-MCC/index.html`). Data do relatório só é aceita de um controle de período que exponha explicitamente um único dia. A moeda é aceita somente por código/símbolo que a identifique sem ambiguidade; não se usa `$` isolado, título de campanha ou GEO para inferi-la.
+- O inventário do parser D0 é de 18 campos, com 13 obrigatórios (ver `sourceDescriptor()` em `src/preparador-MCC/index.html`). Data do relatório só é aceita de um controle de período que exponha explicitamente um único dia. A moeda é aceita somente por código/símbolo que a identifique sem ambiguidade; não se usa `$` isolado, título de campanha ou GEO para inferi-la.
 - Comparação local mede campanha, conta, cabeçalhos e campos reconhecidos; diferencia `ausente` de zero e sinaliza campanhas/cabeçalhos duplicados. Data por campanha permanece não comparável se a grade não possuir coluna de data.
 - Testes: `node tests/mcc-grid-experiment.test.mjs` (normalização, mapeamento, campos ausentes, duplicidades, virtualização aparente, ausente × zero, comparação e falha segura), `node tests/mcc-grid-production.test.mjs` (captura direta e prévia), e `node tests/mcc-extension-parity.test.mjs` (não regressão do fluxo de transporte CSV).
 

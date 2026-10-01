@@ -21,6 +21,8 @@ let output = template.replace("__DATABASE_MODULE__", database).replace("__PRODUC
 output = output.replace("__CONTROL_MACRO_VIEW__", await readFile(resolve(root, "src/control-macro/template.html"), "utf8"));
 output = output.replace("__CPA_VIEW__", await readFile(resolve(root, "src/cpa/template.html"), "utf8"));
 output = output.replace("__TESTED_PRODUCTS_VIEW__", await readFile(resolve(root, "src/tested-products/template.html"), "utf8"));
+output = output.replace("__OVERVIEW_VIEW__", await readFile(resolve(root, "src/overview/template.html"), "utf8"));
+output = output.replace("__PRODUCT_DIARY_VIEW__", await readFile(resolve(root, "src/product-diary/template.html"), "utf8"));
 const faviconBase64 = template.match(/<link rel="icon" type="image\/png" href="data:image\/png;base64,([^"]+)"/)?.[1];
 if (!faviconBase64) throw new Error("Favicon do painel não encontrado no template.");
 await mkdir(resolve(root, "dist"), { recursive: true });
@@ -35,6 +37,9 @@ await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navi
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
+// Publish only the canonical page; historical copies are not build inputs.
+await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
+await cp(resolve(root, "src/preparador-MCC/index.html"), resolve(root, "dist/preparador-MCC/index.html"));
 await cp(resolve(root, "src/curadoria"), resolve(root, "dist/curadoria"), { recursive: true });
 await cp(resolve(root, "src/meu-tempo"), resolve(root, "dist/meu-tempo"), { recursive: true });
 await cp(resolve(root, "src/copy-ficha"), resolve(root, "dist/copy-ficha"), { recursive: true });
@@ -44,7 +49,10 @@ await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro")
 await cp(resolve(root, "src/accounts"), resolve(root, "dist/accounts"), { recursive: true });
 await cp(resolve(root, "src/cpa"), resolve(root, "dist/cpa"), { recursive: true });
 await cp(resolve(root, "src/tested-products"), resolve(root, "dist/tested-products"), { recursive: true });
+await cp(resolve(root, "src/overview"), resolve(root, "dist/overview"), { recursive: true });
+await cp(resolve(root, "src/product-diary"), resolve(root, "dist/product-diary"), { recursive: true });
 await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
+await cp(resolve(root, "src/storage"), resolve(root, "dist/storage"), { recursive: true });
 await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
 await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
 // Personal operational payloads belong only to browser IndexedDB or data-local/.

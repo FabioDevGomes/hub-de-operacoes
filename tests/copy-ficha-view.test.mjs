@@ -30,13 +30,13 @@ assert.equal(restoredFields[0].dataset.autoFilled,'true','a restauração recupe
 assert.deepEqual(restoredFields[0].classList.values,['is-autofilled'],'a restauração recupera o destaque de detecção');
 assert.equal(restoredFields[1].dataset.autoFilled,undefined,'campos manuais continuam sem marcação automática');
 
-const view=await readFile(new URL('../src/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
+const view=(await Promise.all(['copy-ficha-view.mjs','copy-ficha-template.mjs','copy-ficha-draft.mjs','copy-ficha-workflow.mjs'].map(path=>readFile(new URL('../src/copy-ficha/'+path,import.meta.url),'utf8')))).join('\n');
 const copyCss=await readFile(new URL('../src/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
 const outputCss=await readFile(new URL('../src/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
 assert.ok(!view.includes('Resultados')&&!view.includes('copyFichaJson')&&!view.includes('copyDownloadFicha')&&!view.includes('copyGenerateQuestions')&&!view.includes('copyOfferQuestions')&&!view.includes('Perguntas e respostas da oferta'),'a tela não exibe mais o quadro de resultados, perguntas e respostas ou o download JSON');
 assert.match(view,/<h2>3\. Conteúdo obrigatório da ficha<\/h2>/,'o conteúdo obrigatório passa a ser o item 3');
 assert.ok(view.includes('id="copyPresellStatus"')&&view.includes('id="copyPresellReport"')&&view.includes('id="copyWarnings"'),'o item 3 mantém o status e os relatórios de validação da Presell');
-assert.ok(view.includes('async function generateFichaAndCreatePresell(')&&view.includes('buildStructuredFicha(inputValue(root,\'copyFichaSource\'),payload(root))')&&view.includes('createPresellFromFicha(ficha)'),'a ação única valida o conteúdo estruturado antes de criar a Presell');
+assert.ok(view.includes('async function generateFichaAndCreatePresell(')&&view.includes('createFromStructuredContent(inputValue(root,\'copyFichaSource\'),payload(root))')&&view.includes('buildStructuredFicha(source,data)')&&view.includes('await create(ficha)'),'a ação única valida o conteúdo estruturado antes de criar a Presell');
 assert.ok(!view.includes('function generate(root,')&&!view.includes('Gerar copy')&&!view.includes('generateAssets'),'a tela não gera mais copy de anúncios');
 assert.ok(view.includes('confirmedDiscountAmount:inputValue(root,\'copyDiscountAmount\')')&&view.includes('copyDiscountAmount:draft.confirmedDiscountAmount'),'o valor associado ao percentual é salvo e restaurado no rascunho');
 assert.ok(view.includes('id="copyDiscountAmount"')&&view.includes('id="copyDiscountAmountLabel"')&&view.includes('Valor do desconto (${currency})')&&view.includes('clearAutoDiscountAmount(root)'),'a interface exibe o campo de economia com moeda dinâmica e invalida valor automático ao trocar a moeda');

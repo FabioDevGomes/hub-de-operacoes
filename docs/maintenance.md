@@ -22,12 +22,16 @@
 | CPA: interface, eventos e estilos | `src/cpa/view.js`, `template.html`, `cpa.css` | `tests/cpa-view.test.mjs`, `tests/extracted-views-build.test.mjs` |
 | Produtos Testados: agrupamento e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Produtos Testados: interface e preferências de colunas | `src/tested-products/view.js`, `template.html`, `tested-products.css` | `tests/tested-products-ui.test.mjs`, `tests/tested-products-view.test.mjs` |
+| Visão Geral: ordenação e visibilidade por situação | `src/overview-domain.js` | `tests/overview-domain.test.mjs`, `tests/overview-view.test.mjs` |
+| Visão Geral: tabela, indicadores, eventos e estilos | `src/overview/view.js`, `template.html`, `overview.css` | `tests/overview-view.test.mjs`, `tests/mcc-campaign-status.test.mjs` |
+| Diário: datas e linhas virtuais de vendas provisórias | `src/product-diary/domain.js` | `tests/product-diary-ui.test.mjs`, `tests/product-diary-view.test.mjs` |
+| Diário: tabela nativa e resumo legado | `src/product-diary/view.js`, `template.html`, `product-diary.css` | `tests/product-diary-view.test.mjs`, `tests/legacy-totais-migration.test.mjs` |
 | Ficha fornecida e validação de campos | `src/copy-ficha/copy-ficha-structured.mjs`, `copy-ficha-view.mjs` | `tests/copy-ficha-structured.test.mjs`, `tests/copy-ficha-view.test.mjs` |
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
-| Persistência e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
-| Preparador MCC (exceção atual de fonte) | `dist/preparador-MCC/index.html` | `tests/preparador-d0.test.mjs` |
+| Modelo e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
+| Preparador MCC: página, parser, receptores e integração | `src/preparador-MCC/index.html` | `tests/preparador-build.test.mjs`, `tests/preparador-d0.test.mjs`, `tests/preparador-d1.test.mjs`, `tests/mcc-grid-production.test.mjs` |
 
-`dist/index.html` e os demais módulos de `dist/` são gerados; não faça a mesma alteração manual em fonte e saída. O Preparador é a exceção acima, até uma etapa futura específica.
+`dist/index.html`, `dist/preparador-MCC/index.html` e os demais módulos publicados pelo build são gerados; não faça a mesma alteração manual em fonte e saída. Edite o arquivo correspondente em `src/` e gere novamente. Cópias históricas não são fontes do build.
 
 ## Contratos atuais que os testes devem preservar
 
@@ -96,6 +100,51 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 - Campanhas, nomes MCC, IDs e diários não são fundidos nem renomeados pela consolidação de apresentação.
 
 Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.test.mjs`, depois build e suíte completa. Dados dos testes são sintéticos em memória. No navegador, confira as rotas `/?view=macro`, `/?view=cpa` e `/?view=tested`, navegação entre telas, meses/gráficos, filtros/período/seleção, ordenação e preferências, sem editar ou importar dados reais.
+
+## Visão Geral e Diário — passo 7
+
+- `overview/view.js` recebe `getSnapshot()`, formatadores, estado visual e callbacks. Contém tabela, KPIs D−1/D0, alertas, filtros e eventos locais. `overview-domain.js` conserva os cálculos anteriores e acrescenta ordenação sem mutação e visibilidade por situação. Não acessa DOM ou armazenamento.
+- `overviewRowsForMode()` no painel mantém a projeção e o cache financeiro existentes. `overviewSnapshot()` acrescenta somente metadados visuais: ID estável, pausa, política e métricas diárias. KPIs continuam somando todas as campanhas, inclusive pausadas; o filtro muda somente a tabela. Vendas provisórias e limites de teste mantêm a precedência anterior.
+- `product-diary/domain.js` contém datas, colunas e linhas virtuais de vendas provisórias. Essas linhas são apenas de exibição: não criam registros no Diário nem conversões oficiais. `view.js` contém formatação, tabela nativa e resumo legado, em ramos separados.
+- `productDiarySnapshot()` conserva leitura pelo ID estável, fontes manifesto/base/legado e fallbacks existentes. Resumos legados não produzem séries diárias nem recebem ajustes de vendas manuais. Zero observado e ausência permanecem distintos.
+- Os templates e CSS são fontes canônicas nas respectivas pastas. O build incorpora os templates e publica os scripts antes do painel. `renderTotals()` e `renderProduct()` apenas montam uma vez e atualizam; não recrie wrappers ou bindings no HTML principal.
+- As views não abrem banco, importam, salvam ou migram dados. O link de ROI solicita o callback existente somente após clique explícito. Título e navegação do Diário também usam callbacks, preservando nome exato, fonte e ID.
+
+Verificação: `node --test tests/overview-view.test.mjs tests/product-diary-view.test.mjs tests/overview-diary-adapters.test.mjs tests/product-diary-ui.test.mjs tests/mcc-campaign-status.test.mjs`, build e suíte completa. Os testes usam dados sintéticos em memória e cobrem cálculos por período, cache sem mutação, filtros/ordenação, alertas, seleção por ID, zero/ausência e legado separado. No navegador existente, confira Consolidado/D−1/D0, situações, ordenação, abertura de campanha e ida/volta entre Diário e Histórico, sem editar dados reais.
+
+## Preparador MCC no build — passo 8
+
+- `src/preparador-MCC/index.html` passa a ser a fonte canônica. O arquivo foi transferido integralmente, sem alterar HTML, CSS, scripts, parser, validações, persistência ou receptores da extensão.
+- `build.mjs` cria o diretório de saída e copia somente essa página para `dist/preparador-MCC/index.html`. Não usa nem publica cópias históricas como entradas; os arquivos antigos existentes não foram excluídos nesta etapa.
+- A URL continua `http://127.0.0.1:8765/preparador-MCC/`. Links para recursos compartilhados, imports relativos e contratos `__hubReceiveMccD0Grid`/`__hubReceiveMccD1Grid` permanecem iguais. Não é necessário mudar ou reinstalar a extensão por esta transferência.
+- A etapa não modifica schema, chave da base, taxa, campanhas ou registros. Captura prepara a prévia; somente o clique explícito em Atualizar base continua autorizando a aplicação.
+
+Verificação: `node build.mjs` e `node --test`. `tests/preparador-build.test.mjs` compara fonte/saída byte a byte e executa o build em pasta temporária sem base pessoal: saída inicialmente ausente, reconstrução da página e propagação da fonte, sem publicar cópias históricas. Os testes de D0/D−1, numeração, captura e paridade com a extensão continuam exercitando o artefato servido. Na validação visual, abra a rota existente sem capturar/importar dados nem clicar em Atualizar base.
+
+## Banco compartilhado — passo 9
+
+- `src/storage/hub-database.js` é a única declaração de nome, versão 5, stores e índices. A ponte `hub-database.mjs` permite reutilizar a implementação nas views ES module; páginas clássicas carregam o mesmo script antes dos adaptadores.
+- Painel, Preparador, Faturamento e Controle de gastos delegam somente abertura/upgrade. Transações atômicas de campanhas/eventos/Faturamento, backup/restauração e consultas pessoais por índice permanecem em seus locais anteriores, sem alteração das regras.
+- O upgrade continua aditivo; nunca recria stores existentes, altera chaves ou executa writes de domínio ao abrir. Bloqueio avisa para fechar abas antigas; uma conexão tardia de um pedido rejeitado é fechada.
+- Bancos de Meu Tempo e Curadoria não foram unificados. A infraestrutura não conhece suas bases.
+- Faça backup prévio de base/Faturamento/Controle de gastos e do catálogo pelo botão próprio. Os arquivos privados ficam fora do Git; o catálogo conserva seu formato e importação existentes.
+
+Verificação: `tests/hub-database.test.mjs` cobre abertura, erros/bloqueios, esquema completo por qualquer consumidor, upgrades antigos e preservação de registros sintéticos. Rode também os testes de banco, MCC, Faturamento e Controle de gastos e a suíte completa. Não use a base real para testar restauração ou aborto.
+
+## Ficha e Presell — passo 10
+
+- `copy-ficha-view.mjs`: DOM, eventos e atualização de campos; não chama outra view nem contém o template inteiro.
+- `copy-ficha-template.mjs`: somente apresentação, com o mesmo markup/IDs/layout e placeholder escapado.
+- `copy-ficha-draft.mjs`: mesma chave `copy-ficha-draft-v1`, propriedades legadas preservadas; texto estruturado permanece somente na sessão. Não altere essa chave para uma refatoração.
+- `copy-ficha-workflow.mjs`: parser/validação antes de qualquer confirmação/produção; aceita três ou quatro FAQs sem reescrever textos nem recalcular a oferta.
+- `presell-service.mjs`: valida JSON, confirma e chama a API local. Não exige os arquivos finais antes da produção. O motor/validador do servidor não foi alterado e continua bloqueando assets inválidos e sobrescrita.
+- `presell-report.mjs`: relatório escapado. `presell-view.mjs` conserva exports compatíveis para consumidores legados, sem duplicar implementação.
+
+Verificação: `tests/ficha-presell-workflow.test.mjs`, testes de parser/view, build e suíte completa. Fixtures sintéticas cobrem bloqueio antes da API, três/quatro FAQs, cancelamento, erros do servidor, payload e rascunhos. A inspeção no navegador não cria Presell, limpa coleta ou modifica dados reais.
+
+## Sequência concluída
+
+Os passos 1–10 foram implementados incrementalmente. Mudanças futuras devem seguir os limites de responsabilidade acima; não há migração de dados associada à refatoração.
 
 ## Referência do passo 1
 

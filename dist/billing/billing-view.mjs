@@ -1,5 +1,5 @@
 import * as Domain from './billing-domain.mjs';
-import * as Storage from './billing-storage.mjs';
+import * as Storage from './billing-storage.mjs?v=5';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;

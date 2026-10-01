@@ -42,6 +42,8 @@ O painel pode iniciar mesmo quando o projeto foi extraído em outro local. A pas
 
 Consulte [o guia de manutenção](docs/maintenance.md) para localizar fontes, responsabilidades e testes. O conhecimento técnico canônico está em [.agents/skills/painel-operacao-google-ads/SKILL.md](.agents/skills/painel-operacao-google-ads/SKILL.md), não na cópia global da skill.
 
+O Preparador MCC também é gerado pelo build: edite `src/preparador-MCC/index.html` e execute `node build.mjs`. A saída continua em `dist/preparador-MCC/index.html`, servida na mesma rota `/preparador-MCC/`; não edite essa cópia gerada.
+
 ## Privacidade dos dados
 
 O diretório `data-local` e arquivos Excel, CSV, manifestos e bases exportadas são ignorados pelo Git. O repositório deve conter somente o código da ferramenta e sua documentação.

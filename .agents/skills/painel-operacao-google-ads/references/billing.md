@@ -29,7 +29,7 @@ O status `unknown`/indefinido não equivale a pendente. “Pago” sem data cont
 
 ## Persistência e auditoria
 
-O IndexedDB `painel-campanhas` usa a versão 5 por migração **aditiva** declarada em `src/index.template.html`, `src/billing/billing-storage.mjs` e `dist/preparador-MCC/index.html`. A v4 acrescentou as stores do Faturamento abaixo; a v5 acrescenta somente as stores independentes de Controle de gastos (`personal_finance_*`), descritas em [data-model.md](data-model.md). Stores do Faturamento:
+O IndexedDB `painel-campanhas` usa a versão 5 por migração **aditiva** declarada uma única vez em `src/storage/hub-database.js`; os consumidores delegam sua abertura à infraestrutura comum. A v4 acrescentou as stores do Faturamento abaixo; a v5 acrescenta somente as stores independentes de Controle de gastos (`personal_finance_*`), descritas em [data-model.md](data-model.md). Stores do Faturamento:
 
 - `billing_sales`, chave `sale_id`, índices para data, status e dimensões de filtro;
 - `billing_movements`, chave `movement_id`, índices para data efetiva, venda e tipo;

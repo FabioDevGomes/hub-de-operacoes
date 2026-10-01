@@ -320,6 +320,7 @@ const parserStart = html.indexOf('    const ABSENT = new Set');
 const parserEnd = html.indexOf('    function uniqueRecord(', parserStart);
 assert.ok(parserStart >= 0 && parserEnd > parserStart);
 const parserContext = vm.createContext({ crypto:webcrypto, TextEncoder, Intl, Date });
+vm.runInContext(await readFile(new URL('../src/storage/hub-database.js', import.meta.url),'utf8'), parserContext);
 vm.runInContext(html.slice(parserStart, parserEnd) + '\nglobalThis.__gridAdapter = decodeMccGridCapture; globalThis.__parseSource = parseSource;', parserContext);
 const decodedGrid = await parserContext.__gridAdapter(valid.capture);
 const parsedGrid = parserContext.__parseSource(decodedGrid, 'd0');

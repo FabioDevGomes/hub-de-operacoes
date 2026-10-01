@@ -1,8 +1,8 @@
 import { createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=20';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
-export const DB_NAME = 'painel-campanhas';
-export const DB_VERSION = 5;
+import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
+export { DB_NAME, DB_VERSION };
 export const STORES = Object.freeze({
   groups: 'personal_finance_groups',
   categories: 'personal_finance_categories',
@@ -13,55 +13,11 @@ export const STORES = Object.freeze({
 });
 export const STORE_NAMES = Object.freeze(Object.values(STORES));
 
-const schemas = Object.freeze({
-  personal_finance_groups: { keyPath: 'group_id', indexes: { sort_order: 'sort_order' } },
-  personal_finance_categories: { keyPath: 'category_id', indexes: { group_id: 'group_id', sort_order: 'sort_order' } },
-  personal_finance_months: { keyPath: 'month_key', indexes: { created_at: 'created_at' } },
-  personal_finance_entries: { keyPath: 'entry_id', indexes: { month_key: 'month_key', category_id: 'category_id', month_category: ['month_key', 'category_id'] } },
-  personal_finance_debts: { keyPath: 'snapshot_id', indexes: { month_key: 'month_key', item_id: 'item_id', month_item: ['month_key', 'item_id'] } },
-  personal_finance_funds: { keyPath: 'snapshot_id', indexes: { month_key: 'month_key', item_id: 'item_id', month_item: ['month_key', 'item_id'], type: 'type' } },
-});
-
 export function ensurePersonalFinanceStores(db, transaction) {
-  for (const [name, schema] of Object.entries(schemas)) {
-    const store = db.objectStoreNames.contains(name)
-      ? transaction.objectStore(name)
-      : db.createObjectStore(name, { keyPath: schema.keyPath });
-    for (const [indexName, keyPath] of Object.entries(schema.indexes)) {
-      if (!store.indexNames.contains(indexName)) store.createIndex(indexName, keyPath, { unique: false });
-    }
-  }
+  ensureStores(db, transaction, PERSONAL_FINANCE_STORES);
 }
 
-function ensureSharedHubStores(db, transaction) {
-  if (!db.objectStoreNames.contains('bases')) db.createObjectStore('bases');
-  if (!db.objectStoreNames.contains('catalogos')) db.createObjectStore('catalogos');
-  if (!db.objectStoreNames.contains('events')) db.createObjectStore('events', { keyPath: 'event_id' });
-  const billing = {
-    billing_sales: ['sale_id', { sale_date: 'sale_date', product: 'product', platform: 'platform', account: 'account', payment_status: 'payment_status', external_id: 'external_id' }],
-    billing_movements: ['movement_id', { sale_id: 'sale_id', effective_date: 'effective_date', type: 'type' }],
-    billing_audit: ['audit_id', { sale_id: 'entity_id', created_at: 'created_at', entity: 'entity' }],
-    billing_meta: ['key', {}],
-  };
-  for (const [name, [keyPath, indexes]] of Object.entries(billing)) {
-    const store = db.objectStoreNames.contains(name) ? transaction.objectStore(name) : db.createObjectStore(name, { keyPath });
-    for (const [index, path] of Object.entries(indexes)) if (!store.indexNames.contains(index)) store.createIndex(index, path, { unique: false });
-  }
-  ensurePersonalFinanceStores(db, transaction);
-}
-
-export function openPersonalFinanceDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => ensureSharedHubStores(request.result, request.transaction);
-    request.onsuccess = () => {
-      request.result.onversionchange = () => request.result.close();
-      resolve(request.result);
-    };
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Feche outras abas antigas do Hub para atualizar o banco local.'));
-  });
-}
+export function openPersonalFinanceDatabase() { return openDatabase(); }
 
 const only = key => IDBKeyRange.only(key);
 

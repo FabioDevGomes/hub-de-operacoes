@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
+const source = await readFile(new URL('../src/product-diary/domain.js', import.meta.url), 'utf8') + '\n' + await readFile(new URL('../src/product-diary/view.js', import.meta.url), 'utf8');
 const dateFunction = source.match(/^\s*function productDiaryRowDate\(row\)\{[^\r\n]+\}/m)?.[0];
 const salesFunction = source.match(/^\s*function productDiaryHasSales\(row,provisionalSaleDates\)\{[^\r\n]+\}/m)?.[0];
 const countFunction = source.match(/^\s*function productDiaryManualSaleCount\(row,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];

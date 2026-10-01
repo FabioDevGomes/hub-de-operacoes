@@ -74,7 +74,7 @@ Importações devem unir eventos por `event_id`. IDs são idempotentes e writes 
 
 ## Faturamento — domínio financeiro independente
 
-O Faturamento usa stores próprias (`billing_sales`, `billing_movements`, `billing_audit`, `billing_meta`) no IndexedDB compartilhado `painel-campanhas`, atualmente schema versão 5. A migração também é declarada no artefato independente `dist/preparador-MCC/index.html`, que abre o mesmo banco. Não misture vendas/comissões com `vendas_provisorias`, `diario`, `controle_macro_historico` ou Event Log operacional. Regras de negócio, seed local versionado, índices, backups e cálculos estão documentados em [billing.md](billing.md).
+O Faturamento usa stores próprias (`billing_sales`, `billing_movements`, `billing_audit`, `billing_meta`) no IndexedDB compartilhado `painel-campanhas`, atualmente schema versão 5. O schema é declarado uma única vez em `src/storage/hub-database.js`; painel, Preparador e módulos financeiros delegam a abertura a essa infraestrutura. Não misture vendas/comissões com `vendas_provisorias`, `diario`, `controle_macro_historico` ou Event Log operacional. Regras de negócio, seed local versionado, índices, backups e cálculos estão documentados em [billing.md](billing.md).
 
 ## Controle de gastos — domínio pessoal independente
 
@@ -89,7 +89,7 @@ As regras de orçamento, reserva, competência e apresentação ficam em [Contro
 - `personal_finance_debts`, chave `snapshot_id`, índices por mês e item;
 - `personal_finance_funds`, chave `snapshot_id`, índices por mês, item e tipo (`available`/`reserve`).
 
-A versão 5 cria essas stores de modo aditivo nos três pontos que podem abrir o banco compartilhado: tela principal, Preparador MCC e armazenamento do Faturamento. Não rebaixar a versão nem excluir stores ao migrar.
+A versão 5 cria essas stores de modo aditivo na infraestrutura única `src/storage/hub-database.js`, utilizada pela tela principal, Preparador MCC, Faturamento e Controle de gastos. Nenhum schema novo ou migração de dados foi introduzido pela extração. Não rebaixar a versão nem excluir stores ao migrar.
 
 O mês corrente é o período inicial. Entradas mensais guardam cópias dos nomes, grupo e moeda vigentes naquele mês, além de planejado e realizado. `actual_amount: null` significa sem lançamento; `actual_amount: 0` é zero observado. Criar um mês copia apenas o planejado anterior ou usa os padrões vigentes das categorias, nunca os realizados. Dívidas em aberto, disponibilidade e reservas são copiadas como ponto inicial do snapshot mensal, sem modificar o mês de origem; uma dívida marcada paga deixa de ser carregada para meses novos.
 

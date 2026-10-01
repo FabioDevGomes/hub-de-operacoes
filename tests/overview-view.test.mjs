@@ -1,0 +1,82 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import {test} from 'node:test';
+import {createRoot,format} from './helpers/view-dom.mjs';
+const context=vm.createContext({window:{}});
+vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
+vm.runInContext(await readFile(new URL('../src/overview/view.js',import.meta.url),'utf8'),context);
+const domain=context.window.OverviewDomain,view=context.window.OverviewView;
+const row=(name,status,investment,extra={})=>({
+  c:{nome_campanha_exato:name,_status:status,_pausedAt:'2026-09-29',_lastSeen:'2026-09-28'},
+  identity:{name,dateLabel:'29/09',dateSort:'2026-09-29'},campaignId:'id-'+name,pausedAt:'2026-09-29',
+  totals:{investment,impressions:0,clicks:0,conversions:0},d0Totals:{investment,impressions:0,clicks:0},
+  roi:null,profit:null,zeroDays:0,...extra
+});
+function setup(rows){
+  const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
+  const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
+    pausedCount:rows.filter(r=>r.c._status==='pausada').length,referenceDate:'2026-09-30',
+    dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
+  const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,
+    actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args])}});
+  return {...dom,state,snapshot,calls,controller};
+}
+test('overview sorting keeps inputs, zero, missing-last and chronological/numeric identities',()=>{
+  const rows=[row('Conta 10','ativa',0),row('Conta 2','ativa',50),row('Sem valor','pausada',null)],before=JSON.stringify(rows);
+  assert.equal(domain.sortRows(rows,{sortKey:'current',sortDir:'desc'},c=>c?.value)[0].totals.investment,50);
+  assert.equal(domain.sortRows(rows,{sortKey:'current',sortDir:'asc'},c=>c?.value).at(-1).totals.investment,null);
+  assert.equal(domain.sortRows(rows,{sortKey:'campaign',sortDir:'asc'},c=>c?.value)[0].identity.name,'Conta 2');
+  rows[0].identity.dateSort='2026-09-01';rows[1].identity.dateSort='2026-01-31';
+  assert.equal(domain.sortRows(rows,{sortKey:'date',sortDir:'asc'},c=>c?.value)[0].identity.name,'Conta 2');
+  rows[0].identity.dateSort=rows[1].identity.dateSort='2026-09-29';
+  assert.equal(JSON.stringify(rows),before);
+  const sorted=domain.sortRows([row('Lucro','ativa',0,{profit:20}),row('Prejuízo','ativa',0,{profit:-10})],{sortKey:'profit',sortDir:'asc'},c=>c?.value);
+  assert.equal(sorted[0].profit,-10);
+});
+test('overview KPIs cover all rows in every period, filters affect only table',()=>{
+  const s=setup([row('Ativa','ativa',10),row('Pausada','pausada',90)]),before=JSON.stringify(s.snapshot);
+  for(const mode of ['consolidated','d1','d0']){
+    s.state.totalsMode=mode;s.state.campaignStatusFilter='active';s.controller.render();
+    const kpis=s.get('#kpis').innerHTML;
+    assert.match(kpis,/Indicadores D0/);assert.match(kpis,/Indicadores D−1/);
+    assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.match(kpis,/Cliques 1\/2/);
+    assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row hidden"/);
+    assert.match(s.get('#totalsCount').textContent,/1 ativas · 1 pausada/);
+    assert.equal((s.get('#totalsHead').innerHTML.match(/<th>/g)||[]).length,13);
+    s.state.campaignStatusFilter='all';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis);
+  }
+  assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
+test('overview alerts coexist, user text is escaped and absent metrics never become zero',()=>{
+  const s=setup([row('<Oferta>','ativa',null,{rejected:true,policyLimitation:'Restrição "política"',adjustment:{manualSales:2},numberReuse:{group:'1'},profit:-30})]);
+  s.controller.render();
+  const html=s.get('#totalsBody').innerHTML;
+  assert.match(html,/Ativa · Reprovada · Renumerar/);assert.match(html,/2 vendas provisórias/);assert.match(html,/Limitada pela política/);
+  assert.match(html,/policy-limited-row/);assert.match(html,/&lt;Oferta&gt;/);assert.match(html,/&quot;política&quot;/);
+  assert.doesNotMatch(html,/<Oferta>/);assert.match(html,/<td class="num">—<\/td>/);assert.match(html,/num negative">BRL -30.00/);
+});
+test('overview local controls preserve stable ID and invoke writes only after explicit ROI action',()=>{
+  const s=setup([row('Oferta exata','ativa',10)]);s.setList('.sort-btn',[{sort:'campaign'}]);
+  s.setList('#totalsBody tr',[{campaign:'Oferta exata',source:'manifest',campaignId:'stable-id'}]);
+  s.setList('.test-budget-roi-link',[{campaignId:'stable-id',currentRoi:'20'}]);
+  s.controller.render();assert.deepEqual(s.calls,[]);
+  s.root.querySelectorAll('.sort-btn')[0].onclick();assert.equal(s.state.sortKey,'campaign');assert.equal(s.state.sortDir,'asc');
+  s.root.querySelectorAll('.sort-btn')[0].onclick();assert.equal(s.state.sortDir,'desc');
+  s.get('#campaignStatusFilter').onchange({target:{value:'paused'}});assert.equal(s.state.campaignStatusFilter,'paused');
+  s.get('#totalsD1').onclick();assert.equal(s.state.totalsMode,'d1');assert.match(s.get('#totalsCaption').textContent,/29\/09\/2026/);
+  s.get('#totalsD0').onclick();assert.equal(s.state.totalsMode,'d0');
+  s.get('#totalsConsolidated').onclick();assert.equal(s.state.totalsMode,'consolidated');
+  s.root.querySelectorAll('#totalsBody tr')[0].ondblclick();
+  let prevented=0,stopped=0;s.root.querySelectorAll('.test-budget-roi-link')[0].onclick({preventDefault(){prevented++},stopPropagation(){stopped++}});
+  assert.deepEqual(s.calls,[['product','Oferta exata','manifest','stable-id'],['roi','stable-id','20']]);
+  assert.equal(prevented,1);assert.equal(stopped,1);
+});
+test('overview recent-paused filter retains inclusive seven-day boundary and excludes unknown date',()=>{
+  const paused=date=>({c:{_status:'pausada'},pausedAt:date});
+  assert.equal(domain.rowVisible(paused('2026-09-24'),'paused7','2026-09-30'),true);
+  assert.equal(domain.rowVisible(paused('2026-09-23'),'paused7','2026-09-30'),false);
+  assert.equal(domain.rowVisible(paused(''),'paused7','2026-09-30'),false);
+  assert.equal(domain.rowVisible({c:{_status:'ativa'}},'paused7','2026-09-30'),false);
+  assert.equal(domain.rowVisible(paused(''),'all','2026-09-30'),true);
+});

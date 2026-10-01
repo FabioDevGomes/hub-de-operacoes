@@ -85,10 +85,13 @@ assert.match(source, /export async function countData\(\)[\s\S]*?\.count\(\)/, '
 assert.match(source, /export async function exportBundle\(\)[\s\S]*?\.getAll\(\)/, 'leitura integral fica restrita à exportação explícita de backup');
 assert.match(source, /export async function mergeExpensesBundle\(input\)[\s\S]*?db\.transaction\(names, 'readwrite'\)/, 'importação de despesas escreve em transação separada e aditiva');
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
-assert.match(template, /indexedDB\.open\('painel-campanhas',5\)/, 'a migração do banco compartilhado precisa ser aditiva para a tela e o Preparador');
+assert.match(template, /HubDatabase\.openDatabase\(\)/, 'a tela usa o acesso compartilhado sem schema duplicado');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'personal_finance'\)/, 'backup legado sem o domínio pessoal preserva as stores locais');
 assert.match(template, /payload\.personal_finance=await personalFinance\.exportBundle\(\)/, 'backup completo inclui as stores do módulo pessoal');
 const preparer = await readFile(new URL('../dist/preparador-MCC/index.html', import.meta.url), 'utf8');
-assert.match(preparer, /const PANEL_DB_VERSION = 5/);
-assert.match(preparer, /personal_finance_entries/);
+assert.match(preparer, /const PANEL_DB_VERSION = HubDatabase.DB_VERSION/);
+assert.match(preparer, /HubDatabase\.openDatabase\(\)/);
+const infrastructure=await readFile(new URL('../src/storage/hub-database.js',import.meta.url),'utf8');
+assert.match(infrastructure, /DB_VERSION = 5/);
+assert.match(infrastructure, /personal_finance_entries/);
 console.log('personal finance storage and backup ok');

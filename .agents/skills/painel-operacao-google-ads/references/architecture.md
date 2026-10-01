@@ -4,13 +4,15 @@
 
 - `src/index.template.html`: painel principal, integração das views e interfaces.
 - `src/view-registry.js`: IDs estáveis, query, título/subtítulo, IDs de seção/menu e habilitação das telas.
-- `src/database.js`: schema compartilhado, importadores MCC/Excel, consolidação e persistência de domínio.
-- `dist/preparador-MCC/index.html`: atualmente é a fonte editável do Preparador; o build não o gera.
+- `src/database.js`: modelo normalizado, importadores MCC/Excel, consolidação e regras de domínio de campanhas.
+- `src/storage/hub-database.js` e `.mjs`: nome/versão do IndexedDB, stores/índices aditivos e abertura da conexão, compartilhados pelo painel, Preparador e módulos financeiros. Transações de negócio continuam em seus consumidores.
+- `src/preparador-MCC/index.html`: fonte canônica do Preparador; o build publica somente essa página em `dist/preparador-MCC/index.html`, sem copiar arquivos históricos.
 - `src/curadoria/`: Radar, Lista de Gerente, E-commerce GM e Glimpse.
 - `src/control-macro/`: domínio de agregação do Controle Macro e estilos próprios da tela.
 - `src/accounts/`: domínio puro, interface/eventos e CSS do Mapa por Conta. `accountReportSnapshot()` no painel é o adaptador de leitura das projeções existentes; filtros e renderização pertencem ao módulo.
 - `src/personal-finance/`: domínio, armazenamento local, sincronização entre abas e interface do Controle de gastos pessoais.
-- `src/meu-tempo/`, `src/presell/`, `src/asset-studio/`: módulos próprios.
+- `src/meu-tempo/`, `src/asset-studio/`: módulos próprios.
+- `src/copy-ficha/`: domínio/parser estruturado, template de apresentação, rascunho compatível e workflow de validação→criação. `src/presell/presell-service.mjs` é o limite da API/confirmação; `presell-report.mjs` apresenta relatórios sem acesso ao servidor.
 - `dist/index.html` e a maioria de `dist/**`: saída gerada. Edite fontes e rode o build.
 
 ## Registro de telas

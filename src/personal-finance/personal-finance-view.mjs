@@ -1,5 +1,5 @@
 import * as Domain from './personal-finance-domain.mjs?v=21';
-import * as Storage from './personal-finance-storage.mjs?v=15';
+import * as Storage from './personal-finance-storage.mjs?v=16';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);

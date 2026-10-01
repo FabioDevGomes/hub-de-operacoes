@@ -66,13 +66,15 @@ test('copy no longer requires affiliate URL, destination or product price',()=>{
   assert.ok(generationBlockers(data).includes('URL de afiliação'));
 });
 test('the unified action validates structured content before creating Presell and reports field failures',()=>{
-  const view=readFileSync(new URL('../src/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
+  const view=['copy-ficha-view.mjs','copy-ficha-template.mjs'].map(path=>readFileSync(new URL('../src/copy-ficha/'+path,import.meta.url),'utf8')).join('\n');
+  const workflow=readFileSync(new URL('../src/copy-ficha/copy-ficha-workflow.mjs',import.meta.url),'utf8');
   assert.ok(!view.includes('Gerar copy e ficha'));assert.ok(view.includes('id="copyGenerateFicha"'));assert.ok(view.includes('id="copyFichaSource"'));
   const start=view.indexOf('async function generateFichaAndCreatePresell(');
   assert.ok(start>=0,'the unified creation action must exist');
   const ficha=view.slice(start,view.indexOf('export async function mount(',start));
-  const validation=ficha.indexOf("buildStructuredFicha(inputValue(root,'copyFichaSource'),payload(root))");
-  const production=ficha.indexOf('await createPresellFromFicha(ficha)');
+  assert.ok(ficha.includes("createFromStructuredContent(inputValue(root,'copyFichaSource'),payload(root))"));
+  const validation=workflow.indexOf('buildStructuredFicha(source,data)');
+  const production=workflow.indexOf('await create(ficha)');
   assert.ok(validation>=0&&production>validation,'structured validation must run before any creation request');
   assert.ok(ficha.includes('if(result.cancelled)')&&ficha.includes("finalStatus==='BLOCKED'"),'cancelled creation and final blockers must remain visible');
   assert.ok(!ficha.includes('setGeneratedAssets')&&!ficha.includes('renderOfferQuestions')&&!ficha.includes('saveDraft'),'creation must not regenerate advertising copy or persist pasted structured content');

@@ -192,13 +192,14 @@ assert.equal(restored.diario.length, 0, 'restore não cria diário a partir do r
 assert.equal(restored.event_log.length, 1, 'Event Log operacional continua preservado');
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
+const diaryView = await readFile(new URL('../src/product-diary/view.js', import.meta.url), 'utf8');
 assert.ok(template.includes('label:`${c.nome_exibicao||c.nome_mcc} · resumo Totais`'), 'resumos legados ficam acessíveis no Histórico inclusive quando vinculados a campanhas nativas');
 assert.ok(template.includes("showProduct(b.dataset.name,b.dataset.source,b.dataset.id||null)"), 'a tela de resumo localiza a campanha pelo ID estável');
 assert.ok(template.includes("source==='legacy'?[]"), 'resumo legado não fabrica registros diários');
-assert.ok(template.includes("$('#productPanelTitle').textContent='Resumo histórico legado'"), 'campanha legada abre resumo dentro do Diário existente');
-assert.ok(template.includes('<span>Lucro derivado</span>'), 'investimento e lucro são destacados no resumo de campanha');
-assert.ok(template.includes("value.state==='observed'||value.state==='derived'"), 'valores derivados de lucro e ROI aparecem no resumo');
-assert.ok(template.includes("$('#productTableWrap').classList.add('hidden')"), 'tabela diária fica oculta no resumo consolidado legado');
+assert.ok(diaryView.includes("$('#productPanelTitle').textContent='Resumo histórico legado'"), 'campanha legada abre resumo dentro do Diário existente');
+assert.ok(diaryView.includes('<span>Lucro derivado</span>'), 'investimento e lucro são destacados no resumo de campanha');
+assert.ok(diaryView.includes("value.state==='observed'||value.state==='derived'"), 'valores derivados de lucro e ROI aparecem no resumo');
+assert.ok(diaryView.includes("$('#productTableWrap').classList.add('hidden')"), 'tabela diária fica oculta no resumo consolidado legado');
 assert.ok(template.includes('legacyTotalsMigrationModulePromise')&&template.includes("fetch('legacy-totais-migration-v1.json',{cache:'no-store'})"), 'módulo utiliza payload local, sem importar XLSX na interface');
 assert.ok(template.includes("if(result.status==='blocked'){blockedMigration=true;shouldPersist=false;}"), 'ambiguidades bloqueiam a persistência');
 assert.ok(template.includes('function testedProducts()')&&template.includes('state.database?.campanhas||currentCampaignRows()'), 'Produtos Testados reutiliza o agrupamento existente');

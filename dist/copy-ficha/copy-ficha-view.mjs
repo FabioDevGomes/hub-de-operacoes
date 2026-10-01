@@ -1,10 +1,12 @@
 import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=20';
 import {minimumOfferProductPrice,productPriceCondition} from './copy-ficha-questions.mjs?v=2';
-import {buildStructuredFicha,structuredFichaFormat} from './copy-ficha-structured.mjs?v=1';
-import {createPresellFromFicha,reportHtml as presellReportHtml} from '../presell/presell-view.mjs?v=4';
+import {renderTemplate} from './copy-ficha-template.mjs?v=1';
+import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
+import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
+import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=1';
 
 let mounted=false,creatingPresell=false;
-const STORAGE_KEY='copy-ficha-draft-v1';
+// Persistence is isolated in copy-ficha-draft.mjs.
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const by=(root,id)=>root.querySelector(`#${id}`);
 
@@ -81,17 +83,11 @@ function payload(root){
   };
 }
 function saveDraft(root){
-  try{
-    const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')||{};
-    const draft={...previous,...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))};
-    if(Array.isArray(previous.packages))draft.packages=previous.packages;
-    delete draft.packagesManuallyEdited;
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(draft));
-  }catch{}
+  writeDraft({...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
 }
 function restoreDraft(root){
   try{
-    const draft=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+    const draft=readDraft();
     if(!draft)return;
     const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyDiscountAmount:draft.confirmedDiscountAmount,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyGuaranteeStatus:draft.guaranteeStatus,copyFreeShipping:draft.freeShipping};
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
@@ -106,7 +102,7 @@ function restoreDraft(root){
 
 function resetCollection(root,toast){
   if(!confirm('Limpar todos os campos e resultados desta coleta?'))return;
-  try{localStorage.removeItem(STORAGE_KEY)}catch{}
+  clearDraft();
   const blankFields=['copyDtcUrl','copyAffiliateUrl','copyRawText','copyProduct','copyCountry','copyLanguage','copyCurrency','copyDiscount','copyDiscountAmount','copyProductPrice','copyGuarantee','copyPageTitle','copyDestination','copyFichaSource'];
   blankFields.forEach(id=>{const field=by(root,id);if(field)field.value=''});
   const pendingFields=['copyFreeShipping','copyGuaranteeStatus'];
@@ -283,10 +279,9 @@ function renderPresellReports(root,reports=[]){
 async function generateFichaAndCreatePresell(root,toast){
   clearPresellFeedback(root,'Validando o conteúdo obrigatório da ficha…');
   clearValidationMessages(root);
-  const {ficha,warnings}=buildStructuredFicha(inputValue(root,'copyFichaSource'),payload(root));
+  const result=await createFromStructuredContent(inputValue(root,'copyFichaSource'),payload(root));
+  const {ficha,warnings}=result;
   updatePendingHighlights(root);
-  by(root,'copyPresellStatus').textContent='A ficha está válida. Confirmando antes de criar os arquivos da Presell…';
-  const result=await createPresellFromFicha(ficha);
   if(result.cancelled){
     by(root,'copyPresellStatus').textContent='Criação cancelada. A validação foi somente leitura e nenhum arquivo foi criado.';
     return;
@@ -306,29 +301,7 @@ async function generateFichaAndCreatePresell(root,toast){
 export async function mount({root,toast}={}){
   if(!root)return;
   if(!mounted){
-    root.innerHTML=`<div class="copy-ficha-shell">
-      <section class="copy-ficha-card"><header><div><h2>1. Fonte da oferta</h2><p>A URL e o texto visível ajudam a identificar dados para preencher a ficha.</p></div></header><div class="copy-ficha-body">
-        <div class="copy-ficha-grid"><div class="copy-ficha-field span-2"><label>URL da DTC / página do produtor</label><input id="copyDtcUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-2"><label>URL de afiliação (sempre separada)</label><input id="copyAffiliateUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-4"><label>Texto copiado da página (Ctrl+A, Ctrl+C, Ctrl+V)</label><textarea id="copyRawText" class="copy-ficha-textarea" placeholder="Cole aqui o conteúdo visível da oferta para identificar os dados do produto."></textarea></div></div>
-        <div class="copy-ficha-actions"><button id="copyAnalyze" class="copy-ficha-btn primary" type="button">Analisar oferta</button><button id="copyReset" class="copy-ficha-btn danger" type="button">Nova coleta</button></div><div id="copyDetected" class="copy-ficha-detected"></div><div id="copyAnalysisNote" class="copy-ficha-note"></div>
-      </div></section>
-      <section class="copy-ficha-card copy-ficha-validation"><header><div><h2>2. Dados da oferta</h2><p>Revise os dados que serão usados na ficha.</p></div></header><div class="copy-ficha-body">
-        <div class="copy-ficha-grid">
-          <div class="copy-ficha-field"><label>Produto</label><input id="copyProduct" class="copy-ficha-input" placeholder="MyoGlow"></div>
-          <div class="copy-ficha-field"><label>País</label><input id="copyCountry" class="copy-ficha-input" maxlength="2" placeholder="US"></div>
-          <div class="copy-ficha-field"><label>Idioma HTML</label><select id="copyLanguage" class="copy-ficha-select"><option value="">Selecionar</option><option value="en-US">en-US</option><option value="en-AU">en-AU</option><option value="en-CA">en-CA</option><option value="en-GB">en-GB</option><option value="pt-BR">pt-BR</option><option value="it-IT">it-IT</option><option value="es-ES">es-ES</option><option value="fr-FR">fr-FR</option><option value="de-DE">de-DE</option><option value="sv-SE">sv-SE</option></select></div>
-          <div class="copy-ficha-field"><label>Moeda</label><select id="copyCurrency" class="copy-ficha-select"><option value="">Selecionar</option><option value="USD">USD</option><option value="AUD">AUD</option><option value="CAD">CAD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="BRL">BRL</option><option value="SEK">SEK</option></select></div>
-          <div class="copy-ficha-field copy-ficha-price-field"><label for="copyProductPrice" id="copyProductPriceLabel">Menor preço identificado (USD)</label><input id="copyProductPrice" class="copy-ficha-input" inputmode="decimal" placeholder="Ex.: 26.99" title="Menor preço promocional identificado. Você pode revisar este valor antes de gerar novamente."><span id="copyProductPriceNote" class="copy-ficha-note"></span></div>
-          <div class="copy-ficha-discount-pair" role="group" aria-label="Desconto confirmado"><div class="copy-ficha-field"><label>Desconto confirmado (%)</label><input id="copyDiscount" class="copy-ficha-input" inputmode="decimal" aria-label="Desconto confirmado em percentual" placeholder="Ex.: 70"></div><div class="copy-ficha-field"><label id="copyDiscountAmountLabel">Valor do desconto (USD)</label><input id="copyDiscountAmount" class="copy-ficha-input" inputmode="decimal" placeholder="Ex.: 365.00" title="Informe ou revise o valor associado ao percentual de desconto confirmado."></div></div>
-          <div class="copy-ficha-field"><label>Confirmação da garantia</label><select id="copyGuaranteeStatus" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmada</option><option value="no">Não há garantia exibida</option></select></div>
-          <div class="copy-ficha-field"><label>Prazo confirmado (dias)</label><input id="copyGuarantee" class="copy-ficha-input" type="number" min="1" placeholder="90"></div>
-          <div class="copy-ficha-field"><label>Frete grátis</label><select id="copyFreeShipping" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="no">Não exibido</option></select></div>
-          <div class="copy-ficha-field span-2"><label>Título da página</label><input id="copyPageTitle" class="copy-ficha-input" placeholder="Produto | Oferta"></div>
-          <div class="copy-ficha-field span-2"><label>Diretório da Presell</label><input id="copyDestination" class="copy-ficha-input" placeholder="C:\\Users\\...\\pag01"></div>
-          <div class="copy-ficha-field"><label>Pasta de assets</label><input id="copyAssetFolder" class="copy-ficha-input" value="assets"></div>
-        </div>
-      </div></section>
-      <section class="copy-ficha-card"><header><div><h2>3. Conteúdo obrigatório da ficha</h2><p>Os textos colados são preservados sem reescrita. País, idioma, URL de afiliação e destino vêm dos campos acima.</p></div></header><div class="copy-ficha-body"><div class="copy-ficha-field"><label for="copyFichaSource">Conteúdo estruturado · obrigatório para criar a Presell</label><textarea id="copyFichaSource" class="copy-ficha-textarea" spellcheck="false" placeholder="${esc(structuredFichaFormat)}"></textarea><span class="copy-ficha-note">Cole [PRODUTO], os títulos e textos e três ou quatro pares [PERGUNTA_N]/[RESPOSTA_N]. Confira valores por unidade e por pacote; nada será recalculado. Este campo permanece nesta sessão.</span></div><div class="copy-ficha-actions"><button id="copyGenerateFicha" class="copy-ficha-btn primary" type="button">Validar ficha e criar Presell</button></div><div id="copyPresellStatus" class="presell-message" role="status" aria-live="polite">Nenhuma Presell solicitada.</div><div id="copyPresellReport"></div><div id="copyWarnings" class="copy-ficha-note">Revise os dados da ficha; pendências de validação aparecerão aqui.</div></div></section>
-    </div>`;
+    root.innerHTML=renderTemplate();
     restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);
     by(root,'copyAnalyze').onclick=()=>analyze(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);

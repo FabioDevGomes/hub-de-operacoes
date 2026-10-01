@@ -94,31 +94,30 @@ assert.match(elements.get('#campaignList').innerHTML,/Nenhum item encontrado/,'s
 viewContext.state.listMode='history';viewContext.renderSidebar();
 assert.match(elements.get('#campaignList').innerHTML,/Pausa antiga/,'historical sidebar remains available');
 elements.get('#search').value='';
-viewContext.fmtNum=String;
-viewContext.workbookTotalsMap=()=>new Map();
-viewContext.OverviewDomain={totalsColumns:()=>[]};
-viewContext.renderD1MetricSummary=()=>'';
-viewContext.renderD0MetricSummary=()=>'';
-viewContext.manifestDates=()=>({d0:'2026-09-30',d1:'2026-09-29'});
-viewContext.dateLabel=String;
-viewContext.applyPolicyLimitationHighlights=()=>{};
-vm.runInContext(template.match(/function databaseCampaign\([^\n]+/)[0],viewContext);
-const rendererStart=template.indexOf('    function renderTotals(){');
-const rendererEnd=template.indexOf('    async function editMinimumRoi(',rendererStart);
-vm.runInContext(template.slice(rendererStart,rendererEnd),viewContext);
-const filterStart=template.indexOf('    const renderTotalsUnfiltered=renderTotals;');
-const filterEnd=template.indexOf('    function confirmConflicts(',filterStart);
-vm.runInContext(template.slice(filterStart,filterEnd),viewContext);
+const {createRoot,format}=await import('./helpers/view-dom.mjs');
+const overviewDom=createRoot(),overviewContext=vm.createContext({window:{}});
+vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),overviewContext);
+vm.runInContext(await readFile(new URL('../src/overview/view.js',import.meta.url),'utf8'),overviewContext);
+const getSnapshot=()=>{
+  const campaigns=viewContext.campaignRows();
+  return {activeCount:viewContext.activeCampaignRows().length,pausedCount:campaigns.filter(c=>c._status==='pausada').length,
+    dates:{d0:'2026-09-30',d1:'2026-09-29'},referenceDate:'2026-09-30',
+    d1Totals:campaigns.map(()=>({})),rows:campaigns.map(c=>{
+      const stored=historicalBase.campanhas.find(item=>item.nome_mcc===c.nome_campanha_exato);
+      return {c,identity:{name:c.nome_campanha_exato,dateLabel:'',dateSort:''},totals:{},d0Totals:{},
+        campaignId:stored.id,pausedAt:stored.pausada_em||'',zeroDays:null,roi:null,profit:null};
+    })};
+};
+const overview=overviewContext.window.OverviewView.mount({root:overviewDom.root,state:viewContext.state,
+  getSnapshot,domain:overviewContext.window.OverviewDomain,format,actions:{}});
 for(const mode of ['consolidated','d1','d0']){
   viewContext.state.totalsMode=mode;
-  // Details are covered by overview-domain; isolate the actual KPI/count/filter path.
-  viewContext.derivedContext().totalsRowsByMode.set(mode,[]);
-  filterRows=Array.from(viewContext.campaignRows(),campaign=>({dataset:{campaign:campaign.nome_campanha_exato},classList:classes(campaign._status==='pausada'?['paused-row']:[])}));
   for(const [filter,expected] of [['active',1],['paused',5],['paused7',4],['all',6]]){
-    viewContext.state.campaignStatusFilter=filter;viewContext.renderTotals();
-    assert.equal(filterRows.filter(row=>!row.classList.contains('hidden')).length,expected,`${mode}/${filter} filters the correct operational status`);
-    assert.equal(elements.get('#totalsCount').textContent,'1 ativas · 5 pausadas','counter must count statuses, not the five raw manifest records');
-    assert.match(elements.get('#kpis').innerHTML,/<strong class="kpi-value">1<\/strong>/);
+    viewContext.state.campaignStatusFilter=filter;overview.render();
+    const rendered=[...overviewDom.get('#totalsBody').innerHTML.matchAll(/<tr class="([^"]*)" /g)];
+    assert.equal(rendered.filter(row=>!row[1].split(' ').includes('hidden')).length,expected,`${mode}/${filter} filters the correct operational status`);
+    assert.equal(overviewDom.get('#totalsCount').textContent,'1 ativas · 5 pausadas','counter must count statuses, not the five raw manifest records');
+    assert.match(overviewDom.get('#kpis').innerHTML,/<strong class="kpi-value">1<\/strong>/);
   }
 }
 const reactivatedBase=db.importManifest(historicalBase,manifest('2026-10-01',[

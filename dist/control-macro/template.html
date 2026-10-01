@@ -1,0 +1,28 @@
+<div class="macro-toolbar">
+          <div class="macro-month-nav" role="group" aria-label="Navegação por mês">
+            <button id="macroPreviousMonth" class="btn macro-month-arrow" type="button" aria-label="Mês anterior" title="Mês anterior">‹</button>
+            <strong id="macroMonthLabel" class="macro-month-label" aria-live="polite"></strong>
+            <button id="macroNextMonth" class="btn macro-month-arrow" type="button" aria-label="Mês posterior" title="Mês posterior">›</button>
+            <button id="macroCurrentMonth" class="btn" type="button">Mês atual</button>
+          </div>
+          <label class="btn"><input id="macroHistoryInput" class="file-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">Importar histórico Excel</label>
+        </div>
+        <div class="macro-lifetime-summary" aria-label="Acumulado de todos os meses">
+          <div class="macro-lifetime-heading"><strong>Acumulado de todos os meses</strong><small>Todo o histórico disponível na base</small></div>
+          <div id="macroLifetimeKpis" class="macro-lifetime-kpis" aria-live="polite"></div>
+        </div>
+        <div id="macroKpis" class="macro-kpis"></div>
+        <div class="card panel">
+          <div class="panel-head"><div><h2>Resumo diário da operação</h2><p id="macroCaption">A planilha prevalece por campo; a MCC complementa cliques e vendas ausentes a partir de 13/09.</p></div><span id="macroRowCount" class="tag"></span></div>
+          <div class="macro-table-wrap"><table class="macro-table"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th></tr></thead><tbody id="macroDailyBody"></tbody></table></div>
+        </div>
+        <div class="card panel macro-trend-panel">
+          <div class="macro-trend-head"><div><h2>Evolução da operação</h2><p id="macroTrendCaption"></p></div><div class="macro-trend-controls">
+            <div class="macro-chart-switch" role="group" aria-label="Período do gráfico"><button id="macroTrendMonthly" class="btn active" type="button" aria-pressed="true">Consolidado mensal · desde abr/2026</button><button id="macroTrendDaily" class="btn" type="button" aria-pressed="false"></button></div>
+            <div class="macro-chart-switch" role="group" aria-label="Métrica do gráfico"><button class="btn active" type="button" data-macro-trend-metric="finance" aria-pressed="true">Financeiro</button><button class="btn" type="button" data-macro-trend-metric="performance" aria-pressed="false">Desempenho</button><button class="btn" type="button" data-macro-trend-metric="roi" aria-pressed="false">ROI</button><button class="btn" type="button" data-macro-trend-metric="clicks" aria-pressed="false">Cliques</button><button class="btn" type="button" data-macro-trend-metric="sales" aria-pressed="false">Vendas</button></div>
+          </div></div>
+          <div id="macroTrendLegend" class="macro-trend-legend" aria-label="Legenda do gráfico"></div>
+          <div id="macroTrendChart" class="macro-trend-chart" aria-live="polite"></div>
+          <p class="macro-trend-note">Pontos sem dados ficam em branco, não são tratados como zero. Os rótulos mostram os valores; passe o mouse para ver período e cobertura. No modo Desempenho, cada faixa tem escala própria.</p>
+        </div>
+        <p class="footer-note">Valores financeiros exibidos em reais conforme os campos diários da MCC. Vendas ainda não confirmadas aparecem separadas como provisórias até a conciliação do D−1.</p>

@@ -132,7 +132,7 @@ assert.equal(fallback.find(row => row.date === '2026-09-13').source, 'mixed');
 assert.equal(fallback.find(row => row.date === '2026-09-12').investment, null);
 assert.equal(fallback.find(row => row.date === '2026-09-12').clicks, null);
 
-const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
+const template = await readFile(new URL('../src/control-macro/view.js', import.meta.url), 'utf8') + await readFile(new URL('../src/control-macro/template.html', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../src/control-macro/control-macro.css', import.meta.url), 'utf8');
 assert.match(template, /Number\(row\.sales\)>0\?'macro-sales-row':''/);
 assert.match(template, /isSuspensionDate\(row\.date\)\?'macro-suspension-row'/);

@@ -17,7 +17,10 @@ const embedded = JSON.stringify(manifest).replaceAll("</script", "<\\/script");
 const database = databaseModule.replaceAll("</script", "<\\/script");
 const productCatalog = productCatalogModule.replaceAll("</script", "<\\/script");
 const viewRegistry = viewRegistryModule.replaceAll("</script", "<\\/script");
-const output = template.replace("__DATABASE_MODULE__", database).replace("__PRODUCT_CATALOG_MODULE__", productCatalog).replace("__VIEW_REGISTRY_MODULE__", viewRegistry).replace("__EMBEDDED_MANIFEST__", embedded);
+let output = template.replace("__DATABASE_MODULE__", database).replace("__PRODUCT_CATALOG_MODULE__", productCatalog).replace("__VIEW_REGISTRY_MODULE__", viewRegistry).replace("__EMBEDDED_MANIFEST__", embedded);
+output = output.replace("__CONTROL_MACRO_VIEW__", await readFile(resolve(root, "src/control-macro/template.html"), "utf8"));
+output = output.replace("__CPA_VIEW__", await readFile(resolve(root, "src/cpa/template.html"), "utf8"));
+output = output.replace("__TESTED_PRODUCTS_VIEW__", await readFile(resolve(root, "src/tested-products/template.html"), "utf8"));
 const faviconBase64 = template.match(/<link rel="icon" type="image\/png" href="data:image\/png;base64,([^"]+)"/)?.[1];
 if (!faviconBase64) throw new Error("Favicon do painel não encontrado no template.");
 await mkdir(resolve(root, "dist"), { recursive: true });
@@ -28,6 +31,7 @@ await cp(resolve(root, "src/brand-logo.png"), resolve(root, "dist/brand-logo.png
 await cp(resolve(root, "src/flowtracking-copy-guide.png"), resolve(root, "dist/flowtracking-copy-guide.png"));
 await cp(resolve(root, "src/overview-info-icon.png"), resolve(root, "dist/overview-info-icon.png"));
 await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-component.js"));
+await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navigation-controller.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
@@ -38,6 +42,8 @@ await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursiv
 await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });
 await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro"), { recursive: true });
 await cp(resolve(root, "src/accounts"), resolve(root, "dist/accounts"), { recursive: true });
+await cp(resolve(root, "src/cpa"), resolve(root, "dist/cpa"), { recursive: true });
+await cp(resolve(root, "src/tested-products"), resolve(root, "dist/tested-products"), { recursive: true });
 await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
 await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
 await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));

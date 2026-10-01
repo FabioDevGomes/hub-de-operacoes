@@ -4,8 +4,9 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const source = readFileSync(new URL('../src/index.template.html',import.meta.url),'utf8');
+const cpaView = readFileSync(new URL('../src/cpa/view.js',import.meta.url),'utf8');
 const functionLine = name => {
-  const line = source.split('\n').find(value=>value.trimStart().startsWith('function '+name+'('));
+  const line = (name==='cpaSelect'?cpaView:source).split('\n').find(value=>value.trimStart().startsWith('function '+name+'('));
   assert.ok(line,'Hub adapter function missing: '+name);
   return line;
 };

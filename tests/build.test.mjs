@@ -2,14 +2,23 @@ import assert from 'node:assert/strict';
 import {access,readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
+const macroView=await readFile(new URL('../dist/control-macro/view.js',import.meta.url),'utf8');
+const cpaView=await readFile(new URL('../dist/cpa/view.js',import.meta.url),'utf8');
+const cpaDomain=await readFile(new URL('../dist/cpa/domain.js',import.meta.url),'utf8');
+const cpaCss=await readFile(new URL('../dist/cpa/cpa.css',import.meta.url),'utf8');
+const testedView=await readFile(new URL('../dist/tested-products/view.js',import.meta.url),'utf8');
 const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
 const sidebarComponent=await readFile(new URL('../dist/sidebar-component.js',import.meta.url),'utf8');
 const sidebarCss=await readFile(new URL('../dist/sidebar-component.css',import.meta.url),'utf8');
+const navigation=await readFile(new URL('../dist/navigation-controller.js',import.meta.url),'utf8');
+assert.equal(navigation,await readFile(new URL('../src/navigation-controller.js',import.meta.url),'utf8'),'o build deve publicar o controlador canônico');
+assert.ok(html.includes('navigation-controller.js?v=1')&&html.includes('PanelNavigation.create('),'o painel deve carregar e configurar o controlador único');
+assert.doesNotMatch(html,/viewsBefore|baseShowProduct|timeBaseShow|withRegisterSaleVisibility/,'a navegação não deve redefinir funções em camadas');
 const databaseModule=await readFile(new URL('../dist/database.js',import.meta.url),'utf8');
 const overviewDomain=await readFile(new URL('../dist/overview-domain.js',import.meta.url),'utf8');
 const accountView=await readFile(new URL('../dist/accounts/accounts-view.mjs',import.meta.url),'utf8');
 const accountCss=await readFile(new URL('../dist/accounts/accounts.css',import.meta.url),'utf8');
-const timeViewModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
+const timeViewModule=(await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8')).replaceAll('\r\n','\n');
 const timeDomainModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-domain.mjs',import.meta.url),'utf8');
 const timeStorageModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-storage.mjs',import.meta.url),'utf8');
 const timeCss=await readFile(new URL('../dist/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
@@ -26,7 +35,7 @@ const billingView=await readFile(new URL('../dist/billing/billing-view.mjs',impo
 const billingShell=await readFile(new URL('../dist/billing/billing-shell.css',import.meta.url),'utf8');
 const personalFinanceDomain=await readFile(new URL('../dist/personal-finance/personal-finance-domain.mjs',import.meta.url),'utf8');
 const personalFinanceStorage=await readFile(new URL('../dist/personal-finance/personal-finance-storage.mjs',import.meta.url),'utf8');
-const personalFinanceView=await readFile(new URL('../dist/personal-finance/personal-finance-view.mjs',import.meta.url),'utf8');
+const personalFinanceView=(await readFile(new URL('../dist/personal-finance/personal-finance-view.mjs',import.meta.url),'utf8')).replaceAll('\r\n','\n');
 const personalFinanceSync=await readFile(new URL('../dist/personal-finance/personal-finance-sync.mjs',import.meta.url),'utf8');
 const waterReminder=await readFile(new URL('../dist/meu-tempo/water-reminder.mjs',import.meta.url),'utf8');
 const personalFinanceCss=await readFile(new URL('../dist/personal-finance/personal-finance.css',import.meta.url),'utf8');
@@ -39,8 +48,8 @@ assert.ok(html.includes('id="observabilityView"')&&html.includes('id="observabil
 assert.ok(sidebarComponent.includes("key: 'curation-observability'")&&sidebarComponent.includes('Observabilidade da Curadoria')&&html.includes('id="curationObservabilityView"'),'rota e menu independentes da Observabilidade da Curadoria ausentes');
 assert.ok(html.includes("query:'curation-observability'")&&html.includes("state.activeView==='curation-observability'"),'rota da Observabilidade da Curadoria não está registrada/renderizada');
 assert.ok(html.includes('curadoria/curation-observability.css?v=1')&&html.includes("import('./curadoria/curation-observability-view.mjs?v=1')"),'view ou CSS da Observabilidade da Curadoria não foi empacotado sob demanda');
-assert.ok(html.includes('setSidebarGroup(\'analysis\')'),'rota da nova view não abre o agrupamento Análises do menu lateral');
-assert.ok(sidebarComponent.includes("key: 'macro'")&&html.includes("navId:'controlMacroNav'"),'item do Controle Macro ausente do menu compartilhado/registro');
+assert.ok(navigation.includes("closest('[data-sidebar-group]')")&&navigation.includes('HubSidebar?.setOpenGroup(group)'),'a navegação deve abrir o grupo real do item ativo, sem duplicar a configuração do menu');
+assert.ok(sidebarComponent.includes("key: 'macro'")&&(html+macroView).includes("navId:'controlMacroNav'"),'item do Controle Macro ausente do menu compartilhado/registro');
 const operationMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'operation'"),sidebarComponent.indexOf("{ id: 'finance'"));
 const financeMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'finance'"),sidebarComponent.indexOf("{ id: 'analysis'"));
 assert.ok(!operationMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'billing'")&&financeMenu.includes('Faturamento'),'Controle Macro e Faturamento devem estar no grupo Financeiro, não em Operação');
@@ -58,13 +67,13 @@ assert.ok(billingDomain.includes('summarizeCompetence')&&billingDomain.includes(
 assert.ok(billingStorage.includes("const BILLING_SEED_KEY = 'seed:legacy-faturamento:v1'")&&billingStorage.includes('planSeedImport'),'seed idempotente e versionado não foi empacotado');
 assert.ok(billingStorage.includes('onlyIfMissing = false'),'sincronização de recuperação deve ser idempotente e não substituir dados financeiros já sincronizados');
 assert.ok(billingView.includes('Competência')&&billingView.includes('Caixa')&&billingView.includes('Registrar recebimento')&&billingView.includes('Reembolso'),'interface do módulo financeiro incompleta');
-assert.ok(html.includes('billing/billing-shell.css')&&html.includes("classList.add('billing-page')")&&billingShell.includes('body.billing-page .actions'),'isolamento visual da página de Faturamento ausente');
+assert.ok(html.includes('billing/billing-shell.css')&&html.includes("billing:{bodyClass:'billing-page'")&&navigation.includes("classList.toggle(name,name===entry.bodyClass)")&&billingShell.includes('body.billing-page .actions'),'isolamento visual da página de Faturamento ausente');
 assert.ok(!billingView.includes('seed-v1.json')&&!billingView.includes('installBillingSeed'),'Faturamento não deve importar dados pessoais empacotados');
 for(const privateArtifact of ['../dist/billing/seed-v1.json','../dist/campaign-snapshot-seed.json','../dist/__paused-history-source.json'])await assert.rejects(access(new URL(privateArtifact,import.meta.url)),error=>error?.code==='ENOENT',`${privateArtifact} não pode ser publicado no dist`);
 assert.ok(!billingView.includes('input type="file"')&&!billingView.includes('Importar Excel'),'a view de Faturamento não deve incluir importador XLSX');
-assert.ok(html.includes('id="controlMacroView"')&&html.includes('id="macroDailyBody"'),'tela/tabela do Controle Macro ausente');
+assert.ok((html+macroView).includes('id="controlMacroView"')&&(html+macroView).includes('id="macroDailyBody"'),'tela/tabela do Controle Macro ausente');
 assert.ok(html.includes("query:'personal-finance'")&&html.includes('id="personalFinanceView"')&&html.includes("import('./personal-finance/personal-finance-view.mjs?v=65')")&&html.includes('personal-finance/personal-finance.css?v=33'),'rota nativa e assets atualizados do Controle de gastos ausentes');
-assert.ok(!html.includes('id="workbookInput"')&&!html.includes('Atualizar base pelo Excel')&&!html.includes('async function loadWorkbook(file)')&&!html.includes("endsWith('.xlsx')")&&html.includes('id="macroHistoryInput"')&&html.includes('CampaignDatabase.importWorkbook(base,payload.excel).base'),'importação Excel de campanha deve sair da tela sem remover o importador histórico legado nem outros fluxos independentes');
+assert.ok(!(html+macroView).includes('id="workbookInput"')&&!(html+macroView).includes('Atualizar base pelo Excel')&&!(html+macroView).includes('async function loadWorkbook(file)')&&!(html+macroView).includes("endsWith('.xlsx')")&&(html+macroView).includes('id="macroHistoryInput"')&&(html+macroView).includes('CampaignDatabase.importWorkbook(base,payload.excel).base'),'importação Excel de campanha deve sair da tela sem remover o importador histórico legado nem outros fluxos independentes');
 assert.ok(html.includes("personal-finance/personal-finance-storage.mjs?v=7"),'storage do Controle de gastos não invalida o cache após atualizar a leitura de saldos');
 assert.ok(sidebarComponent.includes("import('/meu-tempo/water-reminder.mjs?v=3')")&&waterReminder.includes('REMINDER_START_HOUR = 8')&&waterReminder.includes('REMINDER_END_HOUR = 20')&&waterReminder.includes('WATER_REMINDER_INTERVAL_MS = 90 * 60 * 1000'),'lembrete global de Água não inicia no Hub com intervalo/horário configurados');
 assert.ok(waterReminder.includes('Abrir Meu Tempo')&&waterReminder.includes('href="/?view=time"'),'aviso de Água não oferece ação para abrir Meu Tempo');
@@ -77,7 +86,8 @@ assert.ok(personalFinanceDomain.includes('overlayCurrentCategoryNames')&&persona
 assert.ok(personalFinanceView.includes('shouldLoadReserve ? Storage.readGlobalExpenseTotals() : Promise.resolve(null)'),'resumo da reserva na visão Mensal deve carregar as despesas globais em aberto');
 assert.ok(personalFinanceDomain.includes('canMarkQuickPayInFutureMonthlyView')&&personalFinanceView.includes('actualEditable || Domain.canMarkQuickPayInFutureMonthlyView(row, new Date())'),'DAS e academia devem permitir o atalho de pagamento em competências futuras na visão Mensal');
 assert.ok(personalFinanceDomain.includes('monthlyAmountRemaining')&&personalFinanceView.includes('Domain.monthlyAmountRemaining(planned, row.actual_amount)'),'o restante da aba mensal deve usar o planejado mensal menos o gasto realizado, incluindo almoço/janta');
-assert.ok(sidebarComponent.includes("key: 'personal-finance'")&&sidebarComponent.includes('Controle de gastos')&&html.includes("setSidebarGroup('personal')"),'Controle de gastos não está no grupo Pessoal');
+const personalMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'personal'"));
+assert.ok(personalMenu.includes("key: 'personal-finance'")&&personalMenu.includes('Controle de gastos')&&navigation.includes('HubSidebar?.setOpenGroup(group)'),'Controle de gastos deve ativar seu grupo Pessoal pelo controlador comum');
 assert.ok(personalFinanceDomain.includes('summarizeByCurrency')&&personalFinanceDomain.includes('actual_amount: null')&&personalFinanceDomain.includes('createMonthSnapshot'),'domínio pessoal não diferencia valor realizado em branco nem preserva plano mensal');
 assert.ok(personalFinanceView.includes('personal-finance-domain.mjs?v=21')&&personalFinanceView.includes('personal-finance-storage.mjs?v=15')&&personalFinanceStorage.includes('personal-finance-domain.mjs?v=20')&&personalFinanceStorage.includes('fund.type === \'available\'')&&personalFinanceView.includes('includeFutureFunds:true')&&personalFinanceView.includes('includeFutureContributions:true')&&personalFinanceStorage.includes('createGlobalExpenseTotals')&&personalFinanceStorage.includes('personal_finance_categories')&&personalFinanceStorage.includes(".index('month_key').getAll(only(monthKey))")&&personalFinanceStorage.includes('writeBundleToTransaction'),'persistência pessoal preserva dados e aportes futuros sem alterar outras telas');
 assert.ok(personalFinanceView.includes('<tfoot class="pf-month-totals">${monthlyTotals}</tfoot>')&&personalFinanceView.includes('class="pf-category-total-row ${usdClass(code)}"')&&personalFinanceView.includes('const remainingAmounts = currencyRows.map(row => Domain.monthlyAmountRemaining'),'tabela Mensal deve exibir somatórios por moeda de planejado, realizado e restante');
@@ -110,18 +120,18 @@ assert.ok(personalFinanceCss.includes('.pf-view-toggle')&&personalFinanceCss.inc
 assert.ok(personalFinanceCss.includes('.pf-quarter-table')&&personalFinanceCss.includes('.pf-quarter-month>span'),'estilos de leitura das colunas mensais na visão trimestral ausentes');
 assert.ok(personalFinanceCss.includes('.pf-quarter-table .pf-quarter-current-month'),'mês atual não está destacado como a coluna de edição da visão trimestral');
 assert.ok(personalFinanceView.includes('pf-quarter-table ${consolidated ? \'pf-consolidated-table\' : \'\'}')&&personalFinanceCss.includes('.pf-quarter-table.pf-consolidated-table td{padding-block:4.75px}'),'espaçamento das linhas do Consolidado deve aumentar mais 10% sem alterar o Trimestral');
-assert.ok(html.includes('id="macroPreviousMonth"')&&html.includes('id="macroNextMonth"')&&html.includes('id="macroCurrentMonth"')&&html.includes('id="macroMonthLabel"'),'navegação por mês do Controle Macro incompleta');
-assert.ok(html.includes('id="macroTrendChart"')&&html.includes('id="macroTrendMonthly"')&&html.includes('id="macroTrendDaily"')&&html.includes('data-macro-trend-metric="finance"')&&html.includes('data-macro-trend-metric="performance"')&&html.includes('data-macro-trend-metric="sales"'),'gráfico evolutivo do Controle Macro ou controles de período/métrica ausentes');
-assert.ok(html.includes('macroTrendPerformanceSvg(buckets,scope)')&&html.includes('Desempenho de ROI, cliques e vendas em faixas alinhadas')&&html.includes('No modo Desempenho, cada faixa tem escala própria')&&html.includes('oficiais, ${macroTrendValue(bucket.pendingSales'),'gráfico unificado deve alinhar escalas independentes e detalhar vendas oficiais/provisórias');
-assert.ok(html.includes('ControlMacroDomain.monthlyTrendBuckets')&&html.includes('ControlMacroDomain.dailyTrendBuckets')&&html.includes('cobertura ${covered}/${expected}'),'gráfico deve usar agregados rastreáveis, cobertura e os dois períodos');
-assert.ok(html.includes('function macroInitializePeriod(){state.macroMonth=ControlMacroDomain.currentMonth()}')&&html.includes("$('#controlMacroNav').onclick=()=>{state.macroMonth=ControlMacroDomain.currentMonth();showControlMacro()}"),'Controle Macro deve abrir no mês atual, tanto na rota inicial quanto ao reentrar pela navegação');
-assert.ok(!html.includes('id="macroDateStart"')&&!html.includes('id="macroDateEnd"')&&!html.includes('id="macroApplyDates"'),'filtros manuais de intervalo continuam no Controle Macro');
-assert.ok(!html.includes('<span class="macro-source">'),'origem MCC/planilha continua repetida sob a data no Controle Macro');
-assert.ok(html.includes('control-macro/domain.js')&&macroDomain.includes('aggregateMccDaily'),'domínio do Controle Macro não foi empacotado');
-assert.ok(macroCss.includes('.macro-kpis')&&macroCss.includes('padding:6px 9px')&&html.includes('ControlMacroDomain.monthBounds(state.macroMonth)'),'layout compacto e filtro mensal do Controle Macro ausentes');
+assert.ok((html+macroView).includes('id="macroPreviousMonth"')&&(html+macroView).includes('id="macroNextMonth"')&&(html+macroView).includes('id="macroCurrentMonth"')&&(html+macroView).includes('id="macroMonthLabel"'),'navegação por mês do Controle Macro incompleta');
+assert.ok((html+macroView).includes('id="macroTrendChart"')&&(html+macroView).includes('id="macroTrendMonthly"')&&(html+macroView).includes('id="macroTrendDaily"')&&(html+macroView).includes('data-macro-trend-metric="finance"')&&(html+macroView).includes('data-macro-trend-metric="performance"')&&(html+macroView).includes('data-macro-trend-metric="sales"'),'gráfico evolutivo do Controle Macro ou controles de período/métrica ausentes');
+assert.ok((html+macroView).includes('macroTrendPerformanceSvg(buckets,scope)')&&(html+macroView).includes('Desempenho de ROI, cliques e vendas em faixas alinhadas')&&(html+macroView).includes('No modo Desempenho, cada faixa tem escala própria')&&(html+macroView).includes('oficiais, ${macroTrendValue(bucket.pendingSales'),'gráfico unificado deve alinhar escalas independentes e detalhar vendas oficiais/provisórias');
+assert.ok((html+macroView).includes('ControlMacroDomain.monthlyTrendBuckets')&&(html+macroView).includes('ControlMacroDomain.dailyTrendBuckets')&&(html+macroView).includes('cobertura ${covered}/${expected}'),'gráfico deve usar agregados rastreáveis, cobertura e os dois períodos');
+assert.ok((html+macroView).includes('function macroInitializePeriod(){state.macroMonth=ControlMacroDomain.currentMonth()}')&&(html+macroView).includes("macro:{onMenu:()=>{macroUi.macroMonth=ControlMacroDomain.currentMonth()},render:renderControlMacro}")&&navigation.includes("if(source==='menu')entry.onMenu?.()"),'Controle Macro deve abrir no mês atual, tanto na rota inicial quanto ao reentrar pela navegação');
+assert.ok(!(html+macroView).includes('id="macroDateStart"')&&!(html+macroView).includes('id="macroDateEnd"')&&!(html+macroView).includes('id="macroApplyDates"'),'filtros manuais de intervalo continuam no Controle Macro');
+assert.ok(!(html+macroView).includes('<span class="macro-source">'),'origem MCC/planilha continua repetida sob a data no Controle Macro');
+assert.ok((html+macroView).includes('control-macro/domain.js')&&macroDomain.includes('aggregateMccDaily'),'domínio do Controle Macro não foi empacotado');
+assert.ok(macroCss.includes('.macro-kpis')&&macroCss.includes('padding:6px 9px')&&(html+macroView).includes('ControlMacroDomain.monthBounds(state.macroMonth)'),'layout compacto e filtro mensal do Controle Macro ausentes');
 assert.ok(macroCss.includes('.macro-trend-panel')&&macroCss.includes('.macro-trend-svg')&&macroCss.includes('.macro-chart-switch .btn.active'),'estilos do gráfico do Controle Macro ausentes');
-assert.ok(html.includes('function macroTrendPointLabels(')&&html.includes('${pointLabels}${barLabels}')&&html.includes('${dots}${labels}')&&macroCss.includes('.macro-chart-value'),'rótulos dos valores devem aparecer em todos os modos do gráfico do Controle Macro');
-assert.ok(html.includes("point.format==='finance'?fmtNum(point.value,2):macroTrendValue(point.value,point.format)"),'rótulos financeiros do gráfico devem mostrar números sem símbolo de moeda');
+assert.ok((html+macroView).includes('function macroTrendPointLabels(')&&(html+macroView).includes('${pointLabels}${barLabels}')&&(html+macroView).includes('${dots}${labels}')&&macroCss.includes('.macro-chart-value'),'rótulos dos valores devem aparecer em todos os modos do gráfico do Controle Macro');
+assert.ok((html+macroView).includes("point.format==='finance'?fmtNum(point.value,2):macroTrendValue(point.value,point.format)"),'rótulos financeiros do gráfico devem mostrar números sem símbolo de moeda');
 assert.ok(html.includes('Importar histórico Excel')&&html.includes('Adicionar novos e manter atuais'),'importação histórica não tem prévia e política segura de conflitos');
 assert.ok(html.includes('Observabilidade Decisória Operacional'),'título da tela de observabilidade ausente');
 assert.ok(databaseModule.includes("create(){return{schema:SCHEMA")&&databaseModule.includes('event_log:[]'),'Event Log não inicializa em bases novas');
@@ -157,7 +167,7 @@ assert.ok(copyFichaCss.includes('.copy-ficha-shell'),'CSS da tela Copy e Ficha n
 assert.ok(html.includes('copy-ficha/copy-ficha-pending.css?v=2')&&copyFichaPendingCss.includes('.copy-ficha-warning-count')&&copyFichaPendingCss.includes('.copy-ficha-warning-list li::marker'),'pendências de Copy e Ficha não são exibidas como itens numerados com contagem destacada');
 assert.ok(sidebarComponent.includes("key: 'asset-studio'")&&sidebarComponent.includes('/asset-studio/'),'menu Asset Studio ausente do componente compartilhado');
 assert.ok(html.includes('id="timeView"'),'tela Meu Tempo ausente');
-assert.ok(html.includes('id="controlMacroView"')&&html.includes("navId:'controlMacroNav'"),'tela ou menu Controle Macro ausente');
+assert.ok((html+macroView).includes('id="controlMacroView"')&&(html+macroView).includes("navId:'controlMacroNav'"),'tela ou menu Controle Macro ausente');
 assert.ok(html.includes('data-hub-sidebar-mode="app"')&&html.includes('data-hub-sidebar-products'),'painel principal não usa o componente compartilhado do menu');
 assert.ok(html.includes('sidebar-component.js')&&html.includes('sidebar-component.css'),'componente ou estilos compartilhados do menu ausentes no app principal');
 const personalGroupStart=sidebarComponent.indexOf("id: 'personal'");
@@ -169,7 +179,7 @@ assert.ok(sidebarComponent.includes("key: 'tested'")&&sidebarComponent.includes(
 assert.ok(html.includes('<h2 id="productPanelTitle">Diário de campanha</h2>')&&html.includes("$('#productPanelTitle').textContent='Resumo histórico legado'"),'o painel deve identificar o diário nativo e alternar para o resumo legado dentro da mesma tela');
 assert.ok(sidebarComponent.includes('activeGroupFor(root)')&&sidebarComponent.includes('routeView.id'),'a rota ativa não abre o grupo correspondente do menu');
 assert.ok(sidebarComponent.includes("id: 'curation'")&&sidebarComponent.includes('E-commerce GM'),'grupo expansível Curadoria ausente');
-assert.ok(html.includes("$('#curationObservabilityNav').onclick=showCurationObservability")&&html.includes("PanelViews.urlFor(view.id,location.pathname)"),'Observabilidade da Curadoria não está ligada à navegação central do Hub');
+assert.ok(html.includes("'curation-observability':{render:renderCurationObservability}")&&navigation.includes("button.onclick=()=>safelyOpen(view.id,{source:'menu'})")&&navigation.includes('registry.urlFor(view.id,location.pathname)'),'Observabilidade da Curadoria deve usar o mesmo controlador de menu e URL das outras telas');
 assert.ok(sidebarComponent.includes('data-sidebar-group="products"'),'grupo expansível Produtos ausente');
 assert.ok(sidebarComponent.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''" )&&sidebarComponent.includes("const topName = name === 'products' ? 'operation' : name"),'Produtos não está implementado como subcategoria expansível da Operação');
 assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Ficha e Presell')&&!sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto ou com tela antiga duplicada');
@@ -215,7 +225,7 @@ assert.ok(timeViewModule.includes("time-behavior-start")&&timeCss.includes('.tim
 assert.ok(timeCss.includes('.time-table tr.time-behavior-start>td,.time-matrix tr.time-behavior-start>td{border-top:3px solid #4b6686}'),'Lançamento rápido não exibe a divisória antes dos controles de rotina e saúde');
 assert.ok(timeViewModule.includes('Domain.booleanHistoryValue(item,value)')&&timeViewModule.includes("item.type==='boolean'||Domain.SYMPTOM_SCALE_ITEM_IDS.includes(item.id)?historyValue(item,entry.value)")&&timeDomainModule.includes('export function booleanHistoryValue'),'itens booleanos do Diário não são apresentados como Sim/Não na comparação e no detalhamento do Histórico');
 assert.ok(html.includes('<title>Visão geral</title>'),'título inicial do navegador não acompanha a Visão Geral');
-assert.ok(html.includes("document.title=PanelViews.definition('cpa').title"),'título do navegador não acompanha as telas do painel');
+assert.ok(navigation.includes('document.title=view.title')&&(html+cpaView+cpaDomain+cpaCss).includes('cpa:{render:renderCpaReport}'),'o controlador deve aplicar o título registrado da tela CPA');
 assert.ok(timeViewModule.includes("setBrowserTitle(`Meu Tempo · ${titles[tab]||'Diário'}`)"),'título do navegador não acompanha as abas do Meu Tempo');
 assert.ok(timeViewModule.includes("barChart('Top atividades do dia',topActivities,true,'time-daily-chart')"),'gráfico Top atividades do dia ausente no Diário');
 assert.ok(!timeViewModule.includes('<h3>Lançamentos do dia</h3>'),'quadro Lançamentos do dia ainda aparece no Diário');
@@ -235,7 +245,7 @@ for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts.css'
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
 assert.ok(html.includes('accounts/accounts.css?v=1') && accountView.includes('./accounts-domain.mjs?v=1'),'dependências do Mapa por Conta não foram publicadas');
-assert.ok(!html.includes('function enhanceAccountReportDetail(') && !html.includes('function accountCpaCoverage('),'implementações antigas do Mapa por Conta continuam duplicadas no painel');
+assert.ok(!(html+cpaView+cpaDomain+cpaCss).includes('function enhanceAccountReportDetail(') && !(html+cpaView+cpaDomain+cpaCss).includes('function accountCpaCoverage('),'implementações antigas do Mapa por Conta continuam duplicadas no painel');
 assert.ok(html.includes('function accountReportRows()') && html.includes('function accountReportSnapshot()') &&
   html.includes('campaignZeroImpressionDays(campaign)') && html.includes('identity:campaignIdentity(row.campaign),cpa:cpaTitleInfo(row.campaign)'),
   'o adaptador não reutiliza as projeções e parsers existentes');
@@ -251,8 +261,8 @@ assert.ok(accountCss.includes('.main:has(#accountReportView:not(.hidden)){height
 assert.ok(html.includes('id="accountScrollRail" class="account-scroll-rail"') &&
   html.includes("accountScrollMain.addEventListener('scroll',updateAccountScrollIndicator") &&
   html.includes("reportScrollObserver.observe($('#cpaReportView'))"),'indicador compartilhado de rolagem não está conectado');
-assert.ok(html.includes('body:has(#cpaReportView:not(.hidden)){overflow:hidden}') &&
-  html.includes('body:has(#cpaReportView:not(.hidden)) .account-scroll-rail{display:block}'),'extração do Mapa não deve remover rolagem da análise CPA');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('body:has(#cpaReportView:not(.hidden)){overflow:hidden}') &&
+  cpaCss.includes('body:has(#cpaReportView:not(.hidden)) .account-scroll-rail{display:block}'),'extração do Mapa não deve remover rolagem da análise CPA');
 assert.ok(accountCss.includes('.account-kpis{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}') &&
   accountCss.includes('.account-matrix tbody td{padding-top:5.12px;padding-bottom:5.12px}'),'compactação existente não foi preservada');
 assert.ok(accountCss.includes('.account-matrix tbody tr.selected .account-cell.has-campaigns{background:linear-gradient(') &&
@@ -278,41 +288,41 @@ assert.ok(html.includes('.kpis.has-d0-summary{flex-wrap:nowrap;overflow-x:auto;s
 assert.ok(html.includes('function metricCoverageTooltip(period,metrics,dayTotals,activeCount,pausedCount)')&&html.includes('Cobertura ${period} — campanhas com dado: ${details}. Escopo: ${activeCount} ativas')&&html.includes('e ${pausedCount} pausadas')&&html.includes('button class="kpi-info"')&&html.includes('const overviewInfoIcon=\'<svg class="kpi-info-icon" viewBox="0 0 16 16"')&&html.includes('stroke="currentColor"')&&html.includes('title="${esc(coverageTooltip)}"')&&html.includes('.kpi-info{position:absolute;top:3px;right:4px')&&html.includes('.kpi-info-icon{display:block;width:16px;height:16px')&&html.includes('${overviewInfoIcon}</button>')&&!html.includes('<img src="overview-info-icon.png"')&&!html.includes('<span class="kpi-foot">${foot}</span>'),'ícone vetorial de cobertura deve ficar no canto superior direito, manter tooltip acessível e evitar repetição no rodapé');
 assert.ok(overviewDomain.includes('function sumObservedMetric(rows,field)'),'soma de métricas D0 não distingue zero confirmado de campo ausente');
 assert.ok(html.includes('dailyByCampaign=new Map()'),'registros diários não são indexados por campanha');
-assert.ok(html.includes('cpaRowsByKey:new Map()'),'resultados de CPA não são reutilizados entre filtros');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('cpaRowsByKey:new Map()'),'resultados de CPA não são reutilizados entre filtros');
 assert.ok(html.includes('totalsRowsByMode:new Map()'),'linhas da Visão Geral não são reutilizadas na ordenação');
-assert.ok(html.includes('context.dailyByCampaign.get(stored.id)||[]'),'CPA ainda percorre o diário completo para cada campanha');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('context.dailyByCampaign.get(stored.id)||[]'),'CPA ainda percorre o diário completo para cada campanha');
 assert.ok(html.includes('context.totalsRowsByMode.get(state.totalsMode)'),'ordenação ainda recalcula as métricas da Visão Geral');
-assert.ok(html.includes('derivedCache=null;derivedContext();refreshControlMacroCache();renderStatus()'),'atualização da base não recalcula os índices derivados e o Controle Macro imediatamente');
+assert.ok((html+macroView).includes('derivedCache=null;derivedContext();refreshControlMacroCache();renderStatus()'),'atualização da base não recalcula os índices derivados e o Controle Macro imediatamente');
 assert.ok(!html.includes('CampaignDatabase.salesAdjustmentMap(state.database).get(stored.id)'),'vendas provisórias ainda são recalculadas para cada campanha');
 assert.ok(html.includes('function accountProductIdentity(campaign,catalog)'),'normalização das variações do produto ausente');
 assert.ok(html.includes("replace(/\\s+(?:(?:var(?:iação)?|campanha)\\s*)?#?0*\\d{1,3}$/i"),'sufixo numérico de variação não é removido');
 assert.ok(html.includes("PanelViews.resolveRoute(location.pathname+location.search)"),'registro central não resolve a rota inicial');
-assert.ok(html.includes("const view=PanelViews.definition('accounts')"),'relatório por conta não usa o registro central');
+assert.ok(html.includes('accounts:{render:renderAccountReport}')&&navigation.includes('const view=registry.definition(id)'),'relatório por conta deve obter metadados do registro através do controlador único');
 assert.ok(sidebarComponent.includes("{ key: 'preparer', label: 'Preparador MCC', href: '/preparador-MCC/?v=20260923-sidebar' }"),'Preparador MCC ausente da configuração compartilhada do menu');
 assert.ok(sidebarComponent.includes("key: 'cpa'")&&sidebarComponent.includes("label: 'Análise por faixa de CPA'"),'menu da análise por faixa de CPA ausente da configuração compartilhada');
-assert.ok(html.includes('id="cpaReportView"'),'tela da análise por faixa de CPA ausente');
-assert.ok(html.includes('function cpaValidation(c)'),'comparação entre título e CPA desejado ausente');
-assert.ok(html.includes('commission:valueOf(m.valor_conversao)??valueOf(m.comissao_recebida)'),'Análise por Faixa de CPA não lê o valor de conversão de D0');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('id="cpaReportView"'),'tela da análise por faixa de CPA ausente');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('function cpaValidation(c)'),'comparação entre título e CPA desejado ausente');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('commission:valueOf(m.valor_conversao)??valueOf(m.comissao_recebida)'),'Análise por Faixa de CPA não lê o valor de conversão de D0');
 assert.ok(html.includes('P:{value:conversionValue}'),'Diário de campanha não recebe o valor de conversão importado');
-assert.ok(html.includes("cpaMode:'history'"),'Análise por Faixa de CPA não abre no histórico consolidado');
-assert.ok(html.includes("cpaStatus:'ativa'"),'Análise por Faixa de CPA não abre com o filtro Ativas');
-assert.ok(html.includes('>D zero (hoje)</button>'),'visão diária de CPA permanece ambígua');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes("cpaMode:'history'"),'Análise por Faixa de CPA não abre no histórico consolidado');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes("cpaStatus:'ativa'"),'Análise por Faixa de CPA não abre com o filtro Ativas');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('>D zero (hoje)</button>'),'visão diária de CPA permanece ambígua');
 assert.ok(html.includes('Desempenho por faixa · Impressões'),'gráfico de impressões por faixa ausente');
-assert.ok(html.includes('id="cpaImpressionsChart"'),'área do gráfico de impressões ausente');
-assert.ok(html.includes('function renderCpaImpressionsChart()'),'renderização das impressões por faixa ausente');
-assert.ok(html.includes('id="cpaProductsByRange"')&&html.includes('Quantidade de produtos por faixa de CPA'),'quadro de quantidade de produtos por faixa ausente na Análise por Faixa de CPA');
-assert.ok(html.includes('function cpaProductsByRange(rows)')&&html.includes("group.products.add(row.product.toLocaleLowerCase('pt-BR'))"),'produtos não são contados de forma única por faixa na análise de CPA');
-assert.ok(html.includes('renderCpaProductsByRange()'),'quadro de produtos por faixa não acompanha os filtros da análise de CPA');
-assert.ok(html.includes('cpa-period-filter'),'período da análise de CPA não reserva duas colunas');
-assert.ok(html.includes('placeholder="dd/mm/aaaa"'),'datas da análise de CPA não usam o padrão brasileiro');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('id="cpaImpressionsChart"'),'área do gráfico de impressões ausente');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('function renderCpaImpressionsChart()'),'renderização das impressões por faixa ausente');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('id="cpaProductsByRange"')&&(html+cpaView+cpaDomain+cpaCss).includes('Quantidade de produtos por faixa de CPA'),'quadro de quantidade de produtos por faixa ausente na Análise por Faixa de CPA');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('function cpaProductsByRange(rows)')&&(html+cpaView+cpaDomain+cpaCss).includes("group.products.add(row.product.toLocaleLowerCase('pt-BR'))"),'produtos não são contados de forma única por faixa na análise de CPA');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('renderCpaProductsByRange()'),'quadro de produtos por faixa não acompanha os filtros da análise de CPA');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('cpa-period-filter'),'período da análise de CPA não reserva duas colunas');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('placeholder="dd/mm/aaaa"'),'datas da análise de CPA não usam o padrão brasileiro');
 assert.ok(html.includes('function parseBrazilianDate(value)'),'conversão da data brasileira ausente');
-assert.ok(html.includes('cpa-summary-panel'),'painel expansível do resumo por faixa ausente');
-assert.ok(html.includes('.cpa-summary{height:100%}'),'tabela de resumo não preenche a altura disponível');
-assert.ok(html.includes("absolute<=.75?'ok':absolute<=2.5?'review':'bad'"),'faixas de tolerância da divergência de CPA ausentes');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('cpa-summary-panel'),'painel expansível do resumo por faixa ausente');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes('.cpa-summary{height:100%}'),'tabela de resumo não preenche a altura disponível');
+assert.ok((html+cpaView+cpaDomain+cpaCss).includes("absolute<=.75?'ok':absolute<=2.5?'review':'bad'"),'faixas de tolerância da divergência de CPA ausentes');
 assert.ok(html.includes('Faixa calculada'),'coluna da faixa calculada ausente');
 assert.ok(html.includes('grid-template-columns:224px minmax(0,1fr)'),'menu lateral não foi compactado');
 assert.ok(html.includes("sortKey:'current',sortDir:'desc'"),'Visão Geral não inicia ordenada pelo maior investimento');
-assert.ok(html.includes("function showTotals(){state.sortKey='current';state.sortDir='desc';"),'Visão Geral não restaura a ordenação padrão ao ser aberta');
+assert.ok(html.includes("totals:{render:()=>{state.sortKey='current';state.sortDir='desc';renderTotals()}}"),'Visão Geral não restaura a ordenação padrão ao ser aberta');
 assert.ok(overviewDomain.includes("['current',`Investimento ${totalLabel}`]"),'total de investimento ausente');
 assert.ok(html.includes('.totals-table td{padding:7px 13px}'),'linhas da tabela da Visão Geral não estão compactadas');
 assert.ok(overviewDomain.includes("['imp',`Impressões ${totalLabel}`]"),'total de impressões ausente');
@@ -369,7 +379,7 @@ assert.ok(html.includes('if(shouldPersist&&needsPersist)await persistLocalBase()
 assert.ok(html.includes('main:has(#personalFinanceView:not(.hidden)) #statusbar{display:none}'),'status operacional deve ficar oculto somente no Controle de gastos');
 assert.ok(html.includes("c.metricas_D_zero,'d0'"),'linha diária completa de D zero ausente');
 assert.ok(html.includes('Remover da lista'),'ação reversível de remoção ausente');
-assert.ok(html.includes('Editar nome'),'edição de nome de produto ausente');
+assert.ok(testedView.includes('Editar nome'),'edição de nome de produto ausente');
 assert.ok(html.includes('Excluir ocultos permanentemente'),'exclusão permanente ausente');
 assert.ok(html.includes('datas_inicio'),'datas oficiais do catálogo ausentes');
 assert.ok(html.includes('catalogo_produtos_v1'),'catálogo separado ausente');

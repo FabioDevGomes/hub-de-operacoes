@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
 const start = html.indexOf('function testedProducts(){');
-const end = html.indexOf('\n    function applyTestedColumnVisibility()', start);
+const end = html.indexOf('\n    let testedProductsController', start);
 assert.ok(start >= 0 && end > start, 'função de consolidação dos produtos testados não encontrada');
 
 const campaigns = [
@@ -45,6 +45,9 @@ const sandbox = {
   manifestDates: () => ({ d0: '2026-09-22', d1: null }),
   ProductCatalog: { normalize: () => ({ ocultos: [], aliases: {}, datas_inicio: {} }) },
 };
+const domainContext=vm.createContext({window:{}});
+vm.runInContext(await readFile(new URL('../src/tested-products/domain.js',import.meta.url),'utf8'),domainContext);
+sandbox.TestedProductsDomain=domainContext.window.TestedProductsDomain;
 const testedProducts = vm.runInNewContext(`(${html.slice(start, end).trim()})`, sandbox)();
 assert.equal(testedProducts.find(product => product.label === 'Alpha').totalBilled, 175,
   'soma os valores oficiais das variantes e a venda provisória pendente');

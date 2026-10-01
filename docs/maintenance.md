@@ -12,10 +12,16 @@
 | Mudança | Fonte | Verificação principal |
 | --- | --- | --- |
 | Rota, título e item ativo da SPA | `src/view-registry.js` | `tests/view-registry.test.mjs` |
+| Troca de telas, limpeza visual e carregamento assíncrono | `src/navigation-controller.js`, adaptadores no painel | `tests/navigation-controller.test.mjs` |
 | Menu, grupos e tipografia lateral | `src/sidebar-component.js`, `src/sidebar-component.css` | `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs` |
 | Integração das telas e projeção da base | `src/index.template.html` | `tests/build.test.mjs` e testes do domínio |
 | Mapa por Conta: filtros, agrupamentos e ordenação | `src/accounts/accounts-domain.mjs` | `tests/accounts-domain.test.mjs`, `tests/account-cpa-coverage.test.mjs` |
 | Mapa por Conta: quadros, eventos e layout | `src/accounts/accounts-view.mjs`, `accounts.css` | `tests/accounts-view.test.mjs`, `tests/build.test.mjs` |
+| Controle Macro: interface, gráficos e eventos | `src/control-macro/view.js`, `template.html`, `control-macro.css` | `tests/control-macro-view.test.mjs`, testes de domínio e sincronização |
+| CPA: filtros e resumo por faixa | `src/cpa/domain.js` | `tests/cpa-view.test.mjs` |
+| CPA: interface, eventos e estilos | `src/cpa/view.js`, `template.html`, `cpa.css` | `tests/cpa-view.test.mjs`, `tests/extracted-views-build.test.mjs` |
+| Produtos Testados: agrupamento e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
+| Produtos Testados: interface e preferências de colunas | `src/tested-products/view.js`, `template.html`, `tested-products.css` | `tests/tested-products-ui.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Ficha fornecida e validação de campos | `src/copy-ficha/copy-ficha-structured.mjs`, `copy-ficha-view.mjs` | `tests/copy-ficha-structured.test.mjs`, `tests/copy-ficha-view.test.mjs` |
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
 | Persistência e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
@@ -25,7 +31,7 @@
 
 ## Contratos atuais que os testes devem preservar
 
-- O menu compartilhado usa a tipografia padronizada e somente uma entrada **Ficha e Presell**. `?view=presell` continua abrindo `?view=copy`, com `copyFichaNav` ativo; `presellNav` não é mais um item de navegação. O painel ainda conserva elementos ocultos de compatibilidade para wrappers antigos, até uma etapa futura de roteamento.
+- O menu compartilhado usa a tipografia padronizada e somente uma entrada **Ficha e Presell**. `?view=presell` continua abrindo `?view=copy`, com `copyFichaNav` ativo; `presellNav` não é mais um item de navegação. Os elementos legados permanecem ocultos, mas não há mais camadas de wrappers para fechar as outras telas.
 - Ficha e Presell não mostra geração de anúncios, perguntas/respostas ou download JSON. A ação única valida o texto estruturado (três ou quatro FAQs) antes de solicitar criação; falhas identificam o campo pendente. O servidor continua responsável pela confirmação, assets e não sobrescrita.
 - Arquivos finais de Presell são criados pela produção, não exigidos na validação prévia.
 - Zero observado, valor ausente e inválido são distintos. Nomes MCC completos e chaves campanha/data não podem mudar numa refatoração de interface.
@@ -49,6 +55,47 @@ Testes de domínio verificam resultados com dados sintéticos. Testes de integra
 Verificação recomendada: `node --test tests/accounts-domain.test.mjs tests/accounts-view.test.mjs tests/accounts-adapter.test.mjs tests/account-cpa-coverage.test.mjs`, build e suíte completa. No navegador, confira Ativas/Pausadas/Todas, conta/produto, seleção, ordenação, link de domínio, tamanho compacto e ida/volta pelo menu.
 
 `tests/accounts-adapter.test.mjs` cobre também a seleção da análise CPA, que antes chamava o helper inline do Mapa. `cpaSelect()` agora conserva a implementação de seleção em seu próprio limite; não pode depender de um renderizador removido de outra tela. Os outros testes desse adaptador verificam histórico/D0 sem dupla contagem, ajustes provisórios e identidade/domínio sem escrita.
+
+## Navegação centralizada (passo 3)
+
+- `view-registry.js` continua como fonte dos IDs, rotas e títulos. `navigation-controller.js` controla somente a interface: seção visível, item ativo, grupo lateral, título, URL e classes do corpo. Não importa domínios nem acessa bancos.
+- O painel fornece `entries` com renderizadores existentes. As funções `show*` são adaptadores pequenos para chamadas já usadas por importação, restauração e seleção de campanha; não devem ser redefinidas nem encadeadas com wrappers.
+- Para incluir uma tela principal, registre seus metadados, configure seu item no menu e acrescente o adaptador em `entries`. Não copie listas de telas a esconder ou bindings de navegação para o renderizador.
+- Renderizadores assíncronos recebem `isCurrent()`: confira antes de montar após um `await` e antes de atualizar o título por callbacks. Uma abertura antiga não deve recuperar o foco visual depois que o usuário já mudou de tela.
+- O Diário conserva nome exato, ID e fonte da campanha no estado; não cria identidade por nome nem grava seleção no banco. Sua URL é `/`. Atualizações usam `replaceState`, como antes, sem criar uma entrada no histórico a cada renderização.
+- O Controle Macro reinicia no mês atual ao ser aberto pelo menu, mas uma atualização da base enquanto a tela está aberta preserva o mês selecionado. `onMenu` separa essas duas ações.
+- Faturamento, Controle de gastos, Meu Tempo e Ficha e Presell mantêm seus próprios módulos, callbacks e persistência. Esta etapa não migra dados nem modifica cálculos.
+
+Verificação: `node --test tests/navigation-controller.test.mjs tests/view-registry.test.mjs`, build e suíte completa. Os testes de navegação cobrem todas as 144 combinações de troca entre as 12 telas/estados, alias antigo, atualização, histórico, seleção de campanha e carregamento atrasado, com DOM e base sintéticos em memória. Confira também as rotas reais no servidor existente, sem salvar ou importar dados para o teste.
+
+## Telas extraídas (passos 4, 5 e 6)
+
+As três telas usam módulos pequenos sem framework novo. Cada `view.js` recebe o contêiner `root`, dados/callbacks e formatadores; seus seletores ficam restritos à própria tela. `mount()` é chamado uma vez e retorna `render()`, para atualizar a mesma interface sem duplicar eventos. A navegação permanece no controlador do passo 3.
+
+O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo na seção correspondente do painel, preservando IDs e estrutura. Edite esse template, não a cópia em `dist/index.html`. Os scripts próprios são carregados antes do adaptador principal; ao alterá-los, atualize a versão na referência do painel.
+
+### Controle Macro — passo 4
+
+- `domain.js` conserva os cálculos e a precedência histórica, sem alterações.
+- `view.js` recebe somente as linhas consolidadas por `getRows()` e seu estado visual `macroUi`: mês, escopo e métrica do gráfico. Contém KPIs, tabela, SVGs, tooltips e eventos dos controles.
+- O painel mantém `refreshControlMacroCache()`/`macroAllRows()`, a importação com prévia/confirmação e sua persistência. O input encaminha ao callback existente; montar/renderizar a tela não importa arquivos.
+- O menu reinicia o mês atual; refresh da base não altera o mês selecionado. Gráficos mantêm lacunas, cobertura, ROI ponderado e separação entre vendas oficiais e provisórias.
+
+### Análise de CPA — passo 5
+
+- `domain.js` contém estado visual inicial, filtros, resumo ponderado por faixa, seleção da faixa e contagem de produtos únicos. Não lê DOM ou banco.
+- `view.js` contém selects, datas, tabelas, gráficos e eventos. Não há mais wrapper que redefine `renderCpaReport`.
+- O painel mantém os parsers compartilhados de título/CPA desejado e `cpaPeriodTotals()`/`cpaReportRows({mode,start,end})`, que leem as projeções/indexes existentes. O adaptador recebe o período e o escopo explicitamente, sem ler campos DOM.
+- `cpa.css` conserva os estilos da tela, inclusive as regras de rolagem e responsividade. A barra de rolagem compartilhada continua no painel, pois também atende Mapa por Conta.
+
+### Produtos Testados — passo 6
+
+- `domain.js` recebe campanhas, catálogo normalizado, índices de diário/ajustes e referência de data. Agrupa somente famílias confirmadas, calcula o faturamento sem sobreposição histórica e ordena sem modificar as entradas.
+- `view.js` exibe linhas/contadores, ordena cabeçalhos e aplica preferências de colunas. A chave `painel-produtos-testados-colunas-v1` permanece igual; são preferências de apresentação, não dados operacionais.
+- O painel mantém o cache das projeções, os parsers compartilhados e as gravações no catálogo. A view solicita renomear/ocultar/restaurar por callbacks explícitos; renderização não chama essas ações. Exclusão permanente continua usando a confirmação e o backup existentes, sem alterar o fluxo.
+- Campanhas, nomes MCC, IDs e diários não são fundidos nem renomeados pela consolidação de apresentação.
+
+Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.test.mjs`, depois build e suíte completa. Dados dos testes são sintéticos em memória. No navegador, confira as rotas `/?view=macro`, `/?view=cpa` e `/?view=tested`, navegação entre telas, meses/gráficos, filtros/período/seleção, ordenação e preferências, sem editar ou importar dados reais.
 
 ## Referência do passo 1
 

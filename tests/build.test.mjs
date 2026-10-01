@@ -7,6 +7,8 @@ const sidebarComponent=await readFile(new URL('../dist/sidebar-component.js',imp
 const sidebarCss=await readFile(new URL('../dist/sidebar-component.css',import.meta.url),'utf8');
 const databaseModule=await readFile(new URL('../dist/database.js',import.meta.url),'utf8');
 const overviewDomain=await readFile(new URL('../dist/overview-domain.js',import.meta.url),'utf8');
+const accountView=await readFile(new URL('../dist/accounts/accounts-view.mjs',import.meta.url),'utf8');
+const accountCss=await readFile(new URL('../dist/accounts/accounts.css',import.meta.url),'utf8');
 const timeViewModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const timeDomainModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-domain.mjs',import.meta.url),'utf8');
 const timeStorageModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-storage.mjs',import.meta.url),'utf8');
@@ -132,10 +134,10 @@ assert.ok(html.includes('<style id="product-diary-summary-compact-style">')&&htm
 assert.ok(sidebarComponent.includes("key: 'accounts'")&&sidebarComponent.includes('Mapa por conta'),'menu do relatório por conta ausente');
 assert.ok(html.includes('id="accountReportView"'),'tela do relatório por conta ausente');
 assert.ok(sidebarComponent.includes("key: 'time'")&&sidebarComponent.includes('Meu Tempo'),'menu Meu Tempo ausente');
-assert.ok(sidebarComponent.includes("key: 'copy'")&&sidebarComponent.includes('Ficha e Precel')&&!sidebarComponent.includes("key: 'presell'"),'menu deve apresentar apenas a tela unificada Ficha e Precel');
+assert.ok(sidebarComponent.includes("key: 'copy'")&&sidebarComponent.includes('Ficha e Presell')&&!sidebarComponent.includes("key: 'presell'"),'menu deve apresentar apenas a tela unificada Ficha e Presell');
 assert.ok(html.includes('id="copyFichaView"'),'tela Ficha e Precel ausente');
-assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=29')")&&html.includes('copy-ficha/copy-ficha-output.css?v=7')&&copyFichaView.includes("copy-ficha-domain.mjs?v=20"),'módulo Ficha e Precel ou estilos não invalidam o cache');
-assert.ok(!copyFichaView.includes('Gerar copy')&&copyFichaView.includes('Gerar perguntas e respostas')&&copyFichaView.includes('Validar ficha e criar Precel')&&copyFichaView.includes('copyFichaSource')&&copyFichaView.includes('URL de afiliação (sempre separada)')&&copyFichaView.includes('createPresellFromFicha(ficha)'),'a tela deve manter perguntas e respostas independentes e validar/criar a Precel a partir da ficha obrigatória');
+assert.ok(html.includes("import('./copy-ficha/copy-ficha-view.mjs?v=31')")&&html.includes('copy-ficha/copy-ficha-output.css?v=7')&&copyFichaView.includes("copy-ficha-domain.mjs?v=20"),'módulo Ficha e Presell ou estilos não invalidam o cache');
+assert.ok(!copyFichaView.includes('Gerar copy')&&!copyFichaView.includes('Resultados')&&!copyFichaView.includes('Gerar perguntas e respostas')&&!copyFichaView.includes('Baixar JSON')&&copyFichaView.includes('<h2>3. Conteúdo obrigatório da ficha</h2>')&&copyFichaView.includes('Validar ficha e criar Presell')&&copyFichaView.includes('copyFichaSource')&&copyFichaView.includes('URL de afiliação (sempre separada)')&&copyFichaView.includes('createPresellFromFicha(ficha)'),'a ficha obrigatória deve ser o item 3, sem o quadro de resultados nem ações de perguntas e JSON');
 assert.ok((await readFile(new URL('../dist/copy-ficha/copy-ficha-structured.mjs',import.meta.url),'utf8')).includes('export function buildStructuredFicha'),'parser estruturado deve estar disponível no artefato servido');
 assert.ok(copyFichaView.includes("applyDetected(root,'copyProduct',result.productCandidate)")&&copyFichaView.includes('result.highestSavingsAmount')&&!copyFichaView.includes('copyPackages')&&!copyFichaView.includes('Pacotes para a ficha'),'análise prioriza o maior desconto sem exigir quadros de pacotes');
 assert.ok(copyFichaView.includes('autoFilledFields:collectAutoFilledFieldIds(')&&copyFichaView.includes('restoreAutoFilledFieldIds(root.querySelectorAll(\'input,select,textarea\'),draft.autoFilledFields)')&&copyFichaView.includes('Usar sugestão de produto:'),'rascunhos Copy e Ficha não preservam a origem automática nem permitem aplicar uma sugestão ao campo manual');
@@ -147,7 +149,7 @@ assert.ok(copyFichaDomain.includes('o desconto calculado diverge do selo informa
 assert.ok(!copyFichaView.includes('generationBlockerFields(data,{scope})')&&copyFichaCss.includes('.copy-ficha-select.is-pending')&&copyFichaCss.includes('.copy-ficha-textarea.is-pending')&&html.includes('copy-ficha/copy-ficha.css?v=5'),'campos pendentes da ficha não recebem borda vermelha acessível');
 assert.ok(copyFichaView.includes('id="copyDiscountAmount"')&&copyFichaDomain.includes('export function discountAmountForPercent')&&copyFichaCss.includes('.copy-ficha-discount-pair{grid-column:span 2'),'valor de desconto confirmado ou layout compacto ausente no build');
 assert.ok(!copyFichaView.includes('copyAssetsTabs')&&!copyFichaView.includes('copyAssetsPanel')&&!copyFichaOutputCss.includes('.copy-ficha-tabs')&&html.includes('copy-ficha/copy-ficha-output.css?v=7'),'a interface remove as saídas e estilos de anúncios');
-assert.ok(copyFichaView.includes('Dados alterados. Revise e gere novamente as perguntas e respostas ou a ficha.')&&!copyFichaView.includes('copyUrgency')&&!copyFichaView.includes('copyScarcity'),'campos exclusivos da geração de copy foram removidos');
+assert.ok(copyFichaView.includes('Dados alterados. Revise e valide novamente a ficha.')&&!copyFichaView.includes('copyUrgency')&&!copyFichaView.includes('copyScarcity'),'campos exclusivos da geração de copy foram removidos');
 assert.ok(copyFichaView.includes('id="copyGuaranteeStatus"')&&copyFichaView.includes('id="copyFreeShipping"'),'perguntas e respostas continuam com dados de garantia e frete');
 assert.ok(copyFichaDomain.includes('export function buildFicha')&&copyFichaDomain.includes('mustContain'),'contrato JSON da ficha não foi copiado para dist');
 assert.ok(copyFichaDomain.includes('export function generationBlockers'),'validação de bloqueios não foi copiada para dist');
@@ -170,7 +172,7 @@ assert.ok(sidebarComponent.includes("id: 'curation'")&&sidebarComponent.includes
 assert.ok(html.includes("$('#curationObservabilityNav').onclick=showCurationObservability")&&html.includes("PanelViews.urlFor(view.id,location.pathname)"),'Observabilidade da Curadoria não está ligada à navegação central do Hub');
 assert.ok(sidebarComponent.includes('data-sidebar-group="products"'),'grupo expansível Produtos ausente');
 assert.ok(sidebarComponent.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''" )&&sidebarComponent.includes("const topName = name === 'products' ? 'operation' : name"),'Produtos não está implementado como subcategoria expansível da Operação');
-assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Ficha e Precel')&&!sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto ou com tela antiga duplicada');
+assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Ficha e Presell')&&!sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto ou com tela antiga duplicada');
 assert.ok(sidebarComponent.includes('setOpenGroup(isProductsSubgroup')&&sidebarComponent.includes("group.classList.contains('collapsed') ? toggle.dataset.sidebarToggle : ''"),'acordeão lateral não preserva a hierarquia do submenu Produtos');
 assert.ok(sidebarComponent.includes('body.animate(')&&sidebarComponent.includes('body.inert = !expanded')&&sidebarComponent.includes('prefers-reduced-motion: reduce'),'menu lateral não anima a abertura/retração nem impede foco em grupos recolhidos');
 assert.ok(sidebarComponent.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado do menu expansível não é preservado');
@@ -224,45 +226,41 @@ assert.ok(timeCss.includes('.time-matrix th,.time-matrix td{padding:4px 7px}')&&
 assert.ok(timeViewModule.includes('type="text" inputmode="decimal" placeholder="copos (+/-)"')&&timeViewModule.includes('Domain.waterUnitsToMl(raw,data.settings.waterUnitMl).ml'),'campo de água deve aceitar vírgula decimal e manter a conversão localizada para ml');
 assert.ok(timeViewModule.includes('Domain.SYMPTOM_SCALE_OPTIONS.map(option=>`<option value="${option.value}">${option.label}</option>`)')&&timeViewModule.includes('Domain.symptomScaleHistoryValue(item,value)')&&timeViewModule.includes('Domain.SYMPTOM_SCALE_ITEM_IDS.includes(item.id)?historyValue(item,entry.value)'),'sintomas devem oferecer níveis rotulados e apresentá-los também no Histórico');
 assert.ok(timeCss.includes('.time-daily-summary{display:flex;align-items:end;gap:8px;flex-wrap:nowrap}'),'data e indicadores diários não estão organizados na mesma linha');
-assert.ok(html.includes('Matriz de produtos por conta'),'matriz produto por conta ausente');
-assert.ok(html.includes('.account-matrix-wrap{overflow:visible;max-height:none}'),'matriz por conta ainda funciona como área de rolagem interna');
-assert.ok(html.includes('.account-detail .table-wrap{max-height:none;overflow:visible}'),'campanhas do produto ainda funcionam como área de rolagem interna');
-assert.ok(html.includes('body:has(#accountReportView:not(.hidden)){overflow:hidden}.main:has(#accountReportView:not(.hidden)){height:100vh;overflow-y:auto}'),'Mapa por Conta não possui rolagem vertical na área principal');
-assert.ok(html.includes('.main:has(#accountReportView:not(.hidden)){overflow-y:scroll;scrollbar-gutter:stable;scrollbar-width:auto;scrollbar-color:#7893b2 #14243a}'),'Mapa por Conta não mantém a barra vertical visível');
-assert.ok(html.includes('.main:has(#accountReportView:not(.hidden))::-webkit-scrollbar{width:14px}'),'barra vertical do Mapa por Conta não possui largura visível');
-assert.ok(html.includes('id="accountScrollRail" class="account-scroll-rail"'),'indicador vertical persistente do Mapa por Conta ausente');
-assert.ok(html.includes('function updateAccountScrollIndicator()'),'sincronização da barra vertical do Mapa por Conta ausente');
-assert.ok(html.includes("accountScrollMain.addEventListener('scroll',updateAccountScrollIndicator"),'barra vertical do Mapa por Conta não acompanha a rolagem');
-assert.ok(html.includes('body:has(#cpaReportView:not(.hidden)){overflow:hidden}'),'Análise por Faixa de CPA não isola a rolagem na área principal');
-assert.ok(html.includes('.main:has(#cpaReportView:not(.hidden)){height:100vh;overflow-y:scroll;scrollbar-gutter:stable'),'Análise por Faixa de CPA não possui rolagem vertical da tela');
-assert.ok(html.includes('body:has(#cpaReportView:not(.hidden)) .account-scroll-rail{display:block}'),'Análise por Faixa de CPA não exibe o indicador vertical');
-assert.ok(html.includes("reportScrollObserver.observe($('#cpaReportView'))"),'barra vertical não acompanha as mudanças de conteúdo da Análise por Faixa de CPA');
-assert.ok(html.includes('.account-kpis{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}'),'indicadores do Mapa por Conta não usam o formato compacto');
-assert.ok(html.includes('function accountReportRows()'),'consolidação do relatório por conta ausente');
-assert.ok(html.includes('function accountDomainUrl(domain)')&&html.includes('https://hpanel.hostinger.com/websites/${encodeURIComponent(host)}')&&html.includes("link.target='_blank'")&&html.includes("link.rel='noopener noreferrer'"),'domínios do Mapa por Conta não são links seguros para o hPanel da Hostinger');
-assert.ok(html.includes('.account-domain-link:focus-visible'),'links de domínio do Mapa por Conta não têm foco acessível');
-assert.ok(html.includes("accountReportStatus:'ativa'"),'Mapa por Conta não abre com o filtro Ativas');
-assert.ok(html.includes('Quantidade de produtos por faixa de CPA')&&html.includes('id="accountCpaRangeBars"'),'quadro de quantidade de produtos por faixa de CPA ausente');
-assert.ok(!html.includes('Distribuição de campanhas'),'quadro antigo de distribuição de campanhas ainda aparece no Mapa por Conta');
-assert.ok(html.includes('function accountProductsByCpaRange(rows)')&&html.includes('productKeys:new Set()')&&html.includes('group.productKeys.add(row.productKey)'),'produtos não são contados de forma única por faixa de CPA');
-assert.ok(html.includes('Cobertura por faixa de CPA')&&html.includes('id="accountCpaCoverageStatus"')&&html.includes('Respeita os filtros de Situação e Conta; Produto limita apenas as linhas exibidas.')&&html.includes('id="accountCpaGapHead"')&&html.includes('id="accountCpaGapBody"'),'matriz de cobertura de faixas de CPA sem filtro de situação sincronizado');
-assert.ok(html.indexOf('class="card panel account-detail"')<html.indexOf('class="card panel account-cpa-gaps"'),'quadro Cobertura por faixa de CPA deve ser o último cartão da tela Mapa por Conta');
-assert.ok(html.includes('.account-matrix tbody tr.selected .account-cell.has-campaigns{background:linear-gradient('),'células de conta do produto selecionado não mantêm destaque persistente');
-assert.ok(html.includes('.account-matrix tbody td{padding-top:5.12px;padding-bottom:5.12px}'),'linhas da matriz por conta não tiveram o espaçamento vertical reduzido mais 20%');
-assert.ok(html.includes("th.dataset.accountZeroDays=''")&&html.includes("th.textContent='Dias sem impressão'")&&html.includes('campaignZeroImpressionDays(campaign)'),'tabela Campanhas do produto não mostra dias consecutivos sem impressão com a regra existente');
-assert.ok(html.includes('Domínio')&&html.includes('Data de subida')&&html.includes('campaignIdentity(row.campaign).dateLabel')&&html.includes('function campaignAccountDomain(c)')&&html.includes('domain=campaignAccountDomain(c)||stored?.conta_dominio||domainByAccount.get(account)||null'),'tabela Campanhas do produto deve exibir domínio e data de subida identificada no nome da campanha');
-assert.ok(html.includes("const sortKeys=['account','domain','campaign','campaignDate','zeroDays'")&&html.includes('header.insertBefore(th,header.children[4]||null)')&&html.includes('row.insertBefore(cell,row.children[4]||null)'),'data de subida após Campanha e Dias sem impressão alinhados após a data');
-assert.ok(html.includes('class="account-product-campaign-table"')&&html.includes('.account-product-campaign-table th,.account-product-campaign-table td{text-align:center}')&&html.includes('.account-product-campaign-table th:nth-child(3),.account-product-campaign-table td:nth-child(3){text-align:left}'),'tabela Campanhas do produto deve centralizar cabeçalhos e células, exceto Campanha');
-assert.ok(html.includes("accountDetailSortKey:null,accountDetailSortDir:'asc'")&&html.includes('function accountDetailSortValue(row,key)')&&html.includes('function sortAccountDetailRows(input)'),'estado/funções de ordenação da tabela Campanhas do produto ausentes');
-assert.ok(html.includes('<div class="panel-controls account-detail-controls"><select id="accountDetailStatusFilter"')&&html.includes('<option value="pausada">Pausadas</option><option value="ativa" selected>Ativas</option><option value="all">Todas</option>')&&html.includes("accountDetailStatus:'ativa'")&&html.includes('function applyAccountDetailStatusFilter()')&&html.includes('const allRows=accountReportRows(),selectedProduct=allRows.find(row=>row.productKey===state.accountReportSelected)')&&html.includes("row.status===state.accountDetailStatus"),'filtro de situação de Campanhas do produto deve oferecer Pausadas/Ativas/Todas, iniciar em Ativas e continuar independente da situação global');
-assert.ok(html.includes("const sortKeys=['account','domain','campaign','campaignDate','zeroDays','status','investment','impressions','clicks','conversions','roi']")&&html.includes("state.accountDetailSortDir==='asc'?'desc':'asc'")&&html.includes("button.setAttribute('aria-label',`Ordenar por ${label}"),'cabeçalhos de Campanhas do produto não oferecem ordenação acessível crescente/decrescente');
-assert.ok(html.includes('if(left==null||right==null)return left==null?(right==null?0:1):-1'),'valores ausentes da ordenação devem permanecer distintos de zero e no fim');
-assert.ok(html.includes("empty.colSpan=11")&&html.includes('function enhanceAccountReportDetail()')&&html.includes("if(key==='campaignDate')return campaignIdentity(row.campaign).dateSort"),'estado vazio, ordenação da data e colunas de domínio/datas/dias sem impressão não está consistente');
-assert.ok(html.includes('function accountCpaCoverage(rows,ranges)')&&html.includes("state.accountReportProduct==='all'||x.product===state.accountReportProduct")&&html.includes('function filterAccountCpaCoverageRows(rows,status,account)')&&html.includes('filterAccountCpaCoverageRows(allRows,state.accountReportStatus,state.accountReportAccount)')&&html.includes("$('#accountCpaCoverageStatus').value=state.accountReportStatus")&&html.includes("$('#accountCpaCoverageStatus').onchange=e=>{state.accountReportStatus=e.target.value;renderAccountReport()}"),'cobertura de CPA não acompanha o filtro compartilhado de situação ou o recorte da conta');
-assert.ok(html.includes("const counts=product.ranges.get(range)")&&html.includes("status=row.status==='pausada'?'paused':'active'")&&html.includes("state.accountReportAccount==='all'||x.account===state.accountReportAccount"),'cobertura por faixa não distingue campanhas ativas e pausadas dentro do recorte da conta');
-assert.ok(html.includes('class="cpa-missing">Não testada')&&html.includes('class="cpa-paused"')&&html.includes('Testada · pausada')&&html.includes('class="cpa-mixed"')&&html.includes('Ativa · pausada')&&html.includes('class="cpa-explored"'),'estados de faixa não testada, testada e pausada não estão destacados');
-assert.ok(html.includes('.account-cpa-gap-table tbody td,.account-cpa-gap-table tbody td strong,.account-cpa-gap-table tbody td.cpa-explored,.account-cpa-gap-table tbody td.cpa-paused,.account-cpa-gap-table tbody td.cpa-mixed,.account-cpa-gap-table tbody td.cpa-missing,.account-cpa-gap-table tbody td.cpa-coverage{font-weight:400}'),'matriz de cobertura por faixa de CPA deve exibir nomes e resultados sem negrito');
-assert.ok(html.includes("title.payoutCurrency==='USD'")&&html.includes('function accountCommissionLabel(product)')&&html.includes("${esc(product.name)} — ${esc(accountCommissionLabel(product))}"),'comissão em dólar não acompanha o nome do produto na matriz de faixas');
+// Accounts is now a separately built UI/domain/CSS module, not inline implementation.
+assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
+  html.includes("import('./accounts/accounts-view.mjs?v=1')") &&
+  html.includes('getSnapshot:accountReportSnapshot'), 'Mapa por Conta não está conectado ao adaptador do Hub');
+for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts.css']) {
+  assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
+    await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
+}
+assert.ok(html.includes('accounts/accounts.css?v=1') && accountView.includes('./accounts-domain.mjs?v=1'),'dependências do Mapa por Conta não foram publicadas');
+assert.ok(!html.includes('function enhanceAccountReportDetail(') && !html.includes('function accountCpaCoverage('),'implementações antigas do Mapa por Conta continuam duplicadas no painel');
+assert.ok(html.includes('function accountReportRows()') && html.includes('function accountReportSnapshot()') &&
+  html.includes('campaignZeroImpressionDays(campaign)') && html.includes('identity:campaignIdentity(row.campaign),cpa:cpaTitleInfo(row.campaign)'),
+  'o adaptador não reutiliza as projeções e parsers existentes');
+assert.ok(html.includes('domain=campaignAccountDomain(c)||stored?.conta_dominio||domainByAccount.get(account)||null'),'origens do domínio de conta não foram preservadas');
+assert.ok(accountView.includes('Matriz de produtos por conta') && accountView.includes('Quantidade de produtos por faixa de CPA') &&
+  accountView.includes('Cobertura por faixa de CPA'),'quadros do Mapa por Conta ausentes');
+assert.ok(accountView.indexOf('class="card panel account-detail"') < accountView.indexOf('class="card panel account-cpa-gaps"'),'cobertura deve ser o último cartão');
+assert.ok(accountView.includes('Respeita os filtros de Situação e Conta; Produto limita apenas as linhas exibidas.'),'escopo da cobertura não está explicado');
+assert.ok(accountCss.includes('.account-matrix-wrap{overflow:visible;max-height:none}') &&
+  accountCss.includes('.account-detail .table-wrap{max-height:none;overflow:visible}'),'tabelas não devem ter rolagem vertical interna');
+assert.ok(accountCss.includes('.main:has(#accountReportView:not(.hidden)){height:100vh;overflow-y:auto}') &&
+  accountCss.includes('scrollbar-gutter:stable') && accountCss.includes('::-webkit-scrollbar{width:14px}'),'rolagem da área principal não foi preservada');
+assert.ok(html.includes('id="accountScrollRail" class="account-scroll-rail"') &&
+  html.includes("accountScrollMain.addEventListener('scroll',updateAccountScrollIndicator") &&
+  html.includes("reportScrollObserver.observe($('#cpaReportView'))"),'indicador compartilhado de rolagem não está conectado');
+assert.ok(html.includes('body:has(#cpaReportView:not(.hidden)){overflow:hidden}') &&
+  html.includes('body:has(#cpaReportView:not(.hidden)) .account-scroll-rail{display:block}'),'extração do Mapa não deve remover rolagem da análise CPA');
+assert.ok(accountCss.includes('.account-kpis{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}') &&
+  accountCss.includes('.account-matrix tbody td{padding-top:5.12px;padding-bottom:5.12px}'),'compactação existente não foi preservada');
+assert.ok(accountCss.includes('.account-matrix tbody tr.selected .account-cell.has-campaigns{background:linear-gradient(') &&
+  accountCss.includes('.account-cpa-gap-table tbody td.cpa-coverage{font-weight:400}'),'destaque da seleção ou tipografia da cobertura foi alterado');
+assert.ok(accountCss.includes('.account-product-campaign-table th,.account-product-campaign-table td{text-align:center}') &&
+  accountCss.includes('.account-product-campaign-table th:nth-child(3),.account-product-campaign-table td:nth-child(3){text-align:left}'),'alinhamento das campanhas deve ser preservado');
+assert.ok(accountCss.includes('.account-domain-link:focus-visible') &&
+  accountView.includes('target="_blank" rel="noopener noreferrer"'),'link de domínio deve manter foco e isolamento seguros');
 assert.ok(html.includes('function derivedContext()'),'contexto derivado reutilizável ausente');
 assert.ok(html.includes('<script src="overview-domain.js"></script>')&&html.includes('OverviewDomain.deriveTestBudget('),'cálculo do limite de teste sem vendas não está integrado à Visão Geral');
 assert.ok(overviewDomain.includes('function deriveTestBudget('),'módulo do cálculo do limite de teste não foi publicado no build');

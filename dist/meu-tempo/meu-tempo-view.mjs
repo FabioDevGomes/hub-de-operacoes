@@ -3,7 +3,7 @@ import*as Storage from'./meu-tempo-storage.mjs';
 import{createImportPreview}from'./meu-tempo-import.mjs';
 import{recordWaterTrackerLog,WATER_TRACKER_ITEM_ID}from'./water-reminder.mjs?v=3';
 
-let root,notify=()=>{},setBrowserTitle=()=>{},data=null,tab='daily',historyMode='comparison',selectedDate=Domain.localDate(),historyStart=Domain.shiftDate(selectedDate,-12),historyEnd=selectedDate,historyCategory='all',historyItem='all',historyProductive='all',dailyCategoryFilter='all',importPreview=null,mounted=false,dailyTableScrollTop=0;
+let root,notify=()=>{},setBrowserTitle=()=>{},data=null,tab='daily',historyMode='comparison',selectedDate=Domain.localDate(),historyStart=Domain.shiftDate(selectedDate,-13),historyEnd=selectedDate,historyCategory='all',historyItem='all',historyProductive='all',dailyCategoryFilter='all',importPreview=null,mounted=false,dailyTableScrollTop=0;
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const fmtNumber=(value,digits=0)=>new Intl.NumberFormat('pt-BR',{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(Number(value)||0);
 const dateLabel=Domain.formatBrazilianDate;

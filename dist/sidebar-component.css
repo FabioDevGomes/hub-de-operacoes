@@ -18,13 +18,14 @@
   background: transparent;
   color: #92a4bc;
   font: inherit;
-  font-size: .82rem;
   line-height: 1.2;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
 }
-.hub-menu-toggle { justify-content: space-between; color: #e7eef8; font-weight: 750; }
+.hub-menu-toggle { justify-content: space-between; color: #e7eef8; font-size: .82rem; font-weight: 750; }
+.hub-menu .hub-menu-link,
+.hub-menu-products .hub-menu-link { font-size: .82rem; }
 .hub-menu .hub-menu-toggle:hover,
 .hub-menu-products .hub-menu-toggle:hover,
 .hub-menu-group:not(.collapsed) > .hub-menu-toggle { background: #101f33; color: #fff; }

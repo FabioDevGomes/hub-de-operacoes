@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const source = await readFile(new URL('../src/sidebar-component.js', import.meta.url), 'utf8');
 const built = await readFile(new URL('../dist/sidebar-component.js', import.meta.url), 'utf8');
@@ -36,7 +37,7 @@ for (const group of groupOrder) {
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
   'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
-  'E-commerce GM', 'Asset Studio', 'Ficha e Precel', 'Meu Tempo', 'Controle de gastos',
+  'E-commerce GM', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
   'Produtos testados', 'Diário de campanha',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.ok(source.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''"), 'submenu Produtos não é inserido dentro do grupo Operação');
@@ -52,11 +53,16 @@ assert.ok(source.includes('const isProductsSubgroup = group.dataset.sidebarGroup
 const creationStart = source.indexOf("{ id: 'creation'");
 const creationEnd = source.indexOf("{ id: 'personal'", creationStart);
 const creationItems = source.slice(creationStart, creationEnd);
-assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'"), 'Asset Studio deve aparecer antes de Ficha e Precel no grupo Criação de ofertas');
+assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'"), 'Asset Studio deve aparecer antes de Ficha e Presell no grupo Criação de ofertas');
 assert.ok(!creationItems.includes("key: 'presell'"), 'Gerador de Pre-Sell não deve aparecer como tela separada');
-for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'testedProductsNav', 'timeNav', 'copyFichaNav', 'presellNav']) {
+for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'testedProductsNav', 'timeNav', 'copyFichaNav']) {
   assert.ok(viewRegistry.includes(id) || source.includes(id), `ID de navegação SPA ${id} não foi preservado no registro`);
 }
+const registryContext=vm.createContext({window:{},URLSearchParams,encodeURIComponent});
+vm.runInContext(viewRegistry,registryContext);
+const views=registryContext.window.PanelViews;
+assert.equal(views.definition('presell').navId,views.definition('copy').navId,'o alias de Pre-Sell deve ativar o mesmo item da tela unificada');
+assert.equal(views.resolveRoute('/?view=presell').id,'copy','links antigos devem abrir Ficha e Presell, sem um segundo menu');
 assert.ok(source.includes('definition?.navId'), 'a navegação SPA deve reutilizar os IDs do registro de telas');
 assert.ok(source.includes('campaignList') && source.includes('activeListTab') && source.includes('historyListTab'), 'controles dinâmicos do Diário não foram preservados');
 assert.ok(source.includes('body.animate(') && source.includes('prefers-reduced-motion: reduce') && source.includes('body.inert = !expanded'), 'animação, acessibilidade e movimento reduzido do acordeão devem continuar');

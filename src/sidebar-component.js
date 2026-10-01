@@ -23,7 +23,7 @@
     ] },
     { id: 'creation', label: 'Criação de ofertas', items: [
       { key: 'asset-studio', label: 'Asset Studio', href: '/asset-studio/' },
-      { key: 'copy', label: 'Ficha e Precel', view: 'copy', href: '/?view=copy' },
+      { key: 'copy', label: 'Ficha e Presell', view: 'copy', href: '/?view=copy' },
     ] },
     { id: 'personal', label: 'Pessoal', items: [
       { key: 'time', label: 'Meu Tempo', view: 'time', href: '/?view=time' },

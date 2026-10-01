@@ -1056,7 +1056,23 @@
       if (!data) { pill.textContent = 'Aguardando'; meta.hidden = true; area.value = ''; return; }
       if (data.error) { pill.textContent = 'Erro'; meta.hidden = false; meta.replaceChildren(metaLine('Problema', data.error)); return; }
       pill.textContent = data.source === 'mcc_chrome_extension' ? 'Captura MCC recebida' : 'Recebido'; area.value = `${data.name}\n${data.records.length} campanhas válidas`;
-      meta.hidden = false; meta.replaceChildren(metaLine('Origem', data.source === 'mcc_chrome_extension' ? 'Grade da MCC · extensão' : 'Arquivo/colagem manual'), metaLine('Arquivo', data.name), metaLine('Data detectada', data.dates.join(', ') || 'Não encontrada'), metaLine('Campanhas', data.records.length), metaLine('Moedas', [...new Set(data.records.map(r => r.moeda).filter(Boolean))].join(', ') || 'Não encontradas'));
+      const sourceDetails = slot === 'd0'
+        ? [metaLine('Impressões', sourceMetricTotal(data, 'impressions')), metaLine('Cliques', sourceMetricTotal(data, 'clicks'))]
+        : [metaLine('Origem', data.source === 'mcc_chrome_extension' ? 'Grade da MCC · extensão' : 'Arquivo/colagem manual'), metaLine('Arquivo', data.name)];
+      meta.hidden = false; meta.replaceChildren(...sourceDetails, metaLine('Data detectada', data.dates.join(', ') || 'Não encontrada'), metaLine('Campanhas', data.records.length), metaLine('Moedas', [...new Set(data.records.map(r => r.moeda).filter(Boolean))].join(', ') || 'Não encontradas'));
+    }
+
+    function sourceMetricTotal(source, key) {
+      const values = source.records.map(record => field(record, key, parseNumber));
+      const total = sumValues(values);
+      const absent = values.filter(value => value.estado === 'ausente').length;
+      const invalid = values.filter(value => value.estado === 'invalido').length;
+      if (total == null) return invalid ? `Indisponível · ${invalid} inválido(s)` : `Indisponível · ${absent} sem valor`;
+      const formatted = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:2 }).format(total);
+      const notes = [];
+      if (absent) notes.push(`${absent} sem valor`);
+      if (invalid) notes.push(`${invalid} inválido(s)`);
+      return notes.length ? `${formatted} (parcial; ${notes.join(', ')})` : formatted;
     }
 
     function metaLine(label, value) { const row = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = label; b.textContent = String(value); row.append(a,b); return row; }

@@ -8,6 +8,7 @@
 - `dist/preparador-MCC/index.html`: atualmente é a fonte editável do Preparador; o build não o gera.
 - `src/curadoria/`: Radar, Lista de Gerente, E-commerce GM e Glimpse.
 - `src/control-macro/`: domínio de agregação do Controle Macro e estilos próprios da tela.
+- `src/accounts/`: domínio puro, interface/eventos e CSS do Mapa por Conta. `accountReportSnapshot()` no painel é o adaptador de leitura das projeções existentes; filtros e renderização pertencem ao módulo.
 - `src/personal-finance/`: domínio, armazenamento local, sincronização entre abas e interface do Controle de gastos pessoais.
 - `src/meu-tempo/`, `src/presell/`, `src/asset-studio/`: módulos próprios.
 - `dist/index.html` e a maioria de `dist/**`: saída gerada. Edite fontes e rode o build.
@@ -17,6 +18,8 @@
 Uma view principal deve ser registrada em `src/view-registry.js`; mantenha `id`, `query`, `enabled`, `activeView`, IDs de seção/menu, título e subtítulo no registro. Renderizadores obtêm metadados por `PanelViews.definition()`, resolvem entrada por `resolveRoute()` e criam links por `urlFor()`. Não replique esses dados manualmente na navegação se o registro puder fornecê-los. Rotas desconhecidas voltam para Visão Geral.
 
 O registro não é lugar para estado de filtros, dados de domínio, consultas IndexedDB, funções de renderização ou regras de negócio.
+
+O piloto de separação do Mapa por Conta está documentado em `docs/maintenance.md` na raiz. Não adicione novamente wrappers de renderização/listeners dessa tela ao HTML principal; use `src/accounts/accounts-view.mjs`. A consolidação financeira existente e a barra de rolagem compartilhada com CPA continuam no adaptador do painel, sem alteração de persistência.
 
 ## Rotas centrais atuais
 
@@ -29,8 +32,8 @@ O registro não é lugar para estado de filtros, dados de domínio, consultas In
 - `/?view=curation-observability`: Observabilidade da Curadoria (domínio pré-teste, separado da operação).
 - `/?view=time`: Meu Tempo.
 - `/?view=personal-finance`: Controle de gastos pessoais (skill dedicada `../../controle-gastos-pessoal/SKILL.md`).
-- `/?view=copy`: Ficha e Precel; reúne perguntas e respostas, ficha estruturada obrigatória e criação local da Precel.
-- `/?view=presell`: alias compatível que redireciona para Ficha e Precel.
+- `/?view=copy`: Ficha e Presell; análise da oferta, conteúdo estruturado obrigatório e criação local da Presell. A interface não gera mais copy, perguntas/respostas ou download JSON.
+- `/?view=presell`: alias compatível para Ficha e Presell, com o mesmo item ativo `copyFichaNav`.
 - `/preparador-MCC/`: Preparador MCC.
 - `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/glimpse/`: módulos de curadoria.
 - `/asset-studio/`: preparação local de assets.
@@ -57,7 +60,7 @@ Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.j
 - Financeiro: Controle Macro e Faturamento.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
 - Curadoria: Radar SpyHero, Lista de Gerente e E-commerce GM.
-- Criação de ofertas: Ficha e Precel e Asset Studio.
+- Criação de ofertas: Asset Studio e Ficha e Presell, nessa ordem.
 - Pessoal: Meu Tempo e Controle de gastos pessoais.
 - Produtos: Produtos Testados e acesso ao Diário de campanha; a lista de campanhas permanece no painel principal.
 

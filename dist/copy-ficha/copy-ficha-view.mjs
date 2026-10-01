@@ -1,5 +1,5 @@
 import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=20';
-import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers,formatOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=2';
+import {minimumOfferProductPrice,productPriceCondition} from './copy-ficha-questions.mjs?v=2';
 import {buildStructuredFicha,structuredFichaFormat} from './copy-ficha-structured.mjs?v=1';
 import {createPresellFromFicha,reportHtml as presellReportHtml} from '../presell/presell-view.mjs?v=4';
 
@@ -7,33 +7,6 @@ let mounted=false,creatingPresell=false;
 const STORAGE_KEY='copy-ficha-draft-v1';
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const by=(root,id)=>root.querySelector(`#${id}`);
-export function readOfferQuestionAnswers(root){
-  return [...root.querySelectorAll('[data-offer-answer]')].map(field=>({question:field.dataset.offerQuestion,answer:field.value}));
-}
-
-function resizeOfferAnswer(field){
-  field.style.height='auto';field.style.height=`${field.scrollHeight}px`;
-}
-
-function renderOfferQuestions(root,questions=[]){
-  const host=by(root,'copyOfferQuestions');if(!host)return;
-  by(root,'copyQuestionsCopy').disabled=!questions.length;
-  host.replaceChildren();
-  if(!questions.length){
-    const empty=document.createElement('p');empty.className='copy-ficha-output-empty';empty.textContent='Clique em Gerar perguntas e respostas para preencher este quadro com os dados da oferta.';host.append(empty);return;
-  }
-  const list=document.createElement('dl');list.className='copy-ficha-question-list';
-  for(const {id,question,answer,pending} of questions){
-    const row=document.createElement('div');row.className=`copy-ficha-question${pending?' is-unidentified':''}`;
-    const title=document.createElement('dt');title.id=`copyQuestionLabel-${id}`;title.textContent=question;
-    const value=document.createElement('dd'),input=document.createElement('textarea');
-    input.className='copy-ficha-answer-input';input.rows=1;input.value=answer;input.setAttribute('aria-labelledby',title.id);
-    input.dataset.offerAnswer=id;input.dataset.offerQuestion=question;value.append(input);
-    row.append(title,value);list.append(row);
-  }
-  host.append(list);
-  host.querySelectorAll('[data-offer-answer]').forEach(resizeOfferAnswer);
-}
 
 function updateProductPriceNote(root){
   const field=by(root,'copyProductPrice'),note=by(root,'copyProductPriceNote');if(!field||!note)return;
@@ -245,17 +218,14 @@ function analyze(root){
     useSuggestion.onclick=()=>useProductSuggestion(root,result.productCandidate);
     detected.append(useSuggestion);
   }
-  const analysisMessage=hasManualProduct?`O campo Produto já tem um valor manual e foi preservado. A análise detectou “${result.productCandidate}”; use o botão ao lado se quiser aplicar a sugestão.${result.productCandidateNeedsReview?` ${result.productCandidateEvidence} Confira se é o produto anunciado ou apenas a marca.`:''}`:result.productCandidateNeedsReview?`${result.productCandidateEvidence} Revise se este nome identifica o produto anunciado ou apenas a marca.`:applied.length?`Preenchido automaticamente: ${applied.join(', ')}. Revise os dados antes de gerar perguntas ou ficha.`:'Os dados detectados foram mantidos como candidatos. Revise os campos acima.';
+  const analysisMessage=hasManualProduct?`O campo Produto já tem um valor manual e foi preservado. A análise detectou “${result.productCandidate}”; use o botão ao lado se quiser aplicar a sugestão.${result.productCandidateNeedsReview?` ${result.productCandidateEvidence} Confira se é o produto anunciado ou apenas a marca.`:''}`:result.productCandidateNeedsReview?`${result.productCandidateEvidence} Revise se este nome identifica o produto anunciado ou apenas a marca.`:applied.length?`Preenchido automaticamente: ${applied.join(', ')}. Revise os dados antes de criar a ficha.`:'Os dados detectados foram mantidos como candidatos. Revise os campos acima.';
   by(root,'copyAnalysisNote').textContent=analysisMessage;
   updatePendingHighlights(root);
   saveDraft(root);
 }
 
-function setOutput(root,id,value){by(root,id).value=value;if(id==='copyFichaJson')by(root,'copyDownloadFicha').disabled=!value}
-function clearGeneratedOutputs(root,{preserveQuestions=false}={}){
-  setOutput(root,'copyFichaJson','');
-  clearPresellFeedback(root,'Dados alterados. Valide novamente antes de criar a Precel.');
-  if(!preserveQuestions)renderOfferQuestions(root);
+function clearGeneratedOutputs(root){
+  clearPresellFeedback(root,'Dados alterados. Valide novamente antes de criar a Presell.');
 }
 function clearPresellFeedback(root,message=''){
   const status=by(root,'copyPresellStatus'),report=by(root,'copyPresellReport');
@@ -271,7 +241,7 @@ function invalidateGeneratedOutputs(root,message){
 function renderWarnings(root,warnings,{blocked=false}={}){
   const host=by(root,'copyWarnings');
   host.replaceChildren();
-  if(!warnings.length){host.className='copy-ficha-success';host.textContent='Ficha JSON gerada. Revise antes de publicar.';return}
+  if(!warnings.length){host.className='copy-ficha-success';host.textContent='Ficha validada. Revise antes de publicar.';return}
   host.className=`copy-ficha-warning copy-ficha-warning-listing${blocked?' is-blocked':''}`;
   const heading=document.createElement('div');heading.className='copy-ficha-warning-heading';
   const title=document.createElement('strong');title.textContent=blocked?'Ficha bloqueada':'Itens para revisar na ficha';
@@ -297,13 +267,6 @@ function refreshDetectedProductPrice(root){
   }
 }
 
-function generateQuestions(root,toast){
-  refreshDetectedProductPrice(root);
-  renderOfferQuestions(root,buildOfferQuestionAnswers(payload(root)));
-  saveDraft(root);
-  toast?.('Perguntas e respostas geradas');
-}
-
 function renderPresellReports(root,reports=[]){
   const host=by(root,'copyPresellReport');if(!host)return;
   host.replaceChildren();
@@ -318,13 +281,11 @@ function renderPresellReports(root,reports=[]){
 }
 
 async function generateFichaAndCreatePresell(root,toast){
-  setOutput(root,'copyFichaJson','');
   clearPresellFeedback(root,'Validando o conteúdo obrigatório da ficha…');
   clearValidationMessages(root);
   const {ficha,warnings}=buildStructuredFicha(inputValue(root,'copyFichaSource'),payload(root));
-  setOutput(root,'copyFichaJson',JSON.stringify(ficha,null,2));
   updatePendingHighlights(root);
-  by(root,'copyPresellStatus').textContent='A ficha está válida. Confirmando antes de criar os arquivos da Precel…';
+  by(root,'copyPresellStatus').textContent='A ficha está válida. Confirmando antes de criar os arquivos da Presell…';
   const result=await createPresellFromFicha(ficha);
   if(result.cancelled){
     by(root,'copyPresellStatus').textContent='Criação cancelada. A validação foi somente leitura e nenhum arquivo foi criado.';
@@ -334,47 +295,23 @@ async function generateFichaAndCreatePresell(root,toast){
   const reports=[{title:'Validação após a criação',report:productionReport}];
   const finalStatus=productionReport?.overall;
   const status=finalStatus==='BLOCKED'
-    ?'Os arquivos da Precel foram gerados, mas a validação final apontou bloqueios. Confira o relatório antes de publicar.'
-    :`Precel criada. A ficha passou pela validação e ${ficha.faqs.length} FAQs foram processadas.`;
+    ?'Os arquivos da Presell foram gerados, mas a validação final apontou bloqueios. Confira o relatório antes de publicar.'
+    :`Presell criada. A ficha passou pela validação e ${ficha.faqs.length} FAQs foram processadas.`;
   by(root,'copyPresellStatus').textContent=status;
   renderPresellReports(root,reports);
   renderWarnings(root,warnings);
-  toast?.(finalStatus==='BLOCKED'?'Precel processada com bloqueios na validação final.':`Precel criada com ${ficha.faqs.length} FAQs.`,finalStatus==='BLOCKED');
-}
-
-async function copyOutput(root,id,toast){
-  const field=by(root,id);
-  if(!field.value)return;
-  await copyText(field.value,toast);
-}
-
-async function copyText(value,toast){
-  if(!value)return;
-  try{await navigator.clipboard.writeText(value)}catch{
-    const temporary=document.createElement('textarea');temporary.value=value;temporary.setAttribute('readonly','');temporary.style.position='fixed';temporary.style.opacity='0';document.body.append(temporary);temporary.select();
-    try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable')}catch{toast?.('Não foi possível copiar o conteúdo');temporary.remove();return}
-    temporary.remove();
-  }
-  toast?.('Conteúdo copiado');
-}
-
-function downloadFicha(root){
-  const value=by(root,'copyFichaJson').value;
-  if(!value)return;
-  const product=inputValue(root,'copyProduct').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'oferta';
-  const url=URL.createObjectURL(new Blob([value],{type:'application/json'})),link=document.createElement('a');
-  link.href=url;link.download=`ficha-${product}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
+  toast?.(finalStatus==='BLOCKED'?'Presell processada com bloqueios na validação final.':`Presell criada com ${ficha.faqs.length} FAQs.`,finalStatus==='BLOCKED');
 }
 
 export async function mount({root,toast}={}){
   if(!root)return;
   if(!mounted){
     root.innerHTML=`<div class="copy-ficha-shell">
-      <section class="copy-ficha-card"><header><div><h2>1. Fonte da oferta</h2><p>A URL e o texto visível ajudam a identificar dados para perguntas e respostas. A ficha usa o texto estruturado informado abaixo.</p></div></header><div class="copy-ficha-body">
-        <div class="copy-ficha-grid"><div class="copy-ficha-field span-2"><label>URL da DTC / página do produtor</label><input id="copyDtcUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-2"><label>URL de afiliação (sempre separada)</label><input id="copyAffiliateUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-4"><label>Texto copiado da página (Ctrl+A, Ctrl+C, Ctrl+V)</label><textarea id="copyRawText" class="copy-ficha-textarea" placeholder="Cole aqui o conteúdo visível da oferta para identificar os dados e gerar perguntas e respostas."></textarea></div></div>
+      <section class="copy-ficha-card"><header><div><h2>1. Fonte da oferta</h2><p>A URL e o texto visível ajudam a identificar dados para preencher a ficha.</p></div></header><div class="copy-ficha-body">
+        <div class="copy-ficha-grid"><div class="copy-ficha-field span-2"><label>URL da DTC / página do produtor</label><input id="copyDtcUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-2"><label>URL de afiliação (sempre separada)</label><input id="copyAffiliateUrl" class="copy-ficha-input" type="url" placeholder="https://..."></div><div class="copy-ficha-field span-4"><label>Texto copiado da página (Ctrl+A, Ctrl+C, Ctrl+V)</label><textarea id="copyRawText" class="copy-ficha-textarea" placeholder="Cole aqui o conteúdo visível da oferta para identificar os dados do produto."></textarea></div></div>
         <div class="copy-ficha-actions"><button id="copyAnalyze" class="copy-ficha-btn primary" type="button">Analisar oferta</button><button id="copyReset" class="copy-ficha-btn danger" type="button">Nova coleta</button></div><div id="copyDetected" class="copy-ficha-detected"></div><div id="copyAnalysisNote" class="copy-ficha-note"></div>
       </div></section>
-      <section class="copy-ficha-card copy-ficha-validation"><header><div><h2>2. Dados da oferta</h2><p>Revise os dados usados nas perguntas e respostas e na configuração da ficha.</p></div></header><div class="copy-ficha-body">
+      <section class="copy-ficha-card copy-ficha-validation"><header><div><h2>2. Dados da oferta</h2><p>Revise os dados que serão usados na ficha.</p></div></header><div class="copy-ficha-body">
         <div class="copy-ficha-grid">
           <div class="copy-ficha-field"><label>Produto</label><input id="copyProduct" class="copy-ficha-input" placeholder="MyoGlow"></div>
           <div class="copy-ficha-field"><label>País</label><input id="copyCountry" class="copy-ficha-input" maxlength="2" placeholder="US"></div>
@@ -386,37 +323,24 @@ export async function mount({root,toast}={}){
           <div class="copy-ficha-field"><label>Prazo confirmado (dias)</label><input id="copyGuarantee" class="copy-ficha-input" type="number" min="1" placeholder="90"></div>
           <div class="copy-ficha-field"><label>Frete grátis</label><select id="copyFreeShipping" class="copy-ficha-select"><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="no">Não exibido</option></select></div>
           <div class="copy-ficha-field span-2"><label>Título da página</label><input id="copyPageTitle" class="copy-ficha-input" placeholder="Produto | Oferta"></div>
-          <div class="copy-ficha-field span-2"><label>Diretório da Pre-Sell</label><input id="copyDestination" class="copy-ficha-input" placeholder="C:\\Users\\...\\pag01"></div>
+          <div class="copy-ficha-field span-2"><label>Diretório da Presell</label><input id="copyDestination" class="copy-ficha-input" placeholder="C:\\Users\\...\\pag01"></div>
           <div class="copy-ficha-field"><label>Pasta de assets</label><input id="copyAssetFolder" class="copy-ficha-input" value="assets"></div>
         </div>
-        <div class="copy-ficha-actions"><button id="copyGenerateQuestions" class="copy-ficha-btn primary" type="button">Gerar perguntas e respostas</button></div>
       </div></section>
-      <section class="copy-ficha-card"><header><div><h2>3. Conteúdo obrigatório da ficha</h2><p>Os textos colados são preservados sem reescrita. País, idioma, URL de afiliação e destino vêm dos campos acima.</p></div></header><div class="copy-ficha-body"><div class="copy-ficha-field"><label for="copyFichaSource">Conteúdo estruturado · obrigatório para criar a Precel</label><textarea id="copyFichaSource" class="copy-ficha-textarea" spellcheck="false" placeholder="${esc(structuredFichaFormat)}"></textarea><span class="copy-ficha-note">Cole [PRODUTO], os títulos e textos e três ou quatro pares [PERGUNTA_N]/[RESPOSTA_N]. Confira valores por unidade e por pacote; nada será recalculado. Este campo permanece nesta sessão.</span></div><div class="copy-ficha-actions"><button id="copyGenerateFicha" class="copy-ficha-btn primary" type="button">Validar ficha e criar Precel</button></div></div></section>
-      <section class="copy-ficha-card"><header><div><h2>4. Resultados</h2><p>As perguntas e respostas são independentes. A ficha é enviada para criar a Precel e o motor valida os arquivos gerados.</p></div><button id="copyDownloadFicha" class="copy-ficha-btn" type="button" disabled>Baixar JSON</button></header><div class="copy-ficha-body"><div class="copy-ficha-output-grid">
-        <section class="copy-ficha-output copy-ficha-questions"><div class="copy-ficha-output-heading"><h3>Perguntas e respostas da oferta</h3><button id="copyQuestionsCopy" class="copy-ficha-btn" type="button" disabled>Copiar perguntas e respostas</button></div><p class="copy-ficha-note">Use Gerar perguntas e respostas para preencher este quadro. Edite antes de copiar; gerar novamente as perguntas substitui as respostas deste quadro.</p><div id="copyOfferQuestions"></div></section>
-        <div class="copy-ficha-output ficha"><h3>Ficha JSON usada na criação</h3><button class="copy-ficha-btn copy-ficha-copy" data-copy-output="copyFichaJson" type="button">Copiar</button><textarea id="copyFichaJson" class="copy-ficha-textarea" readonly></textarea><div id="copyPresellStatus" class="presell-message" role="status" aria-live="polite">Nenhuma Precel solicitada.</div><div id="copyPresellReport"></div></div>
-      </div><div id="copyWarnings" class="copy-ficha-note">Gere perguntas e respostas ou crie a Precel a partir do conteúdo estruturado.</div></div></section>
+      <section class="copy-ficha-card"><header><div><h2>3. Conteúdo obrigatório da ficha</h2><p>Os textos colados são preservados sem reescrita. País, idioma, URL de afiliação e destino vêm dos campos acima.</p></div></header><div class="copy-ficha-body"><div class="copy-ficha-field"><label for="copyFichaSource">Conteúdo estruturado · obrigatório para criar a Presell</label><textarea id="copyFichaSource" class="copy-ficha-textarea" spellcheck="false" placeholder="${esc(structuredFichaFormat)}"></textarea><span class="copy-ficha-note">Cole [PRODUTO], os títulos e textos e três ou quatro pares [PERGUNTA_N]/[RESPOSTA_N]. Confira valores por unidade e por pacote; nada será recalculado. Este campo permanece nesta sessão.</span></div><div class="copy-ficha-actions"><button id="copyGenerateFicha" class="copy-ficha-btn primary" type="button">Validar ficha e criar Presell</button></div><div id="copyPresellStatus" class="presell-message" role="status" aria-live="polite">Nenhuma Presell solicitada.</div><div id="copyPresellReport"></div><div id="copyWarnings" class="copy-ficha-note">Revise os dados da ficha; pendências de validação aparecerão aqui.</div></div></section>
     </div>`;
-    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);renderOfferQuestions(root);
+    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);
     by(root,'copyAnalyze').onclick=()=>analyze(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
-    by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast);
     by(root,'copyGenerateFicha').onclick=async()=>{
       if(creatingPresell)return;
       creatingPresell=true;const button=by(root,'copyGenerateFicha');button.disabled=true;button.textContent='Validando e preparando…';
       try{await generateFichaAndCreatePresell(root,toast)}catch(error){updatePendingHighlights(root,{fields:error?.fields});renderWarnings(root,error.blockers||[error.message],{blocked:true});by(root,'copyPresellStatus').textContent=error.message;root.querySelector('.is-pending')?.focus();toast?.(error.message,true)}
-      finally{creatingPresell=false;button.disabled=false;button.textContent='Validar ficha e criar Precel'}
+      finally{creatingPresell=false;button.disabled=false;button.textContent='Validar ficha e criar Presell'}
     };
-    by(root,'copyQuestionsCopy').onclick=()=>copyText(formatOfferQuestionAnswers(readOfferQuestionAnswers(root)),toast);
-    window.addEventListener('resize',()=>by(root,'copyOfferQuestions').querySelectorAll('[data-offer-answer]').forEach(resizeOfferAnswer));
-    by(root,'copyDownloadFicha').onclick=()=>downloadFicha(root);
-    root.querySelectorAll('[data-copy-output]').forEach(button=>button.onclick=()=>copyOutput(root,button.dataset.copyOutput,toast));
     const markManual=event=>{
       if(event.target.id==='copyFichaSource'){
-        setOutput(root,'copyFichaJson','');clearPresellFeedback(root,'Conteúdo alterado. Valide novamente antes de criar a Precel.');event.target.classList.remove('is-pending');event.target.removeAttribute('aria-invalid');return;
-      }
-      if(event.target.matches('[data-offer-answer]')){
-        resizeOfferAnswer(event.target);event.target.closest('.copy-ficha-question')?.classList.remove('is-unidentified');return;
+        clearPresellFeedback(root,'Conteúdo alterado. Valide novamente antes de criar a Presell.');event.target.classList.remove('is-pending');event.target.removeAttribute('aria-invalid');return;
       }
       if(event.target.id==='copyCurrency'){
         const previousCurrency=by(root,'copyDiscountAmountLabel')?.textContent.match(/\(([^)]+)\)$/)?.[1];
@@ -426,8 +350,8 @@ export async function mount({root,toast}={}){
       if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
       if(event.target.id==='copyDiscount')refreshAutoDiscountAmount(root);
       if(event.target.id==='copyProductPrice'){clearProductPriceContext(root);updateProductPriceNote(root)}
-      if(['copyAffiliateUrl','copyDestination','copyAssetFolder','copyPageTitle'].includes(event.target.id)){setOutput(root,'copyFichaJson','');return}
-      if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise e gere novamente as perguntas e respostas ou a ficha.');
+      if(['copyAffiliateUrl','copyDestination','copyAssetFolder','copyPageTitle'].includes(event.target.id))return;
+      if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise e valide novamente a ficha.');
     };
     root.addEventListener('input',event=>{markManual(event);if(event.target.id!=='copyFichaSource')updatePendingHighlights(root)});root.addEventListener('change',event=>{markManual(event);if(event.target.id!=='copyFichaSource')updatePendingHighlights(root)});
     updatePendingHighlights(root);

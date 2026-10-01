@@ -1212,7 +1212,7 @@ export function generationBlockers(data={}, {scope='all'}={}){
   if(!['confirmed','no'].includes(data.scarcityConfirmed||'pending'))blockers.push('Escassez atual: confirme se a oferta exibe uma condição válida ou marque para não usar');
   if(!clean(data.affiliateUrl)||clean(data.affiliateUrl).toUpperCase()==='CONFIRMAR')blockers.push('URL de afiliação');
   else if(!/^https?:\/\//i.test(clean(data.affiliateUrl)))blockers.push('URL de afiliação: informe uma URL completa iniciada por http:// ou https://');
-  if(!clean(data.destination)||clean(data.destination).toUpperCase()==='CONFIRMAR')blockers.push('Diretório da Pre-Sell');
+  if(!clean(data.destination)||clean(data.destination).toUpperCase()==='CONFIRMAR')blockers.push('Diretório da Presell');
   if(missingConfirmation(data.currency))blockers.push('Moeda: selecione a moeda da oferta');
   if(clean(data.confirmedProductPrice)&&(number(data.confirmedProductPrice)===null||number(data.confirmedProductPrice)<0))blockers.push('Preço do produto: informe um valor válido, maior ou igual a zero');
   const mismatchIndexes=generationBlockerPackageIndexes(data);
@@ -1221,7 +1221,7 @@ export function generationBlockers(data={}, {scope='all'}={}){
     const names=labels.length===1?labels[0]:`${labels.slice(0,-1).join(', ')} e ${labels.at(-1)}`;
     blockers.push(`Pacotes: o desconto calculado diverge do selo informado em ${names}. Revise os preços ou o percentual do selo.`);
   }
-  return unique(blockers).filter(item=>scope!=='copy'||! /^(URL de afiliação|Diretório da Pre-Sell|Preço do produto:)/.test(item));
+  return unique(blockers).filter(item=>scope!=='copy'||! /^(URL de afiliação|Diretório da Presell|Preço do produto:)/.test(item));
 }
 
 export function generationBlockerFields(data={}, {scope='all'}={}){
@@ -1238,7 +1238,7 @@ export function generationBlockerFields(data={}, {scope='all'}={}){
   if(blockers.some(item=>item.startsWith('Escassez atual:')))fields.add('scarcityConfirmed');
   const affiliateUrl=clean(data.affiliateUrl);
   if(scope!=='copy'&&(!affiliateUrl||affiliateUrl.toUpperCase()==='CONFIRMAR'||!/^https?:\/\//i.test(affiliateUrl)))fields.add('affiliateUrl');
-  if(blockers.includes('Diretório da Pre-Sell'))fields.add('destination');
+  if(blockers.includes('Diretório da Presell'))fields.add('destination');
   if(blockers.some(item=>item.startsWith('Moeda:')))fields.add('currency');
   if(blockers.some(item=>item.startsWith('Preço do produto:')))fields.add('confirmedProductPrice');
   if(blockers.some(item=>item.startsWith('Pacotes:')))fields.add('packages');

@@ -43,7 +43,7 @@ assert.equal(views.definition('time').enabled,true);
 assert.equal(views.definition('time').sectionId,'timeView');
 assert.equal(views.definition('copy').sectionId,'copyFichaView');
 assert.equal(views.definition('presell').sectionId,'copyFichaView');
-assert.equal(views.definition('presell').title,'Ficha e Precel');
+assert.equal(views.definition('presell').title,'Ficha e Presell');
 assert.equal(views.definition('personal-finance').sectionId,'personalFinanceView');
 assert.equal(views.definition('personal-finance').navId,'personalFinanceNav');
 assert.equal(views.definition('observability').sectionId,'observabilityView');

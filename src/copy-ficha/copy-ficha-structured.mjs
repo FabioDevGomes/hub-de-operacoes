@@ -40,7 +40,7 @@ export function buildStructuredFicha(text,data={}){
   const requireField=(key,message,valid)=>{if(!valid){blockers.push(message);targets.add(key)}};
   requireField('htmlLanguage','Idioma HTML: selecione um idioma válido.',/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(trim(data.htmlLanguage)));
   requireField('countryCode','País: informe o código de duas letras.',/^[A-Z]{2}$/.test(trim(data.countryCode)));
-  requireField('destination','Diretório da Pre-Sell: informe o destino.',!pending(data.destination));
+  requireField('destination','Diretório da Presell: informe o destino.',!pending(data.destination));
   requireField('assetFolder','Pasta de assets: use apenas letras, números, hífen ou sublinhado.',/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(trim(data.assetFolder)||'assets'));
   let url;
   try{url=new URL(trim(data.affiliateUrl))}catch{}

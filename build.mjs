@@ -37,6 +37,7 @@ await cp(resolve(root, "src/copy-ficha"), resolve(root, "dist/copy-ficha"), { re
 await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursive: true });
 await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });
 await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro"), { recursive: true });
+await cp(resolve(root, "src/accounts"), resolve(root, "dist/accounts"), { recursive: true });
 await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
 await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
 await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));

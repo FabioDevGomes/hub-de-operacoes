@@ -11,8 +11,8 @@
     'curation-observability':Object.freeze({id:'curation-observability',query:'curation-observability',enabled:true,activeView:'curation-observability',sectionId:'curationObservabilityView',navId:'curationObservabilityNav',title:'Observabilidade da Curadoria',subtitle:'Histórico independente dos sinais registrados antes do teste'}),
     time:Object.freeze({id:'time',query:'time',enabled:true,activeView:'time',sectionId:'timeView',navId:'timeNav',title:'Meu Tempo',subtitle:'Registre rápido, revise com detalhe e acompanhe sua evolução'}),
     'personal-finance':Object.freeze({id:'personal-finance',query:'personal-finance',enabled:true,activeView:'personal-finance',sectionId:'personalFinanceView',navId:'personalFinanceNav',title:'Controle de gastos',subtitle:'Planejado e realizado por mês, trimestre ou consolidado'}),
-    copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Precel',subtitle:'Cole o conteúdo estruturado, valide a ficha e crie a Precel no fluxo local'}),
-    presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Precel',subtitle:'Atalho compatível para a tela unificada'})
+    copy:Object.freeze({id:'copy',query:'copy',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Presell',subtitle:'Cole o conteúdo estruturado, valide a ficha e crie a Presell no fluxo local'}),
+    presell:Object.freeze({id:'presell',query:'presell',enabled:true,activeView:'copy-ficha',sectionId:'copyFichaView',navId:'copyFichaNav',title:'Ficha e Presell',subtitle:'Atalho compatível para a tela unificada'})
   });
   function definition(id){return VIEWS[String(id||'')]||null}
   function enabledViews(){return Object.values(VIEWS).filter(view=>view.enabled)}

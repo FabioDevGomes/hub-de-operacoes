@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {canApplyDetectedValue,collectAutoFilledFieldIds,formatSitelinkFieldMeta,restoreAutoFilledFieldIds,readOfferQuestionAnswers} from '../src/copy-ficha/copy-ficha-view.mjs';
-import {formatOfferQuestionAnswers} from '../src/copy-ficha/copy-ficha-questions.mjs';
-
-const editableAnswers=[{dataset:{offerQuestion:'Qual o nome do produto?'},value:'Nome revisado'},{dataset:{offerQuestion:'Tem alguma bonificação?'},value:'Sim — Bônus revisado\nSegunda linha'}];
-const outputRoot={querySelectorAll:()=>editableAnswers};
-assert.equal(formatOfferQuestionAnswers(readOfferQuestionAnswers(outputRoot)),'Qual o nome do produto?\nResposta: Nome revisado\n\nTem alguma bonificação?\nResposta: Sim — Bônus revisado\nSegunda linha');
-editableAnswers[0].value='Nova edição';
-assert.equal(readOfferQuestionAnswers(outputRoot)[0].answer,'Nova edição','a cópia lê o texto atual de cada resposta, não a versão gerada antes da edição');
+import {canApplyDetectedValue,collectAutoFilledFieldIds,restoreAutoFilledFieldIds} from '../src/copy-ficha/copy-ficha-view.mjs';
 
 const empty={id:'copyProduct',value:'',dataset:{},classList:{add(){}}};
 assert.equal(canApplyDetectedValue(empty,'Grounded Footwear'),true,'um campo vazio aceita a detecção');
@@ -19,8 +12,6 @@ const manual={id:'copyProduct',value:'Nome digitado pelo usuário',dataset:{},cl
 assert.equal(canApplyDetectedValue(manual,'Grounded Footwear'),false,'um valor manual divergente não é sobrescrito sem ação explícita');
 assert.equal(canApplyDetectedValue(manual,'Nome digitado pelo usuário'),false,'um valor manual idêntico não perde sua origem');
 assert.equal(canApplyDetectedValue(manual,'Grounded Footwear',{force:true}),true,'uma ação explícita pode substituir o valor manual');
-
-assert.equal(formatSitelinkFieldMeta('Descrição 1','Save $54.99',35),'Descrição 1 — 11/35','a contagem do sitelink aparece ao lado do rótulo, separada por travessão');
 
 const savedFields=[
   {id:'copyProduct',dataset:{autoFilled:'true'}},
@@ -42,12 +33,10 @@ assert.equal(restoredFields[1].dataset.autoFilled,undefined,'campos manuais cont
 const view=await readFile(new URL('../src/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
 const copyCss=await readFile(new URL('../src/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
 const outputCss=await readFile(new URL('../src/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
-assert.ok(outputCss.includes('.copy-ficha-question .copy-ficha-answer-input{')&&outputCss.includes('min-height:32px'),'respostas editáveis devem sobrepor a altura mínima genérica de 260px das saídas e permanecer compactas');
-assert.ok(view.includes("if(event.target.matches('[data-offer-answer]'))")&&view.includes('formatOfferQuestionAnswers(readOfferQuestionAnswers(root))'),'a edição não invalida as saídas e a cópia lê as respostas atuais');
-assert.ok(view.includes('id="copyGenerateQuestions"')&&view.includes("by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast)"),'as perguntas têm um botão próprio de geração');
-const questionAction=view.slice(view.indexOf('function generateQuestions('),view.indexOf('function renderPresellReports('));
-assert.ok(questionAction.includes('buildOfferQuestionAnswers(payload(root))')&&!questionAction.includes('generateAssets')&&!questionAction.includes('copyFichaJson'),'as perguntas são geradas sem depender da ficha ou de ativos de anúncios');
-assert.ok(view.includes('async function generateFichaAndCreatePresell(')&&view.includes('buildStructuredFicha(inputValue(root,\'copyFichaSource\'),payload(root))')&&view.includes('createPresellFromFicha(ficha)'),'a ação única valida o conteúdo estruturado antes de criar a Precel');
+assert.ok(!view.includes('Resultados')&&!view.includes('copyFichaJson')&&!view.includes('copyDownloadFicha')&&!view.includes('copyGenerateQuestions')&&!view.includes('copyOfferQuestions')&&!view.includes('Perguntas e respostas da oferta'),'a tela não exibe mais o quadro de resultados, perguntas e respostas ou o download JSON');
+assert.match(view,/<h2>3\. Conteúdo obrigatório da ficha<\/h2>/,'o conteúdo obrigatório passa a ser o item 3');
+assert.ok(view.includes('id="copyPresellStatus"')&&view.includes('id="copyPresellReport"')&&view.includes('id="copyWarnings"'),'o item 3 mantém o status e os relatórios de validação da Presell');
+assert.ok(view.includes('async function generateFichaAndCreatePresell(')&&view.includes('buildStructuredFicha(inputValue(root,\'copyFichaSource\'),payload(root))')&&view.includes('createPresellFromFicha(ficha)'),'a ação única valida o conteúdo estruturado antes de criar a Presell');
 assert.ok(!view.includes('function generate(root,')&&!view.includes('Gerar copy')&&!view.includes('generateAssets'),'a tela não gera mais copy de anúncios');
 assert.ok(view.includes('confirmedDiscountAmount:inputValue(root,\'copyDiscountAmount\')')&&view.includes('copyDiscountAmount:draft.confirmedDiscountAmount'),'o valor associado ao percentual é salvo e restaurado no rascunho');
 assert.ok(view.includes('id="copyDiscountAmount"')&&view.includes('id="copyDiscountAmountLabel"')&&view.includes('Valor do desconto (${currency})')&&view.includes('clearAutoDiscountAmount(root)'),'a interface exibe o campo de economia com moeda dinâmica e invalida valor automático ao trocar a moeda');

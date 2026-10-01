@@ -9,3 +9,7 @@
 .copy-ficha-discount-pair .copy-ficha-field label{font-size:.66rem;line-height:1.2}
 .copy-ficha-discount-pair .copy-ficha-input{min-width:0;padding:6px 7px;font-size:.78rem}
 @media(max-width:620px){.copy-ficha-discount-pair{grid-column:auto}}
+.copy-ficha-validation>.copy-ficha-body>.copy-ficha-grid{align-items:start}
+.copy-ficha-validation .copy-ficha-field>label{display:flex;align-items:flex-end;min-height:1.25rem;line-height:1.2}
+.copy-ficha-validation .copy-ficha-input,.copy-ficha-validation .copy-ficha-select{box-sizing:border-box;height:40px;min-height:40px}
+.copy-ficha-discount-pair{align-items:start}

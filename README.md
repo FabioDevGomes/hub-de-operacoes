@@ -38,7 +38,11 @@ O painel pode iniciar mesmo quando o projeto foi extraído em outro local. A pas
 - `campos_operacionais`: ROI, investimento atual, limite de teste e valor restante.
 - `importacoes`: histórico de cargas do Excel e de manifestos.
 
-## Privacidade
+## Manutenção do código
+
+Consulte [o guia de manutenção](docs/maintenance.md) para localizar fontes, responsabilidades e testes. O conhecimento técnico canônico está em [.agents/skills/painel-operacao-google-ads/SKILL.md](.agents/skills/painel-operacao-google-ads/SKILL.md), não na cópia global da skill.
+
+## Privacidade dos dados
 
 O diretório `data-local` e arquivos Excel, CSV, manifestos e bases exportadas são ignorados pelo Git. O repositório deve conter somente o código da ferramenta e sua documentação.
 

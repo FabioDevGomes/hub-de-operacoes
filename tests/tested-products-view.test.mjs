@@ -8,12 +8,12 @@ const domainSource=await readFile(new URL('../src/tested-products/domain.js',imp
 const viewSource=await readFile(new URL('../src/tested-products/view.js',import.meta.url),'utf8');
 vm.runInContext(domainSource,ctx);vm.runInContext(viewSource,ctx);
 const domain=ctx.window.TestedProductsDomain;
-const product=(key,active,billed)=>({key,name:key,label:key,campaigns:[key+' 01'],startDate:'2026-09-01',first:'2026-09-01',last:'2026-09-02',active,totalBilled:billed});
+const product=(key,active,billed,salesCount=0,profit=billed)=>({key,name:key,label:key,campaigns:[key+' 01'],startDate:'2026-09-01',first:'2026-09-01',last:'2026-09-02',active,totalBilled:billed,totalProfit:profit,salesCount});
 function harness(products,removed=0){
   const h=createRoot(),saved=new Map(),calls=[],messages=[];
-  h.setList('[data-tested-sort]',['product','campaigns','status','revenue'].map(testedSort=>({testedSort})));
-  h.setList('[data-tested-col]',['product','revenue'].map(testedCol=>({testedCol})));
-  h.setList('[data-tested-column]',[{testedColumn:'revenue'}]);
+  h.setList('[data-tested-sort]',['product','campaigns','status','revenue','profit','sales'].map(testedSort=>({testedSort})));
+  h.setList('[data-tested-col]',['product','revenue','profit','sales'].map(testedCol=>({testedCol})));
+  h.setList('[data-tested-column]',[{testedColumn:'revenue'},{testedColumn:'profit'},{testedColumn:'sales'}]);
   h.setList('.catalog-edit',[{key:'synthetic',product:'Synthetic'}]);
   h.setList('.catalog-remove',[{key:'synthetic',product:'Synthetic'}]);
   const choices={name:null,remove:false},dialogs={prompt:()=>choices.name,confirm:()=>choices.remove};
@@ -24,17 +24,24 @@ function harness(products,removed=0){
   return {...h,controller,saved,calls,dialogs,choices,messages};
 }
 test('Tested product sorting preserves active first, numeric order, missing last and original array',()=>{
-  const rows=[product('Historic',false,null),product('Active B',true,20),product('Active A',true,100)],original=structuredClone(rows);
+  const rows=[product('Historic',false,null,1),product('Active B',true,20,2),product('Active A',true,100,8)],original=structuredClone(rows);
   assert.equal(domain.sortProducts(rows)[0].label,'Active A');
   assert.equal(domain.sortProducts(rows,'revenue','desc')[0].totalBilled,100);
   assert.equal(domain.sortProducts(rows,'revenue','asc').at(-1).totalBilled,null);
+  assert.equal(domain.sortProducts(rows,'profit','desc')[0].totalProfit,100);
+  assert.equal(domain.sortProducts(rows,'profit','asc').at(-1).totalProfit,null);
+  assert.equal(domain.sortProducts(rows,'sales','desc')[0].salesCount,8);
   assert.deepEqual(rows,original);
   assert.equal(domain.normalizeDate('2027-01-02','2026-10-01'),'2025-01-02');
 });
 test('Tested view preserves counts, states, currency and escaping',()=>{
-  const h=harness([product('<Synthetic>',true,0),product('Historical',false,null)],1);h.controller.render();
+  const h=harness([product('<Synthetic>',true,0),product('Historical',false,null,null)],1);h.controller.render();
   assert.equal(h.get('#testedProductsCount').textContent,'2 produtos');
   assert.equal(h.get('#testedActiveProductsCount').textContent,'1 com campanha ativa');
+  assert.match(h.get('#testedProductsBody').innerHTML,/data-tested-col="sales" class="num">0<\/td>/);
+  assert.match(h.get('#testedProductsBody').innerHTML,/data-tested-col="sales" class="num">—<\/td>/);
+  assert.match(h.get('#testedProductsBody').innerHTML,/data-tested-col="profit" class="num">BRL 0\.00<\/td>/);
+  assert.match(h.get('#testedProductsBody').innerHTML,/data-tested-col="profit" class="num">—<\/td>/);
   assert.match(h.get('#testedProductsBody').innerHTML,/&lt;Synthetic&gt;/);
   assert.match(h.get('#testedProductsBody').innerHTML,/tested-status active/);
   assert.match(h.get('#testedProductsBody').innerHTML,/BRL 0.00/);
@@ -45,10 +52,16 @@ test('Tested view preserves sorting and column preferences across rendering',()=
   const h=harness([product('Z',true,50),product('A',true,100)]);h.controller.render();
   h.root.querySelectorAll('[data-tested-sort]').find(e=>e.dataset.testedSort==='revenue').onclick();
   assert.ok(h.get('#testedProductsBody').innerHTML.indexOf('>Z<')<h.get('#testedProductsBody').innerHTML.indexOf('>A<'));
+  h.root.querySelectorAll('[data-tested-sort]').find(e=>e.dataset.testedSort==='profit').onclick();
+  assert.ok(h.get('#testedProductsBody').innerHTML.indexOf('>Z<')<h.get('#testedProductsBody').innerHTML.indexOf('>A<'));
+  h.root.querySelectorAll('[data-tested-sort]').find(e=>e.dataset.testedSort==='profit').onclick();
+  assert.ok(h.get('#testedProductsBody').innerHTML.indexOf('>A<')<h.get('#testedProductsBody').innerHTML.indexOf('>Z<'));
   const input=h.root.querySelectorAll('[data-tested-column]')[0];input.checked=false;input.onchange();
   assert.equal(h.saved.get('painel-produtos-testados-colunas-v1'),'["revenue"]');
   h.controller.render();
   assert.equal(h.root.querySelectorAll('[data-tested-col]')[1].classList.contains('hidden-column'),true);
+  assert.match(h.get('#testedColumnsMenu').innerHTML,/Vendas/);
+  assert.match(h.get('#testedColumnsMenu').innerHTML,/Lucro total/);
 });
 test('Tested catalog actions require user intent and retain existing callbacks',async()=>{
   const h=harness([product('Synthetic',true,50)],1);h.controller.render();

@@ -101,7 +101,7 @@ async function readActiveMccGrid() {
 async function captureAndForwardActiveMccD0() {
   const snapshot = await readActiveMccGrid();
   const validation = validateMccD0Capture(snapshot);
-  if (!validation.ok) throw new Error(validation.errors.map(item => item.message).join('\n'));
+  if (!validation.ok) throw Object.assign(new Error(validation.errors.map(item => item.message).join('\n')), { errors: validation.errors });
   const received = await forwardD0Grid(validation.capture);
   return { ...received, campaignCount: validation.capture.campaignCount };
 }
@@ -109,7 +109,7 @@ async function captureAndForwardActiveMccD0() {
 async function captureAndForwardActiveMccD1() {
   const snapshot = await readActiveMccGrid();
   const validation = validateMccD1Capture(snapshot);
-  if (!validation.ok) throw new Error(validation.errors.map(item => item.message).join('\n'));
+  if (!validation.ok) throw Object.assign(new Error(validation.errors.map(item => item.message).join('\n')), { errors: validation.errors });
   const received = await forwardD1Grid(validation.capture);
   return { ...received, campaignCount: validation.capture.campaignCount };
 }
@@ -134,13 +134,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'CAPTURE_AND_FORWARD_MCC_D0') {
     captureAndForwardActiveMccD0()
       .then(result => sendResponse({ ok: true, result }))
-      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura direta do D0.' }));
+      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura direta do D0.', errors: error?.errors }));
     return true;
   }
   if (message?.type === 'CAPTURE_AND_FORWARD_MCC_D1') {
     captureAndForwardActiveMccD1()
       .then(result => sendResponse({ ok: true, result }))
-      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura estrutural do D−1.' }));
+      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na captura estrutural do D−1.', errors: error?.errors }));
     return true;
   }
   if (message?.type === 'READ_ACTIVE_MCC_GRID') {

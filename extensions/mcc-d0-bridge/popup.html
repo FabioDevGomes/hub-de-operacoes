@@ -16,6 +16,11 @@
     button.secondary { background: #18314e; color: #e8f0ff; border: 1px solid #294764; }
     button:disabled { opacity: .55; cursor: wait; }
     .status { min-height: 20px; margin: 10px 0 0; font-size: 12px; }
+    .status.error { padding: 12px; border: 1px solid #f87171; border-left: 4px solid #f87171; border-radius: 8px; background: #321923; color: #fecaca; overflow-wrap: anywhere; }
+    .status.error strong { display: block; color: #fca5a5; font-size: 13px; }
+    .status.error p { margin: 8px 0 0; color: inherit; white-space: pre-line; }
+    .status.error ul { margin: 8px 0 12px; padding-left: 18px; }
+    .status.error li + li { margin-top: 6px; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
   </style>
@@ -28,7 +33,7 @@
     <p class="note">Na MCC, selecione um único dia e role a grade até o final para carregar todas as campanhas antes de capturar. Para D−1, a data deve ser ontem no fuso America/Sao_Paulo. A extensão só prepara a prévia; não atualiza a base.</p>
     <button id="capture-d1" class="secondary" type="button">Capturar D−1 da MCC</button>
     <button id="capture-d0" type="button" style="margin-top:8px">Capturar D0 da MCC</button>
-    <p id="capture-status" class="status" role="status" aria-live="polite"></p>
+    <div id="capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
   </section>
   <script type="module" src="popup.js"></script>
 </body>

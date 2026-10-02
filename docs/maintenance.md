@@ -85,12 +85,15 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
 | Modelo e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
 | Preparador MCC: página, parser, receptores e integração | `src/preparador-MCC/index.html` | `tests/preparador-build.test.mjs`, `tests/preparador-d0.test.mjs`, `tests/preparador-d1.test.mjs`, `tests/mcc-grid-production.test.mjs` |
+| Extensão MCC: apresentação de bloqueios D0/D−1 | `extensions/mcc-d0-bridge/capture-status-view.mjs`, `popup.js`, `popup.html` | `tests/mcc-extension-popup.test.mjs`, `tests/mcc-grid-production.test.mjs` |
 | Hot Offers MS: parser/comparação da coleta | `src/curadoria/hot-offers-ms/hot-offers-ms-domain.mjs` | `tests/hot-offers-ms-domain.test.mjs` |
 | Hot Offers MS: prévia, modal e confirmação visual | `src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs`, `hot-offers-ms-page.mjs` | `tests/hot-offers-ms-ui.test.mjs`, `tests/hot-offers-ms-storage.test.mjs` |
 
 `dist/index.html`, `dist/preparador-MCC/index.html` e os demais módulos publicados pelo build são gerados; não faça a mesma alteração manual em fonte e saída. Edite o arquivo correspondente em `src/` e gere novamente. Cópias históricas não são fontes do build.
 
 ## Contratos atuais que os testes devem preservar
+
+- Na extensão MCC, erros estruturados atravessam o service worker até o popup. Duplicidade de nomes deve ter destaque vermelho e lista dos nomes; não apresentar como captura incompleta quando todas as linhas foram lidas e a única divergência é a quantidade de nomes únicos. Paginação parcial, contagem divergente, virtualização, campos/data inválidos continuam bloqueantes e aparecem separadamente. Não enviar capturas rejeitadas nem alterar a base. Toda mudança na extensão incrementa pelo menos o patch de `manifest.json` e exige recarregamento em `chrome://extensions`.
 
 ### Padrões visuais de Curadoria definidos pelo usuário
 

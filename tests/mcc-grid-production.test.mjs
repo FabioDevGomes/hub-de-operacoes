@@ -286,6 +286,17 @@ const duplicated = {
   duplicateCampaigns: ['Oferta Zero']
 };
 assert.ok(validateMccD0Capture(duplicated).errors.some(error => error.code === 'duplicates'));
+assert.ok(validateMccD0Capture(duplicated).errors.some(error => error.code === 'incomplete'), 'duplicidade não esconde uma divergência real de contagem');
+const duplicatesOnly = { ...duplicated, pagination: { first:1, last:3, total:3 } };
+for (const validation of [
+  validateMccD0Capture(duplicatesOnly),
+  validateMccD1Capture(duplicatesOnly, { now:referenceNow })
+]) {
+  assert.equal(validation.ok, false, 'duplicidade continua bloqueando D0 e D−1');
+  assert.deepEqual(validation.errors.map(error => error.code), ['duplicates'], 'contagem completa com duplicidade não é descrita como captura incompleta');
+  assert.deepEqual(validation.errors[0].campaigns, ['Oferta Zero']);
+}
+assert.ok(validateMccD0Capture({ ...duplicatesOnly, virtualized:true }).errors.some(error => error.code === 'incomplete'), 'virtualização continua bloqueante mesmo com duplicidade');
 
 const missingHeader = {
   ...snapshot,

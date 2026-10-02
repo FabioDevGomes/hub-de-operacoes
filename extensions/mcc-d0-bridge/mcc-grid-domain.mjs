@@ -79,11 +79,13 @@ export function validateMccD0Capture(snapshot) {
   if (!snapshot?.ok) return { ok: false, errors: [{ code: 'grid', message: snapshot?.error || 'Grade MCC não encontrada.' }] };
   const page = snapshot.pagination;
   const total = Number(page?.total);
-  if (!page || !Number.isFinite(total) || page.first !== 1 || page.last !== total || snapshot.rowsCaptured !== total || snapshot.uniqueCampaignCount !== total || snapshot.virtualized || snapshot.truncatedByCap) {
+  const duplicateCampaigns = snapshot.duplicateCampaigns || [];
+  // Duplicidade já tem um bloqueio próprio; não a descreva como falta de linhas.
+  if (!page || !Number.isFinite(total) || page.first !== 1 || page.last !== total || snapshot.rowsCaptured !== total || (!duplicateCampaigns.length && snapshot.uniqueCampaignCount !== total) || snapshot.virtualized || snapshot.truncatedByCap) {
     errors.push({ code: 'incomplete', message: `Captura incompleta ou não verificável: ${snapshot.rowsCaptured ?? 0} campanhas capturadas de ${Number.isFinite(total) ? total : 'total não confirmado'}. Na MCC, role a grade até o final para carregar todas as campanhas e tente novamente; é necessário usar a primeira e única página completa.` });
   }
   if (!snapshot.records?.length) errors.push({ code: 'empty', message: 'Nenhuma campanha foi capturada da grade MCC.' });
-  if (snapshot.duplicateCampaigns?.length) errors.push({ code: 'duplicates', message: `Há campanha(s) duplicada(s): ${snapshot.duplicateCampaigns.slice(0, 5).join(', ')}. A captura foi bloqueada.` });
+  if (duplicateCampaigns.length) errors.push({ code: 'duplicates', campaigns: [...duplicateCampaigns], message: `Captura bloqueada por campanha duplicada: ${duplicateCampaigns.join(', ')}. O mesmo nome aparece em mais de uma linha da MCC.` });
   for (const field of REQUIRED_GRID_FIELDS) {
     const info = snapshot.fields?.[field];
     if (!info?.found || info.hidden || info.ambiguous) {

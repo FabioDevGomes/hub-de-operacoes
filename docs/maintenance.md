@@ -69,21 +69,24 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | Mapa por Conta: filtros, agrupamentos e ordenação | `src/accounts/accounts-domain.mjs` | `tests/accounts-domain.test.mjs`, `tests/account-cpa-coverage.test.mjs` |
 | Mapa por Conta: quadros, eventos e layout | `src/accounts/accounts-view.mjs`, `accounts.css` | `tests/accounts-view.test.mjs`, `tests/build.test.mjs` |
 | Controle Macro: interface, gráficos e eventos | `src/control-macro/view.js`, `template.html`, `control-macro.css` | `tests/control-macro-view.test.mjs`, testes de domínio e sincronização |
+| Controle de gastos: saldo futuro líquido e comparação com a reserva | `src/personal-finance/personal-finance-domain.mjs`, `personal-finance-view.mjs` | `tests/personal-finance-domain.test.mjs`, `tests/build.test.mjs` |
+| Faturamento: status de pagamento, competência e diálogo de alteração | `src/billing/billing-domain.mjs`, `billing-view.mjs`, `billing-status.css`, `billing-storage.mjs` | `tests/billing-domain.test.mjs`, `tests/billing-view.test.mjs`, `tests/billing-storage.test.mjs` |
 | CPA: filtros e resumo por faixa | `src/cpa/domain.js` | `tests/cpa-view.test.mjs` |
 | CPA: interface, eventos e estilos | `src/cpa/view.js`, `template.html`, `cpa.css` | `tests/cpa-view.test.mjs`, `tests/extracted-views-build.test.mjs` |
-| Produtos Testados: agrupamento e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
+| Produtos Testados: agrupamento, vendas/lucro agregados e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Produtos Testados: interface e preferências de colunas | `src/tested-products/view.js`, `template.html`, `tested-products.css` | `tests/tested-products-ui.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Visão Geral: ordenação e visibilidade por situação | `src/overview-domain.js` | `tests/overview-domain.test.mjs`, `tests/overview-view.test.mjs` |
 | Visão Geral: tabela, indicadores, eventos e estilos | `src/overview/view.js`, `template.html`, `overview.css` | `tests/overview-view.test.mjs`, `tests/mcc-campaign-status.test.mjs` |
+| Meu Tempo: indicadores diários e destaques do Histórico | `src/meu-tempo/meu-tempo-domain.mjs`, `src/meu-tempo/meu-tempo-view.mjs`, `src/meu-tempo/meu-tempo.css` | `tests/meu-tempo-domain.test.mjs`, `tests/meu-tempo-daily-order-ui.test.mjs`, `tests/meu-tempo-history-ui.test.mjs`, `tests/build.test.mjs` |
 | Diário: datas e linhas virtuais de vendas provisórias | `src/product-diary/domain.js` | `tests/product-diary-ui.test.mjs`, `tests/product-diary-view.test.mjs` |
-| Diário: tabela nativa e resumo legado | `src/product-diary/view.js`, `template.html`, `product-diary.css` | `tests/product-diary-view.test.mjs`, `tests/legacy-totais-migration.test.mjs` |
+| Diário: tabela nativa, resumo legado e viewport com rolagem interna | `src/product-diary/view.js`, `template.html`, `product-diary.css` | `tests/product-diary-view.test.mjs`, `tests/product-diary-ui.test.mjs`, `tests/legacy-totais-migration.test.mjs` |
 | Ficha fornecida e validação de campos | `src/copy-ficha/copy-ficha-structured.mjs`, `copy-ficha-view.mjs` | `tests/copy-ficha-structured.test.mjs`, `tests/copy-ficha-view.test.mjs` |
 | Ficha: apresentação e rascunho | `src/copy-ficha/copy-ficha-template.mjs`, `copy-ficha-draft.mjs` | `tests/ficha-presell-workflow.test.mjs` |
 | Oferta: respostas e edição/cópia do quadro | `src/copy-ficha/copy-ficha-questions.mjs`, `copy-ficha-questions-view.mjs` | `tests/copy-ficha-questions.test.mjs`, `tests/copy-ficha-questions-view.test.mjs` |
 | Ficha: validação antes da criação e chamada da API | `src/copy-ficha/copy-ficha-workflow.mjs`, `src/presell/presell-service.mjs`, `presell-report.mjs` | `tests/ficha-presell-workflow.test.mjs` |
 | IndexedDB compartilhado: schema e abertura | `src/storage/hub-database.js`, `hub-database.mjs` | `tests/hub-database.test.mjs` e testes dos storages afetados |
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
-| Modelo e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
+| Modelo e importação MCC: status operacional, confirmação de pausa e corte do diário | `src/database.js` | `tests/mcc-campaign-status.test.mjs`, `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
 | Preparador MCC: página, parser, receptores e integração | `src/preparador-MCC/index.html` | `tests/preparador-build.test.mjs`, `tests/preparador-d0.test.mjs`, `tests/preparador-d1.test.mjs`, `tests/mcc-grid-production.test.mjs` |
 | Extensão MCC: apresentação de bloqueios D0/D−1 | `extensions/mcc-d0-bridge/capture-status-view.mjs`, `popup.js`, `popup.html` | `tests/mcc-extension-popup.test.mjs`, `tests/mcc-grid-production.test.mjs` |
 | Hot Offers MS: parser/comparação da coleta | `src/curadoria/hot-offers-ms/hot-offers-ms-domain.mjs` | `tests/hot-offers-ms-domain.test.mjs` |
@@ -148,10 +151,10 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 
 ### Controle Macro — passo 4
 
-- `domain.js` conserva os cálculos e a precedência histórica, sem alterações.
+- `domain.js` conserva os cálculos e a precedência histórica e agrega o detalhamento de vendas por produto. Conversões MCC são atribuídas ao produto da campanha; vendas provisórias usam o produto do lançamento/campanha. Valores da planilha são atribuídos pelo MCC só quando a contagem oficial coincide; anotações explícitas já registradas são preservadas. Sem evidência de produto, a tela identifica a venda como não identificada.
 - `view.js` recebe somente as linhas consolidadas por `getRows()` e seu estado visual `macroUi`: mês, escopo e métrica do gráfico. Contém KPIs, tabela, SVGs, tooltips e eventos dos controles.
 - O painel mantém `refreshControlMacroCache()`/`macroAllRows()`, a importação com prévia/confirmação e sua persistência. O input encaminha ao callback existente; montar/renderizar a tela não importa arquivos.
-- O menu reinicia o mês atual; refresh da base não altera o mês selecionado. Gráficos mantêm lacunas, cobertura, ROI ponderado e separação entre vendas oficiais e provisórias.
+- O menu reinicia o mês atual; refresh da base não altera o mês selecionado. Gráficos mantêm lacunas, cobertura, ROI ponderado e separação entre vendas oficiais e provisórias. Em Cliques no consolidado mensal, cada mês compara o total observado com a média aritmética dos totais mensais observados no período; zero é um total válido, meses sem cliques observados são excluídos do cálculo, e o mês parcial corrente entra com os dados disponíveis. A série de média não aparece na visão dia a dia. A coluna Observações também mostra quantidade, produto e valor observados por venda; registros históricos agregados sem detalhe não são distribuídos entre produtos.
 
 ### Análise de CPA — passo 5
 
@@ -162,8 +165,8 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 
 ### Produtos Testados — passo 6
 
-- `domain.js` recebe campanhas, catálogo normalizado, índices de diário/ajustes e referência de data. Agrupa somente famílias confirmadas, calcula o faturamento sem sobreposição histórica e ordena sem modificar as entradas.
-- `view.js` exibe linhas/contadores, ordena cabeçalhos e aplica preferências de colunas. A chave `painel-produtos-testados-colunas-v1` permanece igual; são preferências de apresentação, não dados operacionais.
+- `domain.js` recebe campanhas, catálogo normalizado, índices de diário/ajustes e snapshots MCC atuais. Agrupa somente famílias confirmadas, calcula faturamento, vendas e lucro sem sobreposição histórica e ordena sem modificar as entradas. **Vendas** soma conversões legadas observadas e conversões diárias por campanha; snapshots D−1/D0 substituem o valor do mesmo dia (D−1 prevalece se houver conflito). Vendas provisórias ainda não conciliadas entram por data apenas no excedente à contagem MCC, sem duplicar lançamentos já refletidos em conversões. **Lucro total** é total faturado menos investimento; investimento soma `investment_brl`, diário da coluna O e snapshots D−1/D0 em BRL, respeitando precedência e `end_date`. Lucro permanece ausente, não zero, se não houver faturamento e investimento observados para cada campanha relacionada.
+- `view.js` exibe linhas/contadores, ordena cabeçalhos e aplica preferências de colunas, incluindo Vendas e Lucro total. A chave `painel-produtos-testados-colunas-v1` permanece igual; são preferências de apresentação, não dados operacionais.
 - O painel mantém o cache das projeções, os parsers compartilhados e as gravações no catálogo. A view solicita renomear/ocultar/restaurar por callbacks explícitos; renderização não chama essas ações. Exclusão permanente continua usando a confirmação e o backup existentes, sem alterar o fluxo.
 - Campanhas, nomes MCC, IDs e diários não são fundidos nem renomeados pela consolidação de apresentação.
 
@@ -172,13 +175,15 @@ Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.
 ## Visão Geral e Diário — passo 7
 
 - `overview/view.js` recebe `getSnapshot()`, formatadores, estado visual e callbacks. Contém tabela, KPIs D−1/D0, alertas, filtros e eventos locais. `overview-domain.js` conserva os cálculos anteriores e acrescenta ordenação sem mutação e visibilidade por situação. Não acessa DOM ou armazenamento.
-- `overviewRowsForMode()` no painel mantém a projeção e o cache financeiro existentes. `overviewSnapshot()` acrescenta somente metadados visuais: ID estável, pausa, política e métricas diárias. KPIs continuam somando todas as campanhas, inclusive pausadas; o filtro muda somente a tabela. Vendas provisórias e limites de teste mantêm a precedência anterior.
-- `product-diary/domain.js` contém datas, colunas e linhas virtuais de vendas provisórias. Essas linhas são apenas de exibição: não criam registros no Diário nem conversões oficiais. `view.js` contém formatação, tabela nativa e resumo legado, em ramos separados.
+- `overviewRowsForMode()` no painel mantém a projeção e o cache financeiro existentes. `overviewSnapshot()` acrescenta somente metadados visuais: ID estável, pausa, política e métricas diárias. KPIs continuam somando todas as campanhas, inclusive pausadas; o filtro muda somente a tabela. Vendas provisórias e limites de teste mantêm a precedência anterior. O tooltip distingue a pausa explícita (`Campanha pausada na data X`) da ausência sem confirmação (`Última aparição em X`).
+- `product-diary/domain.js` contém datas, colunas, linhas virtuais de vendas provisórias e recorte inclusivo por data de pausa confirmada. Essas linhas virtuais são apenas de exibição: não criam registros no Diário nem conversões oficiais. `view.js` contém formatação, tabela nativa e resumo legado, em ramos separados; na data da confirmação, a coluna Observações informa a pausa.
+- `src/database.js` é a fonte da confirmação operacional: D0 explícito prevalece; quando D0 não contém a campanha/estado, um estado pausado explícito em D−1 confirma a pausa. A confirmação usa o campo aditivo `pausa_confirmada_em` no registro existente (sem migração/schema novo). Ausência continua sendo inferência operacional e nunca preenche esse campo. Enquanto confirmada e sem reativação posterior, linhas MCC posteriores não são acrescentadas e o Diário as oculta sem apagar dados já persistidos. Uma observação explícita posterior de campanha ativa limpa o corte e permite retomar o diário.
 - `productDiarySnapshot()` conserva leitura pelo ID estável, fontes manifesto/base/legado e fallbacks existentes. Resumos legados não produzem séries diárias nem recebem ajustes de vendas manuais. Zero observado e ausência permanecem distintos.
+- Em telas desktop, a navegação para o Diário ativa `product-diary-mode`: o quadro ocupa o espaço restante da primeira dobra e a rolagem vertical permanece apenas na tabela (ou no resumo legado). Em larguras até 980px, mantém-se o layout responsivo existente, sem altura fixa no painel.
 - Os templates e CSS são fontes canônicas nas respectivas pastas. O build incorpora os templates e publica os scripts antes do painel. `renderTotals()` e `renderProduct()` apenas montam uma vez e atualizam; não recrie wrappers ou bindings no HTML principal.
 - As views não abrem banco, importam, salvam ou migram dados. O link de ROI solicita o callback existente somente após clique explícito. Título e navegação do Diário também usam callbacks, preservando nome exato, fonte e ID.
 
-Verificação: `node --test tests/overview-view.test.mjs tests/product-diary-view.test.mjs tests/overview-diary-adapters.test.mjs tests/product-diary-ui.test.mjs tests/mcc-campaign-status.test.mjs`, build e suíte completa. Os testes usam dados sintéticos em memória e cobrem cálculos por período, cache sem mutação, filtros/ordenação, alertas, seleção por ID, zero/ausência e legado separado. No navegador existente, confira Consolidado/D−1/D0, situações, ordenação, abertura de campanha e ida/volta entre Diário e Histórico, sem editar dados reais.
+Verificação: `node --test tests/overview-view.test.mjs tests/product-diary-view.test.mjs tests/overview-diary-adapters.test.mjs tests/product-diary-ui.test.mjs tests/mcc-campaign-status.test.mjs`, build e suíte completa. Os testes usam dados sintéticos em memória e cobrem cálculos por período, cache sem mutação, filtros/ordenação, alertas, seleção por ID, zero/ausência, pausa confirmada em D0/D−1, última aparição sem confirmação, encerramento do diário sem apagar histórico e legado separado. No navegador existente, confira Consolidado/D−1/D0, situações, ordenação, abertura de campanha e ida/volta entre Diário e Histórico, sem editar dados reais.
 
 ## Preparador MCC no build — passo 8
 

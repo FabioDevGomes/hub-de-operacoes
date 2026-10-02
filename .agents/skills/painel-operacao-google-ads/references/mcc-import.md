@@ -20,6 +20,9 @@
 ## Comportamento seguro
 
 - A lista MCC pode omitir campanhas pausadas; ausência pode alimentar o snapshot operacional existente, mas não gera evento de estado explícito, de entrega interrompida ou de suspensão de conta.
+- Estado explícito D0 tem precedência. Se D0 marcar a campanha como ausente ou não trouxer estado operacional, um estado pausado explícito de D−1 ainda confirma a pausa; uma observação ativa explícita D0 prevalece sobre pausa D−1. Qualificação/reprovação não substitui `estado_campanha`.
+- A confirmação operacional guarda `pausa_confirmada_em` no registro existente de campanha, sem nova store, migração ou schema. Ausência sem estado pausado explícito permanece somente como `status_origem: 'ausencia_na_coleta'`; a Visão Geral mostra “Última aparição em [data]”, não declara pausa confirmada. Com confirmação, o tooltip mostra “Campanha pausada na data [data]”.
+- No Diário de campanha, a linha da data de confirmação é mantida e identificada em Observações; não entram novas linhas MCC depois dela enquanto não houver uma observação explícita posterior de campanha ativa. Reativação limpa o corte. Histórico que já estava salvo não é apagado; o recorte visual evita exibi-lo depois da pausa confirmada.
 - Registrar início de entrega apenas quando o histórico anterior da campanha contém ao menos uma observação explícita sem entrega (impressões e cliques zero; custo ausente ou zero válido), não contém nenhum sinal positivo anterior e a atualização atual traz um sinal positivo datado de impressões, cliques ou custo em D−1/D0. Um custo inválido não comprova zero; uma primeira coleta positiva, sem zero anterior observado, não comprova início.
 - Uma alteração explícita de `estado_campanha` pode gerar `campaign_status_changed`; mudança de qualificação sozinha não.
 - Não sobrescrever conflitos financeiros silenciosamente fora do fluxo de confirmação já existente.

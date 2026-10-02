@@ -11,7 +11,8 @@ for(const [folder,token,section] of [['control-macro','CONTROL_MACRO','controlMa
     assert.ok(html.includes(markup));assert.equal((html.match(new RegExp('id="'+section+'"','g'))||[]).length,1);
     const view=await readFile(new URL('../src/'+folder+'/view.js',import.meta.url),'utf8');
     assert.equal(view,await readFile(new URL('../dist/'+folder+'/view.js',import.meta.url),'utf8'));
-    assert.ok(html.includes(folder+'/view.js?v=1'));new vm.Script(view);
+    const viewScriptTag=template.match(new RegExp('<script src="'+folder+'/view\\.js\\?v=\\d+"></script>'))?.[0];
+    assert.ok(viewScriptTag&&html.includes(viewScriptTag));new vm.Script(view);
     assert.ok(view.includes('root.querySelector('));assert.ok(!view.includes('document.querySelector('));
     if(folder!=='control-macro'&&folder!=='overview'){
       const domain=await readFile(new URL('../src/'+folder+'/domain.js',import.meta.url),'utf8');

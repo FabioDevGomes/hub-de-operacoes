@@ -77,8 +77,8 @@ O menu lateral das telas principais e dos módulos independentes usa o component
 Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.js` (e registre views da SPA em `src/view-registry.js`), sem copiar rótulos, destinos ou lógica do acordeão para cada HTML. Para validar, rode `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs`, `tests/build.test.mjs` e a suíte completa; confira visualmente a Visão Geral, Preparador MCC, Lista de Gerente, E-commerce GM, Radar e Asset Studio, incluindo estado ativo e expansão do grupo.
 
 - Operação: Visão geral e Preparador MCC.
-- Financeiro: Controle Macro e Faturamento.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
+- Financeiro: Controle Macro e Faturamento.
 - Curadoria: Radar SpyHero, Lista de Gerente, E-commerce GM e Hot Offers MS.
 - Criação de ofertas: Asset Studio e Ficha e Presell, nessa ordem.
 - Pessoal: Meu Tempo e Controle de gastos pessoais.
@@ -86,7 +86,7 @@ Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.j
 
 ### Produtos e campanhas no diário
 
-O Diário de campanha é campanha-cêntrico: cada seleção mostra somente as linhas diárias e métricas daquela campanha. Um mesmo produto pode reunir várias campanhas relacionadas; mantenha-as como campanhas distintas, com identidades e históricos próprios. Produtos Testados é a visão agregada por produto e lista as campanhas relacionadas, enquanto o Diário de campanha abre cada uma individualmente. Não some nem funda diários de campanhas automaticamente.
+O Diário de campanha é campanha-cêntrico: cada seleção mostra somente as linhas diárias e métricas daquela campanha. Um mesmo produto pode reunir várias campanhas relacionadas; mantenha-as como campanhas distintas, com identidades e históricos próprios. Produtos Testados é a visão agregada por produto e lista as campanhas relacionadas, enquanto o Diário de campanha abre cada uma individualmente. Não some nem funda diários de campanhas automaticamente. No desktop, o painel do Diário usa o espaço restante do primeiro viewport e mantém a rolagem vertical na área da tabela; em larguras responsivas, permanece no fluxo normal da página.
 
 ### Migração histórica única da aba `totais`
 
@@ -107,6 +107,10 @@ Trends, Imagens, Glimpse e decisão são capturados após o salvamento original,
 Correlação por nome é sugestão, não confirmação. A busca do Event Log operacional é sob demanda; exija confirmação humana do `product_id` e registre cada confirmação, correção ou invalidação em `correlations`, sem editar os dois históricos. Ver [modelo e persistência](data-model.md) e [workflow de testes](engineering-workflow.md) para stores, índices e validação.
 
 Em Meu Tempo (`src/meu-tempo/`), a aba Histórico inicia com 13 dias inclusivos até a data atual. Na comparação, a coluna Média calcula também os tempos produtivo e total incluindo dias sem registros como zero. O quadro “Tempo trabalhado” nos últimos 7 dias soma somente lançamentos de duração na categoria Trabalho e usa o snapshot da categoria do lançamento; se não existir, recorre à categoria atual do item. O quadro “Tempo produtivo” no mesmo período soma os lançamentos de duração de qualquer categoria cujo `productiveSnapshot` esteja marcado como verdadeiro. Na comparação e no detalhamento do Histórico, itens de tipo booleano exibem `1` como “Sim” e `0` como “Não”; valores ausentes permanecem como “—”, sem serem tratados como zero. As tabelas da aba não devem ter limite de altura nem rolagem vertical interna: a tabela cresce com o conteúdo, mantém apenas rolagem horizontal quando necessária e a rolagem vertical fica na página.
+
+No Diário, o KPI “Tempo até começar a trabalhar” soma, para a data selecionada, apenas lançamentos de duração dos IDs `item-cama-acordar`, `item-preparo-levantar`, `item-cafe` e `item-kakashi`. Conta a duração completa de Kakashi; não aplica sua fração de produtividade. O item `item-dormindo` e demais atividades ficam excluídos. O cálculo é derivado dos lançamentos existentes e não grava nem migra dados.
+
+Na comparação do Histórico, consumo de refrigerante (`item-refrigerante` com valor “Sim”) destaca em vermelho somente a célula da atividade/data, com a mesma tonalidade suave da bebida alcoólica. O cabeçalho da data continua sendo destacado exclusivamente por bebida alcoólica.
 
 ## Build e servidor
 

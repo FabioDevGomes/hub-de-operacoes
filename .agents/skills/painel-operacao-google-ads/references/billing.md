@@ -10,7 +10,7 @@
 - O lançamento espelhado entra em `billing_sales` com `confirmation_status: 'manual'` e `payment_status: 'pending'`. A tabela de Competência mostra “Lançamento manual” em coluna própria.
 - Ao importar um manifesto que contém D−1, `reconcileProvisionalSales` concilia por `campanha_id + data + quantidade oficial de conversões`, ordenando lançamentos manuais pela hora de registro. As mudanças retornadas em `reconciledSales` atualizam o espelho financeiro na mesma transação, incluindo registros legados cujo `billing_sale_id` pode ser reconstruído do ID local `sale_<hash>`; o Faturamento passa a mostrar “Confirmada · MCC D−1” e guarda `confirmation_source`/`confirmed_at` com auditoria.
 - A gravação da base MCC e a atualização dos espelhos financeiros usam a mesma transação IndexedDB no Preparador. O salvamento inicial da venda manual também grava os dois domínios em uma transação. Reimportações não duplicam registro nem auditoria se a confirmação não mudou.
-- Confirmação significa somente que o D−1 confirmou uma conversão. Não mudar `payment_status`, não criar movimento de recebimento e não marcar “Paga” sem evidência de recebimento da plataforma.
+- Confirmação significa somente que o D−1 confirmou uma conversão. Não mudar `payment_status` nem criar movimento de recebimento a partir da confirmação MCC; o status “Pagamento recebido” só deve ser atribuído mediante informação explícita do usuário ou recebimento registrado.
 - D0 não confirma vendas. A reconciliação oficial atual seleciona as primeiras N vendas manuais do grupo campanha/data, pois a MCC fornece totais agregados e não um identificador de transação. Quando houver várias vendas no mesmo grupo, a associação individual é uma aproximação FIFO, não uma prova de qual identificador foi convertido; preservar isso como risco residual.
 - A migração de lançamentos manuais legados é limitada às datas D0/D−1 do manifesto atual e usa a chave idempotente `mcc-manual-sale-backfill:current-period-v2`; não backfillar indiscriminadamente todo o histórico financeiro, que pode já conter a mesma venda importada por outra fonte. Para IDs legados `sale_<hash>`, o vínculo determinístico é `manual-sale:cmp_<hash>`; não se cria uma nova conversão se o D−1 já estiver coberto pelo lançamento manual. Nas atualizações seguintes, o Preparador envia somente os IDs de lançamentos conciliados, evitando varrer o histórico completo a cada importação. Vendas criadas pelo formulário próprio do Faturamento ficam manuais, mas só o fluxo rápido do Hub possui chave de campanha para confirmação automática.
 - `CampaignDatabase.importManifest` também gera `mccBillingSales` incrementalmente a partir de conversões explicitamente disponíveis no manifesto. Usa um ID determinístico por `campanha_id + data`; D0 cria o registro agregado provisório, e o D−1 seguinte atualiza o mesmo ID como confirmado. Assim, os registros de ontem confirmado e de hoje provisório coexistem sem duplicar o fechamento diário.
@@ -25,7 +25,7 @@ As moedas BRL e USD são dimensões independentes: não somar, converter ou pree
 - **Competência:** vendas agrupadas pela data da venda; recebimentos/refundos vinculados pertencem ao contexto da venda.
 - **Caixa:** somente movimentos com data efetiva no período. Venda sem pagamento datado não entra no caixa.
 
-O status `unknown`/indefinido não equivale a pendente. “Pago” sem data continua pago, mas não cria movimento de caixa. Um recebimento parcial gera `partially_paid`; soma dos recebimentos completos leva a `paid`. Reembolsos são movimentos separados e não apagam/cancelam a venda. Cancelar venda a desativa com motivo e trilha, sem exclusão física.
+O status `unknown`/indefinido não equivale a pendente. `issued` significa pagamento emitido e continua no saldo/contagem a receber. “Pagamento recebido” usa `paid`; se informado manualmente, sem data, continua pago, mas não cria movimento de caixa. Um recebimento parcial gera `partially_paid`; soma dos recebimentos completos leva a `paid`. Na tabela de Competência, o botão de status oferece **Pendente**, **Pagamento emitido** e **Pagamento recebido**, salva imediatamente e registra antes/depois na auditoria. A mudança manual do status não cria um movimento nem uma data; o recebimento explícito continua sendo registrado pela ação **Recebimento**. Reembolsos são movimentos separados e não apagam/cancelam a venda. Cancelar venda a desativa com motivo e trilha, sem exclusão física.
 
 ## Persistência e auditoria
 
@@ -38,7 +38,7 @@ O IndexedDB `painel-campanhas` usa a versão 5 por migração **aditiva** declar
 
 Não mudar de versão apagando/recriando stores. Não varrer stores financeiras inteiras em cada gravação: consultas normais usam índices e intervalos; leituras agregadas ficam limitadas ao intervalo selecionado. `getAll` integral é permitido somente em backup/exportação explicitamente acionado.
 
-Correções de valores/status de pagamento e mudanças no estado de confirmação devem gerar auditoria com antes/depois. Movimentos de recebimento/refund são registros independentes, cada um com data efetiva, valor/moeda, origem e notas. Não alterar/apagar o histórico de auditoria. `confirmation_status` (manual/provisional/confirmed/not_confirmed/represented_by_manual) e `payment_status` (pending/paid/partially_paid/unknown) são eixos diferentes.
+Correções de valores/status de pagamento e mudanças no estado de confirmação devem gerar auditoria com antes/depois. Movimentos de recebimento/refund são registros independentes, cada um com data efetiva, valor/moeda, origem e notas. Não alterar/apagar o histórico de auditoria. `confirmation_status` (manual/provisional/confirmed/not_confirmed/represented_by_manual) e `payment_status` (pending/issued/paid/partially_paid/unknown) são eixos diferentes.
 
 ## Histórico privado e seed de recuperação
 
@@ -53,6 +53,8 @@ Backup completo explícito inclui o bundle `billing` e pode incluir outros domí
 ## Interface e validação
 
 A view fica em `src/billing/billing-view.mjs` e o domínio puro em `src/billing/billing-domain.mjs`; persistência em `src/billing/billing-storage.mjs`; estilos em `src/billing/billing.css` e `src/billing/billing-shell.css`. Use a classe `billing-page` no `body` para regras de escopo da página; não reutilize `billing-mode`, que pertence exclusivamente ao seletor Competência/Caixa. A tela não oferece importação XLSX. Mantenha o mês atual como período inicial, controles explícitos Competência/Caixa, filtros, dimensões, agregações e paginação.
+
+Na faixa de indicadores de Competência, **Total de vendas** representa o histórico completo de vendas ativas, sem herdar período ou filtros selecionados. Linhas `mcc_conversion_aggregate` contam pelo `conversion_count`, pois uma linha pode representar várias conversões; vendas canceladas/inativas não entram. O indicador **Vendas** continua mostrando apenas a quantidade do recorte e filtros atuais.
 
 Ao alterar:
 

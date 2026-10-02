@@ -27,6 +27,12 @@ assert.ok(view.includes("sale?.source === 'hub_manual_capture' && sale.source_re
 assert.ok(view.includes('billingPaymentStatusDialog') && view.includes('data-payment-status-choice') && view.includes('data-billing-action="payment-status"'), 'o status na coluna de vendas é acionável e abre o seletor de pagamento');
 assert.match(view, /competenceKpis\(context\.sales, context\.movements, context\.allSales\)[\s\S]*?kpi\('Total de vendas', lifetimeSalesCount/,
   'total de vendas usa todo o histórico, sem herdar o período/filtros da seleção atual');
+assert.match(view, /const \[raw, allSales\] = await Promise\.all\([\s\S]*?Storage\.queryAllSales\(\)/,
+  'Faturamento total consulta o histórico persistido no IndexedDB, não uma constante da interface');
+assert.match(view, /function lifetimeTotalKpi\(sales\)[\s\S]*?Domain\.sumCurrency\(activeSales, 'value_brl'\)[\s\S]*?Domain\.sumCurrency\(activeSales, 'value_usd'\)/,
+  'o faturamento total é calculado a partir das vendas lidas do banco local e exclui canceladas');
+assert.ok(view.includes("Storage.querySalesByDate(chartRange.start, chartRange.end)") && view.includes("Storage.queryMovementsByDate(chartRange.start, chartRange.end)"),
+  'o gráfico mensal consulta registros persistidos por data em vez de conter uma série de faturamento embutida');
 assert.ok(view.includes('BILLING_MANUAL_STATUS_OPTIONS') && view.includes("Storage.updateSale(saleId, { payment_status:paymentStatus }, 'payment_status_changed')"), 'as três opções de pagamento são salvas e auditadas pela API de Faturamento');
 assert.ok(view.includes('Pagamento emitido') && view.includes('Pagamento recebido') && view.includes('não cria um lançamento de caixa'), 'a janela distingue emissão de recebimento de caixa');
 assert.ok(view.includes('billingSourceCorrectionNotice') && view.includes('source_campaign_id') && view.includes('source_country_code') && view.includes('source_sale_time') && view.includes("!['sale_id','sale_date','product','platform','value_brl','source_campaign_id','source_country_code','source_sale_time'].includes(field.name)"), 'edição vinculada libera campos da venda usados no sistema e mantém separados os recebimentos e reembolsos');

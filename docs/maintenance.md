@@ -63,7 +63,7 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | --- | --- | --- |
 | Rota, título e item ativo da SPA | `src/view-registry.js` | `tests/view-registry.test.mjs` |
 | Troca de telas, limpeza visual e carregamento assíncrono | `src/navigation-controller.js`, adaptadores no painel | `tests/navigation-controller.test.mjs` |
-| Aviso de base atualizada entre telas abertas (duração do toast) | `src/index.template.html` | `tests/build.test.mjs` |
+| Avisos compartilhados (estilo e duração do toast) | `src/index.template.html` | `tests/build.test.mjs` |
 | Meu Tempo: aviso prolongado com destaque da duração lançada | `src/meu-tempo/meu-tempo-view.mjs`, `src/index.template.html` | `tests/meu-tempo-daily-order-ui.test.mjs`, `tests/build.test.mjs` |
 | Menu, grupos e tipografia lateral | `src/sidebar-component.js`, `src/sidebar-component.css` | `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs` |
 | Curadoria Hot Offers MS: parser, histórico, filtros e decisões | `src/curadoria/hot-offers-ms/` | `tests/hot-offers-ms-domain.test.mjs`, `tests/hot-offers-ms-storage.test.mjs`, `tests/hot-offers-ms-ui.test.mjs`, `tests/sidebar-component.test.mjs` |
@@ -78,8 +78,8 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | Produtos Testados: agrupamento, vendas/lucro agregados e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Produtos Testados: interface e preferências de colunas | `src/tested-products/view.js`, `template.html`, `tested-products.css` | `tests/tested-products-ui.test.mjs`, `tests/tested-products-view.test.mjs` |
 | Visão Geral: ordenação e visibilidade por situação | `src/overview-domain.js` | `tests/overview-domain.test.mjs`, `tests/overview-view.test.mjs` |
-| Visão Geral: tabela, indicadores, eventos e estilos | `src/overview/view.js`, `template.html`, `overview.css` | `tests/overview-view.test.mjs`, `tests/mcc-campaign-status.test.mjs` |
-| Meu Tempo: indicadores diários e destaques do Histórico | `src/meu-tempo/meu-tempo-domain.mjs`, `src/meu-tempo/meu-tempo-view.mjs`, `src/meu-tempo/meu-tempo.css` | `tests/meu-tempo-domain.test.mjs`, `tests/meu-tempo-daily-order-ui.test.mjs`, `tests/meu-tempo-history-ui.test.mjs`, `tests/build.test.mjs` |
+| Visão Geral: tabela, indicadores, lucro diário e estilos | `src/overview-domain.js`, `src/overview/view.js`, adaptador em `src/index.template.html`, `overview.css` | `tests/overview-view.test.mjs`, `tests/overview-diary-adapters.test.mjs`, `tests/mcc-campaign-status.test.mjs` |
+| Meu Tempo: configuração de itens com diálogo acessível, Diário, Histórico e lembretes | `src/meu-tempo/meu-tempo-view.mjs`, `src/meu-tempo/meu-tempo.css`, `src/meu-tempo/meu-tempo-domain.mjs`, `src/meu-tempo/water-reminder.mjs`, `src/sidebar-component.js` | `tests/meu-tempo-daily-order-ui.test.mjs`, `tests/meu-tempo-domain.test.mjs`, `tests/meu-tempo-history-ui.test.mjs`, `tests/water-reminder.test.mjs`, `tests/build.test.mjs` |
 | Diário: datas e linhas virtuais de vendas provisórias | `src/product-diary/domain.js` | `tests/product-diary-ui.test.mjs`, `tests/product-diary-view.test.mjs` |
 | Diário: tabela nativa, resumo legado e viewport com rolagem interna | `src/product-diary/view.js`, `template.html`, `product-diary.css` | `tests/product-diary-view.test.mjs`, `tests/product-diary-ui.test.mjs`, `tests/legacy-totais-migration.test.mjs` |
 | Ficha fornecida e validação de campos | `src/copy-ficha/copy-ficha-structured.mjs`, `copy-ficha-view.mjs` | `tests/copy-ficha-structured.test.mjs`, `tests/copy-ficha-view.test.mjs` |

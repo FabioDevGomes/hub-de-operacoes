@@ -16,4 +16,5 @@ body.time-mode .topbar{margin-bottom:10px}.time-shell{display:grid;gap:12px}.tim
 .time-matrix th,.time-matrix td{padding:4px 7px}.time-history-table-wrap .time-table th{padding:3px 6px}.time-history-table-wrap .time-table td{padding:2px 6px}
 .time-matrix thead th:not(:first-child){text-align:center}.time-matrix th:first-child,.time-matrix td:first-child{text-align:left}
 .time-output-textarea{min-height:105px}
+.time-matrix tbody td.time-refrigerante-yes{background:rgba(248,113,113,.12);color:#ffb6bc;box-shadow:inset 0 0 0 1px rgba(248,113,113,.24)}.time-matrix tbody tr:hover td.time-refrigerante-yes{background:rgba(248,113,113,.18)}
 .time-row-actions{width:1%;white-space:nowrap;padding-left:4px!important;padding-right:4px!important}.time-row-actions-buttons{display:flex;justify-content:center;gap:2px}.time-table .time-row-actions button{box-sizing:border-box;width:22px;min-width:22px;height:22px;padding:0;font-size:.75rem;line-height:1}.time-row-actions button:disabled{opacity:.38;cursor:not-allowed}

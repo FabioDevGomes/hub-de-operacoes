@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
 assert.deepEqual(DEFAULT_ITEMS.map(({id,name,categoryId})=>({id,name,categoryId})),[
@@ -67,6 +67,20 @@ assert.equal(matrix.averages.totalMinutes,92.5,'a média total inclui todos os d
 assert.deepEqual(comparisonMatrix([],[],[]).averages,{productiveMinutes:null,totalMinutes:null});
 assert.equal(PARTIALLY_PRODUCTIVE_ITEM_ID,'item-kakashi');
 assert.equal(PARTIAL_PRODUCTIVE_RATE,.1);
+assert.deepEqual(PRE_WORK_ITEM_IDS,['item-cama-acordar','item-preparo-levantar','item-cafe','item-kakashi'],'o intervalo pré-trabalho soma apenas as quatro atividades destacadas');
+const preWorkEntries=[
+  {date:'2026-10-02',itemId:'item-cama-acordar',type:'duration',minutes:7},
+  {date:'2026-10-02',itemId:'item-preparo-levantar',type:'duration',minutes:13},
+  {date:'2026-10-02',itemId:'item-cafe',type:'duration',minutes:19},
+  {date:'2026-10-02',itemId:'item-kakashi',type:'duration',minutes:23},
+  {date:'2026-10-02',itemId:'item-dormindo',type:'duration',minutes:400},
+  {date:'2026-10-02',itemId:'other',type:'duration',minutes:900},
+  {date:'2026-10-02',itemId:'item-cafe',type:'boolean',value:true},
+  {date:'2026-10-03',itemId:'item-cafe',type:'duration',minutes:30}
+];
+assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-02'),62,'o total sintético inclui a duração integral de Kakashi e exclui sono, outros itens, outros tipos e outras datas');
+assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-03'),30,'o cálculo acompanha somente a data selecionada');
+assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-04'),0,'data sem lançamentos retorna zero');
 const kakashiEntries=[
   {id:'k1',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:120,productiveSnapshot:false},
   {id:'k2',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:30,productiveSnapshot:true},

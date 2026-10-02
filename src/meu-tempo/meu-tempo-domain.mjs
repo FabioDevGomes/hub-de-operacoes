@@ -2,6 +2,7 @@ export const ITEM_TYPES=Object.freeze(['duration','number','scale','boolean','te
 export const BOOLEAN_ITEM_IDS=Object.freeze(['item-alcool','item-refrigerante','item-acucar','item-sodio','item-verde-horario']);
 export const PARTIALLY_PRODUCTIVE_ITEM_ID='item-kakashi';
 export const PARTIAL_PRODUCTIVE_RATE=0.1;
+export const PRE_WORK_ITEM_IDS=Object.freeze(['item-cama-acordar','item-preparo-levantar','item-cafe',PARTIALLY_PRODUCTIVE_ITEM_ID]);
 export const SYMPTOM_SCALE_ITEM_IDS=Object.freeze(['item-garganta','item-rim','item-metalico']);
 export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
   Object.freeze({value:3,label:'Alto'}),
@@ -139,6 +140,15 @@ export function aggregateDay(entries,date){
     byItem.set(entry.itemId,current);
   }
   return{date,entries:rows,byItem,totalMinutes,productiveMinutes,productivePercent:totalMinutes?productiveMinutes/totalMinutes*100:0};
+}
+
+export function totalPreWorkDuration(entries,date){
+  const itemIds=new Set(PRE_WORK_ITEM_IDS);
+  return entries.reduce((total,entry)=>{
+    if(entry.date!==date||entry.type!=='duration'||!itemIds.has(entry.itemId))return total;
+    const minutes=Number(entry.minutes);
+    return Number.isFinite(minutes)?total+Math.max(0,minutes):total;
+  },0);
 }
 
 export function productiveContributionMinutes(entry){

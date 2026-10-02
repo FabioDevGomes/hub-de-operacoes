@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{productiveTotalHighlightClass,alcoholHistoryHighlightClass}from'../src/meu-tempo/meu-tempo-view.mjs';
+import{productiveTotalHighlightClass,alcoholHistoryHighlightClass,refrigeranteHistoryHighlightClass}from'../src/meu-tempo/meu-tempo-view.mjs';
 import{readFile}from'node:fs/promises';
 
 assert.equal(productiveTotalHighlightClass(480),'','exatamente oito horas não recebem destaque');
@@ -16,14 +16,22 @@ assert.equal(alcoholHistoryHighlightClass({id:'item-alcool',type:'boolean'},true
 assert.equal(alcoholHistoryHighlightClass({id:'item-alcool',type:'boolean'},0),'','Não não recebe destaque');
 assert.equal(alcoholHistoryHighlightClass({id:'item-alcool',type:'boolean'},null),'','valor ausente não recebe destaque');
 assert.equal(alcoholHistoryHighlightClass({id:'item-agua',type:'boolean'},1),'','outros indicadores booleanos não recebem destaque de álcool');
+assert.equal(refrigeranteHistoryHighlightClass({id:'item-refrigerante',type:'boolean'},1),'time-refrigerante-yes','consumo de refrigerante recebe destaque vermelho na célula');
+assert.equal(refrigeranteHistoryHighlightClass({id:'item-refrigerante',type:'boolean'},true),'time-refrigerante-yes','Sim booleano também indica consumo de refrigerante');
+assert.equal(refrigeranteHistoryHighlightClass({id:'item-refrigerante',type:'boolean'},0),'','Não não recebe destaque de refrigerante');
+assert.equal(refrigeranteHistoryHighlightClass({id:'item-refrigerante',type:'boolean'},null),'','valor ausente não recebe destaque de refrigerante');
+assert.equal(refrigeranteHistoryHighlightClass({id:'item-alcool',type:'boolean'},1),'','destaque específico do refrigerante não colore outra atividade');
 const view=await readFile(new URL('../src/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
 assert.ok(view.includes('id="dayOutput" class="time-textarea time-output-textarea"'),'Output do dia precisa ter estilo de altura dedicado');
 assert.ok(css.includes('.time-output-textarea{min-height:105px}')&&css.includes('.time-textarea{width:100%;min-height:84px;resize:vertical}'),'Output do dia deve ficar 25% mais alto, sem alterar largura, outros campos nem redimensionamento manual');
 assert.ok(view.includes("alcoholDates.has(date)?'time-alcohol-day':''"),'cabeçalho do dia com bebida alcoólica não recebe indicação');
+assert.ok(view.includes("alcoholDates=new Set(data.entries.filter(entry=>entry.itemId==='item-alcool'&&Domain.booleanHistoryValue(alcoholItem,entry.value)==='Sim')"),'cabeçalhos continuam sendo destacados somente pelas datas com bebida alcoólica');
 assert.ok(view.includes("cell.values.some(value=>alcoholHistoryHighlightClass(row.item,value))?'time-alcohol-yes':''"),'célula Sim na comparação não recebe destaque');
+assert.ok(view.includes("root.querySelectorAll('.time-matrix td[data-cell-item=\"item-refrigerante\"]')")&&view.includes("if(consumedDates.has(cell.dataset.cellDate))cell.classList.add('time-refrigerante-yes')"),'somente a célula de refrigerante na matriz da comparação é destacada, sem alterar o cabeçalho');
 assert.ok(view.includes('alcoholHistoryHighlightClass(item,entry.value)'),'registro Sim no detalhamento não recebe destaque');
 assert.ok(css.includes('.time-matrix tbody td.time-alcohol-yes')&&css.includes('.time-table tr.time-alcohol-yes>td'),'destaque suave não foi aplicado à comparação e ao detalhamento');
+assert.ok(css.includes('.time-matrix tbody td.time-refrigerante-yes{background:rgba(248,113,113,.12);color:#ffb6bc;box-shadow:inset 0 0 0 1px rgba(248,113,113,.24)}'),'célula de refrigerante deve usar o mesmo vermelho suave da bebida alcoólica');
 assert.ok(css.includes('.time-matrix tbody td.time-under-three-and-a-half-hours{background:rgba(248,113,113,.12);color:#ffb6bc;box-shadow:inset 0 0 0 1px rgba(248,113,113,.24)}')&&view.includes('productiveTotalHighlightClass(x.entries.length?x.productiveMinutes:null)')&&view.includes('productiveTotalHighlightClass(hasRecordedDay?productiveAverage:null)'),'tempo produtivo abaixo de 3h30 deve usar o destaque vermelho do histórico, sem sinalizar dias sem registros');
 assert.ok(css.includes('.time-daily-summary .time-date-controls{align-items:flex-end;gap:7px}')&&css.includes('.time-daily-summary .time-date-controls .time-field{width:158px;flex:0 0 158px}')&&css.includes('.time-daily-summary .time-date-controls #timeDate{width:100%;min-width:0}'),'controles diários da data devem alinhar com a base do campo e usar largura compacta');
 assert.ok(css.includes('.time-daily-summary .time-kpis{flex:1 1 auto;flex-wrap:nowrap}')&&css.includes('.time-daily-summary .time-kpi{padding:8px 10px;min-width:132px}'),'os três quadros de métricas do Diário devem preservar seu layout');

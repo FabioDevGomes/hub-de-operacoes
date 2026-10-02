@@ -1,5 +1,6 @@
 // Reminder state follows the Meu Tempo water-tracking item, not a finance expense.
 export const WATER_REMINDER_INTERVAL_MS = 90 * 60 * 1000;
+export const WATER_REMINDER_SNOOZE_MS = 20 * 60 * 1000;
 export const WATER_REMINDER_STORAGE_KEY = 'painel-water-reminder-v1';
 export const WATER_TRACKER_ITEM_ID = 'item-agua';
 const REMINDER_START_HOUR = 8;
@@ -7,6 +8,7 @@ const REMINDER_END_HOUR = 20;
 const UPDATE_EVENT = 'hub-water-reminder-updated';
 
 const asDate = value => {
+  if (value == null || value === '') return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
 };
@@ -20,24 +22,33 @@ export function isWithinWaterReminderHours(value) {
   return Boolean(date && date.getHours() >= REMINDER_START_HOUR && date.getHours() < REMINDER_END_HOUR);
 }
 
-export function isWaterReminderDue({ lastLoggedAt, lastNotifiedAt = null, now = new Date() } = {}) {
+export function isWaterReminderDue({ lastLoggedAt, lastNotifiedAt = null, snoozedUntil = null, now = new Date() } = {}) {
   const current = asDate(now), lastLogged = asDate(lastLoggedAt), lastNotified = asDate(lastNotifiedAt);
   if (!current || !lastLogged || !isWithinWaterReminderHours(current)) return false;
   if (current.getTime() - lastLogged.getTime() < WATER_REMINDER_INTERVAL_MS) return false;
+  const snooze = asDate(snoozedUntil);
+  if (snooze && lastNotified && lastNotified.getTime() >= lastLogged.getTime()) return current.getTime() >= snooze.getTime();
   return !lastNotified || current.getTime() - lastNotified.getTime() >= WATER_REMINDER_INTERVAL_MS;
+}
+
+export function snoozeWaterReminderState(state, now = new Date()) {
+  const current = asDate(now), lastLogged = asDate(state?.lastLoggedAt), lastNotified = asDate(state?.lastNotifiedAt);
+  if (!current || !lastLogged || !lastNotified || lastNotified.getTime() < lastLogged.getTime()) return null;
+  return { ...state, snoozedUntil:new Date(current.getTime() + WATER_REMINDER_SNOOZE_MS).toISOString() };
 }
 
 function readReminderState() {
   try {
     const value = JSON.parse(globalThis.localStorage?.getItem(WATER_REMINDER_STORAGE_KEY) || 'null');
-    if (value?.version !== 1) return { version:1, lastLoggedAt:null, lastNotifiedAt:null };
+    if (value?.version !== 1) return { version:1, lastLoggedAt:null, lastNotifiedAt:null, snoozedUntil:null };
     return {
       version:1,
       lastLoggedAt:asDate(value.lastLoggedAt)?.toISOString() || null,
       lastNotifiedAt:asDate(value.lastNotifiedAt)?.toISOString() || null,
+      snoozedUntil:asDate(value.snoozedUntil)?.toISOString() || null,
     };
   } catch {
-    return { version:1, lastLoggedAt:null, lastNotifiedAt:null };
+    return { version:1, lastLoggedAt:null, lastNotifiedAt:null, snoozedUntil:null };
   }
 }
 
@@ -55,7 +66,7 @@ export function recordWaterTrackerLog({ itemId, value, now = new Date() } = {}) 
   if (!isWaterTrackerItem(itemId) || value == null || !Number.isFinite(Number(value))) return false;
   const loggedAt = asDate(now);
   if (!loggedAt) return false;
-  writeReminderState({ version:1, lastLoggedAt:loggedAt.toISOString(), lastNotifiedAt:null });
+  writeReminderState({ version:1, lastLoggedAt:loggedAt.toISOString(), lastNotifiedAt:null, snoozedUntil:null });
   return true;
 }
 
@@ -67,6 +78,14 @@ function formatTime(value) {
 export function mountGlobalWaterReminder({ documentRef = globalThis.document, windowRef = globalThis.window, now = () => new Date() } = {}) {
   if (!documentRef?.body || !windowRef) return () => {};
   if (windowRef.__hubWaterReminderCleanup) return windowRef.__hubWaterReminderCleanup;
+  const navigationType = windowRef.performance?.getEntriesByType?.('navigation')?.[0]?.type;
+  if (navigationType === 'reload') {
+    const state = readReminderState();
+    if (state.lastNotifiedAt && !state.snoozedUntil) {
+      const snoozedState = snoozeWaterReminderState(state, now());
+      if (snoozedState) writeReminderState(snoozedState);
+    }
+  }
 
   const styleId = 'hub-water-reminder-style';
   if (!documentRef.getElementById(styleId)) {
@@ -91,10 +110,16 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
 
   let stopped = false;
   let checking = false;
+  let reminderVisible = false;
   let observedLastLoggedAt = readReminderState().lastLoggedAt;
-  const dismiss = () => { banner.hidden = true; };
-  banner.querySelector('.hub-water-reminder__close')?.addEventListener('click', dismiss);
-  banner.querySelector('[data-water-reminder-dismiss]')?.addEventListener('click', dismiss);
+  const hide = () => { banner.hidden = true; reminderVisible = false; };
+  const snooze = () => {
+    hide();
+    const state = snoozeWaterReminderState(readReminderState(), now());
+    if (state) writeReminderState(state);
+  };
+  banner.querySelector('.hub-water-reminder__close')?.addEventListener('click', snooze);
+  banner.querySelector('[data-water-reminder-dismiss]')?.addEventListener('click', snooze);
 
   async function claimAndNotify() {
     if (checking || stopped) return;
@@ -107,18 +132,21 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
         const isVisible = documentRef.visibilityState !== 'hidden';
         const canUseSystemNotification = !isVisible && globalThis.Notification?.permission === 'granted';
         if (!isVisible && !canUseSystemNotification) return;
-        state = { ...state, lastNotifiedAt:current.toISOString() };
+        state = { ...state, lastNotifiedAt:current.toISOString(), snoozedUntil:null };
         if (!writeReminderState(state)) return;
         const message = `Já se passaram pelo menos 90 minutos desde o último lançamento de Água (${formatTime(state.lastLoggedAt)}). Abra Meu Tempo para lançar.`;
         if (canUseSystemNotification) {
           try {
             const notification = new Notification('Hora de registrar Água', { body:message, tag:'hub-water-expense-reminder' });
+            reminderVisible = true;
             notification.onclick = () => { windowRef.focus?.(); windowRef.location.href = '/?view=time'; notification.close(); };
+            notification.onclose = snooze;
             return;
           } catch {}
         }
         banner.querySelector('p').textContent = message;
         banner.hidden = false;
+        reminderVisible = true;
       };
 
       if (globalThis.navigator?.locks?.request) {
@@ -140,19 +168,21 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
     const state = readReminderState();
     const newLog = state.lastLoggedAt !== observedLastLoggedAt;
     observedLastLoggedAt = state.lastLoggedAt;
-    if (newLog || !state.lastLoggedAt || (state.lastNotifiedAt && state.lastNotifiedAt >= state.lastLoggedAt)) dismiss();
+    if (newLog || !state.lastLoggedAt || (state.lastNotifiedAt && state.lastNotifiedAt >= state.lastLoggedAt)) hide();
     claimAndNotify();
   };
+  const handlePageHide = () => { if (reminderVisible) snooze(); };
   const handleUpdate = event => {
     const state = event.detail || readReminderState();
     const newLog = state.lastLoggedAt !== observedLastLoggedAt;
     observedLastLoggedAt = state.lastLoggedAt;
-    if (newLog || !state.lastLoggedAt || !state.lastNotifiedAt) dismiss();
+    if (newLog || !state.lastLoggedAt || !state.lastNotifiedAt) hide();
     claimAndNotify();
   };
   documentRef.addEventListener('visibilitychange', handleVisibility);
   windowRef.addEventListener('focus', handleVisibility);
   windowRef.addEventListener('storage', handleStorage);
+  windowRef.addEventListener('pagehide', handlePageHide);
   windowRef.addEventListener(UPDATE_EVENT, handleUpdate);
   claimAndNotify();
 
@@ -163,6 +193,7 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
     documentRef.removeEventListener('visibilitychange', handleVisibility);
     windowRef.removeEventListener('focus', handleVisibility);
     windowRef.removeEventListener('storage', handleStorage);
+    windowRef.removeEventListener('pagehide', handlePageHide);
     windowRef.removeEventListener(UPDATE_EVENT, handleUpdate);
     banner.remove();
     delete windowRef.__hubWaterReminderCleanup;

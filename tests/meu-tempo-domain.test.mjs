@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,dailyDurationLaunchHistory,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
 assert.deepEqual(DEFAULT_ITEMS.map(({id,name,categoryId})=>({id,name,categoryId})),[
@@ -47,6 +47,18 @@ assert.throws(()=>parseBrazilianDate('31/02/2026'),/data válida/);
 const removal=planDurationRemoval([{id:'old',type:'duration',minutes:30,createdAt:'2026-09-19T08:00:00Z'},{id:'new',type:'duration',minutes:50,createdAt:'2026-09-19T09:00:00Z'}],60);
 assert.deepEqual(removal,{requestedMinutes:60,deleteIds:['new'],updates:[{id:'old',minutes:20}]});
 assert.throws(()=>planDurationRemoval([{id:'only',type:'duration',minutes:15}],20),/Só existem 15min/);
+
+const launchHistory=[
+  {id:'earlier',date:'2026-09-19',itemId:'ads',type:'duration',minutes:25,source:'manual',createdAt:'2026-09-19T12:00:00.000Z'},
+  {id:'other-day',date:'2026-09-20',itemId:'ads',type:'duration',minutes:60,source:'manual',createdAt:'2026-09-20T13:00:00.000Z'},
+  {id:'latest',date:'2026-09-19',itemId:'cafe',type:'duration',minutes:10,source:'registrar_ate_agora',createdAt:'2026-09-19T14:30:00.000Z'},
+  {id:'imported',date:'2026-09-19',itemId:'ads',type:'duration',minutes:45,source:'excel_import',createdAt:'2026-09-19T15:00:00.000Z'},
+  {id:'not-duration',date:'2026-09-19',itemId:'water',type:'number',value:350,source:'manual',createdAt:'2026-09-19T16:00:00.000Z'},
+  {id:'unknown-time',date:'2026-09-19',itemId:'other',type:'duration',minutes:5,source:'manual'}
+];
+const launchHistoryBefore=JSON.stringify(launchHistory);
+assert.deepEqual(dailyDurationLaunchHistory(launchHistory,'2026-09-19').map(entry=>entry.id),['latest','earlier','unknown-time'],'histórico diário mostra durações manuais da data selecionada em ordem recente, sem importações Excel');
+assert.equal(JSON.stringify(launchHistory),launchHistoryBefore,'ordenar o histórico não altera os lançamentos recebidos');
 
 const entries=[
   {id:'1',date:'2026-09-19',itemId:'ads',type:'duration',minutes:70,productiveSnapshot:true},

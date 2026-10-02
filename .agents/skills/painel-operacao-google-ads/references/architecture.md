@@ -110,6 +110,10 @@ Em Meu Tempo (`src/meu-tempo/`), a aba Histórico inicia com 13 dias inclusivos 
 
 No Diário, o KPI “Tempo até começar a trabalhar” soma, para a data selecionada, apenas lançamentos de duração dos IDs `item-cama-acordar`, `item-preparo-levantar`, `item-cafe` e `item-kakashi`. Conta a duração completa de Kakashi; não aplica sua fração de produtividade. O item `item-dormindo` e demais atividades ficam excluídos. O cálculo é derivado dos lançamentos existentes e não grava nem migra dados.
 
+O Diário também mostra o quadro “Histórico de lançamentos do dia” para a data selecionada: lançamentos manuais de duração, do mais recente para o mais antigo, com atividade, duração e hora local de `createdAt`. Registros importados do Excel ficam de fora porque `createdAt` representa a importação, não o horário original do lançamento. O quadro é somente de leitura e não altera o armazenamento.
+
+Na aba Configurar, a edição de itens e atividades usa um diálogo nativo integrado à página, em vez de caixas `prompt`/`confirm` do navegador. O formulário edita nome, categoria, tipo, ordem, produtividade, exibição nas análises, tipo de gráfico e agregação; a regra fixa de 10% do Kakashi é informativa e permanece controlada pelo domínio. Salvar continua chamando `Storage.saveItem`, preserva IDs e snapshots dos lançamentos antigos e altera a configuração apenas após confirmação explícita no formulário.
+
 Na comparação do Histórico, consumo de refrigerante (`item-refrigerante` com valor “Sim”) destaca em vermelho somente a célula da atividade/data, com a mesma tonalidade suave da bebida alcoólica. O cabeçalho da data continua sendo destacado exclusivamente por bebida alcoólica.
 
 ## Build e servidor

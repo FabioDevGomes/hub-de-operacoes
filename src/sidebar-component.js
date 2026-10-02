@@ -216,7 +216,7 @@
   initialize();
   if (!window.__hubWaterReminderStarted) {
     window.__hubWaterReminderStarted = true;
-    import('/meu-tempo/water-reminder.mjs?v=3')
+    import('/meu-tempo/water-reminder.mjs?v=5')
       .then(module => module.mountGlobalWaterReminder())
       .catch(() => { window.__hubWaterReminderStarted = false; });
   }

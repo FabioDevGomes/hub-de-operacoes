@@ -87,6 +87,16 @@ export function formatDuration(value){
   return hours?`${hours}h${String(rest).padStart(2,'0')}`:`${rest}min`;
 }
 
+export function dailyDurationLaunchHistory(entries,date){
+  const timestamp=value=>{const parsed=Date.parse(value||'');return Number.isFinite(parsed)?parsed:null};
+  return(Array.isArray(entries)?entries:[]).filter(entry=>entry?.date===date&&entry?.type==='duration'&&entry?.source!=='excel_import').slice().sort((a,b)=>{
+    const aTime=timestamp(a.createdAt),bTime=timestamp(b.createdAt);
+    if(aTime==null&&bTime!=null)return 1;
+    if(aTime!=null&&bTime==null)return-1;
+    return(bTime??0)-(aTime??0)||String(b.id??'').localeCompare(String(a.id??''));
+  });
+}
+
 export function booleanHistoryValue(item,value){
   if(item?.type!=='boolean'&&!BOOLEAN_ITEM_IDS.includes(item?.id))return null;
   if(value==null||String(value).trim()==='')return'—';

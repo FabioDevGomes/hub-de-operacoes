@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { isWaterReminderDue, isWithinWaterReminderHours, isWaterTrackerItem, recordWaterTrackerLog, WATER_REMINDER_INTERVAL_MS } from '../src/meu-tempo/water-reminder.mjs';
+import { isWaterReminderDue, isWithinWaterReminderHours, isWaterTrackerItem, recordWaterTrackerLog, snoozeWaterReminderState, WATER_REMINDER_INTERVAL_MS, WATER_REMINDER_SNOOZE_MS } from '../src/meu-tempo/water-reminder.mjs';
 
 assert.equal(WATER_REMINDER_INTERVAL_MS, 90 * 60 * 1000, 'o lembrete de Água repete a cada 90 minutos');
+assert.equal(WATER_REMINDER_SNOOZE_MS, 20 * 60 * 1000, 'dispensar o aviso adia sua reaparição por 20 minutos');
 assert.equal(isWaterTrackerItem('item-agua'), true, 'o lembrete acompanha o item Água do Meu Tempo');
 assert.equal(isWaterTrackerItem('item-energia'), false, 'o lembrete não acompanha outros itens do Meu Tempo');
 assert.equal(recordWaterTrackerLog({ itemId:'item-agua', value:0, now:new Date(2026, 8, 26, 10) }), true, 'lançar zero explicitamente também registra o momento em Água');
@@ -15,6 +16,17 @@ assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 10, 30), no
 assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 10, 30), now:new Date(2026, 8, 26, 12, 0) }), true, 'o primeiro aviso vence após 90 minutos sem lançamento');
 assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 10, 30), lastNotifiedAt:new Date(2026, 8, 26, 11, 0), now:new Date(2026, 8, 26, 12, 29) }), false, 'avisos seguintes respeitam mais 90 minutos desde a notificação anterior');
 assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 10, 30), lastNotifiedAt:new Date(2026, 8, 26, 11, 0), now:new Date(2026, 8, 26, 12, 30) }), true, 'o próximo aviso vence após outros 90 minutos');
+const lastLoggedAt=new Date(2026, 8, 26, 10, 30),lastNotifiedAt=new Date(2026, 8, 26, 12, 0),snoozedUntil=new Date(lastNotifiedAt.getTime()+WATER_REMINDER_SNOOZE_MS);
+const snoozedState=snoozeWaterReminderState({version:1,lastLoggedAt:lastLoggedAt.toISOString(),lastNotifiedAt:lastNotifiedAt.toISOString()},lastNotifiedAt);
+assert.equal(snoozedState.snoozedUntil,snoozedUntil.toISOString(),'dispensar persiste o novo horário de reaparição');
+assert.equal(snoozeWaterReminderState({lastLoggedAt:lastLoggedAt.toISOString(),lastNotifiedAt:null},lastNotifiedAt),null,'sem aviso ativo não há adiamento para salvar');
+const reloadAt=new Date(lastNotifiedAt.getTime()+5*60*1000),reloadSnoozedState=snoozeWaterReminderState({version:1,lastLoggedAt:lastLoggedAt.toISOString(),lastNotifiedAt:lastNotifiedAt.toISOString()},reloadAt),reloadSnoozedUntil=new Date(reloadAt.getTime()+WATER_REMINDER_SNOOZE_MS);
+assert.equal(reloadSnoozedState.snoozedUntil,reloadSnoozedUntil.toISOString(),'recarregar com o lembrete aberto agenda reaparição 20 minutos após a atualização');
+assert.equal(isWaterReminderDue({...reloadSnoozedState,lastLoggedAt,lastNotifiedAt,now:new Date(reloadSnoozedUntil.getTime()-1)}),false,'após atualizar, o aviso continua oculto até completar os 20 minutos');
+assert.equal(isWaterReminderDue({...reloadSnoozedState,lastLoggedAt,lastNotifiedAt,now:reloadSnoozedUntil}),true,'após atualizar e aguardar 20 minutos, o aviso reaparece sem novo lançamento');
+assert.equal(isWaterReminderDue({lastLoggedAt,lastNotifiedAt,snoozedUntil,now:new Date(2026, 8, 26, 12, 19, 59)}),false,'dispensar mantém o aviso oculto até completar 20 minutos');
+assert.equal(isWaterReminderDue({lastLoggedAt,lastNotifiedAt,snoozedUntil,now:new Date(2026, 8, 26, 12, 20)}),true,'após os 20 minutos, o aviso pode reaparecer sem novo registro de água');
+assert.equal(isWaterReminderDue({lastLoggedAt:new Date(2026, 8, 26, 12, 10),lastNotifiedAt,snoozedUntil,now:new Date(2026, 8, 26, 12, 20)}),false,'um novo registro de Água prevalece sobre uma dispensa antiga');
 assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 6, 0), now:new Date(2026, 8, 26, 8, 0) }), true, 'um lembrete vencido durante a noite pode ser mostrado às 8h');
 assert.equal(isWaterReminderDue({ lastLoggedAt:new Date(2026, 8, 26, 10, 0), now:new Date(2026, 8, 26, 20, 0) }), false, 'um lembrete vencido às 20h aguarda o próximo horário permitido');
 

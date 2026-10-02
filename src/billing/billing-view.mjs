@@ -1,5 +1,5 @@
 import * as Domain from './billing-domain.mjs?v=4';
-import * as Storage from './billing-storage.mjs?v=6';
+import * as Storage from './billing-storage.mjs?v=7';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;
@@ -33,6 +33,7 @@ export async function mount({ root, toast = () => {}, onUpdateManualSale = null,
   try {
     const counts = await Storage.countBillingData();
     status.textContent = counts.sales ? 'Histórico financeiro deste navegador.' : 'Nenhum lançamento salvo neste navegador.';
+    await syncLegacyCleanupButton(root, toast);
     await refresh(root);
   } catch (error) {
     status.textContent = `Não foi possível abrir o Faturamento: ${error.message}`;
@@ -62,7 +63,8 @@ function markup() {
     </div>
     <section class="card panel billing-aggregate-panel"><div class="panel-head"><div><h2 id="billingAggregateTitle">Faturamento por mês</h2><p>Totais do recorte e filtros selecionados.</p></div><div class="panel-controls"><label>Agregar por <select id="billingDimension" class="search" style="width:auto"><option value="month">Mês</option><option value="product">Produto</option><option value="platform">Plataforma</option><option value="account">Conta</option></select></label></div></div><div class="billing-table-wrap"><table><thead id="billingAggregateHead"></thead><tbody id="billingAggregateBody"></tbody></table></div></section>
     <section class="card panel billing-detail-panel"><div class="panel-head"><div><h2 id="billingDetailTitle">Vendas por competência</h2><p id="billingCaption"></p></div><span id="billingCount" class="tag"></span></div><div class="billing-table-wrap"><table><thead id="billingSalesHead"></thead><tbody id="billingSalesBody"></tbody></table></div><div class="billing-pagination"><span id="billingPageSummary"></span><div><button id="billingPreviousPage" class="btn" type="button">Anterior</button><button id="billingNextPage" class="btn" type="button">Próxima</button><select id="billingPageSize" class="search" aria-label="Linhas por página"><option>25</option><option selected>50</option><option>100</option></select></div></div></section>
-    <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses até o mês selecionado · filtros atuais.</p></div></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
+    <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses até o mês selecionado · filtros atuais.</p></div><button class="btn billing-legacy-cleanup hidden" id="billingLegacyCleanupButton" type="button">Remover carga antiga e recalcular</button></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
+    <dialog id="billingLegacyCleanupDialog" class="billing-payment-dialog billing-legacy-cleanup-dialog" aria-labelledby="billingLegacyCleanupTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Revisar carga antiga</span><h2 id="billingLegacyCleanupTitle">Remover dados importados</h2><p>Esta carga veio de uma versão antiga do Hub e pode estar elevando o faturamento e o gráfico neste navegador.</p></div><button class="billing-payment-dialog-close" type="button" data-close-legacy-cleanup aria-label="Fechar">×</button></div><div class="billing-legacy-cleanup-counts"><div><span>Vendas antigas</span><strong id="billingLegacyCleanupSales">0</strong></div><div><span>Pagamentos e reembolsos vinculados</span><strong id="billingLegacyCleanupMovements">0</strong></div><div><span>Auditorias dessas vendas</span><strong id="billingLegacyCleanupAudit">0</strong></div></div><p class="billing-payment-dialog-note">Ao confirmar, serão removidos somente os registros dessa carga e seus movimentos e auditorias associados. Vendas de outras origens, campanhas e demais dados do Hub serão preservados. Depois, o faturamento e o gráfico serão recalculados. A remoção não pode ser desfeita.</p><div class="billing-legacy-cleanup-actions"><button class="btn" type="button" data-close-legacy-cleanup>Cancelar</button><button class="btn billing-legacy-cleanup-confirm" id="billingLegacyCleanupConfirm" type="button">Remover e recalcular</button></div></dialog>
     <dialog id="billingPaymentStatusDialog" class="billing-payment-dialog" aria-labelledby="billingPaymentStatusTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Status do pagamento</span><h2 id="billingPaymentStatusTitle"></h2><p id="billingPaymentStatusCurrent"></p></div><button class="billing-payment-dialog-close" type="button" data-close-payment-status aria-label="Fechar">×</button></div><div id="billingPaymentStatusOptions" class="billing-payment-dialog-options"></div><p class="billing-payment-dialog-note">“Pagamento recebido” atualiza o status, mas não cria um lançamento de caixa nem informa uma data. Para isso, registre um recebimento.</p></dialog>
     <div id="billingModal" class="billing-modal hidden" role="dialog" aria-modal="true" aria-labelledby="billingModalTitle"><form id="billingForm" class="billing-modal-card"><div class="panel-head"><h2 id="billingModalTitle">Nova venda</h2><button class="btn" type="button" data-close-modal>Fechar</button></div><p id="billingSourceCorrectionNotice" class="billing-notice hidden">Este lançamento está vinculado à venda provisória da base de campanhas. Data, produto, plataforma, campanha, país, hora e valor serão sincronizados com os cálculos. Data e campanha também definem a conciliação MCC e o diário associado. Recebimentos e reembolsos registrados permanecem preservados.</p><input type="hidden" name="sale_id"><div class="billing-form-grid">
       <label>Data da venda <input name="sale_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
@@ -97,6 +99,8 @@ function bind(root, toast) {
     }
     const action = event.target.closest('[data-billing-action]');
     if (action) { await handleAction(action, root, toast); return; }
+    if (event.target.closest('#billingLegacyCleanupButton')) { await openLegacyCleanupDialog(root, toast); return; }
+    if (event.target.closest('#billingLegacyCleanupConfirm')) { await removeLegacyCleanup(root, toast); return; }
     const paymentChoice = event.target.closest('[data-payment-status-choice]');
     if (paymentChoice) { await savePaymentStatus(paymentChoice, root, toast); return; }
     const sort = event.target.closest('[data-billing-sort]');
@@ -115,6 +119,7 @@ function bind(root, toast) {
     if (event.target.closest('[data-close-modal]')) closeSaleModal(root);
     if (event.target.closest('[data-close-movement]')) closeMovementModal(root);
     if (event.target.closest('[data-close-payment-status]')) root.querySelector('#billingPaymentStatusDialog').close();
+    if (event.target.closest('[data-close-legacy-cleanup]')) root.querySelector('#billingLegacyCleanupDialog').close();
   });
   root.addEventListener('change', async event => {
     if (event.target.matches('#billingDimension')) await refresh(root);
@@ -135,6 +140,63 @@ function bind(root, toast) {
   root.querySelector('#billingModal').addEventListener('click', event => { if (event.target.id === 'billingModal') closeSaleModal(root); });
   root.querySelector('#billingMovementModal').addEventListener('click', event => { if (event.target.id === 'billingMovementModal') closeMovementModal(root); });
   root.querySelector('#billingPaymentStatusDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+  root.querySelector('#billingLegacyCleanupDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+}
+
+async function syncLegacyCleanupButton(root, toast = () => {}) {
+  const button = root.querySelector('#billingLegacyCleanupButton');
+  try {
+    const preview = await Storage.previewLegacyBillingSeedCleanup();
+    button.classList.toggle('hidden', !preview.installed || preview.sales + preview.movements + preview.audit === 0);
+  } catch (error) {
+    button.classList.add('hidden');
+    toast(`Não foi possível verificar a carga antiga: ${error.message}`, true);
+  }
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat('pt-BR').format(value);
+}
+
+async function openLegacyCleanupDialog(root, toast) {
+  const button = root.querySelector('#billingLegacyCleanupButton');
+  button.disabled = true;
+  try {
+    const preview = await Storage.previewLegacyBillingSeedCleanup();
+    if (!preview.installed || preview.sales + preview.movements + preview.audit === 0) {
+      button.classList.add('hidden');
+      toast('Nenhum dado da carga antiga foi encontrado.');
+      return;
+    }
+    root.querySelector('#billingLegacyCleanupSales').textContent = formatCount(preview.sales);
+    root.querySelector('#billingLegacyCleanupMovements').textContent = formatCount(preview.movements);
+    root.querySelector('#billingLegacyCleanupAudit').textContent = formatCount(preview.audit);
+    root.querySelector('#billingLegacyCleanupDialog').showModal();
+  } catch (error) {
+    toast(`Não foi possível revisar a carga antiga: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function removeLegacyCleanup(root, toast) {
+  const button = root.querySelector('#billingLegacyCleanupConfirm');
+  button.disabled = true;
+  try {
+    const removed = await Storage.removeLegacyBillingSeed();
+    root.querySelector('#billingLegacyCleanupDialog').close();
+    await syncLegacyCleanupButton(root, toast);
+    await refresh(root);
+    if (!removed.installed || removed.sales + removed.movements + removed.audit === 0) {
+      toast('A carga antiga já não tinha registros para remover.');
+      return;
+    }
+    toast(`Carga antiga removida: ${formatCount(removed.sales)} venda(s), ${formatCount(removed.movements)} movimento(s) e ${formatCount(removed.audit)} auditoria(s). Faturamento e gráfico atualizados.`);
+  } catch (error) {
+    toast(`Não foi possível remover a carga antiga: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function refresh(root) {

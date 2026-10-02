@@ -6,6 +6,7 @@ export const BILLING_DB_VERSION = DB_VERSION;
 export const BILLING_STORES = Object.freeze({ sales: 'billing_sales', movements: 'billing_movements', audit: 'billing_audit', meta: 'billing_meta' });
 export const BILLING_STORE_NAMES = Object.freeze(Object.values(BILLING_STORES));
 export const BILLING_SEED_KEY = 'seed:legacy-faturamento:v1';
+export const LEGACY_BILLING_SEED_SOURCE = 'legacy_faturamento_xlsx';
 
 // Retain the public compatibility helper without another schema declaration.
 export function ensureBillingStores(db, transaction) {
@@ -299,6 +300,76 @@ export async function installBillingSeed(seed) {
     tx.onerror = () => { db.close(); reject(tx.error || new Error('Não foi possível instalar a carga histórica do Faturamento.')); };
     tx.onabort = () => { db.close(); reject(tx.error || new Error('A carga histórica do Faturamento foi cancelada.')); };
   });
+}
+
+function isLegacyBillingSeedMeta(meta) {
+  return Number(meta?.version) >= 1 && meta?.source?.type === LEGACY_BILLING_SEED_SOURCE;
+}
+
+function scanLegacyBillingSeed({ remove = false } = {}) {
+  return openBillingDatabase().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(BILLING_STORE_NAMES, remove ? 'readwrite' : 'readonly');
+    const result = { installed:false, sales:0, movements:0, audit:0 };
+    const saleIds = new Set();
+    const metaStore = tx.objectStore(BILLING_STORES.meta);
+    const metaRequest = metaStore.get(BILLING_SEED_KEY);
+    let seedMeta = null;
+    const finish = () => {
+      if (remove && result.installed && result.sales + result.movements + result.audit > 0) {
+        metaStore.put({
+          key:BILLING_SEED_KEY,
+          version:Number(seedMeta.version),
+          applied_at:seedMeta.applied_at || null,
+          source:{ type:LEGACY_BILLING_SEED_SOURCE },
+          cleaned_at:new Date().toISOString(),
+          removed:{ sales:result.sales, movements:result.movements, audit:result.audit },
+        });
+      }
+    };
+    const scan = (store, matches, key, onDone) => {
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) { onDone(); return; }
+        try {
+          if (matches(cursor.value)) {
+            result[key] += 1;
+            if (remove) cursor.delete();
+          }
+          cursor.continue();
+        } catch { tx.abort(); }
+      };
+      request.onerror = () => tx.abort();
+    };
+    const scanRelated = () => {
+      let pending = 2;
+      const oneDone = () => { pending -= 1; if (pending === 0) finish(); };
+      scan(tx.objectStore(BILLING_STORES.movements),
+        movement => movement.source === LEGACY_BILLING_SEED_SOURCE || saleIds.has(movement.sale_id),
+        'movements', oneDone);
+      scan(tx.objectStore(BILLING_STORES.audit),
+        record => saleIds.has(record.entity_id),
+        'audit', oneDone);
+    };
+    metaRequest.onsuccess = () => {
+      seedMeta = metaRequest.result;
+      if (!isLegacyBillingSeedMeta(seedMeta)) return;
+      result.installed = true;
+      scan(tx.objectStore(BILLING_STORES.sales), sale => sale.source === LEGACY_BILLING_SEED_SOURCE, 'sales', () => scanRelated());
+    };
+    metaRequest.onerror = () => tx.abort();
+    tx.oncomplete = () => { db.close(); resolve(result); };
+    tx.onerror = () => { db.close(); reject(tx.error || new Error('Não foi possível revisar a carga antiga do Faturamento.')); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error('A limpeza da carga antiga do Faturamento foi cancelada.')); };
+  }));
+}
+
+export function previewLegacyBillingSeedCleanup() {
+  return scanLegacyBillingSeed();
+}
+
+export function removeLegacyBillingSeed() {
+  return scanLegacyBillingSeed({ remove:true });
 }
 
 export async function countBillingData() {

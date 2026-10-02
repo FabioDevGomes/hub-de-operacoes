@@ -102,6 +102,58 @@
   line-height: 1.5;
 }
 
+.billing-legacy-cleanup {
+  margin-left: auto;
+  border-color: #8c6630;
+  color: #ffdda1;
+}
+
+.billing-legacy-cleanup-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px 21px 12px;
+}
+
+.billing-legacy-cleanup-counts div {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #101f34;
+}
+
+.billing-legacy-cleanup-counts span {
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.billing-legacy-cleanup-counts strong {
+  color: var(--text);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-legacy-cleanup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 21px 19px;
+}
+
+.billing-legacy-cleanup-confirm {
+  border-color: #8c3944;
+  background: #3a2028;
+  color: #ffc0c6;
+}
+
+@media (max-width: 560px) {
+  .billing-legacy-cleanup-counts { grid-template-columns: 1fr; }
+  .billing-legacy-cleanup { margin-left: 0; }
+  .billing-legacy-cleanup-actions { flex-wrap: wrap; }
+}
+
 @media (max-width: 560px) {
   .billing-payment-dialog-options { grid-template-columns: 1fr; }
 }

@@ -116,20 +116,25 @@ assert.equal(monthlyTrend[0].revenue, 350);
 assert.equal(monthlyTrend[0].profit, 50);
 assert.equal(monthlyTrend[0].roi, 50 / 300 * 100, 'ROI mensal deve ser ponderado pelo investimento, não média dos dias');
 assert.equal(monthlyTrend[0].clicks, 15);
-assert.ok(Math.abs(monthlyTrend[0].averageMonthlyClicks - 19 / 3) < 1e-9, 'a média considera os totais de abril, maio (incluindo zero) e setembro');
-assert.equal(monthlyTrend[0].averageMonthlyClicksCount, 3);
+assert.equal(monthlyTrend[0].clicksPerSale, 7.5, 'cliques por venda mensal usa o total de cliques dividido pelo total de vendas observadas no mês');
 assert.equal(monthlyTrend[0].sales, 2);
 assert.equal(monthlyTrend[0].officialSales, 1);
 assert.equal(monthlyTrend[0].pendingSales, 1);
 assert.deepEqual(monthlyTrend[0].coverage, { investment: 3, revenue: 2, profit: 2, roi: 2, clicks: 2, sales: 2 });
 assert.equal(monthlyTrend[2].investment, null, 'mês sem observações deve continuar ausente, não zero');
 assert.equal(monthlyTrend[2].clicks, null, 'mês sem cliques observados continua como lacuna');
-assert.ok(Math.abs(monthlyTrend[2].averageMonthlyClicks - 19 / 3) < 1e-9, 'mês sem dados conserva a referência da média do período');
+assert.equal(monthlyTrend[2].clicksPerSale, null, 'mês sem cliques ou vendas não inventa uma média');
 assert.equal(monthlyTrend[2].coverage.investment, 0);
 assert.equal(monthlyTrend[5].expectedDays, 22, 'mês atual deve ser tratado como parcial até a data de referência');
-const noObservedClicks = domain.monthlyTrendBuckets([{ date: '2026-04-01', investment: 10, clicks: null }], { startMonth: '2026-04', throughDate: '2026-04-30' });
-assert.equal(noObservedClicks[0].averageMonthlyClicks, null);
-assert.equal(noObservedClicks[0].averageMonthlyClicksCount, 0);
+const noObservedClicks = domain.monthlyTrendBuckets([{ date: '2026-04-01', investment: 10, clicks: null, sales: 2 }], { startMonth: '2026-04', throughDate: '2026-04-30' });
+assert.equal(noObservedClicks[0].clicksPerSale, null, 'vendas sem cliques observados permanecem sem taxa calculável');
+const noSalesForRatio = domain.monthlyTrendBuckets([{ date: '2026-04-01', clicks: 10, sales: 0 }], { startMonth: '2026-04', throughDate: '2026-04-30' });
+assert.equal(noSalesForRatio[0].clicksPerSale, null, 'cliques sem vendas não produzem divisão por zero');
+const monthlyClicksPerSale = domain.monthlyTrendBuckets([
+  { date: '2026-04-01', clicks: 30, sales: 3, pendingSales: 1 },
+  { date: '2026-04-02', clicks: 10, sales: 1, pendingSales: 0 }
+], { startMonth: '2026-04', throughDate: '2026-04-30' });
+assert.equal(monthlyClicksPerSale[0].clicksPerSale, 10, 'razão mensal é ponderada pelos totais e contabiliza vendas provisórias já incluídas em sales');
 const dailyTrend = domain.dailyTrendBuckets(trendRows, '2026-04', '2026-04-03');
 assert.equal(dailyTrend.length, 3);
 assert.equal(dailyTrend[1].investment, 50);

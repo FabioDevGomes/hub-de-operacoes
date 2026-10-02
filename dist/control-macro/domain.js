@@ -192,7 +192,7 @@
     const matchedInvestment=observedSum(matched,'investment'),matchedRevenue=observedSum(matched,'revenue'),profit=matched.length?matched.reduce((total,row)=>total+parseNumber(row.revenue)-parseNumber(row.investment),0):null;
     const pendingSales=salesRows.length?salesRows.reduce((total,row)=>total+(parseNumber(row.pendingSales)||0),0):null,officialSales=sales==null?null:Math.max(0,sales-(pendingSales||0));
     const roi=matchedInvestment>0&&matchedRevenue!=null?(matchedRevenue-matchedInvestment)/matchedInvestment*100:null;
-    return{key,investment,revenue,profit,roi,clicks,sales,officialSales,pendingSales,expectedDays,coverage:{investment:validInvestment.length,revenue:validRevenue.length,profit:matched.length,roi:matched.filter(row=>parseNumber(row.investment)>0).length,clicks:(rows||[]).filter(row=>parseNumber(row?.clicks)!=null).length,sales:salesRows.length}};
+    return{key,investment,revenue,profit,roi,clicks,sales,clicksPerSale:clicks!=null&&sales>0?clicks/sales:null,officialSales,pendingSales,expectedDays,coverage:{investment:validInvestment.length,revenue:validRevenue.length,profit:matched.length,roi:matched.filter(row=>parseNumber(row.investment)>0).length,clicks:(rows||[]).filter(row=>parseNumber(row?.clicks)!=null).length,sales:salesRows.length}};
   }
   function dailyTrendBuckets(rows=[],monthValue,throughDate=localIsoDate()){
     const month=normalizeMonth(monthValue),bounds=monthBounds(month),through=parseDate(throughDate)||localIsoDate();if(!month||!bounds||month>through.slice(0,7))return[];
@@ -204,8 +204,7 @@
     let month=normalizeMonth(startMonth);const through=parseDate(throughDate)||localIsoDate(),last=through.slice(0,7),output=[];if(!month||month>last)return output;
     const byMonth=new Map();for(const row of rows||[]){const date=parseDate(row?.date);if(!date)continue;const key=date.slice(0,7);if(key<month||key>last)continue;if(!byMonth.has(key))byMonth.set(key,[]);byMonth.get(key).push(row)}
     while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month);output.push(trendBucket(month,byMonth.get(month)||[],days));month=shiftMonth(month,1)}
-    const observedClickMonths=output.filter(bucket=>bucket.clicks!=null),averageMonthlyClicks=observedClickMonths.length?observedClickMonths.reduce((sum,bucket)=>sum+bucket.clicks,0)/observedClickMonths.length:null;
-    return output.map(bucket=>({...bucket,averageMonthlyClicks,averageMonthlyClicksCount:observedClickMonths.length}));
+    return output;
   }
   return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,summarize,lifetimeSummary,dailyTrendBuckets,monthlyTrendBuckets});
 });

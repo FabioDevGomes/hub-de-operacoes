@@ -6,6 +6,7 @@ import {test} from 'node:test';
 import {createRoot,format} from './helpers/view-dom.mjs';
 const domain=createRequire(import.meta.url)('../src/control-macro/domain.js');
 const source=await readFile(new URL('../src/control-macro/view.js',import.meta.url),'utf8');
+const template=await readFile(new URL('../src/control-macro/template.html',import.meta.url),'utf8');
 const ctx=vm.createContext({window:{}});vm.runInContext(source,ctx);
 function harness(rows=[]){
   const h=createRoot(),state=ctx.window.ControlMacroView.createState();
@@ -63,15 +64,17 @@ test('Macro charts preserve all metrics, gaps, coverage and aligned performance 
   h.get('#macroHistoryInput').onchange();assert.equal(h.imports(),1);
   assert.doesNotMatch(source,/indexedDB|localStorage|fetch\(/);
 });
-test('Macro monthly clicks chart compares each month with the mean total; daily view stays unchanged',()=>{
+test('Macro monthly clicks chart shows each month clicks per sale; daily view stays unchanged',()=>{
   const h=harness([row,{...row,date:'2026-08-29',clicks:0},{...row,date:'2026-07-29',clicks:null}]);h.state.macroMonth='2026-09';
   h.get('#macroTrendDaily').onclick();h.state.macroTrendMetric='clicks';h.controller.renderTrend();
-  assert.doesNotMatch(h.get('#macroTrendChart').innerHTML,/macro-chart-bar-average|Média mensal/);
+  assert.doesNotMatch(h.get('#macroTrendChart').innerHTML,/macro-chart-bar-average|Cliques por venda/);
   h.get('#macroTrendMonthly').onclick();h.state.macroTrendMetric='clicks';h.controller.renderTrend();
-  assert.match(h.get('#macroTrendLegend').innerHTML,/Média mensal/);
+  assert.match(h.get('#macroTrendLegend').innerHTML,/Cliques por venda/);
   assert.match(h.get('#macroTrendChart').innerHTML,/macro-chart-bar-average/);
-  assert.match(h.get('#macroTrendChart').innerHTML,/média dos totais/);
-  assert.match(h.get('#macroTrendChart').innerHTML,/Evolução de cliques e média mensal/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/10 cliques ÷ 2 vendas \(oficiais \+ provisórias/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/Evolução de cliques e cliques por venda/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/Cliques por venda/,'eixo secundário distingue a escala da taxa da escala de cliques');
+  assert.match(template,/No modo Desempenho e na série Cliques por venda, as escalas são independentes/);
 });
 test('Macro import conflict preview retains shared formatters and performs no writes',async()=>{
   const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');

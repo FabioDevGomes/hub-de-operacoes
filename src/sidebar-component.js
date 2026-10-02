@@ -6,15 +6,15 @@
       { key: 'overview', label: 'Visão geral', view: 'totals', href: '/' },
       { key: 'preparer', label: 'Preparador MCC', href: '/preparador-MCC/?v=20260923-sidebar' },
     ] },
-    { id: 'finance', label: 'Financeiro', items: [
-      { key: 'macro', label: 'Controle Macro', view: 'macro', href: '/?view=macro' },
-      { key: 'billing', label: 'Faturamento', view: 'billing', href: '/?view=billing' },
-    ] },
     { id: 'analysis', label: 'Análises', items: [
       { key: 'cpa', label: 'Análise por faixa de CPA', view: 'cpa', href: '/?view=cpa' },
       { key: 'accounts', label: 'Mapa por conta', view: 'accounts', href: '/?view=accounts' },
       { key: 'observability', label: 'Observabilidade decisória', view: 'observability', href: '/?view=observability' },
       { key: 'curation-observability', label: 'Observabilidade da Curadoria', view: 'curation-observability', href: '/?view=curation-observability' },
+    ] },
+    { id: 'finance', label: 'Financeiro', items: [
+      { key: 'macro', label: 'Controle Macro', view: 'macro', href: '/?view=macro' },
+      { key: 'billing', label: 'Faturamento', view: 'billing', href: '/?view=billing' },
     ] },
     { id: 'curation', label: 'Curadoria', items: [
       { key: 'radar', label: 'Radar SpyHero', href: '/curadoria/' },

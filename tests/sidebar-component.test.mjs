@@ -28,7 +28,7 @@ for (const [name, path, mode] of pages) {
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
 }
 
-const groupOrder = ['operation', 'finance', 'analysis', 'curation', 'creation', 'personal'];
+const groupOrder = ['operation', 'analysis', 'finance', 'curation', 'creation', 'personal'];
 let previous = -1;
 for (const group of groupOrder) {
   const index = source.indexOf(`id: '${group}'`);
@@ -43,10 +43,11 @@ for (const label of [
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.ok(source.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''"), 'submenu Produtos não é inserido dentro do grupo Operação');
 const operationStart = source.indexOf("{ id: 'operation'");
-const financeStart = source.indexOf("{ id: 'finance'");
 const analysisStart = source.indexOf("{ id: 'analysis'");
-const operationItems = source.slice(operationStart, financeStart);
-const financeItems = source.slice(financeStart, analysisStart);
+const operationItems = source.slice(operationStart, analysisStart);
+const financeStart = source.indexOf("{ id: 'finance'");
+const curationStart = source.indexOf("{ id: 'curation'");
+const financeItems = source.slice(financeStart, curationStart);
 assert.ok(!operationItems.includes("key: 'macro'"), 'Controle Macro não deve permanecer no grupo Operação');
 assert.ok(financeItems.includes("key: 'macro'") && financeItems.includes("key: 'billing'"), 'Controle Macro e Faturamento devem compartilhar o grupo Financeiro');
 assert.ok(source.includes("const topName = name === 'products' ? 'operation' : name"), 'abrir Produtos não mantém Operação expandida como grupo pai');

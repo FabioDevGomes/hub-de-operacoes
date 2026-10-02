@@ -1,5 +1,11 @@
 # Workflow de engenharia
 
+## Porta de entrada para novas implementações
+
+Leia [Regras para novas implementações](../../../../docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](../../../../docs/maintenance.md#roteiro-de-execução). Antes de editar, identifique o módulo responsável e registre quais comportamentos devem permanecer. Uma falha de teste após extração de arquivos não autoriza remover um botão ou uma funcionalidade: confira o requisito atual, ajuste a verificação ao novo módulo e proteja o comportamento com regressão.
+
+Ao concluir, confira diff, publicação/cache, testes do domínio e suíte completa, e a UI quando aplicável; atualize os contratos e o mapa de arquivos. Separe falhas preexistentes de regressões e informe verificações não realizadas. Alterações apenas de documentação exigem checagem de caminhos/links e coerência com as fontes, sem rebuild, saves ou acesso aos bancos reais.
+
 ## Editar, compilar e testar
 
 1. Confirme a raiz e consulte `git status --short`; preserve mudanças preexistentes.
@@ -75,4 +81,4 @@ Para schema e abertura de `painel-campanhas`, edite somente `src/storage/hub-dat
 
 Antes de mudanças de risco, baixe e confira os backups locais de base/Faturamento/Controle de gastos e do catálogo (botão Baixar catálogo JSON). Não grave nem versione o conteúdo desses backups. Na inspeção visual use a origem existente, sem importações, saves ou limpeza de bases reais.
 
-Ficha e Presell usa `copy-ficha-template.mjs` para apresentação, `copy-ficha-draft.mjs` para a mesma chave legada, `copy-ficha-workflow.mjs` para validação antes da produção e `presell-service.mjs` para confirmação/API. Rode `tests/ficha-presell-workflow.test.mjs`; nenhum teste deve criar arquivos de uma oferta real. Preserve três/quatro FAQs, conteúdo colado somente na sessão, diagnóstico de campos, cancelamento e proteção contra sobrescrita do motor.
+Ficha e Presell usa `copy-ficha-template.mjs` para apresentação, `copy-ficha-draft.mjs` para a mesma chave legada, `copy-ficha-workflow.mjs` para validação antes da produção e `presell-service.mjs` para confirmação/API. O quadro independente de perguntas/respostas usa `copy-ficha-questions.mjs` e `copy-ficha-questions-view.mjs`: mantenha oito respostas editáveis, cópia das edições atuais e ausência de efeitos na criação/texto estruturado/rascunho. Rode `tests/ficha-presell-workflow.test.mjs`, `tests/copy-ficha-questions.test.mjs` e `tests/copy-ficha-questions-view.test.mjs`; nenhum teste deve criar arquivos de uma oferta real. Preserve três/quatro FAQs, conteúdo colado somente na sessão, diagnóstico de campos, cancelamento e proteção contra sobrescrita do motor.

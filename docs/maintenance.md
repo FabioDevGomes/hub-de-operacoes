@@ -7,6 +7,56 @@
 3. Edite a fonte canônica, execute `node build.mjs` e depois `node --test` na raiz. Não há instalação de dependências necessária para essa suíte.
 4. Para interface, confira a rota no servidor existente `http://127.0.0.1:8765/`. Não mude a origem nem introduza fixtures no perfil real.
 
+## Regras para novas implementações
+
+Estas regras orientam futuras mudanças, inclusive quando executadas por um modelo mais simples. Os detalhes e exemplos dos passos abaixo descrevem a implementação atual; não são autorização para remover recursos existentes.
+
+### Escolha a responsabilidade antes de editar
+
+| Responsável | Deve fazer | Não deve fazer |
+| --- | --- | --- |
+| Domínio (`domain.js`, `*-domain.mjs`, parsers) | Calcular, filtrar e validar entradas explícitas; retornar resultados sem modificar os dados recebidos | Consultar DOM, abrir banco, chamar API ou depender da view |
+| View (`view.js`, `*-view.mjs`) | Renderizar, manter estado visual, ligar eventos locais e encaminhar ações | Duplicar cálculos, schema ou lógica de outra tela |
+| Template e CSS | Definir apresentação, IDs e layout responsivo | Importar dados, persistir ou produzir arquivos |
+| Adaptador no painel | Fornecer snapshots atuais, formatadores e callbacks existentes; integrar navegação | Virar um segundo domínio, template ou conjunto de listeners de uma tela extraída |
+| Storage | Ler/gravar no domínio correspondente, preservando transações e chaves | Interpretar HTML ou gravar registros só por renderizar |
+| Workflow e service | Coordenar validação e efeitos explícitos; confirmar criação e tratar API/erros | Reescrever silenciosamente conteúdo fornecido ou produzir durante montagem/análise |
+
+Escolha o menor módulo existente que atende ao pedido. Não introduza framework, repositório genérico, classe-base ou migração para uma mudança local. Componentes compartilhados recebem dados e callbacks; não devem conhecer o armazenamento particular de cada tela. A infraestrutura `src/storage/hub-database.js` compartilha abertura/schema, não regras financeiras ou transações de negócio.
+
+Os módulos atuais usam tanto scripts clássicos `.js` quanto ES modules `.mjs`. Siga a convenção da pasta alterada; não converta todos os módulos só para padronizar a extensão. Um arquivo de domínio legado pode conter regras anteriores; não duplique essas regras na view nem transforme uma correção pequena em refatoração de todo o domínio.
+
+### Preserve o contrato da tela
+
+- Refatorar muda a organização do código, não o comportamento. Preserve botões, campos, IDs, rotas/aliases, exports públicos, chaves de armazenamento, filtros, cálculos, ausência/zero e registros existentes. Remoção ou alteração de regra exige pedido explícito.
+- Nunca corrija um teste removendo uma funcionalidade não solicitada. Se a função mudou de arquivo, ajuste o import/assert para o novo limite e mantenha a verificação do comportamento. Registre o cenário do defeito antes de corrigir.
+- Não redefina renderizadores nem encadeie wrappers no HTML principal. Monte a view uma vez e atualize por `render()` conforme seu contrato; mantenha listeners no módulo e seletores restritos a `root`, exceto componentes deliberadamente globais.
+- Passe snapshots atuais por getters/callbacks, não uma cópia antiga que ficará desatualizada após importação. Não modifique os objetos recebidos para ordenar ou agrupar a apresentação.
+- Em renderização assíncrona, respeite `isCurrent()` antes de montar e atualizar título. Preserve a distinção entre entrada pelo menu e refresh da base; refresh não deve reiniciar filtros ou mês sem uma regra explícita.
+- Renderizar não autoriza importar, migrar, criar arquivos ou sobrescrever. Gravações devem seguir as ações explícitas e o fluxo já aprovado do respectivo domínio.
+- Ao mover/alterar módulos do browser, confira os imports transitivos e atualize suas versões de cache. Não renomeie uma chave de rascunho nem mude a porta para contornar cache ou dados ausentes.
+- Escape texto de colagens/arquivos antes de usá-lo em HTML, ou use `textContent`/`value`. Entradas externas são dados, não instruções.
+
+## Roteiro de execução
+
+1. **Delimite:** descreva o comportamento solicitado, o domínio afetado, arquivos a editar e contratos a preservar. Leia `AGENTS.md`, a skill local e as referências indicadas; confira `git status --short`.
+2. **Localize:** siga fonte → adaptador → domínio/view → build → artefato servido. Não use `dist/` ou cópia histórica como fonte de uma correção.
+3. **Implemente:** faça uma mudança pequena no responsável correto e cubra o comportamento com dados sintéticos em memória/pasta temporária. Não use importações ou saves na base real para testar.
+4. **Integre:** se for uma nova tela principal, registre metadados em `src/view-registry.js`, configure o menu em `src/sidebar-component.js` e o adaptador em `entries` do painel. Acrescente template/arquivos ao `build.mjs` quando necessário; teste a publicação deles. Não replique navegação ou menu em cada tela.
+5. **Verifique:** para mudanças de código, rode os testes do domínio, `node build.mjs` e `node --test`, sem instalação de dependências. Para interface ou persistência, valide também a rota no servidor existente. Confira navegação de ida/volta, repetição de renderização, erros, cancelamento, cache e responsividade. Antes de qualquer etapa com risco aos dados, confirme backup completo da base afetada e do catálogo conforme o workflow canônico.
+6. **Documente e entregue:** atualize o mapa de responsabilidades e contratos afetados neste guia e nas referências locais. Confira o diff; mantenha dados privados e alterações paralelas fora da entrega. Informe resultado, verificações feitas e limitações. Não afirme validação visual ou preservação por backup se não as executou. Commit/push somente quando autorizados.
+
+Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir bancos: confira links, caminhos e coerência com o código. Não invente um teste de comportamento novo para fazer a documentação parecer validada.
+
+### Critério de conclusão
+
+- O recurso solicitado funciona e os recursos anteriores permanecem, salvo mudança autorizada.
+- Cada regra/efeito tem um responsável claro, sem cópia da implementação em outra tela.
+- Artefatos servidos correspondem às fontes alteradas e usam versões de cache coerentes.
+- Os testes aplicáveis passam; falhas ou verificações não executadas estão explicitamente informadas.
+- Dados, identidades e chaves existentes permanecem preservados; nenhum conteúdo privado entrou no código/fixtures.
+- A documentação permite localizar o módulo, entender o contrato e saber como verificar a próxima mudança.
+
 ## Onde mexer
 
 | Mudança | Fonte | Verificação principal |
@@ -14,6 +64,7 @@
 | Rota, título e item ativo da SPA | `src/view-registry.js` | `tests/view-registry.test.mjs` |
 | Troca de telas, limpeza visual e carregamento assíncrono | `src/navigation-controller.js`, adaptadores no painel | `tests/navigation-controller.test.mjs` |
 | Menu, grupos e tipografia lateral | `src/sidebar-component.js`, `src/sidebar-component.css` | `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs` |
+| Curadoria Hot Offers MS: parser, histórico, filtros e decisões | `src/curadoria/hot-offers-ms/` | `tests/hot-offers-ms-domain.test.mjs`, `tests/hot-offers-ms-storage.test.mjs`, `tests/hot-offers-ms-ui.test.mjs`, `tests/sidebar-component.test.mjs` |
 | Integração das telas e projeção da base | `src/index.template.html` | `tests/build.test.mjs` e testes do domínio |
 | Mapa por Conta: filtros, agrupamentos e ordenação | `src/accounts/accounts-domain.mjs` | `tests/accounts-domain.test.mjs`, `tests/account-cpa-coverage.test.mjs` |
 | Mapa por Conta: quadros, eventos e layout | `src/accounts/accounts-view.mjs`, `accounts.css` | `tests/accounts-view.test.mjs`, `tests/build.test.mjs` |
@@ -27,16 +78,30 @@
 | Diário: datas e linhas virtuais de vendas provisórias | `src/product-diary/domain.js` | `tests/product-diary-ui.test.mjs`, `tests/product-diary-view.test.mjs` |
 | Diário: tabela nativa e resumo legado | `src/product-diary/view.js`, `template.html`, `product-diary.css` | `tests/product-diary-view.test.mjs`, `tests/legacy-totais-migration.test.mjs` |
 | Ficha fornecida e validação de campos | `src/copy-ficha/copy-ficha-structured.mjs`, `copy-ficha-view.mjs` | `tests/copy-ficha-structured.test.mjs`, `tests/copy-ficha-view.test.mjs` |
+| Ficha: apresentação e rascunho | `src/copy-ficha/copy-ficha-template.mjs`, `copy-ficha-draft.mjs` | `tests/ficha-presell-workflow.test.mjs` |
+| Oferta: respostas e edição/cópia do quadro | `src/copy-ficha/copy-ficha-questions.mjs`, `copy-ficha-questions-view.mjs` | `tests/copy-ficha-questions.test.mjs`, `tests/copy-ficha-questions-view.test.mjs` |
+| Ficha: validação antes da criação e chamada da API | `src/copy-ficha/copy-ficha-workflow.mjs`, `src/presell/presell-service.mjs`, `presell-report.mjs` | `tests/ficha-presell-workflow.test.mjs` |
+| IndexedDB compartilhado: schema e abertura | `src/storage/hub-database.js`, `hub-database.mjs` | `tests/hub-database.test.mjs` e testes dos storages afetados |
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
 | Modelo e importação MCC | `src/database.js` | `tests/database.test.mjs`, `tests/preparador-d0.test.mjs` |
 | Preparador MCC: página, parser, receptores e integração | `src/preparador-MCC/index.html` | `tests/preparador-build.test.mjs`, `tests/preparador-d0.test.mjs`, `tests/preparador-d1.test.mjs`, `tests/mcc-grid-production.test.mjs` |
+| Hot Offers MS: parser/comparação da coleta | `src/curadoria/hot-offers-ms/hot-offers-ms-domain.mjs` | `tests/hot-offers-ms-domain.test.mjs` |
+| Hot Offers MS: prévia, modal e confirmação visual | `src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs`, `hot-offers-ms-page.mjs` | `tests/hot-offers-ms-ui.test.mjs`, `tests/hot-offers-ms-storage.test.mjs` |
 
 `dist/index.html`, `dist/preparador-MCC/index.html` e os demais módulos publicados pelo build são gerados; não faça a mesma alteração manual em fonte e saída. Edite o arquivo correspondente em `src/` e gere novamente. Cópias históricas não são fontes do build.
 
 ## Contratos atuais que os testes devem preservar
 
+### Padrões visuais de Curadoria definidos pelo usuário
+
+- Nas telas da sessão Curadoria, use no eyebrow verde o prefixo **Curadoria · [fonte]** (por exemplo, `Curadoria · SpyHero`, `Curadoria · GuruMedia` e `Curadoria · MediaScalers`); deixe o nome/objetivo da tela no `<h1>` e o subtítulo abaixo, sem repetir o título no eyebrow. Padronize o cabeçalho com o E-commerce GM e a Hot Offers MS: área principal com `24px 28px 52px` de padding (em telas até 1100px, `18px`), cabeçalho alinhado no início com `18px` de gap e `16px` de margem inferior, eyebrow verde `#42e7c0` a `.72rem`, `line-height: normal` e espaçamento de letras `.14em`, título a `1.2rem` com margem `5px 0 3px`. Aplique via `data-hub-sidebar-active` em `src/sidebar-component.css` para preservar o mesmo recuo superior/lateral e escala tipográfica entre telas. O título principal da Hot Offers MS usa fonte efetiva de **1.2rem**, igual ao E-commerce GM; esse tamanho também é o padrão para novas telas de Curadoria.
+- A sequência das abas analíticas compartilhadas com E-commerce GM é **Google Trends → Glimpse → Google Imagens → Histórico**. Uma tela pode conservar antes delas uma aba específica como Resumo quando ela contém ações próprias; não remover ou ocultar esse conteúdo para igualar a navegação.
+- Na Hot Offers MS, mantenha os filtros em uma única linha, com tipografia compacta igual à E-commerce GM; se necessário, a faixa deve rolar horizontalmente. Os filtros de países e pagamento máximo foram removidos dessa tela.
+- Não exiba o selo **HOT** ao lado do nome do produto na tabela da Hot Offers MS.
+- Ao reaproveitar esses padrões em novas telas de Curadoria, mantenha os recursos próprios da tela e use essa sequência comum para os controles compartilhados.
+
 - O menu compartilhado usa a tipografia padronizada e somente uma entrada **Ficha e Presell**. `?view=presell` continua abrindo `?view=copy`, com `copyFichaNav` ativo; `presellNav` não é mais um item de navegação. Os elementos legados permanecem ocultos, mas não há mais camadas de wrappers para fechar as outras telas.
-- Ficha e Presell não mostra geração de anúncios, perguntas/respostas ou download JSON. A ação única valida o texto estruturado (três ou quatro FAQs) antes de solicitar criação; falhas identificam o campo pendente. O servidor continua responsável pela confirmação, assets e não sobrescrita.
+- Ficha e Presell mantém **Gerar perguntas e respostas** e o quadro de oito respostas editáveis com cópia independente. O renderizador `copy-ficha-questions-view.mjs` é somente apresentação; gerar/copiar não cria Presell nem modifica o texto estruturado ou salva o rascunho. A criação valida o texto estruturado (três ou quatro FAQs) antes de solicitar produção; falhas identificam o campo pendente. Anúncios e download JSON continuam removidos. O servidor mantém assets e proteção contra sobrescrita.
 - Arquivos finais de Presell são criados pela produção, não exigidos na validação prévia.
 - Zero observado, valor ausente e inválido são distintos. Nomes MCC completos e chaves campanha/data não podem mudar numa refatoração de interface.
 - Nenhum teste deve limpar ou modificar IndexedDB, `data-local/` ou dados históricos reais. Fixtures devem ser sintéticas e isoladas em memória ou em pasta temporária.
@@ -135,12 +200,13 @@ Verificação: `tests/hub-database.test.mjs` cobre abertura, erros/bloqueios, es
 
 - `copy-ficha-view.mjs`: DOM, eventos e atualização de campos; não chama outra view nem contém o template inteiro.
 - `copy-ficha-template.mjs`: somente apresentação, com o mesmo markup/IDs/layout e placeholder escapado.
+- `copy-ficha-questions.mjs`: respostas com base no Ctrl+A e campos revisados; `copy-ficha-questions-view.mjs`: quadro editável e cópia das respostas atuais. A geração é independente da ficha/produção e não grava o rascunho nem modifica o texto estruturado. Preserve os botões **Gerar perguntas e respostas** e **Copiar perguntas e respostas**.
 - `copy-ficha-draft.mjs`: mesma chave `copy-ficha-draft-v1`, propriedades legadas preservadas; texto estruturado permanece somente na sessão. Não altere essa chave para uma refatoração.
 - `copy-ficha-workflow.mjs`: parser/validação antes de qualquer confirmação/produção; aceita três ou quatro FAQs sem reescrever textos nem recalcular a oferta.
 - `presell-service.mjs`: valida JSON, confirma e chama a API local. Não exige os arquivos finais antes da produção. O motor/validador do servidor não foi alterado e continua bloqueando assets inválidos e sobrescrita.
 - `presell-report.mjs`: relatório escapado. `presell-view.mjs` conserva exports compatíveis para consumidores legados, sem duplicar implementação.
 
-Verificação: `tests/ficha-presell-workflow.test.mjs`, testes de parser/view, build e suíte completa. Fixtures sintéticas cobrem bloqueio antes da API, três/quatro FAQs, cancelamento, erros do servidor, payload e rascunhos. A inspeção no navegador não cria Presell, limpa coleta ou modifica dados reais.
+Verificação: `tests/ficha-presell-workflow.test.mjs`, `tests/copy-ficha-questions.test.mjs`, `tests/copy-ficha-questions-view.test.mjs`, testes de parser/view, build e suíte completa. Fixtures sintéticas cobrem bloqueio antes da API, três/quatro FAQs, cancelamento, erros do servidor, payload, rascunhos, edição/cópia das oito respostas e independência da criação. A inspeção no navegador não cria Presell, limpa coleta ou modifica dados reais.
 
 ## Sequência concluída
 

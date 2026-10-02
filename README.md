@@ -42,6 +42,8 @@ O painel pode iniciar mesmo quando o projeto foi extraído em outro local. A pas
 
 Consulte [o guia de manutenção](docs/maintenance.md) para localizar fontes, responsabilidades e testes. O conhecimento técnico canônico está em [.agents/skills/painel-operacao-google-ads/SKILL.md](.agents/skills/painel-operacao-google-ads/SKILL.md), não na cópia global da skill.
 
+Para novas implementações, comece por [Regras para novas implementações](docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](docs/maintenance.md#roteiro-de-execução). O guia define os limites entre domínio, view, template, adaptador, storage e serviço, como integrar uma tela e o checklist de preservação/testes. [AGENTS.md](AGENTS.md) registra as instruções de entrada para agentes que mantêm este repositório.
+
 O Preparador MCC também é gerado pelo build: edite `src/preparador-MCC/index.html` e execute `node build.mjs`. A saída continua em `dist/preparador-MCC/index.html`, servida na mesma rota `/preparador-MCC/`; não edite essa cópia gerada.
 
 ## Privacidade dos dados

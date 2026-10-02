@@ -1,5 +1,15 @@
 # Arquitetura e telas
 
+## Princípios para futuras implementações
+
+O guia [Manutenção gradual do Hub](../../../../docs/maintenance.md#regras-para-novas-implementações) contém as regras normativas, o roteiro para novas telas e o critério de conclusão. Consulte-o antes de alterar a estrutura. Este documento mapeia as fontes atuais; não substitui os contratos de comportamento do domínio.
+
+- Regras puras ficam no domínio; DOM/eventos na view; apresentação no template/CSS; leitura e integração no adaptador; efeitos explícitos nos storages e serviços próprios.
+- O painel coordena os módulos existentes, sem recolocar no HTML principal o código já extraído. Reutilize componentes por dados/callbacks, sem importar uma view de outra tela.
+- Registro de telas, navegação e menu têm fontes únicas. Schema/abertura do banco compartilhado não incluem transações de negócio nem unificam os bancos pessoais/curadoria.
+- Preserve funcionalidades, exports, IDs, chaves, cálculos, zero/ausência e dados existentes. Remoção de recurso ou mudança de regra só por pedido explícito; uma refatoração não autoriza isso.
+- Use `src/` como fonte e o build para publicar `dist/`. Testes verificam comportamentos e contratos, não a permanência física de uma função no HTML antigo.
+
 ## Fontes canônicas
 
 - `src/index.template.html`: painel principal, integração das views e interfaces.
@@ -7,7 +17,7 @@
 - `src/database.js`: modelo normalizado, importadores MCC/Excel, consolidação e regras de domínio de campanhas.
 - `src/storage/hub-database.js` e `.mjs`: nome/versão do IndexedDB, stores/índices aditivos e abertura da conexão, compartilhados pelo painel, Preparador e módulos financeiros. Transações de negócio continuam em seus consumidores.
 - `src/preparador-MCC/index.html`: fonte canônica do Preparador; o build publica somente essa página em `dist/preparador-MCC/index.html`, sem copiar arquivos históricos.
-- `src/curadoria/`: Radar, Lista de Gerente, E-commerce GM e Glimpse.
+- `src/curadoria/`: Radar, Lista de Gerente, E-commerce GM, Hot Offers MS e Glimpse. Hot Offers MS é um módulo independente; parser/domínio, view, adaptador e IndexedDB próprio ficam em `src/curadoria/hot-offers-ms/`, enquanto apresentação reutilizável usa componentes compartilhados.
 - `src/control-macro/`: domínio de agregação do Controle Macro e estilos próprios da tela.
 - `src/accounts/`: domínio puro, interface/eventos e CSS do Mapa por Conta. `accountReportSnapshot()` no painel é o adaptador de leitura das projeções existentes; filtros e renderização pertencem ao módulo.
 - `src/personal-finance/`: domínio, armazenamento local, sincronização entre abas e interface do Controle de gastos pessoais.
@@ -34,15 +44,23 @@ O piloto de separação do Mapa por Conta está documentado em `docs/maintenance
 - `/?view=curation-observability`: Observabilidade da Curadoria (domínio pré-teste, separado da operação).
 - `/?view=time`: Meu Tempo.
 - `/?view=personal-finance`: Controle de gastos pessoais (skill dedicada `../../controle-gastos-pessoal/SKILL.md`).
-- `/?view=copy`: Ficha e Presell; análise da oferta, conteúdo estruturado obrigatório e criação local da Presell. A interface não gera mais copy, perguntas/respostas ou download JSON.
+- `/?view=copy`: Ficha e Presell; análise da oferta, conteúdo estruturado obrigatório e criação local da Presell. Também gera perguntas/respostas editáveis por ação independente, com cópia do quadro. Não gera copy de anúncios nem download JSON.
 - `/?view=presell`: alias compatível para Ficha e Presell, com o mesmo item ativo `copyFichaNav`.
 - `/preparador-MCC/`: Preparador MCC.
-- `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/glimpse/`: módulos de curadoria.
+- `/curadoria/`, `/curadoria/gerentes/`, `/curadoria/top-performance/`, `/curadoria/hot-offers-ms/`, `/curadoria/glimpse/`: módulos de curadoria.
 - `/asset-studio/`: preparação local de assets.
 
 O lembrete global do item `item-agua` é baseado nos lançamentos de Meu Tempo, não nos gastos. `src/meu-tempo/water-reminder.mjs` salva somente os horários locais e é iniciado pelo componente compartilhado de navegação; seus avisos recorrentes respeitam a janela de 8h a 20h e apontam para `/?view=time`.
 
-As listas da Lista de Gerente e de E-commerce GM usam `src/curadoria/list-focus.mjs` para registrar em `sessionStorage` a rolagem da página e do contêiner `.tablewrap`, a identidade da linha e a coluna acionada (Glimpse, Trends, Imagens ou Decisão). Ao voltar do Glimpse, fechar as fichas ou atualizar a lista após uma decisão, a página restaura as posições e anima a linha e o controle acionado com três pulsos azuis sutis. O estado é temporário por aba e expira após 30 minutos.
+As listas da Lista de Gerente, E-commerce GM e Hot Offers MS usam `src/curadoria/list-focus.mjs` para registrar em `sessionStorage` a rolagem da página e do contêiner `.tablewrap`, a identidade da linha e a coluna acionada (Glimpse, Trends, Imagens ou Decisão). Ao voltar do Glimpse, fechar as fichas ou atualizar a lista após uma decisão, a página restaura as posições e anima a linha e o controle acionado com três pulsos azuis sutis. O estado é temporário por aba e expira após 30 minutos.
+
+### Hot Offers MS
+
+`src/curadoria/hot-offers-ms/` implementa a captura periódica da lista tabular copiada do site Hot Offers MS. `hot-offers-ms-domain.mjs` interpreta o cabeçalho com os dois campos chamados “Países”, mantém a coluna de aprovação de afiliação separada dos países e trata o texto `+N More` apenas como uma contagem parcial. Título original, rótulo HOT, tags/CTC, preço bruto, categoria e ações de pré-visualização são preservados. A moeda do símbolo `$` não é presumida.
+
+Cada coleta exige um escopo explícito (Fundo quente ou Topo quente) e confirmação humana de que a colagem está completa: a origem não oferece um total verificável. Só após a confirmação a tela salva snapshots e compara posições, entradas, retornos, mudanças de campo e saídas, dentro do mesmo escopo; IDs iguais em escopos diferentes permanecem ofertas distintas (`scope:offerId`). Não use uma colagem parcial para inferir que ofertas saíram.
+
+O módulo persiste em IndexedDB isolado `radar-hot-offers-ms`; decisões, Trends, Imagens e coleções não alteram `radar-top-performance`. Tendências e Imagens usam os domínios e renderizadores compartilhados, com candidatas de busca positivas no Trends e países manuais separados dos países extraídos da fonte. Glimpse continua compartilhando a identidade normalizada do produto em `radar-glimpse`; origem, Offer ID e funil são encaminhados para retorno à tela e observabilidade. A view não grava dados; importações, decisão, avaliações e inclusão de país manual só persistem após ação explícita. A captura não assume URLs nem conteúdo de prévia que o texto copiado não fornece.
 
 `src/curadoria/keyword-candidates-ui.mjs` é o componente de apresentação compartilhado para listas de candidatas e seus botões de pesquisa/remoção. Ele recebe callbacks e contexto; cada tela continua responsável por persistir no domínio correspondente e montar a URL da plataforma. Lista de Gerente e E-commerce GM o usam tanto para candidatas positivas do Google Trends quanto para negativas do Google Imagens: no Trends, cada candidata tem busca individual; em Imagens, as candidatas não têm botões individuais e um único botão coletivo fica à direita da lista, excluindo todos os termos registrados naquele produto/país. `imageSearchUrlExcluding` aceita um termo ou uma lista, adiciona `-palavra` (ou `-"frase com espaços"`) para cada negativa e preserva país/idioma do cartão; a busca normal de imagens permanece sem exclusão. Radar SpyHero usa somente o fluxo de Trends, com `trendsKeywordCandidates` no registro do sinal, sem criar avaliações ou entradas no histórico de Trends. Ao incluir outra tela, reutilize o renderizador e mantenha separado o armazenamento e o contexto de busca.
 
@@ -61,7 +79,7 @@ Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.j
 - Operação: Visão geral e Preparador MCC.
 - Financeiro: Controle Macro e Faturamento.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
-- Curadoria: Radar SpyHero, Lista de Gerente e E-commerce GM.
+- Curadoria: Radar SpyHero, Lista de Gerente, E-commerce GM e Hot Offers MS.
 - Criação de ofertas: Asset Studio e Ficha e Presell, nessa ordem.
 - Pessoal: Meu Tempo e Controle de gastos pessoais.
 - Produtos: Produtos Testados e acesso ao Diário de campanha; a lista de campanhas permanece no painel principal.
@@ -74,7 +92,7 @@ O Diário de campanha é campanha-cêntrico: cada seleção mostra somente as li
 
 `src/legacy-totais-migration.mjs` planeja uma migração versionada (`legacy_totais_migration.version = 1`) para o objeto de base que já existe em `bases/atual`. Não cria tela, importador visível, store IndexedDB nem outra base de campanhas. O payload privado é local e ignorado pelo Git (`data-local/legacy-totais-migration-v1.json`); `node build.mjs` o copia para `dist/` somente quando presente. A página principal lê esse payload uma vez durante a restauração da base, pré-valida nomes/contas/IDs e aborta sem persistir se houver ambiguidade. Linhas de contas MCC que já existem na base são excluídas pelo sufixo de quatro dígitos e ficam explícitas no relatório; campanhas sem conta definida são aceitas sem associação. Campanhas sem identidade operacional exata viram registros `status: 'historico'`, `registro_origem: 'legacy_totais'` com um resumo consolidado de campanha; nenhuma linha diária é criada. Correspondências nativas inequívocas recebem `legacy_totais`, sem substituir diário, status ou métricas MCC. O resumo de investimento e lucro fica visível no Histórico mesmo quando associado a uma campanha nativa. Depois da conclusão, a base e os backups são a fonte persistente; não há dependência do XLSX no fluxo normal.
 
-O Controle Macro é uma tela principal registrada no `src/view-registry.js`. Sua lógica pura fica em `src/control-macro/domain.js`; a interface e persistência são integradas em `src/index.template.html`. A tela navega por meses completos (anterior, posterior e mês atual), abre sempre no mês atual e conserva a navegação manual enquanto permanece aberta. As alterações MCC recalculam as métricas agregadas ao salvar/recarregar a base. O Preparador MCC também publica `base-updated` pelo `BroadcastChannel('painel-campanhas')`, fazendo a tela aberta restaurar a base e recalcular sem nova importação do histórico. O arquivo histórico importado fica como `controle_macro_historico` na base existente, sem nova store ou migração de IndexedDB. A planilha prevalece campo a campo: MCC/D−1 só complementa cliques e vendas ausentes desde 13/09/2026; não substitui investimento, faturamento ou zeros explícitos. Consulte `references/data-model.md` para a regra integral e o tratamento de suspensões e vendas.
+O Controle Macro é uma tela principal registrada no `src/view-registry.js`. Sua lógica pura fica em `src/control-macro/domain.js`; a interface, os eventos e os gráficos ficam em `src/control-macro/view.js`, com apresentação em `template.html` e `control-macro.css`. O painel mantém os adaptadores de leitura, sincronização e importação/persistência em `src/index.template.html`. A tela navega por meses completos (anterior, posterior e mês atual), abre sempre no mês atual e conserva a navegação manual enquanto permanece aberta. As alterações MCC recalculam as métricas agregadas ao salvar/recarregar a base. O Preparador MCC também publica `base-updated` pelo `BroadcastChannel('painel-campanhas')`, fazendo a tela aberta restaurar a base e recalcular sem nova importação do histórico. O arquivo histórico importado fica como `controle_macro_historico` na base existente, sem nova store ou migração de IndexedDB. A planilha prevalece campo a campo: MCC/D−1 só complementa cliques e vendas ausentes desde 13/09/2026; não substitui investimento, faturamento ou zeros explícitos. Consulte `references/data-model.md` para a regra integral e o tratamento de suspensões e vendas.
 
 Para as próximas atualizações diárias, a política operacional é usar somente MCC D0/D−1, sem nova importação da planilha. O histórico legado permanece. Isso não modifica a precedência existente em datas sobrepostas; veja `references/data-model.md` antes de afirmar que MCC substituiu um valor histórico.
 

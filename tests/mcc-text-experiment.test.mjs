@@ -11,11 +11,13 @@ const popupScript = await readFile(new URL('extensions/mcc-d0-bridge/popup.js', 
 const readerSource = await readFile(new URL('extensions/mcc-d0-bridge/mcc-text-reader.mjs', root), 'utf8');
 
 assert.deepEqual(manifest.permissions, ['scripting', 'activeTab'], 'captura textual não deve pedir permissão de clipboard');
-assert.ok(background.includes("message?.type === 'READ_ACTIVE_MCC_TEXT'") && background.includes('parseMccSelectableText(capture.text)'));
-assert.ok(popup.includes('id="read-text"') && popupScript.includes("type: 'READ_ACTIVE_MCC_TEXT'"));
-assert.ok(popup.includes('role manualmente a página da MCC até o final'), 'orienta a carregar a lista toda antes da captura textual');
-assert.ok(popupScript.includes('DIAGNÓSTICO POSICIONAL DE MÉTRICAS') && popupScript.includes('não é mapeamento confirmado'),
-  'apresenta hipótese posicional sem promover métricas a dados confirmados');
+assert.ok(background.includes("message?.type === 'READ_ACTIVE_MCC_TEXT'") && background.includes('parseMccSelectableText(capture.text)'),
+  'o parser legado permanece isolado, sem ser acionado pelo popup');
+assert.ok(!popup.includes('id="read-text"') && !popupScript.includes("type: 'READ_ACTIVE_MCC_TEXT'"),
+  'a captura textual experimental não deve mais aparecer como opção da extensão');
+assert.ok(!popup.includes('role manualmente a página da MCC até o final'), 'o popup não orienta mais o experimento textual removido');
+assert.ok(!popupScript.includes('DIAGNÓSTICO POSICIONAL DE MÉTRICAS') && !popupScript.includes('não é mapeamento confirmado'),
+  'o popup não apresenta mais o diagnóstico posicional experimental');
 assert.ok(!/navigator\.clipboard|document\.execCommand|window\.getSelection|\.select\s*\(/i.test(readerSource), 'captura não deve selecionar a página nem ler clipboard');
 assert.ok(!/indexedDB|chrome\.storage|fetch\s*\(/i.test(readerSource), 'leitor textual não deve persistir nem transmitir');
 

@@ -18,41 +18,17 @@
     .status { min-height: 20px; margin: 10px 0 0; font-size: 12px; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
-    pre { max-height: 310px; overflow: auto; padding: 10px; border: 1px solid #29415c; border-radius: 8px; background: #0d1b30; color: #d7e5fa; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.45 ui-monospace, Consolas, monospace; }
   </style>
 </head>
 <body>
   <h1>Preparador MCC · D0 / D−1</h1>
-  <p>A captura direta prepara os dados para revisão; o envio manual de CSV continua disponível como fallback.</p>
+  <p>A captura direta prepara os dados para revisão no Preparador; a base só é atualizada após sua confirmação.</p>
   <section aria-labelledby="capture-title" style="margin-top:0;padding-top:0;border-top:0">
     <h2 id="capture-title">Captura direta · D0 e D−1</h2>
     <p class="note">Na MCC, selecione um único dia e role a grade até o final para carregar todas as campanhas antes de capturar. Para D−1, a data deve ser ontem no fuso America/Sao_Paulo. A extensão só prepara a prévia; não atualiza a base.</p>
     <button id="capture-d1" class="secondary" type="button">Capturar D−1 da MCC</button>
     <button id="capture-d0" type="button" style="margin-top:8px">Capturar D0 da MCC</button>
     <p id="capture-status" class="status" role="status" aria-live="polite"></p>
-  </section>
-  <section aria-labelledby="csv-title">
-    <h2 id="csv-title">Fallback · CSV manual</h2>
-    <form id="send-form">
-      <label for="csv-file">Arquivo CSV de D0
-        <input id="csv-file" type="file" accept=".csv,text/csv" required>
-      </label>
-      <button id="send-button" type="submit" disabled>Enviar ao Preparador MCC</button>
-    </form>
-    <p id="status" class="status" role="status" aria-live="polite"></p>
-  </section>
-  <section aria-labelledby="grid-title">
-    <h2 id="grid-title">Experimento local · leitura da MCC</h2>
-    <p class="note">Diagnóstico local separado. Não envia dados ao Hub nem atualiza a base.</p>
-    <button id="read-grid" class="secondary" type="button">Testar leitura da MCC</button>
-    <button id="read-text" class="secondary" type="button" style="margin-top:8px">Testar captura por texto</button>
-    <p class="note">Antes da captura textual, role manualmente a página da MCC até o final para carregar a lista completa. A extensão não rola a página.</p>
-    <label for="compare-csv" style="margin-top:12px">CSV D0 da mesma tela e período
-      <input id="compare-csv" type="file" accept=".csv,text/csv">
-    </label>
-    <button id="compare-button" class="secondary" type="button" disabled>Comparar prévia com CSV</button>
-    <p id="experiment-status" class="status" role="status" aria-live="polite"></p>
-    <pre id="experiment-result" hidden></pre>
   </section>
   <script type="module" src="popup.js"></script>
 </body>

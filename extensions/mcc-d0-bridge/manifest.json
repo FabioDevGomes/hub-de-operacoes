@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Hub MCC D0",
-  "version": "1.2.1",
-  "description": "Captura a grade D0 da MCC ou encaminha um CSV manual ao Preparador local.",
+  "version": "1.2.2",
+  "description": "Captura a grade da MCC para preparar prévias D0/D−1 no Hub local.",
   "icons": {
     "64": "icon.png"
   },

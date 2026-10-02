@@ -21,7 +21,8 @@ assert.equal(manifest.action.default_icon, 'icon.png', 'a ação da extensão de
 assert.deepEqual(manifest.icons, {'64':'icon.png'}, 'a extensão deve declarar a mesma marca para sua identidade');
 assert.deepEqual(extensionIcon, systemIcon, 'o ícone da extensão deve ser uma cópia exata do favicon do sistema');
 assert.ok(!/function\s+(?:parseSource|buildManifest)\b/.test(extensionSource), 'o comparador diagnóstico não pode incluir o parser do Hub nem gerar manifesto');
-assert.ok(extensionSource.includes("type: 'READ_ACTIVE_MCC_GRID'") && extensionSource.includes("type: 'FORWARD_D0_CSV'"), 'a leitura experimental deve ser paralela e o fluxo de CSV existente deve permanecer');
+assert.ok(extensionSource.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'") && extensionSource.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"), 'o popup preserva as duas capturas diretas');
+assert.ok(!extensionSource.includes('id="send-form"') && !extensionSource.includes('id="read-grid"') && !extensionSource.includes('id="read-text"'), 'opções CSV e experimentais não aparecem no popup');
 const readHandler = backgroundSource.slice(backgroundSource.indexOf('async function readActiveMccGrid'), backgroundSource.indexOf('chrome.runtime.onMessage.addListener'));
 assert.ok(readHandler.length > 0 && !readHandler.includes('forwardD0Csv'), 'a leitura da grade não pode acionar a ponte de envio ao Preparador');
 assert.ok(extensionSource.includes('current-page-matches-apparent-total') && extensionSource.includes('partial-or-virtualized'), 'a prévia deve distinguir completude aparente de leitura parcial');

@@ -13,7 +13,7 @@ function setup(initial){
     actions:{setTitle:(...args)=>titles.push(args)}});
   return {...dom,titles,requests,controller,setSnapshot:value=>snapshot=value};
 }
-const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesByDate:new Map(),summary:null,investment:null});
+const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesByDate:new Map(),summary:null,pauseConfirmedAt:null,investment:null});
 test('native diary preserves columns, empty data, escaping and selection arguments',()=>{
   const s=setup(empty());s.controller.render('MCC exata','workbook','campaign-123');
   assert.deepEqual(s.requests,[['MCC exata','workbook','campaign-123']]);
@@ -34,6 +34,21 @@ test('manual-sale rows remain display-only, official zero separate, formats pres
   assert.match(s.get('#productSummary').innerHTML,/BRL 0.00/);assert.equal(s.get('#rowCount').textContent,'2 dias');
   assert.equal(JSON.stringify(rows),before);assert.equal(rows.length,1);assert.equal(rows[0].cells.F.value,0);
   s.controller.render('MCC exata');assert.equal(s.get('#productBody').innerHTML,html);
+});
+test('confirmed pause marks its diary date and hides later daily and provisional rows without mutating history',()=>{
+  const rows=[
+    {date:'2026-09-29',cells:{A:{value:'2026-09-29'},B:{value:10},Q:{value:'Estado informado pela MCC'}}},
+    {date:'2026-09-30',cells:{A:{value:'2026-09-30'},B:{value:99}}},
+  ],manualSalesByDate=new Map([['2026-09-29',{pendingConversions:1}],['2026-10-01',{pendingConversions:2}]]),before=JSON.stringify(rows);
+  const s=setup({...empty(),rows,displayRows:rows,manualSalesByDate,pauseConfirmedAt:'2026-09-29'});
+  s.controller.render('Oferta pausada');
+  const html=s.get('#productBody').innerHTML;
+  assert.match(html,/Campanha pausada na data 29\/09\/2026/);
+  assert.match(html,/Estado informado pela MCC/);
+  assert.doesNotMatch(html,/2026-09-30|2026-10-01/,'linhas posteriores e vendas provisórias posteriores não aparecem');
+  assert.equal(s.get('#rowCount').textContent,'1 dia');
+  assert.match(s.get('#productCaption').textContent,/encerrado na pausa confirmada em 29\/09\/2026/);
+  assert.equal(JSON.stringify(rows),before,'o recorte da view não altera o diário persistido');
 });
 test('legacy summary stays separate, preserves observed zero/absence and returns cleanly to native diary',()=>{
   const summary={historical_number:1,metrics:{investment_brl:{state:'observed',value:0},clicks:{state:'unknown',value:null},commission_brl:{state:'observed',value:0}},

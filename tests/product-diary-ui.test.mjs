@@ -2,14 +2,17 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../src/product-diary/domain.js', import.meta.url), 'utf8') + '\n' + await readFile(new URL('../src/product-diary/view.js', import.meta.url), 'utf8');
+const diaryStyles = await readFile(new URL('../src/product-diary/product-diary.css', import.meta.url), 'utf8');
+const panelSource = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 const dateFunction = source.match(/^\s*function productDiaryRowDate\(row\)\{[^\r\n]+\}/m)?.[0];
 const salesFunction = source.match(/^\s*function productDiaryHasSales\(row,provisionalSaleDates\)\{[^\r\n]+\}/m)?.[0];
 const countFunction = source.match(/^\s*function productDiaryManualSaleCount\(row,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];
 const rowsFunction = source.match(/^\s*function productDiaryRowsWithManualSales\(rows,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];
-const cellFunction = source.match(/^\s*function formatProductDiaryCell\(col,row,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];
-assert.ok(dateFunction && salesFunction && countFunction && rowsFunction && cellFunction, 'helpers de data/venda do Diário de campanha ausentes');
+const cutoffFunction = source.match(/^\s*function productDiaryRowsThroughDate\(rows,cutoff\)\{[^\r\n]+\}/m)?.[0];
+const cellFunction = source.match(/^\s*function formatProductDiaryCell\(col,row,manualSalesByDate(?:,pauseConfirmedAt)?\)\{[^\r\n]+\}/m)?.[0];
+assert.ok(dateFunction && salesFunction && countFunction && rowsFunction && cutoffFunction && cellFunction, 'helpers de data/venda do Diário de campanha ausentes');
 
-const { productDiaryRowDate, productDiaryHasSales, productDiaryManualSaleCount, productDiaryRowsWithManualSales, formatProductDiaryCell } = new Function('excelDate','formatProductCell', `${dateFunction}\n${salesFunction}\n${countFunction}\n${rowsFunction}\n${cellFunction}\nreturn {productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,formatProductDiaryCell};`)(serial => new Date(Math.round((Number(serial) - 25569) * 86400000)), (_col,cell) => cell?.value == null ? '—' : String(cell.value));
+const { productDiaryRowDate, productDiaryHasSales, productDiaryManualSaleCount, productDiaryRowsWithManualSales, productDiaryRowsThroughDate, formatProductDiaryCell } = new Function('excelDate','formatProductCell', `${dateFunction}\n${salesFunction}\n${countFunction}\n${rowsFunction}\n${cutoffFunction}\n${cellFunction}\nreturn {productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,formatProductDiaryCell};`)(serial => new Date(Math.round((Number(serial) - 25569) * 86400000)), (_col,cell) => cell?.value == null ? '—' : String(cell.value));
 const serialFor = iso => Date.parse(`${iso}T00:00:00Z`) / 86400000 + 25569;
 
 assert.equal(productDiaryHasSales({ cells: { F: { value: 2 } } }, new Set()), true, 'conversões oficiais positivas devem destacar o dia');
@@ -24,6 +27,13 @@ assert.equal(diaryRows[1].cells.A.text, '24/09/2026');
 assert.equal(diaryRows[1].cells.F, undefined, 'linha virtual não inventa conversão oficial');
 assert.equal(productDiaryManualSaleCount(diaryRows[1], manualSalesByDate), 1, 'venda manual pendente deve ser identificada separadamente da conversão MCC');
 assert.equal(formatProductDiaryCell('F',{date:'2026-09-24',cells:{F:{value:0}}},manualSalesByDate), '<span>0</span><small class="product-manual-sale-note">+1 manual · provisória</small>', 'venda manual aparece separada sem somar conversões à métrica MCC');
+assert.equal(formatProductDiaryCell('Q',{date:'2026-09-24',cells:{Q:{value:'Pausada'}}},new Map(),'2026-09-24'), '<span>Pausada</span><small class="product-pause-note">Campanha pausada na data 24/09/2026</small>', 'a confirmação fica visível em Observações na data correspondente');
+assert.deepEqual(productDiaryRowsThroughDate([{date:'2026-09-24'},{date:'2026-09-25'}],'2026-09-24').map(productDiaryRowDate),['2026-09-24'],'o corte do Diário inclui o dia da confirmação');
 assert.equal(productDiaryManualSaleCount(diaryRows[0], manualSalesByDate), 0, 'venda manual não deve aparecer em outra data');
 assert.equal(productDiaryRowsWithManualSales(diaryRows, manualSalesByDate).length, 2, 'a mesma data manual não deve duplicar linha já existente');
+
+assert.match(panelSource, /product:\{[^\n]*bodyClass:'product-diary-mode'/, 'o modo do Diário deve ser ativado somente pela navegação para a tela');
+assert.match(diaryStyles, /body\.product-diary-mode\{overflow:hidden\}/, 'a página não deve ganhar rolagem vertical externa enquanto o Diário está aberto');
+assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*height:100dvh[^}]*overflow:hidden/, 'no desktop, o Diário deve caber no viewport sem rolagem vertical da página');
+assert.match(diaryStyles, /body\.product-diary-mode #productTableWrap\{[^}]*min-height:0;max-height:none;overflow:auto/, 'a área da tabela deve consumir o espaço restante e manter rolagem própria');
 console.log('product diary sales highlight ok');

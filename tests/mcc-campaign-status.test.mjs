@@ -34,6 +34,8 @@ assert.equal(campaign('Oferta ativa').status, 'ativa', 'D0 prevalece sobre D−1
 assert.equal(campaign('Oferta removida').status, 'pausada', 'removida não entra na lista de ativas');
 assert.equal(campaign('Só ontem').status, 'pausada', 'presença somente em D−1 não reativa campanha ausente de D0');
 assert.equal(campaign('Estado no status').status, 'pausada', 'estado literal em Status também pode informar a pausa');
+assert.equal(campaign('Oferta pausa').pausa_confirmada_em, '2026-09-30', 'pausa explícita guarda a data efetiva de confirmação');
+assert.equal(campaign('Só ontem').pausa_confirmada_em, undefined, 'ausência em D0 não vira confirmação de pausa');
 assert.equal(result.base.campanhas.filter(item => item.status === 'ativa').length, 1);
 assert.equal(result.base.diario.find(item => item.campanha_id === pausedId && item.data === '2026-09-29').celulas.F.value, 1);
 assert.equal(result.base.vendas_provisorias[0].status, 'conciliada', 'D−1 confirma a venda mesmo com a campanha pausada');
@@ -55,6 +57,20 @@ const reactivated = db.importManifest(result.base, manifest('2026-10-01', [
 ]), rowFactory).base.campanhas.find(item => item.id === pausedId);
 assert.equal(reactivated.status, 'ativa');
 assert.equal(reactivated.movimento_status, 'reativada');
+
+const confirmedInD1 = db.importManifest(db.create(), manifest('2026-09-30', [
+  { nome_campanha_exato:'Pausa confirmada em D−1', metricas_D_menos_1:period('2026-09-29', 'Pausada'), metricas_D_zero:{ presente:false } },
+]), rowFactory);
+const confirmedD1Campaign = confirmedInD1.base.campanhas[0];
+assert.equal(confirmedD1Campaign.status, 'pausada');
+assert.equal(confirmedD1Campaign.pausa_confirmada_em, '2026-09-29', 'D−1 confirmado prevalece quando D0 não contém a campanha');
+assert.deepEqual(confirmedInD1.base.diario.map(item=>item.data), ['2026-09-29'], 'a linha da própria confirmação é preservada');
+const laterPausedCollection = db.importManifest(confirmedInD1.base, manifest('2026-10-01', [
+  { nome_campanha_exato:'Pausa confirmada em D−1', metricas_D_zero:period('2026-10-01', 'Pausada') },
+]), rowFactory);
+assert.equal(laterPausedCollection.base.campanhas[0].pausa_confirmada_em, '2026-09-29', 'repetir status pausado não desloca a data inicial da confirmação');
+assert.deepEqual(laterPausedCollection.base.diario.map(item=>item.data), ['2026-09-29'], 'dados posteriores não são acrescentados após pausa confirmada');
+
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 const viewContext = vm.createContext({ CampaignDatabase:db, state:{ database:result.base, manifest:all, productCatalog:null } });
 const viewHelpers = ['currentCampaignRows','derivedContext','campaignRows','activeCampaignRows'].map(name => template.match(new RegExp(`function ${name}\\([^\\n]+`))[0]).join('\n');
@@ -105,7 +121,7 @@ const getSnapshot=()=>{
     d1Totals:campaigns.map(()=>({})),rows:campaigns.map(c=>{
       const stored=historicalBase.campanhas.find(item=>item.nome_mcc===c.nome_campanha_exato);
       return {c,identity:{name:c.nome_campanha_exato,dateLabel:'',dateSort:''},totals:{},d0Totals:{},
-        campaignId:stored.id,pausedAt:stored.pausada_em||'',zeroDays:null,roi:null,profit:null};
+        campaignId:stored.id,pausedAt:stored.pausada_em||'',pauseConfirmedAt:stored.pausa_confirmada_em||(stored.status_origem==='status_na_coleta'?stored.pausada_em:'')||'',zeroDays:null,roi:null,profit:null};
     })};
 };
 const overview=overviewContext.window.OverviewView.mount({root:overviewDom.root,state:viewContext.state,
@@ -120,6 +136,10 @@ for(const mode of ['consolidated','d1','d0']){
     assert.match(overviewDom.get('#kpis').innerHTML,/<strong class="kpi-value">1<\/strong>/);
   }
 }
+viewContext.state.totalsMode='consolidated';viewContext.state.campaignStatusFilter='all';overview.render();
+assert.match(overviewDom.get('#totalsBody').innerHTML,/title="Campanha pausada na data 30\/09\/2026"/,'tooltip de pausa confirmada informa a data explícita');
+assert.match(overviewDom.get('#totalsBody').innerHTML,/title="Última aparição em 29\/09\/2026"/,'ausência sem confirmação informa apenas a última aparição');
+assert.doesNotMatch(overviewDom.get('#totalsBody').innerHTML,/Não apareceu na coleta/,'ausência não é descrita como pausa confirmada');
 const reactivatedBase=db.importManifest(historicalBase,manifest('2026-10-01',[
   {nome_campanha_exato:'Oferta pausa',metricas_D_zero:period('2026-10-01','Ativada')},
   {nome_campanha_exato:'Oferta ativa',metricas_D_zero:period('2026-10-01','Enabled')},

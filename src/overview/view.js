@@ -17,7 +17,7 @@
       const metrics=[['Investimento','investment',fmtMoney],['Impressões','impressions',fmtNum],['Cliques','clicks',fmtNum]],coverageTooltip=metricCoverageTooltip('D−1',metrics,dayTotals,activeCount,pausedCount);
       return`<div class="kpi-group kpi-group-d1" role="group" aria-label="Indicadores D−1"><span class="kpi-group-label">D−1</span><button class="kpi-info" type="button" title="${esc(coverageTooltip)}" aria-label="${esc(coverageTooltip)}">${overviewInfoIcon}</button>${metrics.map(([label,field,format])=>{const result=OverviewDomain.sumObservedMetric(dayTotals,field);return`<div class="kpi"><span class="kpi-label">${label}</span><strong class="kpi-value">${result.value==null?'—':format(result.value)}</strong></div>`}).join('')}</div>`;
     }
-    function renderRow({c,identity,totals,budget,testLimit,testRemaining,zeroDays,roi,profit,account,sales,adjustment,rejected,numberReuse,campaignId,policyLimitation,pausedAt},headers,referenceDate){
+    function renderRow({c,identity,totals,budget,testLimit,testRemaining,zeroDays,roi,profit,account,sales,adjustment,rejected,numberReuse,campaignId,policyLimitation,pausedAt,pauseConfirmedAt},headers,referenceDate){
       const paused=c._status==='pausada',reactivated=c._movement==='reativada',
         baseStatus=paused?(rejected?'Pausada por reprovação':'Pausada'):rejected?'Ativa · Reprovada':reactivated?'Reativada':'Ativa',
         statusLabel=numberReuse?`${baseStatus} · Renumerar`:baseStatus,
@@ -25,7 +25,7 @@
         rowClass=paused?'paused-row':numberReuse?'numbering-warning-row':rejected?'rejected-row':'',
         manualSales=adjustment?.manualSales??sales?.manualSales??0,
         saleLabel=manualSales?`${manualSales===1?'1 venda provisória':`${manualSales} vendas provisórias`}`:'',
-        statusTitle=numberReuse?`A numeração ${numberReuse.group} já apareceu em outra campanha. Use um novo número antes da próxima coleta.`:paused?(rejected?'Pausa detectada após a última qualificação informada pela MCC indicar reprovação.':`Não apareceu na coleta de ${dateLabel(c._pausedAt)}; última aparição em ${dateLabel(c._lastSeen)}`):rejected?'A MCC informou reprovação ou não qualificação':statusLabel,
+        statusTitle=numberReuse?`A numeração ${numberReuse.group} já apareceu em outra campanha. Use um novo número antes da próxima coleta.`:paused?(pauseConfirmedAt?`Campanha pausada na data ${dateLabel(pauseConfirmedAt)}`:c._lastSeen?`Última aparição em ${dateLabel(c._lastSeen)}`:'Última aparição'):rejected?'A MCC informou reprovação ou não qualificação':statusLabel,
         budgetCaption=budget?.salesCount?`ROI mínimo ${fmtPct(budget.minimumRoi)} · ${fmtNum(budget.salesCount)} venda${budget.salesCount===1?'':'s'}`:'',
         limitContent=budget?`${fmtMoney(testLimit.value)}${budgetCaption?`<a class="test-budget-detail test-budget-roi-link" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-roi="${budget.minimumRoi}" aria-label="Editar ROI mínimo" title="Editar ROI mínimo">${esc(budgetCaption)}</a>`:''}`:displayCell(testLimit),
         remainingTitle=budget?(budget.remaining>=0?'Investimento ainda permitido até o limite.':`Limite de teste excedido em ${fmtMoney(Math.abs(budget.remaining))}.`):'',

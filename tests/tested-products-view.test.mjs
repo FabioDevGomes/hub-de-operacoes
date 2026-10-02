@@ -48,6 +48,14 @@ test('Tested view preserves counts, states, currency and escaping',()=>{
   assert.equal(h.get('#restoreProducts').classList.contains('hidden'),false);
   assert.deepEqual(h.calls,[],'rendering must not invoke catalog writes');
 });
+test('negative total profit is red without bold and other profit states stay unchanged',()=>{
+  const h=harness([product('Loss',true,100,0,-25),product('Profit',true,100,0,25),product('Unknown',false,null,null,null)]);h.controller.render();
+  const html=h.get('#testedProductsBody').innerHTML;
+  assert.match(html,/data-tested-col="profit" class="num negative">BRL -25\.00<\/td>/);
+  assert.match(html,/data-tested-col="profit" class="num">BRL 25\.00<\/td>/);
+  assert.match(html,/data-tested-col="profit" class="num">—<\/td>/);
+  assert.doesNotMatch(html,/<td data-tested-col="profit"[^>]*><strong>/);
+});
 test('Tested view preserves sorting and column preferences across rendering',()=>{
   const h=harness([product('Z',true,50),product('A',true,100)]);h.controller.render();
   h.root.querySelectorAll('[data-tested-sort]').find(e=>e.dataset.testedSort==='revenue').onclick();

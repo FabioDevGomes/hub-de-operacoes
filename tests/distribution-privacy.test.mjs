@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { test } from 'node:test';
+import { privateDistributionFiles } from '../scripts/distribution-privacy.mjs';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const run = promisify(execFile);
+test('distribution excludes private inputs and preserves stale payloads outside the package', async t => {
+  const temporary = await mkdtemp(join(tmpdir(), 'hub-private-build-'));
+  t.after(async () => {
+    assert.equal(dirname(resolve(temporary)), resolve(tmpdir()));
+    assert.ok(basename(temporary).startsWith('hub-private-build-'));
+    await rm(temporary, { recursive:true, force:true });
+  });
+  await cp(join(root, 'src'), join(temporary, 'src'), { recursive:true });
+  await cp(join(root, 'build.mjs'), join(temporary, 'build.mjs'));
+  await mkdir(join(temporary, 'scripts'));
+  await cp(join(root, 'scripts/distribution-privacy.mjs'), join(temporary, 'scripts/distribution-privacy.mjs'));
+  await mkdir(join(temporary, 'data-local'));
+  await mkdir(join(temporary, 'dist/billing'), { recursive:true });
+  const sentinel = JSON.stringify({ schema:'billing_seed_v1', version:99, sales:[{ product:'SYNTHETIC_PRIVATE_BUILD_SENTINEL', value_brl:123 }] });
+  const local = join(temporary, 'data-local/legacy-totais-migration-v1.json');
+  await writeFile(local, sentinel);
+  await writeFile(join(temporary, 'src/billing/seed-v99.json'), sentinel);
+  await writeFile(join(temporary, 'src/billing/export.csv'), 'SYNTHETIC_PRIVATE_BUILD_SENTINEL');
+  await writeFile(join(temporary, 'dist/billing/seed-v99.json'), sentinel);
+  await writeFile(join(temporary, 'dist/catalogo-produtos-oficial.json'), sentinel);
+  const build = (...args) => run(process.execPath, [join(temporary, 'build.mjs'), ...args], { cwd:temporary, windowsHide:true });
+  await build();
+  assert.deepEqual(await privateDistributionFiles(join(temporary, 'dist')), []);
+  assert.deepEqual(await readdir(join(temporary, 'dist/billing')), (await readdir(join(root, 'src/billing'))).filter(name => /\.(mjs|css)$/.test(name)).sort());
+  const html = await readFile(join(temporary, 'dist/index.html'), 'utf8');
+  assert.ok(!html.includes('SYNTHETIC_PRIVATE_BUILD_SENTINEL'));
+  assert.ok(html.includes('"campanhas":[]'), 'distribution always embeds an empty manifest');
+  assert.equal(await readFile(local, 'utf8'), sentinel, 'private local input remains intact');
+  assert.equal(await readFile(join(temporary, 'src/billing/seed-v99.json'), 'utf8'), sentinel);
+  const recovery = join(temporary, 'data-local/distribution-recovery');
+  const recovered = [...(await readdir(join(recovery, 'billing'))).map(name => join(recovery, 'billing', name)),
+    ...(await readdir(recovery)).filter(name => name.endsWith('.private')).map(name => join(recovery, name))];
+  assert.equal(recovered.length, 2);
+  for (const path of recovered) assert.equal(await readFile(path, 'utf8'), sentinel, 'stale copies are recoverable, never discarded');
+  await build();
+  assert.equal((await readdir(join(recovery, 'billing'))).length, 1, 'rebuild does not recopy a source seed');
+  await assert.rejects(build(local), /não aceita dados operacionais/);
+  assert.equal(await readFile(join(temporary, 'dist/index.html'), 'utf8'), html, 'a rejected private input never replaces the shared page');
+});

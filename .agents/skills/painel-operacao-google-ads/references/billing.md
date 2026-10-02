@@ -44,6 +44,10 @@ Correções de valores/status de pagamento e mudanças no estado de confirmaçã
 
 O histórico de Faturamento vive somente nas stores locais do IndexedDB. Não existe seed financeiro em `src/` ou `dist/`, e abrir a tela nunca importa uma carga empacotada. Uma instalação ou navegador novo começa sem lançamentos financeiros.
 
+Faturamento total e Total de vendas leem todo o histórico local de vendas; o gráfico mensal consulta as datas das vendas/movimentos daquele banco. Sem registros, o gráfico informa o estado vazio. O isolamento é por perfil de navegador e origem local, sem autenticação de usuário ou banco remoto. `tests/billing-user-isolation.test.mjs` verifica os três resultados com bancos sintéticos independentes e sem transações de escrita.
+
+O build não aceita manifesto operacional nem usa `data-local/` como entrada. Cargas privadas e planilhas não são copiadas para os módulos; sobras privadas em `dist/` são movidas para `data-local/distribution-recovery/` com nomes únicos. O servidor não entrega esses formatos como arquivos estáticos. Versões antigas publicaram e instalaram um seed financeiro; uma atualização não apaga os registros que já entraram em um navegador. Identifique e autorize qualquer remoção seletiva separadamente, preservando o histórico legítimo. Arquivos removidos do checkout ainda podem existir no histórico Git: não declarar expurgo do GitHub sem reescrever/verificar esse histórico.
+
 O script offline `scripts/generate-billing-seed.py` permanece apenas como ferramenta privada de recuperação/migração. Sua saída deve ficar em `data-local/` (ignorado pelo Git) ou fora do repositório; o script bloqueia destinos dentro de `src/` e `dist/`. Não colocar a planilha original, JSON gerado, caminho absoluto, nome de usuário ou outros dados de ambiente no Git. `planSeedImport` e a chave histórica em `billing_meta` continuam legíveis por compatibilidade com bancos locais que receberam a migração antiga, mas o runtime não procura nem instala seed automaticamente.
 
 ## Backup e compatibilidade

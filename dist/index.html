@@ -822,7 +822,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     let curationObservabilityModulePromise=null;
     async function renderCurationObservability({isCurrent}){try{curationObservabilityModulePromise=curationObservabilityModulePromise||import('./curadoria/curation-observability-view.mjs?v=1');const module=await curationObservabilityModulePromise;if(!isCurrent())return;await module.mount({root:$('#curationObservabilityRoot'),getOperationalEvents:()=>(state.database?.event_log||[]).map(accountAliasForEvent)})}catch(error){$('#curationObservabilityRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Observabilidade da Curadoria: ${esc(error.message)}</div>`}}
     async function updateManualSale({sourceSaleId,data,hora,campanha_id,pais_codigo,produto,plataforma,valor_brl}){const before=state.database,sourceSale=before?.vendas_provisorias?.find(item=>String(item.id)===String(sourceSaleId));if(!sourceSale)throw new Error('O lançamento original vinculado não foi encontrado na base.');const rawKey=sourceSale.identificador_mascarado==='chave composta'?`fallback:${data}|${hora||''}|${campanha_id}|${valor_brl}|${produto}`:null,dedupe=rawKey?await sha256(rawKey):sourceSale.chave_duplicidade,updated=CampaignDatabase.updateProvisionalSale(before,{id:sourceSaleId,data,hora,campanha_id,pais_codigo,produto,plataforma,valor_brl,chave_duplicidade:dedupe}),target=updated.sale,impactedIds=new Set([`${sourceSale.campanha_id}|${sourceSale.data}`,`${target.campanha_id}|${target.data}`].map(key=>`mcc-conversion:${key.replace('|',':')}`)),mccCandidates=[...CampaignDatabase.mccBillingSalesFromDiary(updated.base),...CampaignDatabase.mccBillingSalesFromManifest(updated.base)],mccBillingSales=[...new Map(mccCandidates.filter(item=>impactedIds.has(item.sale_id)).map(item=>[item.sale_id,item])).values()];state.database=updated.base;try{await persistLocalBase({updatedProvisionalBillingSales:[target],mccBillingSales})}catch(error){state.database=before;throw error}derivedCache=null;derivedContext();refreshControlMacroCache();renderStatus();baseChannel?.postMessage({type:'provisional-sale-updated',provisionalSaleIds:[target.id]});return target}
-    async function renderBilling({isCurrent}){try{await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling();const module=await import('./billing/billing-view.mjs?v=6');if(!isCurrent())return;await module.mount({root:$('#billingRoot'),toast,onUpdateManualSale:updateManualSale,getManualSaleEditData:()=>({campaigns:(state.database?.campanhas||[]).map(item=>({id:item.id,nome_mcc:item.nome_mcc,nome_exibicao:item.nome_exibicao,conta_id:item.conta_id,conta_sufixo:item.conta_sufixo})),countries:[...countryList,{code:'ZZ',name:'País não identificado'}]})})}catch(error){$('#billingRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Faturamento: ${esc(error.message)}</div>`}}
+    async function renderBilling({isCurrent}){try{await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling();const module=await import('./billing/billing-view.mjs?v=7');if(!isCurrent())return;await module.mount({root:$('#billingRoot'),toast,onUpdateManualSale:updateManualSale,getManualSaleEditData:()=>({campaigns:(state.database?.campanhas||[]).map(item=>({id:item.id,nome_mcc:item.nome_mcc,nome_exibicao:item.nome_exibicao,conta_id:item.conta_id,conta_sufixo:item.conta_sufixo})),countries:[...countryList,{code:'ZZ',name:'País não identificado'}]})})}catch(error){$('#billingRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Faturamento: ${esc(error.message)}</div>`}}
     let personalFinanceModulePromise=null,personalFinanceController=null,personalFinanceMountPromise=null;
     async function renderPersonalFinance({isCurrent}){try{personalFinanceModulePromise=personalFinanceModulePromise||import('./personal-finance/personal-finance-view.mjs?v=67');const module=await personalFinanceModulePromise;if(!isCurrent())return;if(personalFinanceController)await personalFinanceController.refresh();else{personalFinanceMountPromise=personalFinanceMountPromise||module.mount({root:$('#personalFinanceRoot'),toast});personalFinanceController=await personalFinanceMountPromise}}catch(error){if(!personalFinanceController)personalFinanceMountPromise=null;$('#personalFinanceRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Controle de gastos: ${esc(error.message)}</div>`}}
     function render(){renderStatus();return navigation.refresh()}
@@ -868,33 +868,23 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
       const payload=restored.base;if(!payload)return false;
       let base=payload.schema===CampaignDatabase.SCHEMA?CampaignDatabase.normalize(payload):await migrateLegacyBase(payload);
       base=CampaignDatabase.mergeEventLogs(base,restored.events);
-      let shouldPersist=persist,needsPersist=payload.schema!==CampaignDatabase.SCHEMA||!!payload.event_log?.length,justMigrated=false,blockedMigration=false;
+      let shouldPersist=persist,needsPersist=payload.schema!==CampaignDatabase.SCHEMA||!!payload.event_log?.length,blockedMigration=false;
       if(persist){
         try{
           legacyTotalsMigrationModulePromise??=import('./legacy-totais-migration.mjs?v=2');
           const migration=await legacyTotalsMigrationModulePromise;
           if(migration.migrationAlreadyApplied(base)){const refreshed=migration.refreshLegacyTotalsReport(base);base=refreshed.base;needsPersist=needsPersist||refreshed.changed;state.legacyTotalsMigrationReport=base.legacy_totais_migration?.report||null;}
-          else{
-            const response=await fetch('legacy-totais-migration-v1.json',{cache:'no-store'});
-            if(response.ok){
-              const result=migration.planLegacyTotaisMigration(base,await response.json());
-              state.legacyTotalsMigrationReport=result.report;
-              if(result.status==='blocked'){blockedMigration=true;shouldPersist=false;}
-              else if(result.status==='ready'){base=result.base;justMigrated=true;needsPersist=true;}
-            }else if(response.status!==404){blockedMigration=true;shouldPersist=false;state.legacyTotalsMigrationReport={ambiguities:[{reason:`Não foi possível ler o payload local (${response.status}).`}],campaigns_valid:0,created_legacy:0,existing_in_hub:0};}
-          }
         }catch(error){blockedMigration=true;shouldPersist=false;state.legacyTotalsMigrationReport={ambiguities:[{reason:`Pré-checagem interrompida: ${error.message}`}],campaigns_valid:0,created_legacy:0,existing_in_hub:0};}
       }
       if((payload.produtos_ocultos?.length||Object.keys(payload.produtos_aliases||{}).length)&&!state.productCatalog.ocultos.length&&!Object.keys(state.productCatalog.aliases).length){state.productCatalog=ProductCatalog.normalize({schema:ProductCatalog.SCHEMA,ocultos:payload.produtos_ocultos||[],aliases:payload.produtos_aliases||{}});if(shouldPersist)await persistProductCatalog()}
       state.database=base;state.manifest=state.database.manifesto_atual||embeddedManifest;state.localSavedAt=state.database.atualizado_em||null;
       derivedCache=null;refreshControlMacroCache();
       if(shouldPersist&&needsPersist)await persistLocalBase();
-      renderLegacyMigrationNotice(state.legacyTotalsMigrationReport,{blocked:blockedMigration,visible:blockedMigration||justMigrated});
+      renderLegacyMigrationNotice(state.legacyTotalsMigrationReport,{blocked:blockedMigration,visible:blockedMigration});
       if(renderPage)render();
       return true
     }
     async function restoreProductCatalog(){const db=await openLocalDb();const payload=await new Promise((resolve,reject)=>{const tx=db.transaction('catalogos','readonly'),request=tx.objectStore('catalogos').get('atual');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});db.close();if(payload?.schema===ProductCatalog.SCHEMA)state.productCatalog=ProductCatalog.normalize(payload);return!!payload}
-    async function mergeLocalOfficialCatalog(){try{const response=await fetch('catalogo-produtos-oficial.json',{cache:'no-store'});if(!response.ok)return false;const official=ProductCatalog.normalize(await response.json()),current=ProductCatalog.normalize(state.productCatalog);state.productCatalog=ProductCatalog.normalize({...official,aliases:{...official.aliases,...current.aliases},datas_inicio:{...official.datas_inicio,...current.datas_inicio},ocultos:current.ocultos});await persistProductCatalog();render();return true}catch{return false}}
     async function downloadLocalBase(){const payload=localBasePayload(),billing=await getBillingStorage(),personalFinance=await getPersonalFinanceStorage();payload.billing=await billing.exportBillingBundle();payload.personal_finance=await personalFinance.exportBundle();const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`base-painel-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);toast('Base JSON, Faturamento e Controle de gastos preparados para download')}
     function downloadProductCatalog(){const payload=ProductCatalog.normalize(state.productCatalog),blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='catalogo-produtos.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),0);toast('Catálogo JSON preparado para download')}
     $('#downloadCatalog').onclick=downloadProductCatalog;
@@ -967,7 +957,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     function showBilling(){return navigation.open('billing')}
     function showPersonalFinance(){return navigation.open('personal-finance')}
     navigation.bind();
-    render();restoreProductCatalog().then(restoreLocalBase).then(mergeLocalOfficialCatalog).catch(()=>toast('Não foi possível recuperar os dados locais anteriores.',true));
+    render();restoreProductCatalog().then(restoreLocalBase).catch(()=>toast('Não foi possível recuperar os dados locais anteriores.',true));
   </script>
 </body>
 </html>

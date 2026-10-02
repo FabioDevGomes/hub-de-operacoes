@@ -1,19 +1,18 @@
-import { cp, readFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { copyPublicDirectory, isolatePrivateDistributionFiles } from './scripts/distribution-privacy.mjs';
 
 const root = resolve(import.meta.dirname);
-const manifestPath = process.argv[2];
+if (process.argv.length > 2) throw new Error('O build compartilhável não aceita dados operacionais. Carregue os dados pelo sistema no banco local do usuário.');
 
 const emptyManifest = { schema: "manifesto_mcc_v1", separacao_temporal: { D_menos_1: { datas_detectadas: [] }, D_zero: { datas_detectadas: [] } }, campanhas: [] };
-const [template, databaseModule, productCatalogModule, viewRegistryModule, rawManifest] = await Promise.all([
+const [template, databaseModule, productCatalogModule, viewRegistryModule] = await Promise.all([
   readFile(resolve(root, "src/index.template.html"), "utf8"),
   readFile(resolve(root, "src/database.js"), "utf8"),
   readFile(resolve(root, "src/product-catalog.js"), "utf8"),
   readFile(resolve(root, "src/view-registry.js"), "utf8"),
-  manifestPath ? readFile(resolve(manifestPath), "utf8") : Promise.resolve(JSON.stringify(emptyManifest)),
 ]);
-const manifest = JSON.parse(rawManifest);
-const embedded = JSON.stringify(manifest).replaceAll("</script", "<\\/script");
+const embedded = JSON.stringify(emptyManifest);
 const database = databaseModule.replaceAll("</script", "<\\/script");
 const productCatalog = productCatalogModule.replaceAll("</script", "<\\/script");
 const viewRegistry = viewRegistryModule.replaceAll("</script", "<\\/script");
@@ -40,33 +39,11 @@ await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-d
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await cp(resolve(root, "src/preparador-MCC/index.html"), resolve(root, "dist/preparador-MCC/index.html"));
-await cp(resolve(root, "src/curadoria"), resolve(root, "dist/curadoria"), { recursive: true });
-await cp(resolve(root, "src/meu-tempo"), resolve(root, "dist/meu-tempo"), { recursive: true });
-await cp(resolve(root, "src/copy-ficha"), resolve(root, "dist/copy-ficha"), { recursive: true });
-await cp(resolve(root, "src/presell"), resolve(root, "dist/presell"), { recursive: true });
-await cp(resolve(root, "src/asset-studio"), resolve(root, "dist/asset-studio"), { recursive: true });
-await cp(resolve(root, "src/control-macro"), resolve(root, "dist/control-macro"), { recursive: true });
-await cp(resolve(root, "src/accounts"), resolve(root, "dist/accounts"), { recursive: true });
-await cp(resolve(root, "src/cpa"), resolve(root, "dist/cpa"), { recursive: true });
-await cp(resolve(root, "src/tested-products"), resolve(root, "dist/tested-products"), { recursive: true });
-await cp(resolve(root, "src/overview"), resolve(root, "dist/overview"), { recursive: true });
-await cp(resolve(root, "src/product-diary"), resolve(root, "dist/product-diary"), { recursive: true });
-await cp(resolve(root, "src/billing"), resolve(root, "dist/billing"), { recursive: true });
-await cp(resolve(root, "src/storage"), resolve(root, "dist/storage"), { recursive: true });
-await cp(resolve(root, "src/personal-finance"), resolve(root, "dist/personal-finance"), { recursive: true });
-await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
-// Personal operational payloads belong only to browser IndexedDB or data-local/.
-// Remove stale copies so a build can never republish data left by an older version.
-for (const privateArtifact of [
-  "dist/billing/seed-v1.json",
-  "dist/campaign-snapshot-seed.json",
-  "dist/__paused-history-source.json",
-]) await rm(resolve(root, privateArtifact), { force: true });
-const legacyTotalsSeed = resolve(root, "data-local/legacy-totais-migration-v1.json");
-const legacyTotalsSeedOutput = resolve(root, "dist/legacy-totais-migration-v1.json");
-try {
-  await cp(legacyTotalsSeed, legacyTotalsSeedOutput);
-} catch (error) {
-  if (error?.code !== "ENOENT") throw error;
-  await rm(legacyTotalsSeedOutput, { force: true });
+for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance']) {
+  await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
 }
+await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
+// Old builds may have left private payloads behind. Preserve those copies outside
+// the served/shared package; never read data-local as a distribution input.
+const isolated = await isolatePrivateDistributionFiles(root);
+if (isolated.length) console.log(`${isolated.length} arquivo(s) privado(s) isolado(s) em data-local/distribution-recovery.`);

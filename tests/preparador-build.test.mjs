@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
-import {cp,mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
+import {cp,mkdir,mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {basename,dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -33,6 +33,8 @@ test('clean isolated build creates Preparador and rebuilds from src without publ
     await rm(temporary,{recursive:true,force:true});
   });
   await cp(join(root,'build.mjs'),join(temporary,'build.mjs'));
+  await mkdir(join(temporary,'scripts'));
+  await cp(join(root,'scripts/distribution-privacy.mjs'),join(temporary,'scripts/distribution-privacy.mjs'));
   await cp(join(root,'src'),join(temporary,'src'),{recursive:true});
   // Local backups are deliberately not canonical inputs or distribution files.
   await writeFile(join(temporary,'src/preparador-MCC/index.before-test.html'),'synthetic unused historical page','utf8');

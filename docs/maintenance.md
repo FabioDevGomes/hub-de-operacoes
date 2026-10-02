@@ -96,6 +96,15 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 
 `dist/index.html`, `dist/preparador-MCC/index.html` e os demais módulos publicados pelo build são gerados; não faça a mesma alteração manual em fonte e saída. Edite o arquivo correspondente em `src/` e gere novamente. Cópias históricas não são fontes do build.
 
+## Isolamento dos dados e pacote compartilhável
+
+- Faturamento total, Total de vendas e série mensal são calculados pelas consultas às stores `billing_sales`/`billing_movements` do IndexedDB daquele navegador. Uma instalação nova começa sem vendas e mostra o gráfico vazio. O código não identifica usuários por login: o isolamento atual é por máquina/perfil do navegador e origem local.
+- O build sempre incorpora manifesto vazio e rejeita argumentos com dados operacionais. `scripts/distribution-privacy.mjs` publica somente extensões de código e recursos visuais; nunca copia JSON, planilhas ou arquivos de `data-local/`. Cópias privadas antigas em `dist/` são movidas, sem sobrescrever backups, para `data-local/distribution-recovery/`. O servidor também bloqueia a entrega estática desses formatos privados.
+- Abrir o Hub não busca catálogos nem cargas históricas empacotadas. Bases, catálogos e resumos legados já persistidos continuam preservados e disponíveis; recuperação/importação usa o fluxo explícito de dados do usuário.
+- Registros importados automaticamente por versões antigas continuam na base de quem executou aquela versão. Não limpar nem ocultar indiscriminadamente esse histórico: o mesmo tipo de carga pode ser legítimo para o proprietário original. Remoção seletiva exige identificação da carga, backup e autorização específica.
+- Ignorar/remover um arquivo no checkout atual não o retira dos commits anteriores do Git. Expurgo remoto de histórico é uma operação separada, com alvos definidos e autorização para reescrever o histórico compartilhado.
+- Verifique `tests/distribution-privacy.test.mjs` (build temporário com cargas sintéticas, preservação e rejeição de manifesto), `tests/billing-user-isolation.test.mjs` (bancos vazios/distintos alimentando os indicadores e gráfico) e `tests/privacy-boundary.test.mjs` (pacote e índice Git atuais).
+
 ## Contratos atuais que os testes devem preservar
 
 - Na extensão MCC, erros estruturados atravessam o service worker até o popup. Duplicidade de nomes deve ter destaque vermelho e lista dos nomes; não apresentar como captura incompleta quando todas as linhas foram lidas e a única divergência é a quantidade de nomes únicos. Paginação parcial, contagem divergente, virtualização, campos/data inválidos continuam bloqueantes e aparecem separadamente. Não enviar capturas rejeitadas nem alterar a base. Toda mudança na extensão incrementa pelo menos o patch de `manifest.json` e exige recarregamento em `chrome://extensions`.

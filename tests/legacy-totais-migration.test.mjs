@@ -200,8 +200,8 @@ assert.ok(diaryView.includes("$('#productPanelTitle').textContent='Resumo histó
 assert.ok(diaryView.includes('<span>Lucro derivado</span>'), 'investimento e lucro são destacados no resumo de campanha');
 assert.ok(diaryView.includes("value.state==='observed'||value.state==='derived'"), 'valores derivados de lucro e ROI aparecem no resumo');
 assert.ok(diaryView.includes("$('#productTableWrap').classList.add('hidden')"), 'tabela diária fica oculta no resumo consolidado legado');
-assert.ok(template.includes('legacyTotalsMigrationModulePromise')&&template.includes("fetch('legacy-totais-migration-v1.json',{cache:'no-store'})"), 'módulo utiliza payload local, sem importar XLSX na interface');
-assert.ok(template.includes("if(result.status==='blocked'){blockedMigration=true;shouldPersist=false;}"), 'ambiguidades bloqueiam a persistência');
+assert.ok(template.includes('legacyTotalsMigrationModulePromise')&&template.includes('migration.refreshLegacyTotalsReport(base)'), 'histórico já persistido continua compatível e seu relatório pode ser atualizado');
+assert.ok(!template.includes("fetch('legacy-totais-migration-v1.json'"), 'abrir o sistema não importa um histórico privado empacotado');
 assert.ok(template.includes('function testedProducts()')&&template.includes('source=state.database?.campanhas||activeCampaigns.map')&&template.includes('const activeCampaigns=currentCampaignRows()'), 'Produtos Testados reutiliza o agrupamento existente e alimenta os snapshots MCC ativos');
 assert.ok(template.includes('function localBasePayload()')&&template.includes('async function loadBase(file)'), 'backup e restore continuam na base única do Hub');
 assert.ok(!template.includes('legacy-totais-migration-v1.json";base64,'), 'dados históricos não são embutidos como texto no código');

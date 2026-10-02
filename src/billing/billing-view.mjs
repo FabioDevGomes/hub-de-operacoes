@@ -32,7 +32,7 @@ export async function mount({ root, toast = () => {}, onUpdateManualSale = null,
   status.textContent = 'Abrindo o histórico financeiro local…';
   try {
     const counts = await Storage.countBillingData();
-    status.textContent = counts.sales ? 'Histórico local pronto.' : 'Nenhum lançamento salvo neste navegador.';
+    status.textContent = counts.sales ? 'Histórico financeiro deste navegador.' : 'Nenhum lançamento salvo neste navegador.';
     await refresh(root);
   } catch (error) {
     status.textContent = `Não foi possível abrir o Faturamento: ${error.message}`;
@@ -347,6 +347,10 @@ async function renderMonthlyChart(root) {
     return;
   }
   if (requestId !== chartRenderSequence) return;
+  if (!series.some(item => item.records > 0)) {
+    root.querySelector('#billingMonthlyChart').innerHTML = '<p class="billing-chart-empty">Nenhum lançamento deste navegador no período selecionado.</p>';
+    return;
+  }
   while (series.length > 1 && series[0].records === 0) series.shift();
   const chartHost = root.querySelector('#billingMonthlyChart');
   chartHost.innerHTML = buildMonthlyChartSvg(series, title, chartHost.clientWidth);

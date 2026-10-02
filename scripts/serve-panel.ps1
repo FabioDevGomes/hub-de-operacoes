@@ -198,6 +198,10 @@ try {
             $relative = [Uri]::UnescapeDataString($path.TrimStart('/')).Replace('/', [IO.Path]::DirectorySeparatorChar)
             if ([string]::IsNullOrWhiteSpace($relative)) { $relative = 'index.html' }
             $candidate = [IO.Path]::GetFullPath((Join-Path $siteDirectory $relative))
+            if ([IO.Path]::GetExtension($candidate).ToLowerInvariant() -in @('.json', '.jsonl', '.csv', '.tsv', '.xls', '.xlsx', '.db', '.sqlite', '.sqlite3', '.bak')) {
+                Write-JsonResponse $stream 404 @{ error = 'Dados privados não fazem parte do pacote compartilhável.' }
+                continue
+            }
             $sitePrefix = $siteDirectory.TrimEnd('\') + '\'
             if (Test-Path -LiteralPath $candidate -PathType Container) { $candidate = Join-Path $candidate 'index.html' }
             if (-not $candidate.StartsWith($sitePrefix, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {

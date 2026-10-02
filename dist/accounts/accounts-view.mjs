@@ -118,11 +118,10 @@ export function mount({root, getSnapshot, format}) {
   function coverageCell(product, range) {
     const counts = product.ranges.get(range);
     if (!counts) return '<td class="cpa-missing">Não testada</td>';
-    const {active,paused} = counts, total = active + paused;
-    const title = `${active} ativa${active===1?'':'s'} · ${paused} pausada${paused===1?'':'s'}; pausadas classificadas assim no recorte atual.`;
-    if (active && paused) return `<td class="cpa-mixed" title="${title}">Ativa · pausada</td>`;
-    if (paused) return `<td class="cpa-paused" title="${title}">Testada · pausada</td>`;
-    return `<td class="cpa-explored" title="${total} campanha${total===1?'':'s'} ativa${total===1?'':'s'} nesta faixa">Testada · ativa</td>`;
+    const {active,paused} = counts;
+    const title = `${active} ativa${active===1?'':'s'} · ${paused} pausada${paused===1?'':'s'} nesta faixa.`;
+    if (active) return `<td class="cpa-explored" title="${title}">Em teste</td>`;
+    return `<td class="cpa-paused" title="${title}">Testada</td>`;
   }
 
   function renderCoverage(report) {

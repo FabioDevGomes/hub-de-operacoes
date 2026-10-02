@@ -49,6 +49,27 @@ test('all three status selectors share one state, including detail-origin change
   }
 });
 
+test('CPA coverage uses only three labels and prioritizes ranges with active campaigns',()=>{
+  const {root}=setup([
+    sample(),
+    sample('pausada'),
+    sample('ativa',{productKey:'other',product:'Other',cpa:{range:90,payout:20,payoutCurrency:'USD'}})
+  ]);
+  let coverage=root.elements.accountCpaGapBody.innerHTML;
+  assert.match(coverage,/>Em teste</);
+  assert.match(coverage,/>Não testada</);
+  assert.doesNotMatch(coverage,/Ativa · pausada|Testada · ativa|Testada · pausada/);
+
+  change(root,'accountCpaCoverageStatus','all');
+  coverage=root.elements.accountCpaGapBody.innerHTML;
+  assert.match(coverage,/>Em teste</,'faixa mista continua em teste enquanto houver campanha ativa');
+
+  change(root,'accountCpaCoverageStatus','pausada');
+  coverage=root.elements.accountCpaGapBody.innerHTML;
+  assert.match(coverage,/>Testada</);
+  assert.doesNotMatch(coverage,/Em teste|Não testada/,'no recorte só de pausadas, a faixa utilizada aparece como testada');
+});
+
 test('detail renders eleven aligned columns, safe domain links and missing values',()=>{
   const {root}=setup([sample()]);
   const html=root.elements.accountDetailBody.innerHTML;

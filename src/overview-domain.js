@@ -2,6 +2,7 @@
   function numeric(value){if(value==null||value==='')return null;const number=Number(value);return Number.isFinite(number)?number:null}
   function money(value){return Math.round(value*100+Math.sign(value)*1e-8)/100}
   function sumObservedMetric(rows,field){const entries=Array.isArray(rows)?rows:[];let total=0,observedCount=0;for(const row of entries){const value=numeric(row?.[field]);if(value==null)continue;total+=value;observedCount++}return{value:observedCount?total:null,observedCount,totalCount:entries.length}}
+  function sumObservedProfit(totalsList){const entries=Array.isArray(totalsList)?totalsList:[];let investment=0,commission=0,observedCount=0;for(const totals of entries){const spent=numeric(totals?.investment),revenue=numeric(totals?.commission);if(spent==null||revenue==null)continue;investment+=spent;commission+=revenue;observedCount++}return{value:observedCount?profitForTotals({investment,commission}):null,observedCount,totalCount:entries.length}}
   function previousIsoDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'';const date=new Date(`${value}T00:00:00.000Z`);if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)return'';date.setUTCDate(date.getUTCDate()-1);return date.toISOString().slice(0,10)}
   function resolveD0Totals(direct,dailyRow,date){
     const result={...direct,date};
@@ -48,5 +49,5 @@
     return rows;
   }
   function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&paused||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
-  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,sumObservedMetric,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,totalsColumns});
+  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,totalsColumns});
 })(typeof window==='object'?window:globalThis);

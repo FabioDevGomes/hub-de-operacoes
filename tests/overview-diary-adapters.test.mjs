@@ -26,6 +26,7 @@ test('overview adapter retains temporal financial projection, manual adjustments
   for(const [mode,conversions,commission,profit] of [['consolidated',5,310,210],['d1',2,80,70],['d0',1,50,20]]){
     context.state.totalsMode=mode;const snapshot=context.overviewSnapshot(),row=snapshot.rows[0];
     assert.equal(row.totals.conversions,conversions);assert.equal(row.totals.commission,commission);assert.equal(row.profit,profit);
+    assert.equal(row.d0ProfitTotals.commission,50,'lucro D0 inclui o ajuste provisório da data D0 independentemente do modo da tabela');assert.equal(row.d0ProfitTotals.investment,30);assert.equal(row.d0Totals.commission,0,'o snapshot MCC original permanece inalterado');
     assert.equal(row.campaignId,stored.id);assert.equal(row.account,'7441');assert.equal(row.budget.limit,258.33);
     assert.equal(row.budget.remaining,158.33);assert.equal(row.budget.minimumRoi,20);
     const count=calculations;context.overviewSnapshot();assert.equal(calculations,count,'sorting/filtering must reuse financial projection');

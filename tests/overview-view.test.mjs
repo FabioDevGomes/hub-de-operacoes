@@ -48,6 +48,21 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
   }
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
 });
+test('overview daily profit follows D0, marks polarity and exposes observed coverage',()=>{
+  const s=setup([
+    row('Lucro','ativa',10,{d0Totals:{investment:10,commission:25},d0ProfitTotals:{investment:10,commission:45}}),
+    row('Prejuízo','pausada',80,{d0Totals:{investment:80,commission:5},d0ProfitTotals:{investment:80,commission:5}}),
+    row('Comissão ausente','ativa',20,{d0Totals:{investment:20,commission:null},d0ProfitTotals:{investment:20,commission:null}})
+  ]);
+  s.controller.render();const kpis=s.get('#kpis').innerHTML,d0Position=kpis.indexOf('aria-label="Indicadores D0"'),profitPosition=kpis.indexOf('kpi-d0-profit');
+  assert.ok(d0Position>=0&&profitPosition>d0Position,'quadro de lucro deve aparecer ao lado e após o grupo D0');
+  assert.match(kpis,/<span class="kpi-label">Lucro do dia<\/span><strong class="kpi-value negative">BRL -40\.00<\/strong>/);
+  assert.match(kpis,/Resultado negativo\. Cobertura: 2\/3 campanhas com investimento e comissão\/ajuste disponíveis\./);
+  const positive=setup([row('Lucro positivo','ativa',10,{d0Totals:{investment:10,commission:25}})]);positive.controller.render();
+  assert.match(positive.get('#kpis').innerHTML,/<strong class="kpi-value positive">\+BRL 15\.00<\/strong>/);
+  const missing=setup([row('Sem comissão','ativa',10,{d0Totals:{investment:10,commission:null}})]);missing.controller.render();
+  assert.match(missing.get('#kpis').innerHTML,/<span class="kpi-label">Lucro do dia<\/span><strong class="kpi-value ">—<\/strong>/);
+});
 test('overview alerts coexist, user text is escaped and absent metrics never become zero',()=>{
   const s=setup([row('<Oferta>','ativa',null,{rejected:true,policyLimitation:'Restrição "política"',adjustment:{manualSales:2},numberReuse:{group:'1'},profit:-30})]);
   s.controller.render();

@@ -7,6 +7,7 @@ const window={};
 vm.runInNewContext(source,{window});
 const derive=window.OverviewDomain.deriveTestBudget;
 const sumObserved=window.OverviewDomain.sumObservedMetric;
+const sumObservedProfit=window.OverviewDomain.sumObservedProfit;
 const resolveD0=window.OverviewDomain.resolveD0Totals;
 const resolveD1=window.OverviewDomain.resolveD1Totals;
 const profitForTotals=window.OverviewDomain.profitForTotals;
@@ -37,6 +38,10 @@ assert.equal(derive({commission:75,commissionCurrency:'EUR',exchangeRate:5.1,con
 assert.equal(derive({commission:null,commissionCurrency:'USD',exchangeRate:5.1,conversions:1,sales:0,investment:210}),null,'sem receita observada ou payout conversível não se inventa limite');
 assert.deepEqual(JSON.parse(JSON.stringify(sumObserved([{investment:125.5},{investment:0},{investment:null},{}],'investment'))),{value:125.5,observedCount:2,totalCount:4},'soma D0 mantém zero confirmado e não trata ausência como zero');
 assert.deepEqual(JSON.parse(JSON.stringify(sumObserved([],'clicks'))),{value:null,observedCount:0,totalCount:0},'sem campanhas não deve exibir total D0 igual a zero');
+assert.deepEqual(JSON.parse(JSON.stringify(sumObservedProfit([{investment:125.25,commission:100},{investment:20,commission:50},{investment:10,commission:null}]))),{value:4.75,observedCount:2,totalCount:3},'lucro do dia soma apenas campanhas com investimento e comissão observados');
+assert.deepEqual(JSON.parse(JSON.stringify(sumObservedProfit([{investment:125.25,commission:100}]))),{value:-25.25,observedCount:1,totalCount:1},'lucro diário negativo permanece negativo');
+assert.deepEqual(JSON.parse(JSON.stringify(sumObservedProfit([{investment:0,commission:0}]))),{value:0,observedCount:1,totalCount:1},'valores observados iguais a zero produzem lucro zero');
+assert.deepEqual(JSON.parse(JSON.stringify(sumObservedProfit([]))),{value:null,observedCount:0,totalCount:0},'sem dados não inventar lucro diário igual a zero');
 const pausedToday={data:'2026-09-28',celulas:{B:{value:39},C:{value:2},F:{value:0},O:{value:30.804},P:{value:0}}};
 assert.deepEqual(JSON.parse(JSON.stringify(resolveD0({investment:null,impressions:null,clicks:null,conversions:null,commission:null},pausedToday,'2026-09-28'))),{investment:30.804,impressions:39,clicks:2,conversions:0,commission:0,date:'2026-09-28'},'campanha pausada hoje deve manter o D0 registrado no Diário');
 assert.deepEqual(JSON.parse(JSON.stringify(resolveD0({investment:50,impressions:45,clicks:3,conversions:0,commission:0},pausedToday,'2026-09-28'))),{investment:50,impressions:45,clicks:3,conversions:0,commission:0,date:'2026-09-28'},'retrato direto mais recente prevalece sobre fallback diário');

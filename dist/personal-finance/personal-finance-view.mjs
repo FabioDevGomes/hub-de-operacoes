@@ -216,7 +216,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const metrics = [
       { label:'Reserva global (inclui aportes futuros)', value:code => reserveCoverage(code).reserveBalance },
       { label:'Saldo futuro líquido (planejado − realizado)', value:code => reserveCoverage(code).netFutureBalance },
-      { label:'Diferença: reserva − saldo futuro líquido', value:code => reserveCoverage(code).globalDifference, tone:value => value < 0 ? 'is-negative' : 'is-positive' }
+      { label:'Diferença', value:code => reserveCoverage(code).globalDifference, tone:value => value < 0 ? 'is-negative' : 'is-positive' }
     ];
     return `<section class="pf-month-global-summary" aria-label="Resumo global da reserva"><div class="pf-month-global-grid">${metrics.map(metric => `<div class="pf-month-global-metric"><small>${metric.label}</small><div class="pf-month-global-values">${Domain.CURRENCIES.map(code => { const value = metric.value(code); return `<span class="${usdClass(code)} ${metric.tone?.(value) || ''}"><b>${code}</b><strong>${money(value, code)}</strong></span>`; }).join('')}</div></div>`).join('')}</div><p>O saldo futuro líquido soma planejado menos realizado apenas em meses atuais e futuros e semanas da competência atual ainda não encerradas; gastos acima do planejado reduzem o saldo e podem torná-lo negativo. Linhas sem planejamento ficam fora. A diferença é a reserva global menos esse saldo. BRL e USD são calculados separadamente.</p></section>`;
   }

@@ -333,7 +333,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     let timeModulePromise=null,copyFichaModulePromise=null;
     function showObservability(){return navigation.open('observability')}
     async function renderTime({isCurrent}){try{timeModulePromise=timeModulePromise||import('./meu-tempo/meu-tempo-view.mjs?v=16');const module=await timeModulePromise;if(!isCurrent())return;await module.mount({root:$('#timeModuleRoot'),toast,setBrowserTitle:title=>{if(isCurrent())document.title=title}})}catch(error){$('#timeModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Meu Tempo: ${esc(error.message)}</div>`}}
-    async function renderCopyFicha({isCurrent}){try{copyFichaModulePromise=copyFichaModulePromise||import('./copy-ficha/copy-ficha-view.mjs?v=32');const module=await copyFichaModulePromise;if(!isCurrent())return;await module.mount({root:$('#copyFichaModuleRoot'),toast})}catch(error){$('#copyFichaModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Ficha e Presell: ${esc(error.message)}</div>`}}
+    async function renderCopyFicha({isCurrent}){try{copyFichaModulePromise=copyFichaModulePromise||import('./copy-ficha/copy-ficha-view.mjs?v=33');const module=await copyFichaModulePromise;if(!isCurrent())return;await module.mount({root:$('#copyFichaModuleRoot'),toast})}catch(error){$('#copyFichaModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Ficha e Presell: ${esc(error.message)}</div>`}}
     function showPresell(){return navigation.open('copy')}
     // Import preview reuses the view date formatter; persistence remains in the Hub.
     function macroInputDate(iso){return ControlMacroView.formatDate(iso)}

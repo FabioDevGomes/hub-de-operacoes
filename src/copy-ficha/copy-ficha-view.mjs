@@ -1,6 +1,7 @@
 import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=20';
-import {minimumOfferProductPrice,productPriceCondition} from './copy-ficha-questions.mjs?v=2';
-import {renderTemplate} from './copy-ficha-template.mjs?v=1';
+import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=2';
+import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=1';
+import {renderTemplate} from './copy-ficha-template.mjs?v=2';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=1';
@@ -221,6 +222,7 @@ function analyze(root){
 }
 
 function clearGeneratedOutputs(root){
+  renderOfferQuestions(root);
   clearPresellFeedback(root,'Dados alterados. Valide novamente antes de criar a Presell.');
 }
 function clearPresellFeedback(root,message=''){
@@ -263,6 +265,12 @@ function refreshDetectedProductPrice(root){
   }
 }
 
+function generateQuestions(root,toast){
+  refreshDetectedProductPrice(root);
+  renderOfferQuestions(root,buildOfferQuestionAnswers(payload(root)));
+  toast?.('Perguntas e respostas geradas');
+}
+
 function renderPresellReports(root,reports=[]){
   const host=by(root,'copyPresellReport');if(!host)return;
   host.replaceChildren();
@@ -302,9 +310,12 @@ export async function mount({root,toast}={}){
   if(!root)return;
   if(!mounted){
     root.innerHTML=renderTemplate();
-    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);
+    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);renderOfferQuestions(root);
     by(root,'copyAnalyze').onclick=()=>analyze(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
+    by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast);
+    by(root,'copyQuestionsCopy').onclick=()=>copyOfferQuestions(root,toast);
+    window.addEventListener('resize',()=>by(root,'copyOfferQuestions').querySelectorAll('[data-offer-answer]').forEach(resizeOfferAnswer));
     by(root,'copyGenerateFicha').onclick=async()=>{
       if(creatingPresell)return;
       creatingPresell=true;const button=by(root,'copyGenerateFicha');button.disabled=true;button.textContent='Validando e preparando…';
@@ -312,6 +323,9 @@ export async function mount({root,toast}={}){
       finally{creatingPresell=false;button.disabled=false;button.textContent='Validar ficha e criar Presell'}
     };
     const markManual=event=>{
+      if(event.target.matches('[data-offer-answer]')){
+        resizeOfferAnswer(event.target);event.target.closest('.copy-ficha-question')?.classList.remove('is-unidentified');return;
+      }
       if(event.target.id==='copyFichaSource'){
         clearPresellFeedback(root,'Conteúdo alterado. Valide novamente antes de criar a Presell.');event.target.classList.remove('is-pending');event.target.removeAttribute('aria-invalid');return;
       }

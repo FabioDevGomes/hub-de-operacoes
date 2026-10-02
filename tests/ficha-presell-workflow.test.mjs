@@ -70,10 +70,11 @@ test('draft round-trip keeps the existing key, manual/autofill origin and unknow
   const denied={getItem(){throw Error('denied')},setItem(){throw Error('denied')},removeItem(){throw Error('denied')}};
   assert.equal(readDraft(denied),null);assert.doesNotThrow(()=>writeDraft(update,denied));assert.doesNotThrow(()=>clearDraft(denied));
 });
-test('presentation has the same single action, required fields and safely escaped structured placeholder',()=>{
+test('presentation keeps creation separate from restored questions and safely escapes structured placeholder',()=>{
   const html=renderTemplate();for(const id of ['copyRawText','copyDiscount','copyDiscountAmount','copyProductPrice','copyFichaSource','copyGenerateFicha','copyPresellStatus','copyPresellReport','copyWarnings'])assert.ok(html.includes('id="'+id+'"'));
   assert.equal((html.match(/id="copyGenerateFicha"/g)||[]).length,1);
-  assert.ok(html.includes(structuredFichaFormat));assert.ok(!html.includes('Gerar copy')&&!html.includes('Gerar perguntas e respostas')&&!html.includes('copyPackages'));
+  assert.ok(html.includes(structuredFichaFormat));assert.ok(!html.includes('Gerar copy')&&!html.includes('copyPackages'));
+  for(const id of ['copyGenerateQuestions','copyOfferQuestions','copyQuestionsCopy'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   const report=reportHtml({overall:'BLOCKED',phases:[{name:'<unsafe>',report:{checks:[{status:'BLOCK',name:'field',message:'<img onerror=bad>'}]}}]});
   assert.ok(report.includes('&lt;img onerror=bad&gt;')&&!report.includes('<img'));
   assert.equal(legacyParse,parseFicha);assert.equal(legacyCreate,createPresellFromFicha);assert.equal(legacyReport,reportHtml);

@@ -63,6 +63,8 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | --- | --- | --- |
 | Rota, título e item ativo da SPA | `src/view-registry.js` | `tests/view-registry.test.mjs` |
 | Troca de telas, limpeza visual e carregamento assíncrono | `src/navigation-controller.js`, adaptadores no painel | `tests/navigation-controller.test.mjs` |
+| Aviso de base atualizada entre telas abertas (duração do toast) | `src/index.template.html` | `tests/build.test.mjs` |
+| Meu Tempo: aviso prolongado com destaque da duração lançada | `src/meu-tempo/meu-tempo-view.mjs`, `src/index.template.html` | `tests/meu-tempo-daily-order-ui.test.mjs`, `tests/build.test.mjs` |
 | Menu, grupos e tipografia lateral | `src/sidebar-component.js`, `src/sidebar-component.css` | `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs` |
 | Curadoria Hot Offers MS: parser, histórico, filtros e decisões | `src/curadoria/hot-offers-ms/` | `tests/hot-offers-ms-domain.test.mjs`, `tests/hot-offers-ms-storage.test.mjs`, `tests/hot-offers-ms-ui.test.mjs`, `tests/sidebar-component.test.mjs` |
 | Integração das telas e projeção da base | `src/index.template.html` | `tests/build.test.mjs` e testes do domínio |

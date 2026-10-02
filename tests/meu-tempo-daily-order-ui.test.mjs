@@ -13,6 +13,8 @@ const view=await readFile(new URL('../src/meu-tempo/meu-tempo-view.mjs',import.m
 const storage=await readFile(new URL('../src/meu-tempo/meu-tempo-storage.mjs',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
 assert.ok(view.includes('<th>Ação</th>'),'tabela do lançamento diário deve exibir a coluna Ação');
+assert.ok(view.includes("refresh(`${item.name}: ${formattedDuration} registrado.`,{duration:TIME_ENTRY_TOAST_DURATION_MS,highlight:formattedDuration})"),'lançamento manual deve destacar a duração recém-adicionada no aviso prolongado');
+assert.ok(view.includes("refresh(`${item.name}: intervalo de ${formattedDuration} registrado.`,{duration:TIME_ENTRY_TOAST_DURATION_MS,highlight:formattedDuration})")&&view.includes("refresh(`${item.name}: ${formattedDuration} registrado até ${interval.end}.`,{duration:TIME_ENTRY_TOAST_DURATION_MS,highlight:formattedDuration})"),'lançamentos por intervalo e até agora devem destacar a duração no aviso prolongado');
 const dailyViewBlock=view.match(/function dailyView\(\)\{([\s\S]*?)\n\}/)?.[1]||'';
 const productivePercentIndex=dailyViewBlock.indexOf('Percentual produtivo'),preWorkIndex=dailyViewBlock.indexOf('Tempo até começar a trabalhar');
 assert.ok(preWorkIndex>productivePercentIndex&&dailyViewBlock.includes('Domain.totalPreWorkDuration(data.entries,selectedDate)')&&dailyViewBlock.includes('Domain.formatDuration(preWorkMinutes)'),'o KPI de tempo até começar a trabalhar vem logo após o percentual produtivo e usa a data selecionada');

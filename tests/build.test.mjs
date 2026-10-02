@@ -77,6 +77,7 @@ assert.ok(billingStorage.includes("const BILLING_SEED_KEY = 'seed:legacy-faturam
 assert.ok(billingStorage.includes('onlyIfMissing = false'),'sincronização de recuperação deve ser idempotente e não substituir dados financeiros já sincronizados');
 assert.ok(billingView.includes('Competência')&&billingView.includes('Caixa')&&billingView.includes('Registrar recebimento')&&billingView.includes('Reembolso'),'interface do módulo financeiro incompleta');
 assert.ok(html.includes('billing/billing-shell.css')&&html.includes("billing:{bodyClass:'billing-page'")&&navigation.includes("classList.toggle(name,name===entry.bodyClass)")&&billingShell.includes('body.billing-page .actions'),'isolamento visual da página de Faturamento ausente');
+assert.ok(html.includes('const TOAST_DEFAULT_DURATION_MS=3600,BASE_UPDATED_TOAST_DURATION_MS=TOAST_DEFAULT_DURATION_MS*2')&&html.includes("function toast(message,error=false,duration=TOAST_DEFAULT_DURATION_MS,highlight='')")&&html.includes('strong.textContent=emphasis')&&html.includes('clearTimeout(toastTimer)')&&html.includes("setTimeout(()=>el.className='toast',duration)")&&html.includes("toast('Base atualizada pelo Preparador MCC',false,BASE_UPDATED_TOAST_DURATION_MS)"),'aviso de base atualizada deve durar o dobro do toast padrão sem alongar os demais avisos e suportar destaque seguro');
 assert.ok(!billingView.includes('seed-v1.json')&&!billingView.includes('installBillingSeed'),'Faturamento não deve importar dados pessoais empacotados');
 for(const privateArtifact of ['../dist/billing/seed-v1.json','../dist/campaign-snapshot-seed.json','../dist/__paused-history-source.json'])await assert.rejects(access(new URL(privateArtifact,import.meta.url)),error=>error?.code==='ENOENT',`${privateArtifact} não pode ser publicado no dist`);
 assert.ok(!billingView.includes('input type="file"')&&!billingView.includes('Importar Excel'),'a view de Faturamento não deve incluir importador XLSX');
@@ -198,11 +199,12 @@ assert.ok(sidebarComponent.includes('body.animate(')&&sidebarComponent.includes(
 assert.ok(sidebarComponent.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado do menu expansível não é preservado');
 assert.ok(sidebarCss.includes('.hub-menu-group.collapsed')&&sidebarCss.includes('.hub-menu-products #campaignList'),'estilos comuns do menu não são publicados');
 assert.ok(sidebarCss.includes('.hub-menu-products #campaignList')&&sidebarCss.includes('max-height: clamp('),'lista de campanhas do submenu Produtos não tem altura limitada para manter o espaçamento estável');
-assert.ok(html.includes("import('./meu-tempo/meu-tempo-view.mjs?v=18')"),'Meu Tempo não é carregado pelo módulo dedicado versionado');
+assert.ok(html.includes("import('./meu-tempo/meu-tempo-view.mjs?v=19')"),'Meu Tempo não é carregado pelo módulo dedicado versionado');
 assert.ok(html.includes('meu-tempo/meu-tempo.css?v=11'),'CSS do Meu Tempo não está versionado para invalidar cache');
 assert.ok(timeViewModule.includes('painel-meu-tempo')||timeViewModule.includes("from'./meu-tempo-storage.mjs'"),'módulo Meu Tempo não foi copiado para dist');
 assert.ok(timeViewModule.includes("input[data-manual],input[data-value]"),'campos manuais do Meu Tempo não registram pelo Enter');
 assert.ok(timeViewModule.includes("input.dataset.submitting==='true'"),'Enter manual do Meu Tempo não impede registro duplicado');
+assert.ok(timeViewModule.includes('const TIME_ENTRY_TOAST_DURATION_MS=7200')&&timeViewModule.includes('highlight:formattedDuration'),'avisos de duração do Meu Tempo devem durar 7,2 s e destacar o tempo lançado');
 const dailyViewBlock=timeViewModule.match(/function dailyView\(\)\{([\s\S]*?)\n\}/)?.[1]||'';
 assert.ok(dailyViewBlock.includes('shell(')&&dailyViewBlock.includes('bindDaily(day)'),'eventos do Diário do Meu Tempo não são conectados após a renderização');
 assert.ok(!dailyViewBlock.includes('return shell('),'Diário do Meu Tempo encerra antes de conectar seus eventos');

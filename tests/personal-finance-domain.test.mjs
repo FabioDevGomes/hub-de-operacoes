@@ -257,18 +257,28 @@ globalExpensesAfterFuturePayment.add({ month_key:'2026-10', category_id:'das', c
 globalExpensesAfterFuturePayment.add({ month_key:'2026-11', category_id:'nubank', category_name:'Cart nubank', currency:'BRL', planned_amount:169, actual_amount:null });
 assert.deepEqual(globalExpensesAfterFuturePayment.result().BRL, { planned:341.1, actual:86.05, remaining:255.05 }, 'o consolidado global inclui todo valor mensal planejado, inclusive Cart nubank em meses além da próxima fatura');
 
+const reserveComparisonForSpend = actualAmount => {
+  const totals = createGlobalExpenseTotals(new Date(2026, 9, 2));
+  totals.add({ month_key:'2026-10', category_id:'week1', category_name:'Lazer semana 1', currency:'BRL', planned_amount:300, actual_amount:actualAmount });
+  totals.add({ month_key:'2026-10', category_id:'future', category_name:'Demais despesas futuras', currency:'BRL', planned_amount:44742, actual_amount:null });
+  const netFutureBalance = totals.result().BRL.remaining;
+  return { netFutureBalance, difference:reserveMinusOpenExpenses(netFutureBalance, 44957) };
+};
+assert.deepEqual(reserveComparisonForSpend(300), { netFutureBalance:44742, difference:215 }, 'quando o realizado iguala o planejado, o saldo futuro líquido preserva a diferença da reserva');
+assert.deepEqual(reserveComparisonForSpend(400), { netFutureBalance:44642, difference:315 }, 'gastar R$ 100 acima do planejado reduz o saldo futuro líquido em R$ 100 e aumenta a diferença da reserva em R$ 100');
+
 const globalOpenExpenses = createGlobalExpenseTotals(globalAsOf);
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'planned', category_name:'Planejada', currency:'BRL', planned_amount:1000, actual_amount:100 });
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:200 });
 globalOpenExpenses.add({ month_key:'2026-10', category_id:'overpaid', category_name:'Pago acima', currency:'BRL', planned_amount:50, actual_amount:75 });
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'usd', category_name:'Despesa USD', currency:'USD', planned_amount:100, actual_amount:25 });
-assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:925 }, 'o saldo global soma o aberto item a item e inclui somente excedentes das linhas com planejamento; gastos sem planejado ficam fora');
+assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:875 }, 'o saldo global soma planejado menos realizado por linha; gastos sem planejado ficam fora e excedentes reduzem o líquido');
 assert.deepEqual(globalOpenExpenses.result().USD, { planned:100, actual:25, remaining:75 }, 'o saldo global em dólares mantém a moeda separada e subtrai somente o realizado dentro do planejamento daquela linha');
 const globalOpenWithUncoveredSpending = createGlobalExpenseTotals(globalAsOf);
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'lunch', category_name:'Almoço', currency:'BRL', planned_amount:100, actual_amount:110 });
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:10 });
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'within-plan', category_name:'Dentro do plano', currency:'BRL', planned_amount:100, actual_amount:10 });
-assert.equal(globalOpenWithUncoveredSpending.result().BRL.remaining, 100, 'R$ 110 realizados em uma linha planejada em R$ 100 adicionam R$ 10; gasto sem planejado fica fora e gasto dentro do plano reduz o aberto');
+assert.equal(globalOpenWithUncoveredSpending.result().BRL.remaining, 80, 'R$ 110 realizados em uma linha planejada em R$ 100 reduzem o saldo em R$ 10; gasto sem planejado fica fora e gasto dentro do plano reduz o aberto');
 
 const futureOnlyExpenses = createGlobalExpenseTotals(globalAsOf);
 for (const [week, actual] of [[1, 700], [2, 299], [3, 784], [4, 410]]) {

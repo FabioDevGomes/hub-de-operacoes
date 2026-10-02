@@ -1,5 +1,5 @@
-import * as Domain from './personal-finance-domain.mjs?v=21';
-import * as Storage from './personal-finance-storage.mjs?v=16';
+import * as Domain from './personal-finance-domain.mjs?v=22';
+import * as Storage from './personal-finance-storage.mjs?v=17';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
@@ -209,17 +209,16 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
   }
   function reserveCoverage(code) {
     const reserveBalance = Number(state.reserveSummary?.balances?.[code]) || 0;
-    const globalRemaining = Number(state.globalExpenseTotals?.[code]?.remaining) || 0;
-    const remainingToCover = Math.max(0, globalRemaining);
-    return { reserveBalance, remainingToCover, globalDifference:Domain.reserveMinusOpenExpenses(remainingToCover, reserveBalance) };
+    const netFutureBalance = Number(state.globalExpenseTotals?.[code]?.remaining) || 0;
+    return { reserveBalance, netFutureBalance, globalDifference:Domain.reserveMinusOpenExpenses(netFutureBalance, reserveBalance) };
   }
   function renderGlobalReserveSummary() {
     const metrics = [
       { label:'Reserva global (inclui aportes futuros)', value:code => reserveCoverage(code).reserveBalance },
-      { label:'Despesas futuras (saldo + excedentes)', value:code => reserveCoverage(code).remainingToCover },
-      { label:'Diferença: reserva − despesas futuras', value:code => reserveCoverage(code).globalDifference, tone:value => value < 0 ? 'is-negative' : 'is-positive' }
+      { label:'Saldo futuro líquido (planejado − realizado)', value:code => reserveCoverage(code).netFutureBalance },
+      { label:'Diferença: reserva − saldo futuro líquido', value:code => reserveCoverage(code).globalDifference, tone:value => value < 0 ? 'is-negative' : 'is-positive' }
     ];
-    return `<section class="pf-month-global-summary" aria-label="Resumo global da reserva"><div class="pf-month-global-grid">${metrics.map(metric => `<div class="pf-month-global-metric"><small>${metric.label}</small><div class="pf-month-global-values">${Domain.CURRENCIES.map(code => { const value = metric.value(code); return `<span class="${usdClass(code)} ${metric.tone?.(value) || ''}"><b>${code}</b><strong>${money(value, code)}</strong></span>`; }).join('')}</div></div>`).join('')}</div><p>O total inclui apenas meses atuais e futuros, e semanas da competência atual ainda não encerradas; saldo não consumido e excedentes entram por linha. Sem planejamento, a despesa fica fora. A diferença compara a reserva global com este total. BRL e USD são calculados separadamente.</p></section>`;
+    return `<section class="pf-month-global-summary" aria-label="Resumo global da reserva"><div class="pf-month-global-grid">${metrics.map(metric => `<div class="pf-month-global-metric"><small>${metric.label}</small><div class="pf-month-global-values">${Domain.CURRENCIES.map(code => { const value = metric.value(code); return `<span class="${usdClass(code)} ${metric.tone?.(value) || ''}"><b>${code}</b><strong>${money(value, code)}</strong></span>`; }).join('')}</div></div>`).join('')}</div><p>O saldo futuro líquido soma planejado menos realizado apenas em meses atuais e futuros e semanas da competência atual ainda não encerradas; gastos acima do planejado reduzem o saldo e podem torná-lo negativo. Linhas sem planejamento ficam fora. A diferença é a reserva global menos esse saldo. BRL e USD são calculados separadamente.</p></section>`;
   }
   function renderPeriodKpis(period, { compareReserve = false } = {}) {
     const visibleEntries = state.entries.filter(Domain.hasMonthlyOccurrence);

@@ -247,7 +247,7 @@ export function createGlobalExpenseTotals(now = new Date()) {
       if (planned != null) {
         const plannedCents = cents(planned);
         total.plannedCents += plannedCents;
-        total.remainingCents += Math.max(0, plannedCents - actualCents) + Math.max(0, actualCents - plannedCents);
+        total.remainingCents += plannedCents - actualCents;
       }
       if (actual != null) total.actualCents += actualCents;
     },

@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
-const start = template.indexOf('    function parseSaleClipboard(raw){');
+const start = template.indexOf('    function parseSaleClipboard(raw,source=saleSource){');
 const end = template.indexOf('\n    function saleCampaignCandidates', start);
 assert.ok(start >= 0 && end > start, 'não foi possível isolar o parser da colagem');
 const parserSource = template.slice(start, end).trim();
-const parse = new Function('state', `${parserSource}; return parseSaleClipboard;`)({ rate: 5.1 });
+const parse = new Function('state', `let saleSource='flowtracking'; ${parserSource}; return parseSaleClipboard;`)({ rate: 5.1 });
 
 const sample = `29/09/2026
 08:30

@@ -57,11 +57,17 @@
     const clicksPerSale=clicks!=null&&totalSales>0?clicks/totalSales:null;
     return{investment,revenue:totalRevenue,profit,roi,clicks,sales:totalSales,officialSales:sales,pendingSales,pendingRevenue,clicksPerSale};
   }
-  function aggregateMccDaily(dailyRecords=[],adjustments=new Map()){
+  function aggregateMccDaily(dailyRecords=[],adjustments=new Map(),{campaignProducts=new Map()}={}){
     const days=new Map();
     const get=(date)=>{
-      if(!days.has(date))days.set(date,{date,hasMccData:true,source:'mcc',sums:{investment:0,revenue:0,clicks:0,sales:0},observed:{investment:false,revenue:false,clicks:false,sales:false},pendingSales:0,pendingRevenue:0});
+      if(!days.has(date))days.set(date,{date,hasMccData:true,source:'mcc',sums:{investment:0,revenue:0,clicks:0,sales:0},observed:{investment:false,revenue:false,clicks:false,sales:false},pendingSales:0,pendingRevenue:0,productSales:new Map()});
       return days.get(date);
+    };
+    const productForCampaign=id=>typeof campaignProducts?.get==='function'?campaignProducts.get(String(id??''))||null:campaignProducts?.[String(id??'')]||null;
+    const addProductSales=(day,{product=null,sales=0,amount=null,provisional=false}={})=>{
+      const count=parseNumber(sales)||0;if(count<=0)return;
+      const label=String(product||'').trim()||null,key=JSON.stringify([label,Boolean(provisional)]),current=day.productSales.get(key)||{product:label,sales:0,amount:0,amountComplete:true,provisional:Boolean(provisional)};
+      current.sales+=count;const value=parseNumber(amount);if(value==null)current.amountComplete=false;else current.amount+=value;day.productSales.set(key,current);
     };
     for(const record of dailyRecords||[]){
       const date=parseDate(record?.data||record?.date);
@@ -71,15 +77,22 @@
       if(Object.values(values).every(value=>value==null))continue;
       const day=get(date);
       for(const [metric,value] of Object.entries(values))if(value!=null){day.sums[metric]+=value;day.observed[metric]=true;}
+      if(values.sales>0)addProductSales(day,{product:productForCampaign(record.campanha_id??record.campaign_id),sales:values.sales,amount:values.revenue,provisional:false});
     }
-    for(const summary of adjustments?.values?.()||[]){
+    for(const [campaignId,summary] of adjustments?.entries?.()||[]){
       for(const [rawDate,adjustment] of Object.entries(summary?.byDate||{})){
         const date=parseDate(rawDate),pendingSales=parseNumber(adjustment?.pendingConversions)||0,pendingRevenue=parseNumber(adjustment?.commissionAdjustment)||0;
         if(!date||(!pendingSales&&!pendingRevenue))continue;
         const day=get(date);day.pendingSales+=pendingSales;day.pendingRevenue+=pendingRevenue;
+        let remaining=pendingSales;
+        for(const sale of Array.isArray(adjustment?.productSales)?adjustment.productSales:[]){
+          const count=Math.min(remaining,Math.max(0,parseNumber(sale?.sales)??1));if(count<=0)continue;
+          addProductSales(day,{product:sale?.product||productForCampaign(campaignId),sales:count,amount:sale?.amount,provisional:true});remaining-=count;
+        }
+        if(remaining>0)addProductSales(day,{product:productForCampaign(campaignId),sales:remaining,provisional:true});
       }
     }
-    return[...days.values()].map(day=>({date:day.date,hasMccData:true,source:'mcc',...deriveMetrics({investment:day.observed.investment?day.sums.investment:null,revenue:day.observed.revenue?day.sums.revenue:null,clicks:day.observed.clicks?day.sums.clicks:null,sales:day.observed.sales?day.sums.sales:null,pendingSales:day.pendingSales,pendingRevenue:day.pendingRevenue})})).sort((a,b)=>a.date.localeCompare(b.date));
+    return[...days.values()].map(day=>({date:day.date,hasMccData:true,source:'mcc',...deriveMetrics({investment:day.observed.investment?day.sums.investment:null,revenue:day.observed.revenue?day.sums.revenue:null,clicks:day.observed.clicks?day.sums.clicks:null,sales:day.observed.sales?day.sums.sales:null,pendingSales:day.pendingSales,pendingRevenue:day.pendingRevenue}),productSales:[...day.productSales.values()].map(item=>({product:item.product,sales:item.sales,amount:item.amountComplete?item.amount:null,provisional:item.provisional}))})).sort((a,b)=>a.date.localeCompare(b.date));
   }
   function parseHistoricalWorkbook(workbook){
     const entries=[],seen=new Map(),ignoredSheets=[];
@@ -121,6 +134,16 @@
     for(const row of incoming||[]){const prior=next.get(row.date);if(!prior||replaceConflicts&&!sameHistory(prior,row))next.set(row.date,{...row});}
     return{rows:[...next.values()].sort((a,b)=>a.date.localeCompare(b.date)),...preview,applied:true};
   }
+  function reconcileProductSales(items=[],officialSales=null,pendingSales=0){
+    const output=(items||[]).filter(item=>parseNumber(item?.sales)>0).map(item=>({product:String(item.product||'').trim()||null,sales:parseNumber(item.sales),amount:parseNumber(item.amount),provisional:Boolean(item.provisional)}));
+    for(const [provisional,targetValue] of [[false,officialSales],[true,pendingSales]]){
+      const target=parseNumber(targetValue);if(target==null)continue;
+      const assigned=output.filter(item=>item.provisional===provisional).reduce((sum,item)=>sum+item.sales,0),remaining=target-assigned;
+      if(remaining>0)output.push({product:null,sales:remaining,amount:null,provisional});
+    }
+    return output;
+  }
+  function annotatedProductSalesCount(observation){return[...String(observation||'').matchAll(/(?:^|[·;]\s*)(\d+)\s+[^·;()]+?\s+\(R\$\s*[\d.,]+\)/gi)].reduce((sum,match)=>sum+Number(match[1]),0)}
   function combineDailyRows(mccRows=[],historicalRows=[]){
     const mccByDate=new Map((mccRows||[]).map(row=>[row.date,row])),historyByDate=new Map((historicalRows||[]).map(row=>[row.date,row])),dates=new Set([...mccByDate.keys(),...historyByDate.keys()]);
     for(let time=Date.parse(`${SUSPENSION_START}T00:00:00Z`);time<=Date.parse(`${SUSPENSION_END}T00:00:00Z`);time+=86400000)dates.add(new Date(time).toISOString().slice(0,10));
@@ -132,16 +155,20 @@
         const clicksFromMcc=history.clicks==null&&canFillClicksSales&&mcc?.clicks!=null;
         const salesFromMcc=history.sales==null&&canFillClicksSales&&mcc?.sales!=null;
         const pendingSales=mcc?.pendingSales||0,pendingRevenue=mcc?.pendingRevenue||0;
-        const values=deriveMetrics({investment:history.investment,revenue:history.revenue,clicks:history.clicks??(clicksFromMcc?mcc.clicks:null),sales:history.sales??(salesFromMcc?mcc.sales:null),pendingSales,pendingRevenue});
+        const mccOfficialSales=mcc?.officialSales??(mcc?.pendingSales?null:mcc?.sales),values=deriveMetrics({investment:history.investment,revenue:history.revenue,clicks:history.clicks??(clicksFromMcc?mcc.clicks:null),sales:history.sales??(salesFromMcc?mccOfficialSales:null),pendingSales,pendingRevenue});
         const observation=[history.observation||'',suspended&&!normalizeText(history.observation).includes('suspens')?SUSPENSION_OBSERVATION:''].filter(Boolean).join(' · ');
-        combined.push({date,source:clicksFromMcc||salesFromMcc?'mixed':'planilha',hasMccData:Boolean(mcc),...values,observation});
+        const mccOfficial=mcc?.productSales?.filter(item=>!item.provisional)||[],mccPending=mcc?.productSales?.filter(item=>item.provisional)||[],historyCountMatchesMcc=history.sales!=null&&date>=MCC_CLICKS_SALES_FALLBACK_FROM&&mcc?.officialSales===history.sales;
+        const notesCoverHistorySales=history.sales!=null&&history.sales>0&&annotatedProductSalesCount(history.observation)>=history.sales,officialDetails=notesCoverHistorySales?[]:history.sales==null&&salesFromMcc?mccOfficial:historyCountMatchesMcc?mccOfficial:history.sales>0?[{product:null,sales:history.sales,amount:null,provisional:false}]:[];
+        const productSales=reconcileProductSales([...officialDetails,...mccPending],notesCoverHistorySales?0:values.officialSales,values.pendingSales);
+        combined.push({date,source:clicksFromMcc||salesFromMcc?'mixed':'planilha',hasMccData:Boolean(mcc),...values,observation,productSales});
         continue;
       }
       if(suspended){
-        combined.push({date,source:'suspension',hasMccData:false,...deriveMetrics({investment:null,revenue:null,clicks:null,sales:null,pendingSales:mcc?.pendingSales||0,pendingRevenue:mcc?.pendingRevenue||0}),observation:SUSPENSION_OBSERVATION});
+        const values=deriveMetrics({investment:null,revenue:null,clicks:null,sales:null,pendingSales:mcc?.pendingSales||0,pendingRevenue:mcc?.pendingRevenue||0});
+        combined.push({date,source:'suspension',hasMccData:false,...values,observation:SUSPENSION_OBSERVATION,productSales:reconcileProductSales(mcc?.productSales?.filter(item=>item.provisional)||[],values.officialSales,values.pendingSales)});
         continue;
       }
-      if(mcc)combined.push({...mcc,observation:mcc.observation||''});
+      if(mcc)combined.push({...mcc,observation:mcc.observation||'',productSales:reconcileProductSales(mcc.productSales,mcc.officialSales,mcc.pendingSales)});
     }
     return combined.sort((a,b)=>b.date.localeCompare(a.date));
   }
@@ -177,7 +204,8 @@
     let month=normalizeMonth(startMonth);const through=parseDate(throughDate)||localIsoDate(),last=through.slice(0,7),output=[];if(!month||month>last)return output;
     const byMonth=new Map();for(const row of rows||[]){const date=parseDate(row?.date);if(!date)continue;const key=date.slice(0,7);if(key<month||key>last)continue;if(!byMonth.has(key))byMonth.set(key,[]);byMonth.get(key).push(row)}
     while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month);output.push(trendBucket(month,byMonth.get(month)||[],days));month=shiftMonth(month,1)}
-    return output;
+    const observedClickMonths=output.filter(bucket=>bucket.clicks!=null),averageMonthlyClicks=observedClickMonths.length?observedClickMonths.reduce((sum,bucket)=>sum+bucket.clicks,0)/observedClickMonths.length:null;
+    return output.map(bucket=>({...bucket,averageMonthlyClicks,averageMonthlyClicksCount:observedClickMonths.length}));
   }
   return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,summarize,lifetimeSummary,dailyTrendBuckets,monthlyTrendBuckets});
 });

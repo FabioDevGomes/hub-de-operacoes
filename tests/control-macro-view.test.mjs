@@ -14,7 +14,7 @@ function harness(rows=[]){
   const controller=ctx.window.ControlMacroView.mount({root:h.root,state,getRows:()=>current,domain,format,onImportHistory:()=>imports++});
   return {...h,state,controller,setRows:rows=>{current=rows},imports:()=>imports};
 }
-const row={date:'2026-09-29',investment:100,revenue:150,profit:50,roi:50,clicks:10,sales:2,officialSales:1,pendingSales:1,pendingRevenue:20,source:'mixed',observation:'<synthetic>'};
+const row={date:'2026-09-29',investment:100,revenue:150,profit:50,roi:50,clicks:10,sales:2,officialSales:1,pendingSales:1,pendingRevenue:20,source:'mixed',observation:'<synthetic>',productSales:[{product:'Wego6',sales:1,amount:433.91,provisional:false},{product:'StopWatt',sales:1,amount:20,provisional:true}]};
 
 test('Macro renders existing totals, provenance and provisional values without mutating input',()=>{
   const rows=[structuredClone(row)],original=structuredClone(rows),h=harness(rows);h.state.macroMonth='2026-09';h.controller.render();
@@ -22,7 +22,11 @@ test('Macro renders existing totals, provenance and provisional values without m
   assert.match(h.get('#macroKpis').innerHTML,/1 oficiais · 1 provisórias/);
   assert.match(h.get('#macroDailyBody').innerHTML,/Planilha \+ MCC/);
   assert.match(h.get('#macroDailyBody').innerHTML,/&lt;synthetic&gt;/);
-  assert.match(h.get('#macroLifetimeKpis').innerHTML,/Lucro total/);
+  assert.match(h.get('#macroDailyBody').innerHTML,/1 Wego6 \(BRL 433\.91\)/);
+  assert.match(h.get('#macroDailyBody').innerHTML,/1 StopWatt \(BRL 20\.00; provisória\)/);
+  assert.equal((h.get('#macroKpis').innerHTML.match(/class="card macro-kpi"/g)||[]).length,8,'os sete indicadores mensais e o lucro histórico aparecem na mesma grade');
+  assert.match(h.get('#macroKpis').innerHTML,/Lucro total/);
+  assert.match(h.get('#macroKpis').innerHTML,/Histórico completo/);
   assert.deepEqual(rows,original);
 });
 test('Macro month controls preserve selection when data is refreshed',()=>{
@@ -38,6 +42,13 @@ test('Macro empty state, zero and missing values remain distinct',()=>{
   assert.match(h.get('#macroDailyBody').innerHTML,/<td>BRL 0.00<\/td><td>—/);
   h.setRows([]);h.controller.render();assert.match(h.get('#macroDailyBody').innerHTML,/Não há dias com dados/);
 });
+test('Macro marks sales without product detail and escapes imported product names',()=>{
+  const unknown=harness([{...row,observation:'',productSales:[{product:null,sales:2,amount:null,provisional:false}]}]);unknown.state.macroMonth='2026-09';unknown.controller.render();
+  assert.match(unknown.get('#macroDailyBody').innerHTML,/2 vendas sem produto identificado/);
+  const untrusted=harness([{...row,observation:'',productSales:[{product:'<img src=x>',sales:1,amount:1,provisional:false}]}]);untrusted.state.macroMonth='2026-09';untrusted.controller.render();
+  assert.match(untrusted.get('#macroDailyBody').innerHTML,/&lt;img src=x&gt;/);
+  assert.doesNotMatch(untrusted.get('#macroDailyBody').innerHTML,/<img src=x>/);
+});
 test('Macro charts preserve all metrics, gaps, coverage and aligned performance tracks',()=>{
   const h=harness([row,{...row,date:'2026-09-30',clicks:null,revenue:null,roi:null}]);h.state.macroMonth='2026-09';
   h.get('#macroTrendDaily').onclick();assert.equal(h.state.macroTrendScope,'daily');
@@ -51,6 +62,16 @@ test('Macro charts preserve all metrics, gaps, coverage and aligned performance 
   h.get('#macroTrendMonthly').onclick();assert.equal(h.state.macroTrendScope,'monthly');
   h.get('#macroHistoryInput').onchange();assert.equal(h.imports(),1);
   assert.doesNotMatch(source,/indexedDB|localStorage|fetch\(/);
+});
+test('Macro monthly clicks chart compares each month with the mean total; daily view stays unchanged',()=>{
+  const h=harness([row,{...row,date:'2026-08-29',clicks:0},{...row,date:'2026-07-29',clicks:null}]);h.state.macroMonth='2026-09';
+  h.get('#macroTrendDaily').onclick();h.state.macroTrendMetric='clicks';h.controller.renderTrend();
+  assert.doesNotMatch(h.get('#macroTrendChart').innerHTML,/macro-chart-bar-average|Média mensal/);
+  h.get('#macroTrendMonthly').onclick();h.state.macroTrendMetric='clicks';h.controller.renderTrend();
+  assert.match(h.get('#macroTrendLegend').innerHTML,/Média mensal/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/macro-chart-bar-average/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/média dos totais/);
+  assert.match(h.get('#macroTrendChart').innerHTML,/Evolução de cliques e média mensal/);
 });
 test('Macro import conflict preview retains shared formatters and performs no writes',async()=>{
   const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');

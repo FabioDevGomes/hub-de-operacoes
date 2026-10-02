@@ -19,16 +19,16 @@ assert.equal(domain.parseNumber('R$ 1.234,56'), 1234.56);
 assert.equal(domain.parseNumber('1.234'), 1234);
 
 const mccRows = [
-  { data: '2026-09-18', celulas: { O: { value: 100 }, P: { value: 250 }, C: { value: 20 }, F: { value: 2 } } },
+  { campanha_id: 'campaign-1', data: '2026-09-18', celulas: { O: { value: 100 }, P: { value: 250 }, C: { value: 20 }, F: { value: 2 } } },
   { data: '2026-09-19', celulas: { O: { value: 0 }, P: { value: 0 }, C: { value: 0 }, F: { value: 0 } } },
 ];
 const adjustments = new Map([
-  ['campaign-1', { byDate: { '2026-09-18': { pendingConversions: 1, commissionAdjustment: 85 } } }],
+  ['campaign-1', { byDate: { '2026-09-18': { pendingConversions: 1, commissionAdjustment: 85, productSales: [{ product: 'Wego6', amount: 85 }] } } }],
 ]);
-const mcc = domain.aggregateMccDaily(mccRows, adjustments);
+const mcc = domain.aggregateMccDaily(mccRows, adjustments, { campaignProducts: new Map([['campaign-1', 'Wego6']]) });
 assert.deepEqual(mcc, [
-  { date: '2026-09-18', hasMccData: true, source: 'mcc', investment: 100, revenue: 335, profit: 235, roi: 235, clicks: 20, sales: 3, officialSales: 2, pendingSales: 1, pendingRevenue: 85, clicksPerSale: 20 / 3 },
-  { date: '2026-09-19', hasMccData: true, source: 'mcc', investment: 0, revenue: 0, profit: 0, roi: null, clicks: 0, sales: 0, officialSales: 0, pendingSales: 0, pendingRevenue: 0, clicksPerSale: null },
+  { date: '2026-09-18', hasMccData: true, source: 'mcc', investment: 100, revenue: 335, profit: 235, roi: 235, clicks: 20, sales: 3, officialSales: 2, pendingSales: 1, pendingRevenue: 85, clicksPerSale: 20 / 3, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }, { product: 'Wego6', sales: 1, amount: 85, provisional: true }] },
+  { date: '2026-09-19', hasMccData: true, source: 'mcc', investment: 0, revenue: 0, profit: 0, roi: null, clicks: 0, sales: 0, officialSales: 0, pendingSales: 0, pendingRevenue: 0, clicksPerSale: null, productSales: [] },
 ]);
 
 const workbook = {
@@ -73,6 +73,19 @@ assert.equal(combined.find(row => row.date === '2026-09-18').investment, 120);
 assert.equal(combined.find(row => row.date === '2026-09-18').revenue, 385);
 assert.equal(combined.find(row => row.date === '2026-09-18').clicks, 30);
 assert.equal(combined.find(row => row.date === '2026-09-18').observation, 'Dia forte');
+assert.deepEqual(combined.find(row => row.date === '2026-09-18').productSales, [
+  { product: null, sales: 3, amount: null, provisional: false },
+  { product: 'Wego6', sales: 1, amount: 85, provisional: true },
+], 'a planilha preserva vendas agregadas sem inventar produto; vendas provisórias continuam identificadas');
+const matchingHistory = domain.combineDailyRows([
+  { date: '2026-09-20', officialSales: 2, pendingSales: 0, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }] },
+], [{ date: '2026-09-20', investment: 10, revenue: 250, clicks: 5, sales: 2, observation: '' }]);
+assert.deepEqual(matchingHistory[0].productSales, [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }], 'atribuição MCC é exibida para uma linha histórica somente quando a contagem oficial coincide');
+const nullSalesHistory = domain.combineDailyRows(mcc, [{ date: '2026-09-18', investment: null, revenue: null, clicks: null, sales: null, observation: '' }]).find(row=>row.date==='2026-09-18');
+assert.equal(nullSalesHistory.sales,3,'ao preencher uma lacuna histórica, MCC não soma as vendas provisórias duas vezes');
+assert.equal(nullSalesHistory.productSales.reduce((sum,item)=>sum+item.sales,0),3);
+const annotatedHistory = domain.combineDailyRows([], [{ date: '2026-09-20', investment: 10, revenue: 433.91, clicks: 5, sales: 1, observation: '1 Wego6 (R$ 433,91)' }])[0];
+assert.deepEqual(annotatedHistory.productSales, [], 'nota histórica já identificada não recebe um rótulo adicional de produto desconhecido');
 assert.equal(combined.find(row => row.date === '2026-09-19').source, 'planilha');
 assert.equal(combined.find(row => row.date === '2026-09-19').investment, 0);
 assert.equal(combined.filter(row => domain.isSuspensionDate(row.date)).length, 15);
@@ -103,13 +116,20 @@ assert.equal(monthlyTrend[0].revenue, 350);
 assert.equal(monthlyTrend[0].profit, 50);
 assert.equal(monthlyTrend[0].roi, 50 / 300 * 100, 'ROI mensal deve ser ponderado pelo investimento, não média dos dias');
 assert.equal(monthlyTrend[0].clicks, 15);
+assert.ok(Math.abs(monthlyTrend[0].averageMonthlyClicks - 19 / 3) < 1e-9, 'a média considera os totais de abril, maio (incluindo zero) e setembro');
+assert.equal(monthlyTrend[0].averageMonthlyClicksCount, 3);
 assert.equal(monthlyTrend[0].sales, 2);
 assert.equal(monthlyTrend[0].officialSales, 1);
 assert.equal(monthlyTrend[0].pendingSales, 1);
 assert.deepEqual(monthlyTrend[0].coverage, { investment: 3, revenue: 2, profit: 2, roi: 2, clicks: 2, sales: 2 });
 assert.equal(monthlyTrend[2].investment, null, 'mês sem observações deve continuar ausente, não zero');
+assert.equal(monthlyTrend[2].clicks, null, 'mês sem cliques observados continua como lacuna');
+assert.ok(Math.abs(monthlyTrend[2].averageMonthlyClicks - 19 / 3) < 1e-9, 'mês sem dados conserva a referência da média do período');
 assert.equal(monthlyTrend[2].coverage.investment, 0);
 assert.equal(monthlyTrend[5].expectedDays, 22, 'mês atual deve ser tratado como parcial até a data de referência');
+const noObservedClicks = domain.monthlyTrendBuckets([{ date: '2026-04-01', investment: 10, clicks: null }], { startMonth: '2026-04', throughDate: '2026-04-30' });
+assert.equal(noObservedClicks[0].averageMonthlyClicks, null);
+assert.equal(noObservedClicks[0].averageMonthlyClicksCount, 0);
 const dailyTrend = domain.dailyTrendBuckets(trendRows, '2026-04', '2026-04-03');
 assert.equal(dailyTrend.length, 3);
 assert.equal(dailyTrend[1].investment, 50);
@@ -136,11 +156,13 @@ const template = await readFile(new URL('../src/control-macro/view.js', import.m
 const styles = await readFile(new URL('../src/control-macro/control-macro.css', import.meta.url), 'utf8');
 assert.match(template, /Number\(row\.sales\)>0\?'macro-sales-row':''/);
 assert.match(template, /isSuspensionDate\(row\.date\)\?'macro-suspension-row'/);
-assert.match(template, /macro-lifetime-summary/);
+assert.match(template, /id="macroKpis" class="macro-kpis"/);
+assert.doesNotMatch(template, /macroLifetimeKpis|macro-lifetime-summary/);
 assert.match(template, /lifetimeSummary\(all\)/);
-assert.match(template, /macroKpi\('Lucro total'/);
+assert.match(template, /macroKpi\('Lucro total'.*Histórico completo/);
 assert.doesNotMatch(template, /macroKpi\('Faturamento total'/);
-assert.match(styles, /\.macro-lifetime-summary\{/);
+assert.match(styles, /\.macro-kpis\{display:grid;grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
+assert.match(styles, /\.macro-kpi\{min-width:0;padding:8px 9px/);
 assert.match(styles, /\.macro-table tr\.macro-sales-row td\{background:rgba\(52,211,153,.075\)\}/);
 assert.match(styles, /\.macro-table tr\.macro-suspension-row td\{background:rgba\(248,113,113,.075\)\}/);
 

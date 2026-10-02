@@ -10,9 +10,12 @@ const databaseContext = vm.createContext({ window:{}, structuredClone });
 vm.runInContext(await readFile(new URL('../src/database.js', import.meta.url), 'utf8'), databaseContext);
 const db = databaseContext.window.CampaignDatabase;
 let persisted = db.create();
+persisted.campanhas = [{ id:'synthetic', nome_mcc:'Wego6 campanha', nome_exibicao:'Wego6' }];
 persisted.diario = [{ campanha_id:'synthetic', data:'2026-09-29', celulas:{ O:{value:100}, P:{value:50}, C:{value:10}, F:{value:1} } }];
-const state = { database:null, controlMacroRows:null };
-const context = vm.createContext({ state, CampaignDatabase:db, ControlMacroDomain:domain, embeddedManifest:null,
+const state = { database:null, controlMacroRows:null, productCatalog:{aliases:{}} };
+const context = vm.createContext({ state, CampaignDatabase:db, ControlMacroDomain:domain, ProductCatalog:{normalize:value=>value||{aliases:{}}},
+  accountProductIdentity:(campaign,catalog)=>({label:catalog.aliases[String(campaign.nome_exibicao||'').toLocaleLowerCase('pt-BR')]||campaign.nome_exibicao||campaign.nome_mcc}),
+  embeddedManifest:null,
   renderLegacyMigrationNotice(){}, render(){},
   openLocalDb:async () => ({ close(){}, transaction(names, mode){
     assert.equal(mode, 'readonly');
@@ -34,6 +37,7 @@ assert.equal(september().length, 0, 'primeiro render ocorre antes da leitura ass
 await context.restoreLocalBase({ persist:false, renderPage:false });
 assert.equal(september().length, 1, 'carregar a base deve recalcular o Macro vazio');
 assert.equal(september()[0].investment, 100);
+assert.deepEqual(september()[0].productSales.map(item=>({product:item.product,sales:item.sales,amount:item.amount})),[{product:'Wego6',sales:1,amount:50}], 'refresh também associa produto às vendas oficiais MCC');
 assert.equal(vm.runInContext('derivedCache', context), null);
 persisted.diario[0].celulas.O.value = 120;
 await context.restoreLocalBase({ persist:false, renderPage:false });

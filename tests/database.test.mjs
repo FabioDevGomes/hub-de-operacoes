@@ -257,6 +257,9 @@ assert.equal(saleResult.sale.billing_sale_id,`manual-sale:cmp_${saleResult.sale.
 let saleAdjustments=db.salesAdjustmentMap(saleResult.base).get('cmp_sale');
 assert.equal(saleAdjustments.pendingConversions,1);
 assert.equal(saleAdjustments.commissionAdjustment,436.75);
+assert.equal(saleAdjustments.byDate['2026-09-14'].productSales.length,1,'a projeção inclui a venda provisória pendente');
+assert.equal(saleAdjustments.byDate['2026-09-14'].productSales[0].product,'Wego6');
+assert.equal(saleAdjustments.byDate['2026-09-14'].productSales[0].amount,436.75,'a projeção preserva o valor da venda provisória');
 const duplicate=db.addProvisionalSale(saleResult.base,{campanha_id:'cmp_sale',data:'2026-09-14',valor_brl:436.75,pais_codigo:'DE',chave_duplicidade:'hash-unico'});
 assert.equal(duplicate.duplicate,true);
 duplicate.base.diario.push({campanha_id:'cmp_sale',data:'2026-09-14',celulas:{F:{value:1}},fontes:['manifesto']});

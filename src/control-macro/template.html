@@ -7,11 +7,7 @@
           </div>
           <label class="btn"><input id="macroHistoryInput" class="file-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">Importar histórico Excel</label>
         </div>
-        <div class="macro-lifetime-summary" aria-label="Acumulado de todos os meses">
-          <div class="macro-lifetime-heading"><strong>Acumulado de todos os meses</strong><small>Todo o histórico disponível na base</small></div>
-          <div id="macroLifetimeKpis" class="macro-lifetime-kpis" aria-live="polite"></div>
-        </div>
-        <div id="macroKpis" class="macro-kpis"></div>
+        <div id="macroKpis" class="macro-kpis" aria-live="polite"></div>
         <div class="card panel">
           <div class="panel-head"><div><h2>Resumo diário da operação</h2><p id="macroCaption">A planilha prevalece por campo; a MCC complementa cliques e vendas ausentes a partir de 13/09.</p></div><span id="macroRowCount" class="tag"></span></div>
           <div class="macro-table-wrap"><table class="macro-table"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th></tr></thead><tbody id="macroDailyBody"></tbody></table></div>

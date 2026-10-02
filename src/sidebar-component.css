@@ -111,4 +111,19 @@
 .shell > main > header.topbar h1 { font-size: clamp(.93rem, 1.8vw, 1.41rem); }
 .shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main > header.top h1 { font-size: clamp(.96rem, 1.8vw, 1.41rem); }
 .shell:has(> aside .hub-menu[data-hub-sidebar-active="ecommerce"]) > main > header.top h1 { font-size: 1.2rem; }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="hot-offers-ms"]) > main > header.top h1 { font-size: 1.2rem; }
 .app-shell > main.shell > header.hero h1 { font-size: clamp(19.2px, 3vw, 31.2px); }
+
+/* Keep the Curadoria pages aligned with E-commerce GM / Hot Offers MS. */
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="radar"]) > main,
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main { padding: 24px 28px 52px; }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="radar"]) > main > header.topbar,
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main > header.top { align-items: flex-start; gap: 18px; margin-bottom: 16px; }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="radar"]) > main > header.topbar .eyebrow,
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main > header.top .eyebrow { color: #42e7c0; font-size: .72rem; line-height: normal; letter-spacing: .14em; font-weight: 400; }
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="radar"]) > main > header.topbar h1,
+.shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main > header.top h1 { font-size: 1.2rem; line-height: normal; margin: 5px 0 3px; }
+@media (max-width: 1100px) {
+  .shell:has(> aside .hub-menu[data-hub-sidebar-active="radar"]) > main,
+  .shell:has(> aside .hub-menu[data-hub-sidebar-active="manager"]) > main { padding: 18px; }
+}

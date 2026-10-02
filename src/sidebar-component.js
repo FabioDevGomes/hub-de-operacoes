@@ -20,6 +20,7 @@
       { key: 'radar', label: 'Radar SpyHero', href: '/curadoria/' },
       { key: 'manager', label: 'Lista de Gerente GM', href: '/curadoria/gerentes/' },
       { key: 'ecommerce', label: 'E-commerce GM', href: '/curadoria/top-performance/' },
+      { key: 'hot-offers-ms', label: 'Hot Offers MS', href: '/curadoria/hot-offers-ms/' },
     ] },
     { id: 'creation', label: 'Criação de ofertas', items: [
       { key: 'asset-studio', label: 'Asset Studio', href: '/asset-studio/' },

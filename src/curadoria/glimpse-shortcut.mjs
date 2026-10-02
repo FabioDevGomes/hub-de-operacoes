@@ -19,6 +19,27 @@ export function glimpseUrl(origin,context){
 }
 
 export function mountGlimpseShortcut(origin){
+  if(origin==='top'){
+    const sheet=document.querySelector('#offerSheet'),tabs=sheet?.querySelector('.tabs'),overviewTab=tabs?.querySelector('[data-tab="overview"]'),trendsTab=tabs?.querySelector('[data-tab="trends"]'),imagesTab=tabs?.querySelector('[data-tab="images"]'),trendsPanel=sheet?.querySelector('[data-panel="trends"]'),imagesPanel=sheet?.querySelector('[data-panel="images"]');
+    if(!tabs||!trendsTab||!imagesTab||!trendsPanel||!imagesPanel||document.querySelector('#topGlimpseTab'))return;
+    overviewTab?.remove();
+    const button=document.createElement('button');button.type='button';button.id='topGlimpseTab';button.className=imagesTab.className;button.dataset.tab='glimpse';button.textContent='Glimpse';imagesTab.before(button);
+    const panel=document.createElement('section');panel.className='hidden';panel.dataset.panel='glimpse';panel.id='topGlimpsePanel';const frame=document.createElement('iframe');frame.id='topGlimpseFrame';frame.className='glimpse-embedded-frame';frame.title='Tela do Glimpse';frame.loading='lazy';panel.append(frame);trendsPanel.after(panel);
+    const showTab=name=>{tabs.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab===name));document.querySelectorAll('#offerSheet [data-panel]').forEach(item=>item.classList.toggle('hidden',item.dataset.panel!==name))};
+    new MutationObserver(()=>{if(!sheet.classList.contains('hidden')&&!sheet.querySelector('[data-panel="overview"]')?.classList.contains('hidden'))trendsTab.click()}).observe(sheet,{attributes:true,attributeFilter:['class']});
+    button.addEventListener('click',()=>{showTab('glimpse');const context=topContext();if(!context.productName)return;const url=new URL(glimpseUrl(origin,context),location.href);url.searchParams.set('embedded','1');if(frame.dataset.url!==url.href){frame.dataset.url=url.href;frame.src=url.href}});
+    document.addEventListener('click',event=>{
+      if(!(event.target instanceof Element))return;
+      const link=event.target.closest('[data-open-top-glimpse]');
+      if(!link)return;
+      event.preventDefault();event.stopPropagation();
+      const row=link.closest('[data-offer]');
+      if(!row)return;
+      row.click();button.click();
+    },true);
+    window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='hub-glimpse-close')return;trendsTab.click()});
+    return;
+  }
   const trendsButton=document.querySelector(origin==='top'?'#openTrends':'#managerOpenTrends');
   if(!trendsButton||document.querySelector('[data-open-glimpse-from-trends]'))return;
   const button=document.createElement('button');button.type='button';button.className='btn glimpse-shortcut';button.dataset.openGlimpseFromTrends=origin;button.textContent='Abrir Glimpse';

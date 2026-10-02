@@ -1,0 +1,31 @@
+#importDialog{width:min(1120px,calc(100% - 28px));max-height:calc(100vh - 28px);border-radius:18px;background:#091627;display:flex;flex-direction:column}
+#importDialog::backdrop{background:rgba(1,6,14,.8)}
+#importDialog .modalhead,#importDialog .modalfoot{flex:0 0 auto;padding:15px 18px;gap:12px}
+#importDialog .modalhead{border-bottom:1px solid var(--line)}
+#importDialog .modalhead b{font-size:1.1rem}
+#importDialog .modalfoot{border:0;border-top:1px solid var(--line);justify-content:flex-end}
+#importDialog .modalbody.import-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch;max-height:none;min-height:0;overflow:auto;padding:16px 18px}
+#importDialog .import-input{display:flex;min-width:0;flex-direction:column;align-items:stretch}
+#importDialog .import-input .field .control{max-width:none}
+#importDialog .import-help{margin:10px 0 0;line-height:1.45}
+#importDialog .paste{height:clamp(240px,42vh,390px);min-height:240px;margin:10px 0;flex:0 0 auto}
+#importDialog .complete-confirm{margin:0 0 11px;line-height:1.4}
+#importDialog .preview-box{display:flex;min-width:0;flex-direction:column;gap:10px;margin:0;padding:18px;background:#0d1c30}
+#importDialog .preview-head h3{margin:0 0 3px;font-size:1.25rem}
+#importDialog .preview-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#importDialog .preview-metrics>div{min-width:0;padding:9px 10px;border-radius:9px;background:#142840}
+#importDialog .preview-metrics span{display:block;color:var(--muted);font-size:.72rem;line-height:1.25}
+#importDialog .preview-metrics b{display:block;margin-top:4px;font-size:.9rem;overflow-wrap:anywhere}
+#importDialog .preview-status{margin-top:2px;font-weight:650;line-height:1.45}
+#importDialog .preview-status.ok{color:var(--green)}
+#importDialog .preview-status.warning{color:#ffd180}
+#importDialog .preview-status.error{color:#ff8c9a}
+#importDialog .issues{margin-top:0}
+#importDialog .preview-changes{min-height:0;overflow:auto}
+#importDialog .preview-note{margin:0 0 7px;color:var(--muted);font-size:.78rem;line-height:1.4}
+#importDialog .preview-change-list{display:grid;gap:5px}
+#importDialog .preview-change-list>div{display:flex;justify-content:space-between;gap:12px;padding:6px 8px;border-radius:8px;background:#142840;font-size:.75rem}
+#importDialog .preview-change-list>div span{text-align:right;overflow-wrap:anywhere}
+#importDialog .preview-change-list small{color:var(--muted)}
+@media(max-width:900px){#importDialog .modalbody.import-body{grid-template-columns:minmax(0,1fr)}#importDialog .paste{height:clamp(220px,36vh,330px)}#importDialog .preview-box{min-height:0}}
+@media(max-width:560px){#importDialog .modalbody.import-body{padding:13px}#importDialog .preview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#importDialog .preview-change-list>div{align-items:flex-start;flex-direction:column}#importDialog .preview-change-list>div span{text-align:left}}

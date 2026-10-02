@@ -75,3 +75,5 @@ body:has(nav[data-hub-sidebar-active="manager"]) #rows td,body:has(nav[data-hub-
 .trends-result-action{min-width:0;padding:6px 5px;font-size:.74rem;white-space:nowrap}
 .trends-result-action.point_peak,.trends-badge.point_peak{border-color:#65538f;background:#211b38;color:#d4c4ff}
 @media(max-width:700px){.trends-result-actions{grid-template-columns:repeat(7,minmax(104px,1fr));overflow-x:auto;padding:2px 3px 8px}}
+#offerSheet .tabs{position:sticky;top:0;z-index:5;padding:8px 0;background:var(--bg)}
+#offerSheet .glimpse-embedded-frame{display:block;width:100%;height:min(1200px,calc(100vh - 220px));min-height:560px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}

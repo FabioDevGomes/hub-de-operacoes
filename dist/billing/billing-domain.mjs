@@ -1,9 +1,12 @@
 export const BILLING_STATUSES = Object.freeze({
   pending: 'Pendente',
-  paid: 'Paga',
+  issued: 'Pagamento emitido',
+  paid: 'Pagamento recebido',
   partially_paid: 'Parcialmente paga',
   unknown: 'Não informado',
 });
+
+export const BILLING_MANUAL_STATUS_OPTIONS = Object.freeze(['pending', 'issued', 'paid']);
 
 export const BILLING_DIMENSIONS = Object.freeze({
   month: 'Mês', product: 'Produto', platform: 'Plataforma', account: 'Conta',
@@ -157,7 +160,7 @@ export function summarizeCompetence(sales, movements) {
   const refundConversions = refunds.reduce((sum, sale) => sum + conversionCount(sale), 0);
   const netBrl = netCurrency(grossBrl, refundBrl, activeConversions, refundConversions);
   const netUsd = netCurrency(grossUsd, refundUsd, activeConversions, refundConversions);
-  const pendingSales = active.filter(sale => ['pending', 'partially_paid'].includes(sale.payment_status));
+  const pendingSales = active.filter(sale => ['pending', 'issued', 'partially_paid'].includes(sale.payment_status));
   const paidWithoutDate = active.filter(sale => sale.payment_status === 'paid' && !receipts.some(move => move.sale_id === sale.sale_id && move.effective_date));
   const pendingBrl = remainingByCurrency(pendingSales, receipts, 'value_brl');
   const pendingUsd = remainingByCurrency(pendingSales, receipts, 'value_usd');
@@ -181,6 +184,10 @@ export function summarizeCompetence(sales, movements) {
 function conversionCount(sale) {
   const count = Number(sale?.conversion_count);
   return Number.isFinite(count) && count >= 0 ? count : 1;
+}
+
+export function totalSalesCount(sales = []) {
+  return sales.filter(sale => sale.active !== false).reduce((sum, sale) => sum + conversionCount(sale), 0);
 }
 
 function netCurrency(gross, refund, salesCount, refundCount) {

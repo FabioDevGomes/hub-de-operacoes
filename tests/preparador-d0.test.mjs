@@ -38,7 +38,7 @@ assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"
 assert.ok(applyFlow.includes('applied.reconciledSales'),'o Preparador envia apenas as vendas manuais cujo estado mudou na importação');
 assert.ok(!applyFlow.includes('.filter(sale=>sale.billing_sale_id)'),'o Preparador não deve descartar lançamentos legados sem o vínculo novo do Faturamento');
 assert.ok(applyFlow.includes('provisionalSaleIds:linkedSales.map(sale=>String(sale.id))'),'o Preparador deve avisar a tela aberta quais vendas manuais foram conciliadas');
-assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=5')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
+assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=6')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
 assert.ok(html.includes('billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales)'),'base MCC e conciliação financeira são gravadas na mesma transação local');
 assert.ok(html.includes('billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales)'),'agregados D0/D−1 do MCC também são gravados atomicamente no Faturamento');
 assert.ok(!applyFlow.includes('fallbackPanelDatabase'),'Preparador não pode atualizar silenciosamente sem Event Log');

@@ -1,4 +1,4 @@
-import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs';
+import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=2';
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
 export const BILLING_DB_NAME = DB_NAME;

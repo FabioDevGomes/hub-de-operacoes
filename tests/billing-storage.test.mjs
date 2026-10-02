@@ -30,6 +30,8 @@ assert.match(storageSource, /adjacentRecordedMonth[\s\S]*?\.index\(indexName\)\.
   'navegação de meses deve buscar o registro adjacente pelo índice, sem carregar a store inteira');
 assert.match(storageSource, /IDBKeyRange\.upperBound\(`\$\{month\}-01`, true\)[\s\S]*?IDBKeyRange\.lowerBound\(`\$\{month\}-31`, true\)/,
   'navegação deve consultar meses anteriores e posteriores pelo intervalo de datas');
+assert.match(storageSource, /export async function updateSale[\s\S]*?makeAudit\(action, 'sale', saleId, changes/,
+  'atualizar o status da venda registra alterações com antes/depois na auditoria');
 const originalIndexedDB = globalThis.indexedDB;
 const originalIDBKeyRange = globalThis.IDBKeyRange;
 const cursorRows = {

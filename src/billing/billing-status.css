@@ -1,0 +1,107 @@
+.billing-status-button {
+  cursor: pointer;
+  font: inherit;
+  font-size: .67rem;
+  transition: filter .15s ease, transform .15s ease;
+}
+
+.billing-status-button:hover,
+.billing-status-button:focus-visible {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+  outline: 2px solid rgba(101, 169, 255, .45);
+  outline-offset: 2px;
+}
+
+.billing-payment-dialog {
+  width: min(650px, calc(100% - 28px));
+  max-height: min(85vh, 720px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #0b1728;
+  color: var(--text);
+  padding: 0;
+  box-shadow: 0 35px 100px rgba(0, 0, 0, .6);
+}
+
+.billing-payment-dialog::backdrop {
+  background: rgba(1, 6, 14, .78);
+  backdrop-filter: blur(4px);
+}
+
+.billing-payment-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 21px;
+  border-bottom: 1px solid var(--line);
+}
+
+.billing-payment-dialog-head h2 {
+  margin: 3px 0 5px;
+  font-size: 1.05rem;
+}
+
+.billing-payment-dialog-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.billing-payment-dialog-kicker {
+  color: #34d399;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.billing-payment-dialog-close {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.55rem;
+  cursor: pointer;
+}
+
+.billing-payment-dialog-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 19px 21px 12px;
+}
+
+.billing-payment-option {
+  min-height: 48px;
+  padding: 9px 12px;
+  border: 1px solid #40516b;
+  border-radius: 11px;
+  background: #172337;
+  color: #d4dce8;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.billing-payment-option:hover { filter: brightness(1.2); }
+.billing-payment-option.selected { outline: 2px solid #34d399; outline-offset: 2px; }
+.billing-payment-option.billing-status-pending { border-color: #695124; background: #302515; color: #ffd071; }
+.billing-payment-option.billing-status-issued { border-color: #31506e; background: #132b44; color: #a9d6ff; }
+.billing-payment-option.billing-status-paid { border-color: #17614b; background: #0d342b; color: #67e0b0; }
+
+.billing-payment-dialog-note {
+  margin: 0;
+  padding: 0 21px 19px;
+  color: var(--muted);
+  font-size: .74rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .billing-payment-dialog-options { grid-template-columns: 1fr; }
+}

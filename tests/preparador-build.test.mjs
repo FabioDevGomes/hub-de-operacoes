@@ -18,7 +18,7 @@ test('Preparador published page matches canonical source and preserves executabl
   for(const contract of ['window.__hubReceiveMccD0Grid','window.__hubReceiveMccD1Grid','id="apply-manifest"',
     'const PANEL_DB_VERSION = HubDatabase.DB_VERSION;','const PANEL_DB_NAME = HubDatabase.DB_NAME;','/database.js',
     '/sidebar-component.js','/sidebar-component.css','/table-headers.css',
-    "import('../billing/billing-storage.mjs?v=5')"]){
+    "import('../billing/billing-storage.mjs?v=6')"]){
     assert.ok(html.includes(contract),'existing contract missing: '+contract);
   }
   // Behavioral parsing, receiver, safety and persistence regressions remain in

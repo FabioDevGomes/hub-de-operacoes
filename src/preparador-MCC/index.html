@@ -555,7 +555,7 @@
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
-        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=5'):null;
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=6'):null;
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em, provisionalSaleIds:linkedSales.map(sale=>String(sale.id)) }); channel.close(); }
         return { base, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };

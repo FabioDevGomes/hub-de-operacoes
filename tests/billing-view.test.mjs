@@ -24,6 +24,11 @@ assert.match(css, /\.billing-root \.billing-product-cell span\{display:block;wid
 assert.ok(view.includes('Provisória · MCC D0') && view.includes('Não confirmada · ${esc(sale.confirmation_source || \'MCC D−1\')}') && view.includes('Coberta por lançamento manual'), 'estados de agregados MCC e cobertura manual ficam explícitos');
 assert.ok(view.includes("sale.source === 'mcc_conversion_aggregate'"), 'linhas agregadas são reconhecidas para proteger os dados derivados');
 assert.ok(view.includes("sale?.source === 'hub_manual_capture' && sale.source_ref") && view.includes('root.__updateManualSale({ sourceSaleId:sourceSaleRef, data:saleDate'), 'edição da venda manual vinculada atualiza o lançamento original junto do espelho');
+assert.ok(view.includes('billingPaymentStatusDialog') && view.includes('data-payment-status-choice') && view.includes('data-billing-action="payment-status"'), 'o status na coluna de vendas é acionável e abre o seletor de pagamento');
+assert.match(view, /competenceKpis\(context\.sales, context\.movements, context\.allSales\)[\s\S]*?kpi\('Total de vendas', lifetimeSalesCount/,
+  'total de vendas usa todo o histórico, sem herdar o período/filtros da seleção atual');
+assert.ok(view.includes('BILLING_MANUAL_STATUS_OPTIONS') && view.includes("Storage.updateSale(saleId, { payment_status:paymentStatus }, 'payment_status_changed')"), 'as três opções de pagamento são salvas e auditadas pela API de Faturamento');
+assert.ok(view.includes('Pagamento emitido') && view.includes('Pagamento recebido') && view.includes('não cria um lançamento de caixa'), 'a janela distingue emissão de recebimento de caixa');
 assert.ok(view.includes('billingSourceCorrectionNotice') && view.includes('source_campaign_id') && view.includes('source_country_code') && view.includes('source_sale_time') && view.includes("!['sale_id','sale_date','product','platform','value_brl','source_campaign_id','source_country_code','source_sale_time'].includes(field.name)"), 'edição vinculada libera campos da venda usados no sistema e mantém separados os recebimentos e reembolsos');
 for (const action of ['edit', 'receipt', 'refund', 'audit', 'cancel']) {
   assert.ok(view.includes(`data-billing-action="${action}"`), `ação ${action} deve continuar disponível`);
@@ -52,5 +57,8 @@ assert.ok(view.includes('querySalesByDate(chartRange.start, chartRange.end)') &&
 assert.ok(view.includes("'Caixa líquido mensal (R$)'"), 'na referência Caixa, o gráfico informa claramente o valor líquido de movimentos');
 assert.match(css, /\.billing-month-chart-scroll\{[^}]*overflow-x:auto/,
   'o gráfico pode acomodar períodos com muitos meses sem criar rolagem vertical interna');
+const statusCss = await readFile(new URL('../src/billing/billing-status.css', import.meta.url), 'utf8');
+assert.match(statusCss, /\.billing-payment-dialog::backdrop/);
+assert.match(statusCss, /\.billing-payment-option\.selected/);
 
 console.log('billing-view: ações e filtros compactos, gráfico mensal acessível e datas alinhadas');

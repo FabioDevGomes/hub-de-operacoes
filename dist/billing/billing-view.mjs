@@ -1,5 +1,5 @@
-import * as Domain from './billing-domain.mjs';
-import * as Storage from './billing-storage.mjs?v=5';
+import * as Domain from './billing-domain.mjs?v=4';
+import * as Storage from './billing-storage.mjs?v=6';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;
@@ -56,19 +56,20 @@ function markup() {
       <label>Plataforma<select id="billingPlatform" class="search"><option value="all">Todas</option></select></label>
       <label>Produto<select id="billingProduct" class="search"><option value="all">Todos</option></select></label>
       <label>Conta<select id="billingAccount" class="search"><option value="all">Todas</option></select></label>
-      <label>Status de pagamento<select id="billingStatus" class="search"><option value="all">Todos</option><option value="paid">Paga</option><option value="partially_paid">Parcialmente paga</option><option value="pending">Pendente</option><option value="unknown">Não informado</option></select></label>
+      <label>Status de pagamento<select id="billingStatus" class="search"><option value="all">Todos</option><option value="paid">Pagamento recebido</option><option value="issued">Pagamento emitido</option><option value="partially_paid">Parcialmente paga</option><option value="pending">Pendente</option><option value="unknown">Não informado</option></select></label>
       <label>Registro<select id="billingRecordState" class="search"><option value="active">Ativos</option><option value="cancelled">Cancelados</option><option value="all">Todos</option></select></label>
       <label class="billing-search">Buscar<input id="billingSearch" class="search" type="search" placeholder="Produto, conta, plataforma…"></label>
     </div>
     <section class="card panel billing-aggregate-panel"><div class="panel-head"><div><h2 id="billingAggregateTitle">Faturamento por mês</h2><p>Totais do recorte e filtros selecionados.</p></div><div class="panel-controls"><label>Agregar por <select id="billingDimension" class="search" style="width:auto"><option value="month">Mês</option><option value="product">Produto</option><option value="platform">Plataforma</option><option value="account">Conta</option></select></label></div></div><div class="billing-table-wrap"><table><thead id="billingAggregateHead"></thead><tbody id="billingAggregateBody"></tbody></table></div></section>
     <section class="card panel billing-detail-panel"><div class="panel-head"><div><h2 id="billingDetailTitle">Vendas por competência</h2><p id="billingCaption"></p></div><span id="billingCount" class="tag"></span></div><div class="billing-table-wrap"><table><thead id="billingSalesHead"></thead><tbody id="billingSalesBody"></tbody></table></div><div class="billing-pagination"><span id="billingPageSummary"></span><div><button id="billingPreviousPage" class="btn" type="button">Anterior</button><button id="billingNextPage" class="btn" type="button">Próxima</button><select id="billingPageSize" class="search" aria-label="Linhas por página"><option>25</option><option selected>50</option><option>100</option></select></div></div></section>
     <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses até o mês selecionado · filtros atuais.</p></div></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
+    <dialog id="billingPaymentStatusDialog" class="billing-payment-dialog" aria-labelledby="billingPaymentStatusTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Status do pagamento</span><h2 id="billingPaymentStatusTitle"></h2><p id="billingPaymentStatusCurrent"></p></div><button class="billing-payment-dialog-close" type="button" data-close-payment-status aria-label="Fechar">×</button></div><div id="billingPaymentStatusOptions" class="billing-payment-dialog-options"></div><p class="billing-payment-dialog-note">“Pagamento recebido” atualiza o status, mas não cria um lançamento de caixa nem informa uma data. Para isso, registre um recebimento.</p></dialog>
     <div id="billingModal" class="billing-modal hidden" role="dialog" aria-modal="true" aria-labelledby="billingModalTitle"><form id="billingForm" class="billing-modal-card"><div class="panel-head"><h2 id="billingModalTitle">Nova venda</h2><button class="btn" type="button" data-close-modal>Fechar</button></div><p id="billingSourceCorrectionNotice" class="billing-notice hidden">Este lançamento está vinculado à venda provisória da base de campanhas. Data, produto, plataforma, campanha, país, hora e valor serão sincronizados com os cálculos. Data e campanha também definem a conciliação MCC e o diário associado. Recebimentos e reembolsos registrados permanecem preservados.</p><input type="hidden" name="sale_id"><div class="billing-form-grid">
       <label>Data da venda <input name="sale_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
       <label>Produto <input name="product" required></label><label>Plataforma <input name="platform" required></label><label>Tipo de comissão <input name="commission_type" placeholder="Comissão"></label><label>Conta <input name="account"></label>
       <label id="billingSourceCampaignField" class="hidden">Campanha associada<select name="source_campaign_id"></select></label><label id="billingSourceCountryField" class="hidden">País da venda<select name="source_country_code"></select></label><label id="billingSourceTimeField" class="hidden">Hora da venda <input name="source_sale_time" type="text" inputmode="numeric" placeholder="HH:MM"></label>
       <label>Comissão (R$) <input name="value_brl" inputmode="decimal" placeholder="0,00"></label><label>Comissão (US$) <input name="value_usd" inputmode="decimal" placeholder="0,00"></label>
-      <label>Status observado <select name="payment_status"><option value="unknown">Não informado</option><option value="pending">Pendente</option><option value="partially_paid">Parcialmente paga</option><option value="paid">Paga</option></select></label>
+      <label>Status observado <select name="payment_status"><option value="unknown">Não informado</option><option value="pending">Pendente</option><option value="issued">Pagamento emitido</option><option value="partially_paid">Parcialmente paga</option><option value="paid">Pagamento recebido</option></select></label>
       <label>Data de pagamento, se conhecida <input name="payment_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa"></label>
       <label class="billing-form-wide">Observação <textarea name="notes" rows="3"></textarea></label>
       </div><div class="billing-modal-actions"><button class="btn" type="button" data-close-modal>Cancelar</button><button class="btn primary" type="submit">Salvar venda</button></div></form></div>
@@ -96,6 +97,8 @@ function bind(root, toast) {
     }
     const action = event.target.closest('[data-billing-action]');
     if (action) { await handleAction(action, root, toast); return; }
+    const paymentChoice = event.target.closest('[data-payment-status-choice]');
+    if (paymentChoice) { await savePaymentStatus(paymentChoice, root, toast); return; }
     const sort = event.target.closest('[data-billing-sort]');
     if (sort) {
       const key = sort.dataset.billingSort;
@@ -111,6 +114,7 @@ function bind(root, toast) {
     if (event.target.closest('#billingNextPage')) { root.dataset.page = String(Number(root.dataset.page || 1) + 1); renderTable(root); return; }
     if (event.target.closest('[data-close-modal]')) closeSaleModal(root);
     if (event.target.closest('[data-close-movement]')) closeMovementModal(root);
+    if (event.target.closest('[data-close-payment-status]')) root.querySelector('#billingPaymentStatusDialog').close();
   });
   root.addEventListener('change', async event => {
     if (event.target.matches('#billingDimension')) await refresh(root);
@@ -130,6 +134,7 @@ function bind(root, toast) {
   root.querySelector('#billingMovementForm').addEventListener('submit', event => saveMovementForm(event, root, toast));
   root.querySelector('#billingModal').addEventListener('click', event => { if (event.target.id === 'billingModal') closeSaleModal(root); });
   root.querySelector('#billingMovementModal').addEventListener('click', event => { if (event.target.id === 'billingMovementModal') closeMovementModal(root); });
+  root.querySelector('#billingPaymentStatusDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 }
 
 async function refresh(root) {
@@ -243,7 +248,7 @@ function populateFilters(root, sales) {
 
 function renderKpis(root) {
   const context = root.__billing;
-  const html = context.mode === 'competence' ? competenceKpis(context.sales, context.movements) : cashKpis(context.movements);
+  const html = context.mode === 'competence' ? competenceKpis(context.sales, context.movements, context.allSales) : cashKpis(context.movements);
   root.querySelector('#billingKpis').innerHTML = `${lifetimeTotalKpi(context.allSales)}${html}`;
   root.querySelector('#billingDetailTitle').textContent = context.mode === 'competence' ? 'Vendas por competência' : 'Movimentos por caixa';
   root.querySelector('#billingAggregateTitle').textContent = context.mode === 'competence' ? 'Faturamento por dimensão' : 'Movimentos de caixa por dimensão';
@@ -258,14 +263,15 @@ function lifetimeTotalKpi(sales) {
   return kpi('Faturamento total', paired(grossBrl, grossUsd), note);
 }
 
-function competenceKpis(sales, movements) {
+function competenceKpis(sales, movements, allSales) {
   const summary = Domain.summarizeCompetence(sales, movements);
+  const lifetimeSalesCount = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:2 }).format(Domain.totalSalesCount(allSales));
   return [
     kpi('Faturamento bruto', paired(summary.grossBrl, summary.grossUsd)),
     kpi('Reembolsos', paired(summary.refundBrl, summary.refundUsd)),
     kpi('Faturamento líquido', paired(summary.netBrl, summary.netUsd)),
-    kpi('Recebido com data', paired(summary.receiptBrl, summary.receiptUsd)),
-    kpi('Pendente', paired(summary.pendingBrl, summary.pendingUsd), `${summary.pendingCount} venda(s) pendentes ou parciais`),
+    kpi('Total de vendas', lifetimeSalesCount, 'Histórico completo · inclui conversões MCC · exclui canceladas'),
+    kpi('Pendente', paired(summary.pendingBrl, summary.pendingUsd), `${summary.pendingCount} venda(s) pendentes, com pagamento emitido ou parciais`),
     kpi('Vendas', String(summary.salesCount), `${summary.paidWithoutDateCount} pagas sem data de recebimento`),
     kpi('Média por conversão', `${money(summary.averageBrl, 'BRL')}${summary.missingBrlCount ? ' *' : ''} · ${money(summary.averageUsd, 'USD')}${summary.missingUsdCount ? ' *' : ''}`),
   ].join('');
@@ -437,7 +443,9 @@ function saleRow(sale, movements, index) {
             ? '<span class="billing-confirmation billing-confirmation-covered">Coberta por lançamento manual</span>'
       : '—';
   const count = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:2 }).format(Number(sale.conversion_count ?? 1));
-  return `<tr class="${sale.active === false ? 'billing-cancelled' : ''}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(sale.product)}"><span>${esc(sale.product)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${money(sale.value_usd, 'USD')}</td><td class="num">${money(sale.value_brl, 'BRL')}</td><td><span class="billing-status billing-status-${esc(sale.payment_status)}">${esc(Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown)}</span></td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
+  const paymentStatus = Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown;
+  const paymentStatusButton = `<button class="billing-status billing-status-button billing-status-${esc(sale.payment_status)}" data-billing-action="payment-status" data-sale-id="${esc(sale.sale_id)}" type="button" title="Alterar status do pagamento" aria-label="Alterar status do pagamento de ${esc(sale.product)}. Atual: ${esc(paymentStatus)}">${esc(paymentStatus)}</button>`;
+  return `<tr class="${sale.active === false ? 'billing-cancelled' : ''}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(sale.product)}"><span>${esc(sale.product)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${money(sale.value_usd, 'USD')}</td><td class="num">${money(sale.value_brl, 'BRL')}</td><td>${paymentStatusButton}</td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
 }
 
 function movementRow(movement) {
@@ -451,6 +459,7 @@ async function handleAction(button, root, toast) {
   try {
     const sale = (await Storage.salesByIds([saleId]))[0];
     if (!sale) throw new Error('A venda não foi encontrada.');
+    if (action === 'payment-status') { openPaymentStatusDialog(root, sale); return; }
     if (action === 'edit') { openSaleModal(root, sale); return; }
     if (action === 'receipt' || action === 'refund') { openMovementModal(root, sale, action === 'refund' ? 'refund' : 'receipt'); return; }
     if (action === 'audit') { await toggleAudit(root, saleId, button); return; }
@@ -464,6 +473,39 @@ async function handleAction(button, root, toast) {
       await refresh(root);
     }
   } catch (error) { toast(error.message, true); }
+}
+
+function openPaymentStatusDialog(root, sale) {
+  const dialog = root.querySelector('#billingPaymentStatusDialog');
+  const currentStatus = Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown;
+  root.dataset.paymentStatusSaleId = sale.sale_id;
+  dialog.querySelector('#billingPaymentStatusTitle').textContent = sale.product || 'Venda';
+  dialog.querySelector('#billingPaymentStatusCurrent').textContent = `Status atual: ${currentStatus}. Escolha uma opção; a alteração será salva imediatamente.`;
+  const options = dialog.querySelector('#billingPaymentStatusOptions');
+  options.innerHTML = Domain.BILLING_MANUAL_STATUS_OPTIONS.map(status => {
+    const selected = status === sale.payment_status;
+    return `<button class="billing-payment-option billing-status-${esc(status)}${selected ? ' selected' : ''}" data-payment-status-choice="${esc(status)}" type="button" aria-pressed="${selected}">${esc(Domain.BILLING_STATUSES[status])}</button>`;
+  }).join('');
+  dialog.showModal();
+  options.querySelector('.selected')?.focus();
+}
+
+async function savePaymentStatus(button, root, toast) {
+  const dialog = root.querySelector('#billingPaymentStatusDialog');
+  const saleId = root.dataset.paymentStatusSaleId;
+  const paymentStatus = button.dataset.paymentStatusChoice;
+  if (!saleId || !Domain.BILLING_MANUAL_STATUS_OPTIONS.includes(paymentStatus)) return;
+  button.disabled = true;
+  try {
+    await Storage.updateSale(saleId, { payment_status:paymentStatus }, 'payment_status_changed');
+    dialog.close();
+    await refresh(root);
+    toast(`Status do pagamento: ${Domain.BILLING_STATUSES[paymentStatus]}`);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function toggleAudit(root, saleId, button) {

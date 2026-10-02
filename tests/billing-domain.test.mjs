@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {
-  aggregateBy, aggregateCashBy, compareRows, dateRangeFor, dateRangeForMonth, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
-  normalizeMovement, normalizeSale, paginate, parseBrazilianDate, provisionalSaleToBilling, summarizeCash, summarizeCompetence,
+  aggregateBy, aggregateCashBy, BILLING_MANUAL_STATUS_OPTIONS, BILLING_STATUSES, compareRows, dateRangeFor, dateRangeForMonth, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
+  normalizeMovement, normalizeSale, paginate, parseBrazilianDate, provisionalSaleToBilling, summarizeCash, summarizeCompetence, totalSalesCount,
 } from '../src/billing/billing-domain.mjs';
 
 const sales = [
@@ -27,6 +27,14 @@ assert.equal(competence.receiptBrl.amount, 125, 'recebimento sem data continua r
 assert.equal(competence.pendingBrl.amount, 50, 'status pago sem data não vira pendente');
 assert.equal(competence.paidWithoutDateCount, 1);
 assert.equal(competence.missingUsdCount, 2);
+assert.equal(totalSalesCount(sales),3,'total histórico exclui vendas canceladas e soma quantidade de conversões ativas');
+const issuedSale=normalizeSale({sale_id:'issued',sale_date:'2026-09-24',product:'Produto emitido',platform:'Hotmart',value_brl:75,payment_status:'issued'});
+const issuedSummary=summarizeCompetence([issuedSale],[]);
+assert.equal(BILLING_STATUSES.issued,'Pagamento emitido');
+assert.equal(BILLING_STATUSES.paid,'Pagamento recebido');
+assert.deepEqual(BILLING_MANUAL_STATUS_OPTIONS,['pending','issued','paid']);
+assert.equal(issuedSummary.pendingBrl.amount,75,'pagamento emitido permanece no saldo a receber');
+assert.equal(issuedSummary.pendingCount,1,'pagamento emitido permanece contado como pendente');
 
 const cash = summarizeCash(movements.filter(move => move.effective_date && move.effective_date >= '2026-09-15' && move.effective_date <= '2026-09-22'));
 assert.equal(cash.movementCount, 2, 'movimento sem data não entra na competência temporal de caixa');
@@ -46,6 +54,7 @@ assert.equal(linkedConfirmedSale.confirmation_source,'MCC D−1');
 assert.equal(linkedConfirmedSale.payment_status,'pending','confirmação MCC não significa pagamento recebido');
 const mccAggregate=normalizeSale({sale_id:mccConversionSaleId('cmp-mcc','2026-09-24'),sale_date:'2026-09-24',product:'Produto MCC',platform:'Google Ads MCC',value_brl:120,payment_status:'pending',confirmation_status:'confirmed',confirmation_source:'MCC D−1',source:'mcc_conversion_aggregate',source_period:'d1',conversion_count:2});
 assert.equal(mccAggregate.conversion_count,2);
+assert.equal(totalSalesCount([mccAggregate]),2,'total histórico conta conversões agregadas MCC, não só as linhas');
 assert.equal(mccAggregate.confirmation_status,'confirmed');
 assert.equal(mccConversionSaleId('cmp-mcc','2026-09-24'),'mcc-conversion:cmp-mcc:2026-09-24');
 const mccSummary=summarizeCompetence([mccAggregate],[]);

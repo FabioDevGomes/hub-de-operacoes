@@ -48,7 +48,7 @@ assert.equal(changed.conflicts.length,1);
 changed.base.diario.find(x=>x.campanha_id===changed.base.campanhas.find(c=>c.nome_exibicao==='MagicGLP 4').id).celulas.O={value:12.5};
 assert.equal(db.investmentTotalsMap(changed.base).get('mcc:27/08 - medicglp 4 (gm) 91% - u$ 60'),12.5);
 const campaignTotals=db.campaignTotalsMap(changed.base).get('mcc:27/08 - medicglp 4 (gm) 91% - u$ 60');
-assert.deepEqual(JSON.parse(JSON.stringify(campaignTotals)),{investment:12.5,impressions:51,clicks:5,conversions:0,commission:0,observed:{investment:1,impressions:2,clicks:2,conversions:0,commission:0},byDate:{'2025-09-12':{investment:12.5,impressions:21,clicks:2,conversions:0,commission:0},'2025-09-13':{investment:0,impressions:30,clicks:3,conversions:0,commission:0}}});
+assert.deepEqual(JSON.parse(JSON.stringify(campaignTotals)),{investment:12.5,impressions:51,clicks:5,conversions:0,commission:0,observed:{investment:1,impressions:2,clicks:2,conversions:0,commission:0},byDate:{'2025-09-12':{investment:12.5,impressions:21,clicks:2,conversions:null,commission:null},'2025-09-13':{investment:null,impressions:30,clicks:3,conversions:null,commission:null}}});
 
 const twoDayManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2026-09-13']},D_zero:{datas_detectadas:['2026-09-14']}},campanhas:[{nome_campanha_exato:'Campanha D0 completa',metricas_D_menos_1:{data:{valor:'2026-09-13'}},metricas_D_zero:{data:{valor:'2026-09-14'}}}]};
 const twoDayRows=source=>[
@@ -66,6 +66,37 @@ const finalApplied=db.importManifest(twoDayImport.base,finalD1,()=>({date:'2026-
 assert.equal(finalApplied.base.diario.find(x=>x.data==='2026-09-14').celulas.B.value,60);
 assert.equal(finalApplied.base.diario.find(x=>x.data==='2026-09-14').celulas.O.value,18);
 
+const lowerSnapshots=name=>({
+  separacao_temporal:{D_menos_1:{datas_detectadas:['2026-09-13']},D_zero:{datas_detectadas:['2026-09-14']}},
+  campanhas:[{nome_campanha_exato:name,
+    metricas_D_menos_1:{presente:true,data:{valor:'2026-09-13'},impressoes:{valor:100},cliques_google:{valor:10}},
+    metricas_D_zero:{presente:true,data:{valor:'2026-09-14'},impressoes:{valor:490},cliques_google:{valor:45}}
+  }]
+});
+const lowerSnapshotCampaign='Campanha atualizada com números menores';
+const lowerSnapshotRows=source=>[
+  {date:source.metricas_D_menos_1.data.valor,period:'d1',cells:{A:{value:46278},B:{value:source.metricas_D_menos_1.impressoes.valor},C:{value:source.metricas_D_menos_1.cliques_google.valor}}},
+  {date:source.metricas_D_zero.data.valor,period:'d0',cells:{A:{value:46279},B:{value:source.metricas_D_zero.impressoes.valor},C:{value:source.metricas_D_zero.cliques_google.valor}}}
+];
+const largerSnapshots=db.importManifest(db.create(),lowerSnapshots(lowerSnapshotCampaign),lowerSnapshotRows,{source:'preparador_mcc'});
+const smallerManifest=lowerSnapshots(lowerSnapshotCampaign);
+smallerManifest.campanhas[0].metricas_D_menos_1.impressoes.valor=40;
+smallerManifest.campanhas[0].metricas_D_menos_1.cliques_google.valor=4;
+smallerManifest.campanhas[0].metricas_D_zero.impressoes.valor=250;
+smallerManifest.campanhas[0].metricas_D_zero.cliques_google.valor=22;
+const smallerRows=lowerSnapshotRows(smallerManifest.campanhas[0]);
+const previewSmallerSnapshots=db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows,{source:'preparador_mcc'});
+const appliedSmallerSnapshots=previewSmallerSnapshots.conflicts.length
+  ?db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows,{source:'preparador_mcc',overwrite:true})
+  :previewSmallerSnapshots;
+assert.equal(appliedSmallerSnapshots.conflicts.length,0,'o fluxo MCC confirmado aplica valores menores sem deixar conflito pendente');
+assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_D_zero.impressoes.valor,250,'o último manifesto D0 deve ser a fonte atual, mesmo com total menor');
+assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_D_zero.cliques_google.valor,22,'o último manifesto D0 deve atualizar cliques menores');
+assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_D_menos_1.impressoes.valor,40,'o último manifesto D−1 deve atualizar impressões menores');
+assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_D_menos_1.cliques_google.valor,4,'o último manifesto D−1 deve atualizar cliques menores');
+assert.deepEqual(smallerRows.map(row=>row.cells.B.value),[40,250]);
+assert.deepEqual(appliedSmallerSnapshots.base.diario.filter(row=>row.campanha_id===appliedSmallerSnapshots.base.campanhas[0].id).sort((a,b)=>a.data.localeCompare(b.data)).map(row=>[row.celulas.B.value,row.celulas.C.value]),[[40,4],[250,22]],'o Diário também deve substituir valores MCC da mesma data por novos valores menores');
+
 const mccBillingCampaign='Campanha agregada MCC';
 const mccBillingManifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-09-24']}},campanhas:[{nome_campanha_exato:mccBillingCampaign,metricas_D_zero:{data:{valor:'2026-09-24'},conversoes:{valor:2},valor_conversao:{valor:100},moeda:{valor:'BRL'}}}]};
 const mccBillingRow=source=>({date:source.metricas_D_zero.data.valor,period:'d0',cells:{A:{value:46288},F:{value:source.metricas_D_zero.conversoes.valor},P:{value:source.metricas_D_zero.valor_conversao.valor}}});
@@ -74,6 +105,19 @@ assert.equal(provisionalMccBilling.mccBillingSales.length,1);
 assert.equal(provisionalMccBilling.mccBillingSales[0].confirmation_status,'provisional');
 assert.equal(provisionalMccBilling.mccBillingSales[0].conversion_count,2);
 assert.equal(provisionalMccBilling.mccBillingSales[0].value_brl,100);
+const lowerBillingManifest=structuredClone(mccBillingManifest);
+lowerBillingManifest.campanhas[0].metricas_D_zero.conversoes.valor=1;
+lowerBillingManifest.campanhas[0].metricas_D_zero.valor_conversao.valor=30;
+const lowerBillingResult=db.importManifest(provisionalMccBilling.base,lowerBillingManifest,mccBillingRow,{overwrite:true});
+assert.equal(lowerBillingResult.mccBillingSales[0].sale_id,provisionalMccBilling.mccBillingSales[0].sale_id);
+assert.equal(lowerBillingResult.mccBillingSales[0].conversion_count,1);
+assert.equal(lowerBillingResult.mccBillingSales[0].value_brl,30,'captura menor substitui também o agregado financeiro da mesma data');
+const absentBillingManifest={separacao_temporal:mccBillingManifest.separacao_temporal,campanhas:[{nome_campanha_exato:'Outra campanha sintética',metricas_D_zero:{presente:true,data:{valor:'2026-09-24'},conversoes:{valor:0},valor_conversao:{valor:0},moeda:{valor:'BRL'}}}]};
+const absentBillingResult=db.importManifest(lowerBillingResult.base,absentBillingManifest,mccBillingRow,{overwrite:true});
+const absentBillingRow=absentBillingResult.mccBillingSales.find(row=>row.sale_id===lowerBillingResult.mccBillingSales[0].sale_id);
+assert.equal(absentBillingRow.active,false,'agregado automático D0 ausente na captura atual não conserva faturamento provisório antigo');
+assert.equal(absentBillingRow.confirmation_status,'not_confirmed');
+assert.equal(absentBillingResult.base.diario.find(row=>row.campanha_id===lowerBillingResult.base.campanhas[0].id).celulas.P.value,30,'ausência não apaga o histórico diário original');
 const confirmedMccBillingManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2026-09-24']},D_zero:{datas_detectadas:['2026-09-25']}},campanhas:[{nome_campanha_exato:mccBillingCampaign,metricas_D_menos_1:{data:{valor:'2026-09-24'},conversoes:{valor:2},valor_conversao:{valor:120},moeda:{valor:'BRL'}},metricas_D_zero:{data:{valor:'2026-09-25'},conversoes:{valor:1},valor_conversao:{valor:50},moeda:{valor:'BRL'}}}]};
 const confirmedMccBilling=db.importManifest(provisionalMccBilling.base,confirmedMccBillingManifest,source=>source.metricas_D_menos_1?[
   {date:source.metricas_D_menos_1.data.valor,period:'d1',cells:{A:{value:46288},F:{value:source.metricas_D_menos_1.conversoes.valor},P:{value:source.metricas_D_menos_1.valor_conversao.valor}}},

@@ -17,6 +17,10 @@
 - GEO só é preservado se a fonte trouxer um campo explicitamente mapeado para alvo geográfico; não deduzir países pelo nome da oferta/campanha.
 - Estado `ausente`, zero confirmado e `invalido` permanecem distintos.
 
+### Apresentação compacta das capturas
+
+Depois de receber D−1 ou D0, o cartão reduz a área de texto e apresenta os metadados em uma grade compacta, mantendo os indicadores relevantes (impressões e cliques em D0; origem, campanhas, data e moedas). As orientações de colagem somem apenas enquanto há uma captura carregada; a área de texto continua disponível para colar uma captura substituta. Cartões vazios não esticam para acompanhar um cartão carregado, e o resumo se adapta a telas estreitas.
+
 ## Comportamento seguro
 
 - A lista MCC pode omitir campanhas pausadas; ausência pode alimentar o snapshot operacional existente, mas não gera evento de estado explícito, de entrega interrompida ou de suspensão de conta.
@@ -43,13 +47,13 @@
 - Política operacional acordada: não pedir nova importação da planilha para atualizações diárias; usar MCC D0 como parcial e D−1 como fechamento do dia anterior. Preservar o histórico da planilha já gravado.
 - O Preparador grava D−1 no mesmo IndexedDB `painel-campanhas`, store `bases`, chave `atual`, e publica `BroadcastChannel('painel-campanhas')` com `type:'base-updated'` após persistir.
 - Com o Controle Macro aberto em outra aba da mesma origem, o painel recebe o evento, restaura a base e recalcula os totais diários. Ao abrir/recarregar o painel, a base persistida também é restaurada e agregada. Não é necessária uma segunda importação do histórico da planilha.
-- No Controle Macro, a planilha histórica continua prevalecendo campo a campo. Desde `2026-09-13`, MCC/D−1 só preenche cliques ou vendas ausentes na planilha; não substitui investimento, faturamento nem zeros explícitos. Antes dessa data, esses campos continuam conforme a planilha. Veja [Modelo e persistência](data-model.md) para as regras completas e o tratamento de suspensões/vendas.
-- A regra anterior descreve o comportamento atual para datas já presentes no histórico legado. Em caso de sobreposição, não afirmar que MCC substituiu a planilha até essa precedência ser alterada no código; a orientação operacional, por si só, não muda a persistência existente.
+- Nas datas D0/D−1 do manifesto atual persistido, o Controle Macro usa a última captura em vez de valores antigos do Diário ou da planilha, mesmo se investimento, cliques, impressões, conversões ou valor de conversão diminuírem. Isso recalcula lucro, ROI e gráficos. Fora desse recorte, a planilha histórica mantém sua precedência campo a campo; desde `2026-09-13`, MCC só complementa cliques/vendas históricos ausentes. Veja [Modelo e persistência](data-model.md) para regras completas.
+- O clique explícito em **Atualizar base** no Preparador aplica a captura mais recente, resolvendo a prévia de conflitos com `overwrite:true`. Fora desse fluxo autorizado, o domínio conserva sua prévia e não espelha conflitos financeiros sem sobrescrita confirmada.
 - Se a tela não atualizar após a confirmação de sucesso, recarregue-a antes de repetir a importação. A atualização automática falhar não significa que se deva importar o mesmo arquivo novamente.
 
 ## Extensão local de captura e encaminhamento D0/D−1
 
-`extensions/mcc-d0-bridge/` contém uma extensão Chrome local, opcional e não publicada. A captura direta oferece D0 e D−1, lendo a grade semântica já renderizada e entregando a captura validada à prévia do Preparador. O encaminhamento do CSV original D0 e os fluxos manuais de CSV D0/D−1, colagem e arrastar/soltar continuam disponíveis como fallback.
+`extensions/mcc-d0-bridge/` contém uma extensão Chrome local, opcional e não publicada. A captura direta oferece D0 e D−1, lendo a grade semântica já renderizada e entregando a captura validada à prévia do Preparador. Como alternativa, o Preparador aceita dados tabulares colados; não há seleção ou arraste de arquivos físicos.
 
 Na captura direta, cabeçalhos semânticos são associados às células da respectiva linha, preferindo o identificador `essfield` compartilhado por cabeçalho e célula quando presente. O nome de campanha vem do texto exato do `<a>` na célula `essfield=name`; na MCC real esse link pode não ter `href` e a célula pode conter texto extra de edição. A extensão bloqueia se não conseguir identificar a grade/associação, se faltar cabeçalho obrigatório, se a data não for uma única data explícita, se moeda/conta não puderem ser lidas, ou se paginação/contagem, virtualização aparente, truncamento ou nomes duplicados não confirmarem a lista completa. A captura não rola nem pagina a MCC. Valores `0` são preservados como zero; `—` e células vazias são preservados como ausência, nunca convertidos em zero. Não infere GEO, estado de campanha, CPA nem valor de conversão quando não há campo explícito confiável.
 
@@ -64,7 +68,7 @@ A versão validada corrige dois pontos independentes:
 1. **Associação das células MCC:** cabeçalhos e células são ligados pelo `essfield` da grade. O nome da campanha é lido do `<a>` dentro de `essfield=name`, mesmo quando o link não tem `href`; não use o texto completo da célula, pois ele pode incluir o controle “settings”. A conta também é lida do link da própria célula, sem concatenar o ID exibido ao lado. `primary_status` identifica qualificação e é distinto do `status` operacional. Linhas auxiliares sem link de campanha ficam fora da contagem.
 2. **Entrega ao Preparador:** `chrome.scripting.executeScript` usa `world: 'MAIN'` ao invocar os adaptadores D0/D−1. O padrão `ISOLATED` do Chrome compartilha o DOM, mas tem outro `window` JavaScript; portanto não enxerga os receptores definidos pelo HTML do Preparador. O transporte continua limitado à URL local do Preparador; a verificação de origem e caminho permanece em `bridge.mjs`. O encaminhamento CSV legado permanece no mundo isolado.
 
-O leitor não rola a página MCC. Antes da captura, o usuário deve rolar a grade manualmente até o final, para que todas as campanhas estejam materializadas; a validação continua bloqueando uma lista parcial. Depois de alterar os arquivos da extensão, recarregue-a em `chrome://extensions`; o Hub servido também precisa estar atualizado. A captura aceita prepara só a prévia e nunca grava até **Atualizar base**.
+A captura não rola nem pagina a MCC por conta própria. O popup oferece a ação separada **Rolar MCC até o final**, que procura o contêiner rolável mais próximo da grade semântica (com fallback para a página), espera o carregamento estabilizar e não lê/encaminha conteúdo. Durante essa ação, os botões de captura ficam desativados; a captura ainda valida completude e bloqueia uma lista parcial. Depois de alterar os arquivos da extensão, recarregue-a em `chrome://extensions`; o Hub servido também precisa estar atualizado. A captura aceita prepara só a prévia e nunca grava até **Atualizar base**.
 
 Esta é a versão estável a preservar. Em mudanças futuras, execute primeiro `node tests/mcc-grid-production.test.mjs` (inclui o cenário de `<a>` sem `href`, associação por `essfield`, exclusão de resumos e prova de chamada no mundo `MAIN`) e depois toda a suíte com `node --test`. Só substitua esta versão após confirmar a prévia no Preparador; não teste a gravação na base ativa sem autorização explícita.
 
@@ -80,7 +84,7 @@ Completude exige paginação explícita começando em 1 e terminando no total, t
 
 ### Contrato e sequência de execução
 
-1. O popup envia `CAPTURE_AND_FORWARD_MCC_D0` ou `CAPTURE_AND_FORWARD_MCC_D1` ao service worker. Ambos exigem uma aba ativa `https://ads.google.com/`, usam o mesmo leitor após clique explícito e validam completude/campos antes da entrega.
+1. O popup envia `SCROLL_ACTIVE_MCC_TO_BOTTOM`, `CAPTURE_AND_FORWARD_MCC_D0` ou `CAPTURE_AND_FORWARD_MCC_D1` ao service worker. A rolagem e ambas as capturas exigem uma aba ativa `https://ads.google.com/`; somente as ações de captura usam o leitor e validam completude/campos antes da entrega.
 2. `mcc-grid-domain.mjs` emite `mcc-d0-grid-v1` ou `mcc-d1-grid-v1`; D0 mantém o contrato estável sem novos campos, D−1 inclui `periodRole:'d1'` e exige a data esperada no fuso `America/Sao_Paulo`. O payload contém só metadados e registros estruturados, nunca HTML bruto, cookies, token ou estado de sessão.
 3. O service worker abre/cria a aba local do Preparador em segundo plano, injeta o adaptador correspondente com `world: 'MAIN'`, entrega por `bridge.mjs` e só foca a aba depois do ACK do receptor correto. Assim erros continuam visíveis no popup; sucesso deixa o usuário no Preparador.
 4. O Preparador valida versão, quantidade, paginação, campos, data, moeda/conta e nomes únicos. A adaptação D−1 cria a mesma representação tabular em memória e chama `parseSource(...,'d1')`. D−1 sozinho instala no slot `d1`, informa que aguarda D0 e não gera manifesto aplicável. Com os dois slots, datas únicas e consecutivas são obrigatórias antes do manifesto e prévia.
@@ -139,3 +143,17 @@ Implementação em `sortPreviewRows`/`renderPreviewTable` no Preparador: compara
 - Ao comparar, nomes de campanha duplicados devem ser reportados e excluídos do pareamento campo a campo, a menos que exista chave de linha/account que permita associação unívoca. Não escolher a primeira linha silenciosamente.
 - No comparador exclusivamente textual, tokens placeholder de campanha (`-`, `--`, en/em dash) são ignorados sem alterar o parser compartilhado do experimento da grade. Variantes textuais conhecidas de gênero em status de qualificação e do artigo opcional em “Maximizar conversões” são contadas como equivalências normalizadas; divergências reais são agregadas por campo, enquanto a interface apresenta apenas uma amostra limitada de detalhes. Isso não modifica o parser D0 de produção nem concede paridade às métricas não rotuladas.
 - O comparador textual expõe um diagnóstico posicional experimental: cabeçalhos reconhecidos e tokens numéricos/monetários/percentuais/traços por campanha são confrontados localmente com os valores do CSV. Mesmo uma coincidência integral é evidência somente para aquele recorte, não altera os campos extraídos nem o fluxo D0; confirme em capturas/CSV adicionais antes de tratar a ordem como estável. Se o melhor alinhamento não for único ou tiver cobertura parcial, mantenha o campo ambíguo.
+
+### Diferenças das capturas D0
+
+- Antes da prévia do manifesto, o Preparador MCC pode exibir diferenças por campanha em impressões, cliques e custo. A consulta usa o manifesto D0 salvo anteriormente no banco local e só compara quando a data do relatório é a mesma.
+- Se ainda não houver D0 salvo para aquela data, a captura atual é comparada a zero e essa condição fica explícita. Campanhas renomeadas pela data só são pareadas quando a detecção existente de mudança de data confirma uma correspondência única.
+- Diferenças de moeda não são comparadas. A tabela é somente leitura e não aplica a captura; atualizar a base continua exigindo a ação explícita já existente.
+- Cobertura sintética: `tests/preparador-d0-delta.test.mjs`.
+
+### Alterações do fechamento D−1
+
+- Ao receber D−1, o Preparador pode exibir outra tabela de impressões, cliques e custo, comparando o fechamento com a captura D0 salva anteriormente para a mesma data. Ela aparece mesmo enquanto a tela aguarda D0 do dia atual.
+- A comparação usa nomes completos e exatos, exceto renomeações que o detector existente confirmou como únicas. Só lista campanhas presentes uma única vez nos dois lados e com diferença numérica observável; campanha nova ou sem par D0 não é tratada como zero.
+- Sem captura D0 salva para a data do D−1, a tabela informa que não há base comparável e não inventa diferenças. Campos ausentes/inválidos permanecem sem comparação; custo só é comparado quando as moedas coincidem. A tabela é somente leitura e não altera o manifesto nem o banco.
+- Cobertura sintética: `tests/preparador-d1-delta.test.mjs`.

@@ -25,7 +25,7 @@ test('CPA selects remain self-contained after extracting the Accounts select ren
 
 test('Accounts adapter preserves observed history and replaces, not duplicates, same-day D0',()=>{
   const d0={date:'2026-01-02',investment:5,impressions:0,clicks:null,conversions:0,commission:null};
-  const context=vm.createContext({d0Totals:()=>d0});
+  const context=vm.createContext({d0Totals:()=>d0,derivedContext:()=>({latestSnapshots:{dates:[]},snapshotsByCampaignName:new Map()})});
   vm.runInContext(functionLine('accountCampaignTotals')+';this.totals=accountCampaignTotals',context);
   const history={
     observed:{investment:true,impressions:true,clicks:false,conversions:true,commission:false},
@@ -44,7 +44,7 @@ test('product and account projections preserve exact campaign names, sales adjus
     {nome_campanha_exato:'02/01 - Example 02',_status:'pausada',account:'B',totals:{investment:null,conversions:0,commission:0}}
   ];
   const stored=new Map(campaigns.map((campaign,index)=>[campaign.nome_campanha_exato,{id:'synthetic-'+index,nome_exibicao:'Example '+(index+1),conta_dominio:index?'.stored.store':null}]));
-  const contextData={campaigns,historyTotals:new Map(),salesAdjustments:new Map([['synthetic-0',{pendingConversions:1,commissionAdjustment:10}]])};
+  const contextData={campaigns,latestSnapshots:{dates:[]},snapshotsByCampaignName:new Map(),historyTotals:new Map(),salesAdjustments:new Map([['synthetic-0',{pendingConversions:1,commissionAdjustment:10}]])};
   const context=vm.createContext({
     derivedContext:()=>contextData,state:{productCatalog:{}},ProductCatalog:{normalize:()=>({aliases:{example:'Example alias'}})},
     accountDomainIndex:()=>new Map([['A','.fallback.shop']]),currentCampaignRows:()=>campaigns,
@@ -63,4 +63,18 @@ test('product and account projections preserve exact campaign names, sales adjus
   assert.equal(result[1].totals.investment,null); assert.equal(result[0].totals.investment,0);
   assert.equal(JSON.stringify(campaigns),before);
   assert.equal(context.rows(),result,'the existing derived-context cache is reused');
+});
+
+test('Accounts replaces both latest snapshot dates, preserving older days and absence',()=>{
+  const context=vm.createContext({window:{}});
+  vm.runInContext(readFileSync(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
+  const rows=[{date:'2026-10-01',period:'d1',present:true,investment:20,commission:40,conversions:1},{date:'2026-10-02',period:'d0',present:true,investment:10,commission:0,conversions:0}];
+  context.OverviewDomain=context.window.OverviewDomain;
+  context.derivedContext=()=>({latestSnapshots:{dates:rows.map(row=>row.date)},snapshotsByCampaignName:new Map([['captured',rows]])});
+  const history={investment:150,commission:150,conversions:6,observed:{investment:3,commission:3,conversions:3},byDate:{'2026-09-30':{investment:50,commission:50,conversions:2},'2026-10-01':{investment:50,commission:50,conversions:2},'2026-10-02':{investment:50,commission:50,conversions:2}}};
+  vm.runInContext(functionLine('accountCampaignTotals')+';this.totals=accountCampaignTotals',context);
+  const totals=context.totals({nome_campanha_exato:'Captured'},history);
+  assert.equal(totals.investment,80);assert.equal(totals.commission,90);assert.equal(totals.conversions,3);
+  assert.equal(context.totals({nome_campanha_exato:'Missing'},history).investment,50);
+  assert.equal(history.investment,150);
 });

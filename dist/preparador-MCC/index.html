@@ -59,10 +59,10 @@
     .shell { width: min(1120px, calc(100% - 32px)); margin: 28px auto 56px; }
     .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
     h1, h2, h3, p { margin-top: 0; }
-    h1 { margin-bottom: 6px; font-size: clamp(1.55rem, 3vw, 2.15rem); line-height: 1.15; font-weight: 700; letter-spacing: -.025em; }
+    h1 { margin-bottom: 4px; font-size: clamp(.93rem, 1.8vw, 1.41rem); line-height: 1.2; font-weight: 700; letter-spacing: -.015em; }
     h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
     h3 { margin-bottom: 8px; font-size: .95rem; }
-    .subtitle { margin: 0; color: var(--muted); font-size: .95rem; }
+    .subtitle { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.4; }
     .local-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font-weight: 650; font-size: .88rem; white-space: nowrap; }
     .local-mark::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
     .steps { display: grid; gap: 14px; }
@@ -71,29 +71,42 @@
     .title-row { display: flex; align-items: center; gap: 12px; }
     .step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-weight: 750; flex: 0 0 auto; }
     .panel-body { padding: 20px; }
-    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .paste-box { border: 2px dashed var(--border); border-radius: 13px; background: var(--surface-soft); padding: 16px; transition: border-color .16s ease, background .16s ease; }
-    .paste-box:focus-within, .paste-box.dragging { border-color: var(--blue); background: var(--blue-soft); }
-    .paste-box.loaded { border-style: solid; border-color: var(--green); background: var(--green-soft); }
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    .paste-box { min-width: 0; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); padding: 16px; transition: border-color .16s ease, background .16s ease; }
+    .paste-box:focus-within { border-color: var(--blue); background: var(--blue-soft); }
+    .paste-box.loaded { display: grid; grid-template-columns: minmax(150px, .85fr) minmax(0, 1.4fr); grid-template-areas: "label label" "area meta"; align-content: start; gap: 8px 12px; border-style: solid; border-color: var(--green); background: var(--green-soft); padding: 12px; }
     .paste-box.error { border-style: solid; border-color: var(--red); background: var(--red-soft); }
     .paste-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
     .paste-label strong { font-size: 1rem; }
     .status-pill { padding: 4px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
     .loaded .status-pill { color: var(--green); border-color: currentColor; }
     .error .status-pill { color: var(--red); border-color: currentColor; }
+    .paste-box.loaded .paste-label { grid-area: label; margin-bottom: 0; }
     .paste-area { width: 100%; min-height: 108px; resize: vertical; border: 0; outline: 0; border-radius: 9px; padding: 14px; background: var(--surface); color: var(--text); line-height: 1.45; font-size: 1rem; box-shadow: inset 0 0 0 1px var(--border); }
+    .paste-box.loaded .paste-area { grid-area: area; min-height: 60px; height: 60px; padding: 9px 12px; line-height: 1.3; font-size: .9rem; }
+    .paste-box.loaded .paste-actions { display: none; }
     .paste-area::placeholder { color: var(--muted); }
     .paste-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .file-input { display: none; }
     .button { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); padding: 9px 13px; cursor: pointer; font-weight: 650; }
     .button:hover { border-color: var(--blue); }
     .button.primary { background: var(--blue); color: light-dark(#fff, #101722); border-color: var(--blue); }
     .button.ghost { background: transparent; color: var(--muted); }
     .button:disabled { opacity: .42; cursor: not-allowed; }
-    .file-input { display: none; }
-    .file-meta { margin: 12px 0 0; padding: 12px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); display: grid; gap: 5px; font-size: .84rem; }
-    .file-meta div { display: flex; justify-content: space-between; gap: 12px; }
+    .file-meta { margin: 8px 0 0; padding: 8px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font-size: .78rem; }
+    .file-meta[hidden] { display: none; }
+    .paste-box.loaded .file-meta { grid-area: meta; align-self: start; margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .file-meta div { min-width: 0; min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 7px; border-radius: 7px; background: var(--surface-soft); }
+    .paste-box.loaded .file-meta div { min-height: 34px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 4px 6px; }
     .file-meta span:first-child { color: var(--muted); }
+    .paste-box.loaded .file-meta span:first-child { font-size: .7rem; line-height: 1.15; }
     .file-meta span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .paste-box.loaded .file-meta span:last-child { text-align: left; }
+    .upload-grid.has-capture .paste-box:not(.loaded):not(.error) { padding: 12px; }
+    .upload-grid.has-capture .paste-box:not(.loaded):not(.error) .paste-area { min-height: 60px; height: 60px; padding: 9px 12px; line-height: 1.3; font-size: .9rem; }
+    .upload-grid.has-capture .paste-box:not(.loaded):not(.error) .paste-actions { margin-top: 6px; }
+    .upload-grid.has-capture .paste-box:not(.loaded):not(.error) .paste-actions .helper { display: none; }
+    .upload-grid.has-capture .paste-box:not(.loaded):not(.error) .paste-actions .button { padding: 6px 9px; font-size: .76rem; }
     .helper { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
     .auto-note { color: var(--muted); font-size: .82rem; }
     .pending { opacity: .55; box-shadow: none; }
@@ -112,6 +125,12 @@
     .summary strong { font-size: 1.35rem; font-weight: 750; font-variant-numeric: tabular-nums; }
     .summary.good strong { color: var(--green); }
     .summary.bad strong { color: var(--red); }
+    .delta-caption { margin: 0 0 12px; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+    .delta-table { min-width: 560px; }
+    .delta-table td { vertical-align: middle; }
+    .delta-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .delta-value.positive { color: var(--green); }
+    .delta-value.negative { color: var(--red); }
     .preview-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
     .preview-origin { color: var(--muted); font-size: .82rem; }
     .source-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); }
@@ -162,6 +181,9 @@
     }
     @media (max-width: 430px) {
       .summary-grid { grid-template-columns: 1fr; }
+      .file-meta { grid-template-columns: 1fr; }
+      .paste-box.loaded .file-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .paste-box.loaded { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "area" "meta"; }
     }
   </style>
   <link rel="stylesheet" href="/sidebar-component.css?v=5">
@@ -180,7 +202,7 @@
     <header class="topbar">
       <div>
         <h1>Preparador do Manifesto MCC</h1>
-        <p class="subtitle">Cole o D0 ou os dois relatórios, confira a validação e atualize o Painel de Campanhas.</p>
+        <p class="subtitle">Carregue o D0 ou os relatórios D−1 e D0, confira as diferenças e atualize a base.</p>
       </div>
       <div class="local-mark">Processamento local</div>
     </header>
@@ -192,13 +214,13 @@
           <button class="button ghost" id="clear-all" type="button">Limpar tudo</button>
         </div>
         <div class="panel-body">
-          <p class="helper">Exporte D−1 e D0 com o filtro <strong>Todas as campanhas</strong>, incluindo pausadas. Mantenha a coluna <strong>Status da campanha</strong>: o status do D0 define as ativas; as métricas das pausadas também entram no histórico e na conciliação.</p>
+          <p class="helper">Na MCC, use o filtro <strong>Todas as campanhas</strong>, incluindo pausadas, e mantenha a coluna <strong>Status da campanha</strong>. Capture D0 e D−1 pela extensão ou use os botões para carregar CSV; dados tabulares também podem ser colados. O status do D0 define as ativas, e as métricas das pausadas também entram no histórico e na conciliação.</p>
           <div class="upload-grid">
             <article class="paste-box" data-slot="d1">
-              <div class="paste-label"><strong>CSV de D−1 (opcional)</strong><span class="status-pill">Aguardando</span></div>
-              <textarea class="paste-area" aria-label="Cole o CSV de D menos um" placeholder="Clique aqui e pressione Ctrl+V&#10;&#10;Também aceita arquivo arrastado."></textarea>
+              <div class="paste-label"><strong>Dados de D−1 (opcional)</strong><span class="status-pill">Aguardando</span></div>
+              <textarea class="paste-area" aria-label="Cole os dados de D menos um" placeholder="Clique aqui e pressione Ctrl+V"></textarea>
               <div class="paste-actions">
-                <p class="helper">Métricas completas do dia fechado.</p>
+                <p class="helper">Métricas completas do dia fechado; cole os dados tabulares se precisar informar D−1.</p>
                 <label class="button">Selecionar arquivo<input class="file-input" type="file" accept=".csv,text/csv"></label>
               </div>
               <div class="file-meta" hidden></div>
@@ -206,14 +228,43 @@
 
             <article class="paste-box" data-slot="d0">
               <div class="paste-label"><strong>D0 (obrigatório)</strong><span class="status-pill">Aguardando</span></div>
-              <textarea class="paste-area" aria-label="Cole o CSV de D zero" placeholder="Clique aqui e pressione Ctrl+V&#10;&#10;Também aceita arquivo arrastado."></textarea>
+              <textarea class="paste-area" aria-label="Cole os dados de D zero" placeholder="Clique aqui e pressione Ctrl+V"></textarea>
               <div class="paste-actions">
-                <p class="helper">Métricas parciais completas do dia atual; pode receber a captura da extensão ou CSV manual.</p>
+                <p class="helper">Métricas parciais do dia atual; pode receber uma captura da extensão ou CSV manual.</p>
                 <label class="button">Selecionar arquivo<input class="file-input" type="file" accept=".csv,text/csv"></label>
               </div>
               <div class="file-meta" hidden></div>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section class="panel" id="d1-changes-panel" aria-labelledby="d1-changes-title" hidden>
+        <div class="panel-head">
+          <div class="title-row"><h2 id="d1-changes-title">Alterações do fechamento D−1</h2></div>
+        </div>
+        <div class="panel-body">
+          <p class="delta-caption" id="d1-changes-caption"></p>
+          <div class="table-wrap"><table class="delta-table" aria-label="Diferenças do fechamento D menos um comparadas à captura D zero">
+            <thead><tr><th>Campanha / produto</th><th class="numeric">Impressões</th><th class="numeric">Cliques</th><th class="numeric">Custo</th></tr></thead>
+            <tbody id="d1-changes-table"></tbody>
+          </table></div>
+          <p class="empty-copy" id="d1-changes-empty" hidden></p>
+        </div>
+      </section>
+
+      <section class="panel" id="d0-changes-panel" aria-labelledby="d0-changes-title" hidden>
+        <div class="panel-head">
+          <div class="title-row"><h2 id="d0-changes-title">Alterações da captura D0</h2></div>
+          <button class="button primary" id="apply-manifest" type="button" disabled>Atualizar base</button>
+        </div>
+        <div class="panel-body">
+          <p class="delta-caption" id="d0-changes-caption"></p>
+          <div class="table-wrap"><table class="delta-table" aria-label="Diferenças da captura D0">
+            <thead><tr><th>Campanha / produto</th><th class="numeric">Impressões</th><th class="numeric">Cliques</th><th class="numeric">Custo</th></tr></thead>
+            <tbody id="d0-changes-table"></tbody>
+          </table></div>
+          <p class="empty-copy" id="d0-changes-empty" hidden></p>
         </div>
       </section>
 
@@ -229,13 +280,12 @@
       </section>
 
       <section class="panel pending" id="apply-panel" aria-labelledby="step3-title">
-        <div class="panel-head"><div class="title-row"><span class="step-number">3</span><h2 id="step3-title">Atualizar o painel</h2></div></div>
+        <div class="panel-head"><div class="title-row"><span class="step-number">3</span><h2 id="step3-title">Status da atualização</h2></div></div>
         <div class="panel-body download-row">
           <div>
             <p class="filename" id="output-name">Base local do Painel de Campanhas</p>
             <p class="download-note" id="apply-note">A atualização será liberada após a validação.</p>
           </div>
-          <button class="button primary" id="apply-manifest" type="button" disabled>Atualizar base</button>
           <p class="apply-feedback" id="apply-feedback" role="status" hidden></p>
         </div>
       </section>
@@ -276,7 +326,7 @@
   </div>
 
   <script src="/sidebar-component.js"></script>
-  <script src="/database.js"></script>
+  <script src="/database.js?v=2"></script>
   <script src="/storage/hub-database.js?v=1"></script>
   <script>
   (() => {
@@ -527,7 +577,7 @@
     }
 
     async function applyManifestToPanel(manifest) {
-      if (!['127.0.0.1', 'localhost'].includes(location.hostname) || location.port !== '8765') throw new Error('Abra o Preparador pelo Hub para compartilhar a mesma base da Visão Geral.');
+      if (location.hostname !== '127.0.0.1' || location.port !== '8765') throw new Error('Abra o Preparador em http://127.0.0.1:8765 pelo Hub. O endereço localhost usa outra base local e não atualiza a Visão Geral.');
       if (!Array.isArray(manifest?.campanhas) || !manifest?.separacao_temporal) throw new Error('O manifesto não contém a estrutura esperada.');
       const databaseApi = window.CampaignDatabase;
       if (typeof databaseApi?.importManifest !== 'function') throw new Error('O módulo compartilhado de observabilidade não foi carregado. A base não foi atualizada; recarregue o Hub e tente novamente.');
@@ -1025,9 +1075,13 @@
     function renderSlot(slot) {
       const box = q(`[data-slot="${slot}"]`), data = slots[slot], pill = box.querySelector('.status-pill'), meta = box.querySelector('.file-meta'), area = box.querySelector('.paste-area');
       box.classList.toggle('loaded', Boolean(data && !data.error)); box.classList.toggle('error', Boolean(data?.error));
+      q('.upload-grid').classList.toggle('has-capture', Object.values(slots).some(item => Boolean(item && !item.error)));
       if (!data) { pill.textContent = 'Aguardando'; meta.hidden = true; area.value = ''; return; }
       if (data.error) { pill.textContent = 'Erro'; meta.hidden = false; meta.replaceChildren(metaLine('Problema', data.error)); return; }
-      pill.textContent = data.source === 'mcc_chrome_extension' ? 'Captura MCC recebida' : 'Recebido'; area.value = `${data.name}\n${data.records.length} campanhas válidas`;
+      const fromMcc = data.source === 'mcc_chrome_extension';
+      pill.textContent = fromMcc ? 'Captura MCC recebida' : 'Dados colados';
+      const campaignLabel = `${data.records.length} ${data.records.length === 1 ? 'campanha válida' : 'campanhas válidas'}`;
+      area.value = `${fromMcc ? 'Captura MCC' : 'Dados colados'}\n${campaignLabel}`;
       const sourceDetails = slot === 'd0'
         ? [metaLine('Impressões', sourceMetricTotal(data, 'impressions')), metaLine('Cliques', sourceMetricTotal(data, 'clicks'))]
         : [metaLine('Origem', data.source === 'mcc_chrome_extension' ? 'Grade da MCC · extensão' : 'Arquivo/colagem manual'), metaLine('Arquivo', data.name)];
@@ -1070,6 +1124,143 @@
       });
     }
 
+    function buildD0DeltaRows(manifest, base, dateChanges=[]) {
+      const date = manifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
+      const previousManifest = base?.manifesto_atual;
+      const previousDate = previousManifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
+      const comparableDate = Boolean(date && previousDate === date);
+      const previousCampaigns = previousManifest?.campanhas || [];
+      const exactName = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
+      const aliases = new Map((dateChanges || []).map(item => [exactName(item.newName), exactName(item.oldName)]));
+      const numeric = field => {
+        if (!field || field.estado === 'ausente' || field.estado === 'invalido' || field.valor == null) return null;
+        const value = Number(field.valor);
+        return Number.isFinite(value) ? value : null;
+      };
+      const currentValue = (campaign, key) => numeric(campaign?.metricas_D_zero?.[key]);
+      const oldCampaignFor = campaign => {
+        const name = exactName(campaign?.nome_campanha_exato);
+        const priorName = aliases.get(name) || name;
+        return previousCampaigns.find(item => exactName(item.nome_campanha_exato) === priorName) || null;
+      };
+      const rows = date ? (manifest?.campanhas || []).map(campaign => {
+        const previousCampaign = comparableDate ? oldCampaignFor(campaign) : null;
+        const oldMetrics = previousCampaign?.metricas_D_zero;
+        const oldCurrency = String(oldMetrics?.moeda?.valor || '').trim().toUpperCase();
+        const currency = String(campaign.metricas_D_zero?.moeda?.valor || '').trim().toUpperCase();
+        const delta = key => {
+          const current = currentValue(campaign, key);
+          if (current == null) return null;
+          if (!previousCampaign) return current;
+          const old = numeric(oldMetrics?.[key]);
+          return old == null ? null : current - old;
+        };
+        const cost = !currency || (previousCampaign && (!oldCurrency || currency !== oldCurrency)) ? null : delta('custo_total');
+        const differences = { impressions:delta('impressoes'), clicks:delta('cliques_google'), cost };
+        return { campaign:campaign.nome_campanha_exato, currency, ...differences };
+      }).filter(row => Object.values(row).some((value, index) => index > 1 && value != null && value !== 0)) : [];
+      return { date, comparableDate, rows };
+    }
+
+    function buildD1DeltaRows(source, base, dateChanges=[]) {
+      const date = source?.dates?.length === 1 ? source.dates[0] : null;
+      const previousManifest = base?.manifesto_atual;
+      const previousDate = previousManifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
+      const comparableDate = Boolean(date && previousDate === date);
+      const previousCampaigns = previousManifest?.campanhas || [];
+      const aliases = new Map((dateChanges || []).map(item => [String(item.newName || '').trim(), String(item.oldName || '').trim()]));
+      const exactName = value => String(value || '').trim();
+      const numeric = field => {
+        if (!field || field.estado === 'ausente' || field.estado === 'invalido' || field.valor == null) return null;
+        const value = Number(field.valor);
+        return Number.isFinite(value) ? value : null;
+      };
+      const currentCounts = new Map();
+      (source?.records || []).forEach(record => currentCounts.set(exactName(record.nome_campanha_exato), (currentCounts.get(exactName(record.nome_campanha_exato)) || 0) + 1));
+      const oldCampaignFor = record => {
+        const name = exactName(record?.nome_campanha_exato);
+        const priorName = aliases.get(name) || name;
+        const matches = previousCampaigns.filter(item => exactName(item?.nome_campanha_exato) === priorName);
+        return matches.length === 1 ? matches[0] : null;
+      };
+      const currentValue = (record, key) => numeric(stateValue(record?.raw?.[key], parseNumber));
+      const rows = date && comparableDate ? (source?.records || []).filter(record => currentCounts.get(exactName(record.nome_campanha_exato)) === 1).map(record => {
+        const previousCampaign = oldCampaignFor(record);
+        if (!previousCampaign) return null;
+        const oldMetrics = previousCampaign.metricas_D_zero;
+        const currency = String(record.moeda || '').trim().toUpperCase();
+        const oldCurrency = String(oldMetrics?.moeda?.valor || '').trim().toUpperCase();
+        const delta = (currentKey, previousKey=currentKey) => {
+          const current = currentValue(record, currentKey), old = numeric(oldMetrics?.[previousKey]);
+          return current == null || old == null ? null : current - old;
+        };
+        const cost = !currency || !oldCurrency || currency !== oldCurrency ? null : delta('cost', 'custo_total');
+        return { campaign:record.nome_campanha_exato, currency, impressions:delta('impressions','impressoes'), clicks:delta('clicks','cliques_google'), cost };
+      }).filter(row => row && [row.impressions,row.clicks,row.cost].some(value => value != null && value !== 0)) : [];
+      return { date, comparableDate, rows };
+    }
+
+    function formatD0DeltaValue(value, kind, currency) {
+      if (value == null) return '—';
+      const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+      const absolute = Math.abs(value);
+      if (kind === 'cost') {
+        if (/^[A-Z]{3}$/.test(currency || '')) {
+          try { return `${sign}${new Intl.NumberFormat('pt-BR', { style:'currency', currency, signDisplay:'never' }).format(absolute)}`; } catch { /* exibe o código desconhecido abaixo */ }
+        }
+        return `${sign}${currency ? `${currency} ` : ''}${new Intl.NumberFormat('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }).format(absolute)}`;
+      }
+      return `${sign}${new Intl.NumberFormat('pt-BR', { maximumFractionDigits:0 }).format(absolute)}`;
+    }
+
+    function renderD0DeltaPanel(manifest, base, dateChanges=[]) {
+      const panel = q('#d0-changes-panel'), body = q('#d0-changes-table'), empty = q('#d0-changes-empty');
+      const result = buildD0DeltaRows(manifest, base, dateChanges);
+      body.replaceChildren();
+      if (!result.date) q('#d0-changes-caption').textContent = 'A data do relatório D0 não foi identificada; não foi possível comparar as métricas.';
+      else if (result.comparableDate) q('#d0-changes-caption').textContent = `Comparação com a captura D0 salva na base local para ${panelDateLabel(result.date)}. A tabela mostra somente campanhas com alguma mudança.`;
+      else q('#d0-changes-caption').textContent = `Não havia captura D0 da mesma data (${panelDateLabel(result.date)}) na base local. Os valores desta primeira captura são comparados a zero.`;
+      result.rows.forEach(row => {
+        const tr = document.createElement('tr'), values = [row.campaign, formatD0DeltaValue(row.impressions, 'count'), formatD0DeltaValue(row.clicks, 'count'), formatD0DeltaValue(row.cost, 'cost', row.currency)];
+        values.forEach((value, index) => {
+          const td = document.createElement('td'); td.textContent = value;
+          if (index === 0) td.className = 'campaign-name';
+          else { const delta = [row.impressions, row.clicks, row.cost][index - 1]; td.className = 'numeric delta-value'; if (delta > 0) td.classList.add('positive'); if (delta < 0) td.classList.add('negative'); }
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      empty.hidden = result.rows.length > 0 || !result.date;
+      empty.textContent = result.date ? 'Nenhuma diferença quantificável em impressões, cliques ou custo nesta captura.' : '';
+      panel.hidden = false;
+    }
+
+    function renderD1DeltaPanel(source, base, dateChanges=[]) {
+      const panel = q('#d1-changes-panel'), body = q('#d1-changes-table'), empty = q('#d1-changes-empty');
+      const result = buildD1DeltaRows(source, base, dateChanges);
+      body.replaceChildren();
+      if (!result.date) q('#d1-changes-caption').textContent = 'A data do fechamento D−1 não foi identificada; não foi possível comparar as métricas.';
+      else if (result.comparableDate) q('#d1-changes-caption').textContent = `Comparação do fechamento D−1 com a última captura D0 salva na base local para ${panelDateLabel(result.date)}. A tabela mostra somente campanhas com alguma mudança.`;
+      else q('#d1-changes-caption').textContent = `Não há uma captura D0 salva na base local para ${panelDateLabel(result.date)}. Sem a captura parcial correspondente, não é possível calcular as alterações do fechamento.`;
+      result.rows.forEach(row => {
+        const tr = document.createElement('tr'), values = [row.campaign, formatD0DeltaValue(row.impressions, 'count'), formatD0DeltaValue(row.clicks, 'count'), formatD0DeltaValue(row.cost, 'cost', row.currency)];
+        values.forEach((value, index) => {
+          const td = document.createElement('td'); td.textContent = value;
+          if (index === 0) td.className = 'campaign-name';
+          else { const delta = [row.impressions, row.clicks, row.cost][index - 1]; td.className = 'numeric delta-value'; if (delta > 0) td.classList.add('positive'); if (delta < 0) td.classList.add('negative'); }
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      empty.hidden = result.rows.length > 0;
+      empty.textContent = !result.date
+        ? 'Não foi possível verificar a data desta captura.'
+        : result.comparableDate
+          ? 'Nenhuma diferença quantificável em impressões, cliques ou custo entre a captura D0 e o fechamento D−1.'
+          : 'A comparação não foi feita; nenhum campo ausente foi tratado como zero.';
+      panel.hidden = false;
+    }
+
     function sortPreviewRows(rows, sort) {
       if (!sort?.key || !sort?.direction) return rows.slice();
       const numericKeys = new Set(['impressions','clicks','conversions','abs_top_share','top_share','cost']);
@@ -1097,7 +1288,9 @@
       previewRole = role;
       qa('.source-tab').forEach(button => { const selected=button.dataset.previewRole === role; button.disabled=!available[button.dataset.previewRole]; button.setAttribute('aria-pressed', String(selected)); });
       const source = role === 'd1' ? slots.d1 : slots.d0;
-      q('#preview-origin').textContent = role === 'd1' ? 'Exibindo dados do CSV D−1' : source?.source === 'mcc_chrome_extension' ? 'Exibindo captura direta da MCC · D0' : 'Exibindo dados do CSV D0';
+      q('#preview-origin').textContent = source?.source === 'mcc_chrome_extension'
+        ? `Exibindo captura direta da MCC · ${role === 'd1' ? 'D−1' : 'D0'}`
+        : `Exibindo dados colados · ${role === 'd1' ? 'D−1' : 'D0'}`;
       q('#preview-cost-head').textContent = role === 'd1' ? 'Custo D−1' : 'Custo D0';
       const sortLabels = { campaign:'Campanha', account:'Conta', status:'Status', impressions:'Impressões', clicks:'Cliques', conversions:'Conversões', abs_top_share:'Impr. primeira posição', top_share:'Impr. parte superior', cost:'Custo' };
       qa('.sort-header').forEach(button => {
@@ -1128,6 +1321,7 @@
       q('#validation-status').textContent = critical.length ? `${critical.length} falha(s) crítica(s)` : 'Validação concluída';
       const summary = q('#summary'); summary.replaceChildren();
       [['Campanhas', validation.quantidades.campanhas_saida_unicas, ''], ['Pendências', validation.quantidades.campanhas_pendentes, validation.quantidades.campanhas_pendentes ? 'bad':'good'], ['Alertas críticos', critical.length, critical.length ? 'bad':'good'], ['Confiança', confidence[0].toUpperCase()+confidence.slice(1), confidence === 'alta' ? 'good':confidence === 'baixa' ? 'bad':'']].forEach(([label,value,cls]) => { const div=document.createElement('div'); div.className=`summary ${cls}`; const span=document.createElement('span'), strong=document.createElement('strong'); span.textContent=label; strong.textContent=String(value); div.append(span,strong); summary.append(div); });
+      clearD0DeltaPanel(); clearD1DeltaPanel();
       renderPreviewTable(manifest, previewRole);
       setPanel('#validation-panel', true); setPanel('#preview-panel', true); setPanel('#apply-panel', true);
       q('#output-name').textContent = 'Base local do Painel de Campanhas'; q('#apply-note').textContent = critical.length ? 'Corrija as falhas críticas antes de atualizar.' : 'Validando a numeração das campanhas na base local…';
@@ -1137,19 +1331,24 @@
 
     async function validatePreparedNumbering(result) {
       const token = ++numberingValidationToken, databaseApi = window.CampaignDatabase || fallbackPanelDatabase;
-      let issues = [], dateChanges = [], historyWarnings = [];
+      let issues = [], dateChanges = [], historyWarnings = [], comparisonBase = null;
       try {
         const db = await openPanelDatabase();
-        try { const base = databaseApi.normalize(await readPanelBase(db)); issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); dateChanges = databaseApi.campaignDateChangeCandidates?.(base, result.manifest) || []; historyWarnings = (databaseApi.campaignNumberHistoryWarnings || panelCampaignNumberHistoryWarnings)(base, result.manifest); }
+        try { const base = databaseApi.normalize(await readPanelBase(db)); comparisonBase = base; issues = (databaseApi.campaignNumberReuseIssues || panelCampaignNumberReuseIssues)(base, result.manifest); dateChanges = databaseApi.campaignDateChangeCandidates?.(base, result.manifest) || []; historyWarnings = (databaseApi.campaignNumberHistoryWarnings || panelCampaignNumberHistoryWarnings)(base, result.manifest); }
         finally { db.close(); }
       } catch (error) {
         if (token !== numberingValidationToken || currentResult !== result) return;
+        showD0DeltaUnavailable();
+        if (slots.d1 && !slots.d1.error) showD1DeltaUnavailable();
         numberingIssues = [];
         q('#apply-note').textContent = 'Não foi possível validar a numeração contra a base local.';
         q('#apply-feedback').className = 'apply-feedback error'; q('#apply-feedback').textContent = `FALHA — A base não foi atualizada. Motivo: ${panelUpdateError(error)}`; q('#apply-feedback').hidden = false;
         q('#apply-manifest').disabled = true; return;
       }
       if (token !== numberingValidationToken || currentResult !== result) return;
+      renderD0DeltaPanel(result.manifest, comparisonBase, dateChanges);
+      if (slots.d1 && !slots.d1.error) renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges);
+      else clearD1DeltaPanel();
       numberingIssues = issues;
       const issueList = q('#issues'); issueList.querySelectorAll('[data-numbering-issue]').forEach(item => item.remove());
       issueList.querySelectorAll('[data-numbering-history]').forEach(item => item.remove());
@@ -1160,31 +1359,59 @@
         for (const issue of issues) { const li = document.createElement('li'); li.className = 'issue fail'; li.dataset.numberingIssue = 'true'; li.textContent = `${issue.group}: a numeração aparece em mais de um nome na coleta atual: ${issue.incomingNames.join(' | ')}. Corrija a numeração na MCC e faça uma nova captura ou exportação.`; issueList.prepend(li); }
         const names = issues.flatMap(issue => issue.incomingNames).join(' | '), feedback = q('#apply-feedback');
         q('#validation-status').textContent = 'Correção de numeração necessária';
-        q('#apply-note').textContent = 'Atualização bloqueada. Corrija a numeração na MCC e importe um novo CSV.';
+        q('#apply-note').textContent = 'Atualização bloqueada. Corrija a numeração na MCC e capture ou cole os dados novamente.';
         feedback.className = 'apply-feedback error'; feedback.textContent = `BASE NÃO ATUALIZADA — Renumere: ${names}`; feedback.hidden = false;
         q('#apply-manifest').disabled = true; q('#announcer').textContent = 'Atualização bloqueada por reutilização de numeração de campanha.';
       } else {
         q('#apply-feedback').hidden = true;
         q('#validation-status').textContent = result.critical.length ? `${result.critical.length} falha(s) crítica(s)` : (historyWarnings.length ? 'Validação concluída · avisos históricos' : 'Validação concluída');
-        q('#apply-note').textContent = result.critical.length ? 'Corrija as falhas críticas antes de atualizar.' : (result.manifest.origem_geracao?.origem_entrada_D_zero === 'mcc_chrome_extension' ? 'A captura da MCC foi validada e pode atualizar a mesma base usada pela Visão Geral.' : 'O CSV foi validado e pode atualizar a mesma base usada pela Visão Geral.');
+        q('#apply-note').textContent = result.critical.length ? 'Corrija as falhas críticas antes de atualizar.' : (result.manifest.origem_geracao?.origem_entrada_D_zero === 'mcc_chrome_extension' ? 'A captura da MCC foi validada e pode atualizar a mesma base usada pela Visão Geral.' : 'Os dados colados foram validados e podem atualizar a mesma base usada pela Visão Geral.');
         q('#apply-manifest').disabled = result.critical.length > 0;
-        q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : 'CSV validado e pronto para atualizar a base.';
+        q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : (result.manifest.origem_geracao?.origem_entrada_D_zero === 'mcc_chrome_extension' ? 'Captura MCC validada e pronta para atualizar a base.' : 'Dados colados validados e prontos para atualizar a base.');
       }
     }
 
+    function clearD0DeltaPanel() {
+      q('#d0-changes-panel').hidden = true;
+      q('#d0-changes-table').replaceChildren();
+      q('#d0-changes-empty').hidden = true;
+    }
+
+    function clearD1DeltaPanel() {
+      q('#d1-changes-panel').hidden = true;
+      q('#d1-changes-table').replaceChildren();
+      q('#d1-changes-empty').hidden = true;
+    }
+
+    function showD0DeltaUnavailable() {
+      q('#d0-changes-caption').textContent = 'Não foi possível consultar a base local para comparar esta captura D0.';
+      q('#d0-changes-table').replaceChildren();
+      q('#d0-changes-empty').textContent = 'A prévia segue disponível, mas as diferenças não puderam ser calculadas.';
+      q('#d0-changes-empty').hidden = false;
+      q('#d0-changes-panel').hidden = false;
+    }
+
+    function showD1DeltaUnavailable() {
+      q('#d1-changes-caption').textContent = 'Não foi possível consultar a base local para comparar o fechamento D−1 com a captura D0.';
+      q('#d1-changes-table').replaceChildren();
+      q('#d1-changes-empty').textContent = 'A comparação de alterações não pôde ser calculada.';
+      q('#d1-changes-empty').hidden = false;
+      q('#d1-changes-panel').hidden = false;
+    }
+
     function resetResults() {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', false); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando D0';
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', false); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando D0';
     }
 
     function showInputBlock(message, { title='D0 obrigatório', status='Aguardando D0' }={}) {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
       const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'fail', title, message);
       const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=message; issues.append(li);
       q('#validation-status').textContent=status; q('#announcer').textContent=message;
     }
 
     function showWaitingForD0() {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
+      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); q('#apply-manifest').disabled = true;
       const message = 'D−1 recebido e validado. Aguardando D0 para gerar a prévia.';
       const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'warn', 'Aguardando D0', message);
       q('#issues').replaceChildren(); q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
@@ -1192,19 +1419,21 @@
 
     async function detectPendingD1DateChanges(source) {
       const token=numberingValidationToken, databaseApi=window.CampaignDatabase;
-      if (!databaseApi?.campaignDateChangeCandidates || !source?.records?.length) return;
+      if (!databaseApi?.normalize || !source?.records?.length) return;
       try {
         const db=await openPanelDatabase(); let base;
         try { base=databaseApi.normalize(await readPanelBase(db)); } finally { db.close(); }
         if (token!==numberingValidationToken || slots.d0 || slots.d1!==source) return;
         const partial={campanhas:source.records.map(record=>({nome_campanha_exato:record.nome_campanha_exato,metricas_D_menos_1:{conta:{valor:record.conta}}}))};
-        for (const item of databaseApi.campaignDateChangeCandidates(base,partial)) { const li=document.createElement('li'); li.className='issue warn'; li.textContent=`Possível mudança de data detectada no D−1: ${item.oldName} → ${item.newName}. Aguarde o D0; a correção só será aplicada após confirmação em Atualizar base.`; q('#issues').append(li); }
-      } catch { /* D−1 continua aguardando D0; a validação completa ocorre ao montar o manifesto. */ }
+        const dateChanges=databaseApi.campaignDateChangeCandidates?.(base,partial)||[];
+        renderD1DeltaPanel(source,base,dateChanges);
+        for (const item of dateChanges) { const li=document.createElement('li'); li.className='issue warn'; li.textContent=`Possível mudança de data detectada no D−1: ${item.oldName} → ${item.newName}. Aguarde o D0; a correção só será aplicada após confirmação em Atualizar base.`; q('#issues').append(li); }
+      } catch { if(token===numberingValidationToken && !slots.d0 && slots.d1===source)showD1DeltaUnavailable(); }
     }
 
     function attemptBuild() {
       if (!slots.d0) { if (slots.d1 && !slots.d1.error) showWaitingForD0(); else resetResults(); return; }
-      if (slots.d0.error || slots.d1?.error) { showInputBlock(slots.d0.error ? 'O CSV de D0 contém erro e precisa ser corrigido.' : 'O CSV de D−1 informado contém erro. Corrija-o ou limpe tudo e envie somente o D0.'); return; }
+      if (slots.d0.error || slots.d1?.error) { showInputBlock(slots.d0.error ? 'Os dados de D0 contêm erro e precisam ser corrigidos.' : 'Os dados de D−1 contêm erro. Corrija-os ou limpe tudo e informe somente o D0.'); return; }
       const datePairIssue = reportDatePairIssue(slots.d1, slots.d0);
       if (datePairIssue) { showInputBlock(datePairIssue, { title:'Datas incompatíveis', status:'Correção necessária' }); return; }
       try {
@@ -1215,7 +1444,7 @@
         const dateToken = d1Dates.length === 1 ? d1Dates[0] : d0Dates.length === 1 ? d0Dates[0] : 'data_indeterminada';
         currentFilename = `manifesto_mcc_${dateToken}.json`; renderResults(result); validatePreparedNumbering(result);
       } catch (error) {
-        numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
+        numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); setPanel('#apply-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
       }
     }
 

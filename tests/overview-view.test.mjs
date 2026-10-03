@@ -63,6 +63,17 @@ test('overview daily profit follows D0, marks polarity and exposes observed cove
   const missing=setup([row('Sem comissão','ativa',10,{d0Totals:{investment:10,commission:null}})]);missing.controller.render();
   assert.match(missing.get('#kpis').innerHTML,/<span class="kpi-label">Lucro do dia<\/span><strong class="kpi-value ">—<\/strong>/);
 });
+test('overview D0 indicators exclude stale rows absent from the latest MCC capture',()=>{
+  const captured=row('Capturada','ativa',20,{d0Totals:{investment:20,impressions:50,clicks:5,commission:30},d0ProfitTotals:{investment:20,commission:30}});
+  const stale=row('Ausente da captura','pausada',113,{d0Totals:{investment:113,impressions:113,clicks:10,commission:85},d0ProfitTotals:{investment:113,commission:85}});
+  stale.c.metricas_D_zero={presente:false};
+  const s=setup([captured,stale]);s.controller.render();const kpis=s.get('#kpis').innerHTML;
+  const d0Kpis=kpis.slice(kpis.indexOf('aria-label="Indicadores D0"'),kpis.indexOf('class="kpi kpi-d0-profit"'));
+  assert.match(d0Kpis,/BRL 20\.00[\s\S]*Impressões[\s\S]*50[\s\S]*Cliques[\s\S]*5/);
+  assert.match(d0Kpis,/Cliques 1\/1/);
+  assert.match(kpis,/Resultado positivo\. Cobertura: 1\/1 campanhas com investimento e comissão\/ajuste disponíveis\./);
+  assert.doesNotMatch(d0Kpis,/BRL 133\.00|Cliques 1\/2/);
+});
 test('overview alerts coexist, user text is escaped and absent metrics never become zero',()=>{
   const s=setup([row('<Oferta>','ativa',null,{rejected:true,policyLimitation:'Restrição "política"',adjustment:{manualSales:2},numberReuse:{group:'1'},profit:-30})]);
   s.controller.render();

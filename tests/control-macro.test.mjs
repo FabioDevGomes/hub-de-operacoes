@@ -156,6 +156,22 @@ assert.equal(fallback.find(row => row.date === '2026-09-13').sales, 2);
 assert.equal(fallback.find(row => row.date === '2026-09-13').source, 'mixed');
 assert.equal(fallback.find(row => row.date === '2026-09-12').investment, null);
 assert.equal(fallback.find(row => row.date === '2026-09-12').clicks, null);
+const authoritativeDaily=domain.aggregateMccDaily([
+  {campanha_id:'campaign-1',data:'2026-10-01',celulas:{O:{value:40},P:{value:100},C:{value:8},F:{value:2}}},
+  {campanha_id:'campaign-1',data:'2026-10-02',celulas:{O:{value:20},P:{value:30},C:{value:5},F:{value:1}}},
+],new Map(),{authoritativeDates:['2026-10-01','2026-10-02']});
+const authoritativeCombined=domain.combineDailyRows(authoritativeDaily,[
+  {date:'2026-10-01',investment:400,revenue:300,clicks:80,sales:10,observation:'legado D−1'},
+  {date:'2026-10-02',investment:500,revenue:400,clicks:90,sales:12,observation:'legado D0'},
+  {date:'2026-10-03',investment:10,revenue:25,clicks:2,sales:1,observation:'fora do retrato'},
+],{authoritativeDates:['2026-10-01','2026-10-02']});
+assert.deepEqual(authoritativeCombined.filter(row=>row.date.startsWith('2026-10')).map(row=>[row.date,row.source,row.investment,row.revenue,row.profit,row.clicks,row.sales]),[
+  ['2026-10-03','planilha',10,25,15,2,1],['2026-10-02','mcc',20,30,10,5,1],['2026-10-01','mcc',40,100,60,8,2],
+],'capturas recentes D0/D−1 prevalecem sobre a planilha nas mesmas datas, sem alterar dias fora do retrato');
+assert.equal(authoritativeCombined.find(row=>row.date==='2026-10-02').observation,'legado D0','corrigir métricas não remove anotações do usuário');
+const absentSnapshot=domain.combineDailyRows([], [{date:'2026-10-02',investment:500,revenue:400,clicks:90,sales:12}], {authoritativeDates:['2026-10-02']});
+assert.equal(absentSnapshot.some(row=>row.date==='2026-10-02'),false,'campanha sem métricas na captura mais recente não conserva o dia antigo na agregação');
+assert.deepEqual(domain.summarize(authoritativeCombined),{investment:70,revenue:155,profit:85,roi:85/70*100,clicks:15,sales:4,clicksPerSale:3.75},'KPIs e lucro derivado no Macro refletem as métricas substituídas');
 
 const template = await readFile(new URL('../src/control-macro/view.js', import.meta.url), 'utf8') + await readFile(new URL('../src/control-macro/template.html', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../src/control-macro/control-macro.css', import.meta.url), 'utf8');

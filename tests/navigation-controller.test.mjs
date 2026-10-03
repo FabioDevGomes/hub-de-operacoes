@@ -21,7 +21,7 @@ function element(group){
 function harness(overrides={}){
   const nodes=new Map(),renders=[],frames=[],errors=[],openedGroups=[],historyWrites=[],handlers=new Map();
   for(const view of routes){nodes.set(view.sectionId,element());nodes.set(view.navId,element(groups[view.id]))}
-  for(const id of ['productView','presellView','presellNav','pageTitle','pageSubtitle','registerSale'])nodes.set(id,element());
+  for(const id of ['productView','presellView','presellNav','pageTitle','pageSubtitle','registerSale','correctCampaignDate'])nodes.set(id,element());
   const body=element(),document={body,title:'',getElementById:id=>nodes.get(id)||null,defaultView:{HubSidebar:{setOpenGroup:group=>openedGroups.push(group)}}};
   const location={pathname:'/',search:''};
   const history={replaceState:(_state,_title,url)=>{historyWrites.push(url);const parsed=new URL(url,'http://example.test');location.pathname=parsed.pathname;location.search=parsed.search}};
@@ -46,6 +46,8 @@ function assertFrame(h,id){
   assert.equal(h.document.body.classList.contains('billing-page'),id==='billing');
   assert.equal(h.document.body.classList.contains('billing-mode'),false);
   assert.equal(h.nodes.get('registerSale').classList.contains('hidden'),id!=='totals');
+  const group=id==='product'?'products':groups[id];
+  assert.equal(h.nodes.get('correctCampaignDate').classList.contains('hidden'),group!=='operation'&&group!=='products');
   assert.equal(h.historyWrites.at(-1),registry.urlFor(id,'/'));
 }
 

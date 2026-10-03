@@ -20,14 +20,14 @@ assert.ok(html.includes("['revenue','Total faturado']"),'coluna Total faturado n
 assert.ok(html.includes("['profit','Lucro total']")&&html.includes("key==='profit'?product.totalProfit"),'coluna Lucro total não está disponível no seletor ou na ordenação');
 assert.ok(html.includes("['sales','Vendas']")&&html.includes("key==='sales'?product.salesCount"),'coluna Vendas não está disponível no seletor ou na ordenação');
 assert.ok(html.includes("legacyMetric?.state==='observed'")&&html.includes("metrics?.commission_brl")&&html.includes('addBilled(group,legacyCommission,campaignProfitEvidence)'),'comissão observada do resumo histórico não entra no total faturado');
-assert.ok(html.includes('date>legacyEndDate')&&html.includes("String(row.data||'')>legacyEndDate")&&html.includes('if(afterLegacy)addBilled(group,rawBilled,campaignProfitEvidence)'),'diário e ajustes não são limitados ao período posterior ao resumo histórico');
+assert.ok(html.includes('date>legacyEndDate')&&html.includes("String(row.data||'')>legacyEndDate")&&html.includes('if(afterLegacy&&!isAuthoritative)addBilled(group,rawBilled,campaignProfitEvidence)'),'diário e ajustes não são limitados ao período posterior ao resumo histórico');
 assert.ok(html.includes('else addBilled(group,adjustment?.commissionAdjustment,campaignProfitEvidence)'),'vendas provisórias sem resumo histórico não são incluídas no total faturado');
 assert.ok(html.includes("title=\"Usa a comissão observada na planilha histórica por campanha; acrescenta somente os dados diários e vendas provisórias posteriores à data final desse resumo."),'a regra de consolidação não está explicada no cabeçalho');
 assert.ok(html.includes('totalBilled=x.billedObserved?x.totalBilled:null'),'produto sem faturamento registrado não é distinguido de faturamento zero');
 assert.ok(html.includes('totalInvestment=x.investmentObserved?x.totalInvestment:null')&&html.includes('totalProfit:!x.profitComplete||totalBilled==null||totalInvestment==null?null:totalBilled-totalInvestment'),'lucro não preserva ausência de dados ou não é derivado dos totais agregados');
 assert.ok(html.includes('fmtMoney(p.totalBilled)'),'total faturado não é exibido como moeda');
 assert.ok(html.includes('fmtMoney(p.totalProfit)'),'lucro total não é exibido como moeda');
-assert.ok(html.includes('investmentSnapshots=activeCampaigns.map')&&html.includes('value:!d0||d0.presente===false||rawD0==null?null:currentCost(c)')&&html.includes("Number(rawD1)*(currency==='USD'?state.rate:1)"),'adaptador não fornece snapshots D0/D−1 de investimento em BRL');
+assert.ok(html.includes('metricSnapshots:context.latestSnapshots.rows')&&html.includes('authoritativeDates:context.latestSnapshots.dates')&&html.includes('OverviewDomain.authoritativeMccSnapshots(manifest,{exchangeRate:state.rate})'),'adaptador deve fornecer a captura atual compartilhada em BRL, sem duplicar datas do Diário');
 assert.ok(html.includes('fmtNum(p.salesCount,Number.isInteger(p.salesCount)?0:2)'),'quantidade de vendas não é exibida com precisão apropriada');
 assert.ok(html.includes("key==='revenue'?product.totalBilled"),'ordenação numérica por Total faturado ausente');
 assert.ok(html.includes("key==='profit'?product.totalProfit"),'ordenação numérica por Lucro total ausente');

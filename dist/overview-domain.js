@@ -4,8 +4,37 @@
   function sumObservedMetric(rows,field){const entries=Array.isArray(rows)?rows:[];let total=0,observedCount=0;for(const row of entries){const value=numeric(row?.[field]);if(value==null)continue;total+=value;observedCount++}return{value:observedCount?total:null,observedCount,totalCount:entries.length}}
   function sumObservedProfit(totalsList){const entries=Array.isArray(totalsList)?totalsList:[];let investment=0,commission=0,observedCount=0;for(const totals of entries){const spent=numeric(totals?.investment),revenue=numeric(totals?.commission);if(spent==null||revenue==null)continue;investment+=spent;commission+=revenue;observedCount++}return{value:observedCount?profitForTotals({investment,commission}):null,observedCount,totalCount:entries.length}}
   function previousIsoDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'';const date=new Date(`${value}T00:00:00.000Z`);if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)return'';date.setUTCDate(date.getUTCDate()-1);return date.toISOString().slice(0,10)}
+  function manifestValue(value){if(value&&typeof value==='object'){if(value.estado==='ausente'||value.estado==='invalido')return null;if(Object.prototype.hasOwnProperty.call(value,'valor'))return value.valor;if(Object.prototype.hasOwnProperty.call(value,'value'))return value.value}return value}
+  function manifestField(value){return numeric(manifestValue(value))}
+  function manifestDate(value,fallback){const raw=manifestValue(value),text=String(raw??fallback??'').trim();if(/^\d{4}-\d{2}-\d{2}$/.test(text))return previousIsoDate(text)?text:'';const match=text.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{4})$/);if(!match)return'';const iso=`${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`,date=new Date(`${iso}T00:00:00.000Z`);return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===iso?iso:''}
+  function authoritativeMccSnapshots(manifest,{exchangeRate=1}={}){
+    const temporal=manifest?.separacao_temporal||{},fallbackDates={d0:manifestDate(temporal.D_zero?.datas_detectadas?.[0]),d1:manifestDate(temporal.D_menos_1?.datas_detectadas?.[0])},dateFields={d0:'metricas_D_zero',d1:'metricas_D_menos_1'},dates=new Set(Object.values(fallbackDates).filter(Boolean)),rows=[];
+    for(const campaign of manifest?.campanhas||[])for(const[period,field]of Object.entries(dateFields)){
+      const metrics=campaign?.[field];if(!metrics)continue;
+      const date=manifestDate(metrics.data,fallbackDates[period]);if(!date)continue;dates.add(date);
+      const present=metrics.presente!==false,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),factor=currency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
+      let investment=manifestField(metrics.custo_total),costCurrency=currency;
+      if(period==='d0'){
+        const cost=campaign.custo_D_zero,rawCost=manifestField(cost?.custo_total_destino_totais_coluna_M);
+        if(cost?.presente!==false&&rawCost!=null){investment=rawCost;costCurrency=String(manifestValue(cost.moeda)||currency).trim().toUpperCase()}
+      }
+      const costFactor=costCurrency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
+      const commission=manifestField(metrics.valor_conversao)??manifestField(metrics.comissao_recebida);
+      rows.push({campaignName:String(campaign.nome_campanha_exato||''),period,date,present,investment:!present||investment==null?null:investment*costFactor,impressions:present?manifestField(metrics.impressoes):null,clicks:present?manifestField(metrics.cliques_google):null,conversions:present?manifestField(metrics.conversoes):null,commission:!present||commission==null?null:commission*factor});
+    }
+    const rowsByCampaignDate=new Map();for(const row of rows){const key=`${row.campaignName.toLocaleLowerCase('pt-BR')}|${row.date}`,previous=rowsByCampaignDate.get(key);if(!previous||row.period==='d1')rowsByCampaignDate.set(key,row)}
+    return{dates:[...dates].sort(),rows:[...rowsByCampaignDate.values()].sort((a,b)=>a.date.localeCompare(b.date))};
+  }
+  function replaceAuthoritativeDates(history,snapshots=[],authoritativeDates=[]){
+    const fields=['investment','impressions','clicks','conversions','commission'],source=history||{},total={};for(const field of fields)total[field]=numeric(source[field]);
+    const dates=[...new Set(authoritativeDates||[])],rowsByDate=new Map();for(const row of snapshots||[]){if(!row?.date)continue;const previous=rowsByDate.get(row.date);if(!previous||row.period==='d1')rowsByDate.set(row.date,row)}
+    const adjustedObserved={};for(const field of fields){let observed=Math.max(0,Number(source.observed?.[field])||0);for(const date of dates){const previous=numeric(source.byDate?.[date]?.[field]),snapshot=rowsByDate.get(date),next=snapshot?.present?numeric(snapshot[field]):null;if(previous!=null||next!=null){total[field]=(total[field]??0)-(previous??0)+(next??0);observed+=Number(next!=null)-Number(previous!=null)}}adjustedObserved[field]=observed;total[field]=observed>0?total[field]:null}
+    return{...total,observed:adjustedObserved};
+  }
   function resolveD0Totals(direct,dailyRow,date){
-    const result={...direct,date};
+    const {present=true,...observed}=direct||{};
+    const result={...observed,date};
+    if(present===false){for(const field of ['investment','impressions','clicks','conversions','commission'])result[field]=null;return result}
     if(!date||dailyRow?.data!==date)return result;
     const columns={investment:'O',impressions:'B',clicks:'C',conversions:'F',commission:'P'};
     for(const [field,column] of Object.entries(columns))if(result[field]==null)result[field]=numeric(dailyRow.celulas?.[column]?.value);
@@ -49,5 +78,5 @@
     return rows;
   }
   function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&paused||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
-  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,totalsColumns});
+  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns});
 })(typeof window==='object'?window:globalThis);

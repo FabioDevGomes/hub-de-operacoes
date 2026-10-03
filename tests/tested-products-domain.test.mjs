@@ -21,6 +21,7 @@ const campaigns = [
   { id: 'legacy-no-end-date', nome_mcc: 'Legacy No End Date', nome_exibicao: 'Legacy No End Date', legacy_totais: { metrics: { commission_brl: { value: 50, state: 'observed' }, investment_brl: { value: 50, state: 'observed' }, conversions: { value: 6, state: 'observed' } } } },
 ];
 const context = {
+  latestSnapshots:{rows:[],dates:[]},
   dailyByCampaign: new Map([
     ['alpha-1', [{ data: '2026-09-20', celulas: { F: { value: 3 }, O: { value: 40 }, P: { value: 100 } } }, { data: '2026-09-21', celulas: { F: { value: 0 }, O: { value: 10 }, P: { value: 0 } } }]],
     ['alpha-2', [{ data: '2026-09-21', celulas: { F: { value: 2 }, O: { value: 20 }, P: { value: 50 } } }]],
@@ -108,4 +109,20 @@ assert.equal(snapshotProducts[0].salesCount,7,'D−1/D0 atuais sobrepõem a pró
 assert.equal(snapshotProducts[0].totalInvestment,12,'snapshots de investimento MCC D−1/D0 substituem os valores da coluna O na mesma data');
 assert.equal(snapshotProducts[0].totalBilled,70,'preserva o faturamento diário usado na consolidação');
 assert.equal(snapshotProducts[0].totalProfit,58,'calcula lucro usando o investimento mais recente e o faturamento agregado');
+const rebasedProducts=domainContext.window.TestedProductsDomain.buildProducts({
+  source:[{id:'captured',nome_mcc:'Captured Product',nome_exibicao:'Captured Product'},{id:'missing',nome_mcc:'Paused Product',nome_exibicao:'Paused Product'}],
+  activeCampaigns:[{nome_campanha_exato:'Captured Product'}],
+  metricSnapshots:[{campaignName:'Captured Product',date:'2026-10-02',period:'d0',present:true,investment:20,commission:30,conversions:1}],
+  authoritativeDates:['2026-10-02'],catalog:{ocultos:[],aliases:{},datas_inicio:{}},salesAdjustments:new Map(),
+  dailyByCampaign:new Map([
+    ['captured',[{data:'2026-10-01',celulas:{F:{value:1},O:{value:10},P:{value:15}}},{data:'2026-10-02',celulas:{F:{value:3},O:{value:90},P:{value:80}}}]],
+    ['missing',[{data:'2026-10-02',celulas:{F:{value:2},O:{value:60},P:{value:100}}}]],
+  ]),referenceDate:'2026-10-02',getProductName:campaign=>campaign.nome_exibicao,getCampaignIdentity:()=>({dateSort:null}),getCampaignSheet:name=>name,
+});
+assert.equal(rebasedProducts.find(product=>product.label==='Captured Product').totalInvestment,30,'Produtos Testados preserva o investimento anterior e substitui o gasto D0 obsoleto');
+assert.equal(rebasedProducts.find(product=>product.label==='Captured Product').totalBilled,45,'faturamento por produto substitui a comissão MCC da data corrigida');
+assert.equal(rebasedProducts.find(product=>product.label==='Captured Product').totalProfit,15,'lucro por produto é recalculado sobre o retrato atual');
+assert.equal(rebasedProducts.find(product=>product.label==='Captured Product').salesCount,2,'conversões D0 corrigidas substituem a contagem diária antiga');
+assert.equal(rebasedProducts.find(product=>product.label==='Paused Product').totalInvestment,null,'campanha ausente não conserva investimento diário obsoleto no dia da captura');
+assert.equal(rebasedProducts.find(product=>product.label==='Paused Product').totalBilled,null,'campanha ausente não conserva faturamento MCC obsoleto no dia da captura');
 console.log('tested products domain ok');

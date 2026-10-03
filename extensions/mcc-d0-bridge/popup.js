@@ -2,10 +2,33 @@ import { showCaptureStatus, showCaptureError } from './capture-status-view.mjs';
 
 const captureButton = document.querySelector('#capture-d0');
 const captureD1Button = document.querySelector('#capture-d1');
+const scrollButton = document.querySelector('#scroll-to-bottom');
 const captureStatus = document.querySelector('#capture-status');
+const actionButtons = [scrollButton, captureD1Button, captureButton];
+
+function setActionsDisabled(disabled) {
+  for (const button of actionButtons) button.disabled = disabled;
+}
+
+scrollButton.addEventListener('click', async () => {
+  setActionsDisabled(true);
+  showCaptureStatus(captureStatus, 'Rolando a grade da MCC até o final; aguarde o carregamento das campanhas…');
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'SCROLL_ACTIVE_MCC_TO_BOTTOM' });
+    if (!response?.ok) throw response || new Error('Não foi possível rolar a página da MCC.');
+    const message = response.result?.steps
+      ? 'Fim da grade alcançado. Agora você pode capturar D0 ou D−1.'
+      : 'A grade já estava no final. Agora você pode capturar D0 ou D−1.';
+    showCaptureStatus(captureStatus, message);
+  } catch (error) {
+    showCaptureError(captureStatus, error);
+  } finally {
+    setActionsDisabled(false);
+  }
+});
 
 captureButton.addEventListener('click', async () => {
-  captureButton.disabled = true;
+  setActionsDisabled(true);
   showCaptureStatus(captureStatus, 'Validando e capturando a grade D0 da aba ativa…');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'CAPTURE_AND_FORWARD_MCC_D0' });
@@ -14,12 +37,12 @@ captureButton.addEventListener('click', async () => {
   } catch (error) {
     showCaptureError(captureStatus, error);
   } finally {
-    captureButton.disabled = false;
+    setActionsDisabled(false);
   }
 });
 
 captureD1Button.addEventListener('click', async () => {
-  captureD1Button.disabled = true;
+  setActionsDisabled(true);
   showCaptureStatus(captureStatus, 'Validando a data de ontem e capturando a grade D−1 da aba ativa…');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'CAPTURE_AND_FORWARD_MCC_D1' });
@@ -32,6 +55,6 @@ captureD1Button.addEventListener('click', async () => {
   } catch (error) {
     showCaptureError(captureStatus, error);
   } finally {
-    captureD1Button.disabled = false;
+    setActionsDisabled(false);
   }
 });

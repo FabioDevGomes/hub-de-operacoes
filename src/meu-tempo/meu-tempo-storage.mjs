@@ -13,9 +13,8 @@ export function openTimeDb(){
       const db=request.result;
       if(!db.objectStoreNames.contains('categories'))db.createObjectStore('categories',{keyPath:'id'});
       if(!db.objectStoreNames.contains('items')){const store=db.createObjectStore('items',{keyPath:'id'});store.createIndex('categoryId','categoryId')}
-      if(!db.objectStoreNames.contains('entries')){const store=db.createObjectStore('entries',{keyPath:'id'});store.createIndex('date','date');store.createIndex('itemId','itemId');store.createIndex('date_item',['date','itemId']);store.createIndex('importKey','importKey')}
+      if(!db.objectStoreNames.contains('entries')){const store=db.createObjectStore('entries',{keyPath:'id'});store.createIndex('date','date');store.createIndex('itemId','itemId');store.createIndex('date_item',['date','itemId'])}
       if(!db.objectStoreNames.contains('days'))db.createObjectStore('days',{keyPath:'date'});
-      if(!db.objectStoreNames.contains('imports'))db.createObjectStore('imports',{keyPath:'id'});
       if(!db.objectStoreNames.contains('settings'))db.createObjectStore('settings',{keyPath:'key'});
     };
     request.onsuccess=()=>resolve(request.result);
@@ -37,10 +36,10 @@ export async function initialize(){
 
 export async function snapshot(){
   await initialize();
-  return withDb(['categories','items','entries','days','imports','settings'],'readonly',async tx=>{
+  return withDb(['categories','items','entries','days','settings'],'readonly',async tx=>{
     const all=name=>requestResult(tx.objectStore(name).getAll());
-    const[categories,items,entries,days,imports,settings]=await Promise.all(['categories','items','entries','days','imports','settings'].map(all));
-    return{categories:categories.sort((a,b)=>a.order-b.order||a.name.localeCompare(b.name,'pt-BR')),items:items.sort((a,b)=>a.order-b.order||a.name.localeCompare(b.name,'pt-BR')),entries:entries.sort((a,b)=>a.date.localeCompare(b.date)||String(a.start||'99:99').localeCompare(String(b.start||'99:99'))||a.createdAt.localeCompare(b.createdAt)),days,imports,settings:Object.fromEntries(settings.map(row=>[row.key,row.value]))};
+    const[categories,items,entries,days,settings]=await Promise.all(['categories','items','entries','days','settings'].map(all));
+    return{categories:categories.sort((a,b)=>a.order-b.order||a.name.localeCompare(b.name,'pt-BR')),items:items.sort((a,b)=>a.order-b.order||a.name.localeCompare(b.name,'pt-BR')),entries:entries.sort((a,b)=>a.date.localeCompare(b.date)||String(a.start||'99:99').localeCompare(String(b.start||'99:99'))||a.createdAt.localeCompare(b.createdAt)),days,settings:Object.fromEntries(settings.map(row=>[row.key,row.value]))};
   });
 }
 
@@ -64,17 +63,3 @@ export async function removeDuration(date,itemId,minutes){return withDb(['entrie
 export async function undoLast(date){return withDb(['entries'],'readwrite',async tx=>{const entries=await requestResult(tx.objectStore('entries').index('date').getAll(date));const last=entries.filter(x=>x.source!=='excel_import').sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];if(!last)return null;tx.objectStore('entries').delete(last.id);return last})}
 export async function saveDay(day){const row={date:day.date,lastRecordedTime:day.lastRecordedTime||null,output:String(day.output||''),observations:String(day.observations||''),updatedAt:new Date().toISOString()};await withDb(['days'],'readwrite',tx=>{tx.objectStore('days').put(row)});return row}
 export async function saveSetting(key,value){await withDb(['settings'],'readwrite',tx=>{tx.objectStore('settings').put({key,value})})}
-
-export async function applyImport(preview,{overwrite=false}={}){
-  const conflicts=[...preview.classified.filter(x=>x.status==='conflict'),...(preview.dayClassified||[]).filter(x=>x.status==='conflict')];
-  if(conflicts.length&&!overwrite)throw new Error('A prévia possui conflitos. Confirme explicitamente a substituição.');
-  return withDb(['items','entries','days','imports'],'readwrite',async tx=>{
-    const itemsStore=tx.objectStore('items'),entriesStore=tx.objectStore('entries'),daysStore=tx.objectStore('days'),importsStore=tx.objectStore('imports');
-    for(const item of preview.proposedItems||[])itemsStore.put(item);
-    let imported=0,replaced=0;
-    for(const row of preview.classified){if(row.status==='identical')continue;if(row.status==='conflict')replaced++;else imported++;entriesStore.put(row.entry)}
-    for(const row of preview.dayClassified||[])if(row.status!=='identical')daysStore.put(row.day);
-    importsStore.put({id:preview.fileHash,fileName:preview.fileName,sheet:preview.sheet,period:preview.period,importedAt:new Date().toISOString(),parserVersion:1,report:preview.report});
-    return{imported,replaced,identical:preview.classified.filter(x=>x.status==='identical').length};
-  });
-}

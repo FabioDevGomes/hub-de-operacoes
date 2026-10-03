@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {summarizeCompetence,monthlyFinancialSeries} from '../src/billing/billing-domain.mjs';
 import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
@@ -189,6 +190,17 @@ await new Promise(resolve=>setImmediate(resolve));
 let aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
 assert.equal(aggregate.conversion_count,2);
 assert.equal(aggregate.confirmation_status,'provisional');
+const lowerAggregate={...provisionalAggregate,value_brl:80,conversion_count:1};
+upsertMccConversionSalesToTransaction(syncTx,[lowerAggregate]);
+await new Promise(resolve=>setImmediate(resolve));
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.value_brl,80);assert.equal(aggregate.conversion_count,1);
+assert.equal(summarizeCompetence([aggregate],[]).grossBrl.amount,80,'indicador de faturamento lê o agregado corrigido');
+assert.equal(monthlyFinancialSeries({sales:[aggregate],start:'2026-09-01',end:'2026-09-30'})[0].value,80,'gráfico mensal lê o mesmo agregado corrigido');
+const unchangedAudit=syncStores.get('billing_audit').rows.length;
+upsertMccConversionSalesToTransaction(syncTx,[lowerAggregate]);
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(syncStores.get('billing_audit').rows.length,unchangedAudit,'repetir captura menor não duplica vendas nem auditoria');
 const officialAggregate={...provisionalAggregate,value_brl:240,conversion_count:2,confirmation_status:'confirmed',confirmation_source:'MCC D−1',confirmed_at:'2026-09-24T12:00:00Z',source_period:'d1',notes:'D−1 agregado'};
 upsertMccConversionSalesToTransaction(syncTx,[officialAggregate]);
 await new Promise(resolve=>setImmediate(resolve));
@@ -228,6 +240,21 @@ aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregate
 assert.equal(aggregate.active,false,'D−1 com zero desativa o agregado anterior sem apagá-lo');
 assert.equal(aggregate.confirmation_status,'not_confirmed');
 assert.equal(aggregate.value_brl,null);
+
+const absentD0={...provisionalAggregate,sale_id:'mcc-conversion:absent:2026-09-23',campaign_id:'absent',payment_status:'issued',observed_payment_status:'issued'};
+upsertMccConversionSalesToTransaction(syncTx,[absentD0]);
+await new Promise(resolve=>setImmediate(resolve));
+const manualBefore=structuredClone(syncStores.get('billing_sales').rows.filter(row=>row.source!=='mcc_conversion_aggregate'));
+upsertMccConversionSalesToTransaction(syncTx,[{...absentD0,active:false,conversion_count:0,value_brl:null,confirmation_status:'not_confirmed',payment_status:'pending'}]);
+await new Promise(resolve=>setImmediate(resolve));
+const absentStored=syncStores.get('billing_sales').rows.find(row=>row.sale_id===absentD0.sale_id);
+assert.equal(absentStored.active,false);assert.equal(absentStored.payment_status,'issued','correção MCC preserva status informado pelo usuário');
+assert.equal(summarizeCompetence([absentStored],[]).salesCount,0);
+assert.equal(monthlyFinancialSeries({sales:[absentStored],start:'2026-09-01',end:'2026-09-30'})[0].value,0);
+assert.deepEqual(syncStores.get('billing_sales').rows.filter(row=>row.source!=='mcc_conversion_aggregate'),manualBefore,'linhas manuais ficam intactas');
+upsertMccConversionSalesToTransaction(syncTx,[{...confirmedDiaryAggregate,source_period:'d0',active:false,conversion_count:0,value_brl:null,confirmation_status:'not_confirmed'}]);
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===confirmedDiaryAggregate.sale_id).active,true,'ausência D0 não invalida fechamento D−1 confirmado');
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'billing'\)/, 'backup antigo sem faturamento preserva as stores financeiras');

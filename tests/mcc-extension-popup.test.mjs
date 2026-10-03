@@ -12,16 +12,20 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.3', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.4', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura a grade da MCC/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
+assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
+assert.ok(popup.indexOf('id="scroll-to-bottom"') < popup.indexOf('id="capture-d1"'), 'rolagem fica acima dos botões de captura');
+assert.match(popup, /button\.scroll-page[^}]*font-size:\s*11px/, 'botão de rolagem usa apresentação compacta e discreta');
 for (const removedId of [
   'send-form','csv-file','send-button','read-grid','read-text','compare-csv','compare-button','experiment-status','experiment-result'
 ]) assert.ok(!popup.includes(`id="${removedId}"`), `popup não deve mais exibir ${removedId}`);
 assert.doesNotMatch(popup, /Fallback · CSV manual|Experimento local|Testar leitura da MCC|Testar captura por texto|Comparar prévia com CSV/);
 assert.doesNotMatch(script, /createCsvTransferPayload|READ_ACTIVE_MCC_GRID|READ_ACTIVE_MCC_TEXT|FORWARD_D0_CSV|compareMcc/i,
-  'o popup mantém somente as ações diretas de captura');
+  'o popup mantém somente rolagem e ações diretas de captura');
 assert.ok(script.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'") && script.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"));
+assert.ok(script.includes("type: 'SCROLL_ACTIVE_MCC_TO_BOTTOM'"));
 
 assert.match(popup, /\.status\.error/);
 assert.match(popup, /aria-atomic="true"/);
@@ -59,8 +63,8 @@ assert.ok(!status.classes.has('error'));
 assert.equal(status.textContent, 'Validando…');
 
 // Exercita os dois cliques, sem Chrome real nem escrita no Preparador.
-const d0 = new Element('button', doc), d1 = new Element('button', doc);
-const nodes = { '#capture-d0':d0, '#capture-d1':d1, '#capture-status':status };
+const d0 = new Element('button', doc), d1 = new Element('button', doc), scroll = new Element('button', doc);
+const nodes = { '#capture-d0':d0, '#capture-d1':d1, '#scroll-to-bottom':scroll, '#capture-status':status };
 let response = failure;
 const requests = [];
 const context = vm.createContext({
@@ -69,14 +73,53 @@ const context = vm.createContext({
   chrome:{ runtime:{ sendMessage:async request => { requests.push(request.type); return response; } } }
 });
 vm.runInContext(script.replace(/^import .*?;\s*/s, ''), context);
+let resolveScroll;
+response = new Promise(resolve => { resolveScroll = resolve; });
+const scrollPromise = scroll.click();
+assert.ok(d0.disabled && d1.disabled && scroll.disabled, 'capturas ficam temporariamente bloqueadas durante a rolagem');
+resolveScroll({ ok:true, result:{ steps:4 } });
+await scrollPromise;
+assert.deepEqual(requests, ['SCROLL_ACTIVE_MCC_TO_BOTTOM']);
+assert.match(status.textContent, /Fim da grade alcançado/);
+assert.ok(!d0.disabled && !d1.disabled && !scroll.disabled);
+response = failure;
 for (const button of [d0, d1]) {
   await button.click();
   assert.equal(button.disabled, false);
   assert.equal(status.children[0].textContent, 'Captura bloqueada: campanha duplicada');
 }
-assert.deepEqual(requests, ['CAPTURE_AND_FORWARD_MCC_D0', 'CAPTURE_AND_FORWARD_MCC_D1']);
+assert.deepEqual(requests, ['SCROLL_ACTIVE_MCC_TO_BOTTOM', 'CAPTURE_AND_FORWARD_MCC_D0', 'CAPTURE_AND_FORWARD_MCC_D1']);
 response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-01', waitingForD0:true } };
 await d1.click();
 assert.ok(!status.classes.has('error'));
 assert.match(status.textContent, /Aguardando D0/);
-console.log('MCC extension popup: D0/D−1, duplicate error emphasis, safe text, status reset; version 1.2.3');
+
+// O service worker restringe a rolagem à aba ativa do Google Ads e injeta
+// somente o helper geométrico, sem invocar o leitor da grade.
+const backgroundSource = await readFile(new URL('background.js', extension), 'utf8');
+let backgroundListener;
+let activeTab = { id:17, url:'https://ads.google.com/aw/campaigns' };
+let injected = null;
+const scrollHelper = async () => ({ ok:true, steps:3 });
+const backgroundContext = vm.createContext({
+  chrome:{
+    runtime:{ onMessage:{ addListener:listener => { backgroundListener = listener; } } },
+    tabs:{ query:async () => [activeTab] },
+    scripting:{ executeScript:async options => { injected = options; return [{ result:{ ok:true, steps:3 } }]; } }
+  },
+  scrollMccPageToBottom:scrollHelper
+});
+vm.runInContext(backgroundSource.replace(/^import .*?;\s*/gm, ''), backgroundContext);
+const requestScroll = () => new Promise(resolve => {
+  assert.equal(backgroundListener({ type:'SCROLL_ACTIVE_MCC_TO_BOTTOM' }, null, resolve), true);
+});
+const scrolled = await requestScroll();
+assert.equal(scrolled.ok, true);
+assert.equal(injected.target.tabId, 17);
+assert.equal(injected.func, scrollHelper);
+activeTab = { id:18, url:'https://example.com/' };
+injected = null;
+const rejected = await requestScroll();
+assert.equal(rejected.ok, false);
+assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
+console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.4');

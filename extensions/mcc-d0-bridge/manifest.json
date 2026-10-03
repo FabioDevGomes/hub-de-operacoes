@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hub MCC D0",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Captura a grade da MCC para preparar prévias D0/D−1 no Hub local.",
   "icons": {
     "64": "icon.png"

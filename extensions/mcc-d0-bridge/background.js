@@ -1,6 +1,7 @@
 import { deliverD0CsvToPreparador, deliverD0GridToPreparador, deliverD1GridToPreparador } from './bridge.mjs';
 import { collectMccGrid } from './mcc-grid-reader.mjs';
 import { collectMccSelectableText } from './mcc-text-reader.mjs';
+import { scrollMccPageToBottom } from './mcc-page-scroll.mjs';
 import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD1Capture } from './mcc-grid-domain.mjs';
 import { parseMccSelectableText } from './mcc-text-domain.mjs';
 
@@ -98,6 +99,19 @@ async function readActiveMccGrid() {
   return execution.result;
 }
 
+async function scrollActiveMccPageToBottom() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https:\/\/ads\.google\.com\//i.test(String(tab.url || ''))) {
+    throw new Error('Abra primeiro a aba da MCC/Google Ads e tente novamente. Nenhum dado foi lido.');
+  }
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: scrollMccPageToBottom
+  });
+  if (!execution?.result?.ok) throw new Error(execution?.result?.message || 'Não foi possível rolar a página da MCC.');
+  return execution.result;
+}
+
 async function captureAndForwardActiveMccD0() {
   const snapshot = await readActiveMccGrid();
   const validation = validateMccD0Capture(snapshot);
@@ -131,6 +145,12 @@ async function readActiveMccText() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'SCROLL_ACTIVE_MCC_TO_BOTTOM') {
+    scrollActiveMccPageToBottom()
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na rolagem automática da MCC.' }));
+    return true;
+  }
   if (message?.type === 'CAPTURE_AND_FORWARD_MCC_D0') {
     captureAndForwardActiveMccD0()
       .then(result => sendResponse({ ok: true, result }))

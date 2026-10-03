@@ -236,10 +236,10 @@
       const campaign=campaigns.get(record.campanha_id);
       if(!campaign)continue;
       const total=sums.get(campaign.id)||{investment:0,impressions:0,clicks:0,conversions:0,commission:0,observed:{investment:0,impressions:0,clicks:0,conversions:0,commission:0},byDate:{}};
-      const day=total.byDate[record.data]||{investment:0,impressions:0,clicks:0,conversions:0,commission:0};
+      const day=total.byDate[record.data]||{investment:null,impressions:null,clicks:null,conversions:null,commission:null};
       for(const [field,column] of Object.entries({investment:'O',impressions:'B',clicks:'C',conversions:'F',commission:'P'})){
         const value=Number(record.celulas?.[column]?.value);
-        if(record.celulas?.[column]?.value!=null&&record.celulas[column].value!==''&&Number.isFinite(value)){total[field]+=value;day[field]+=value;total.observed[field]++}
+        if(record.celulas?.[column]?.value!=null&&record.celulas[column].value!==''&&Number.isFinite(value)){total[field]+=value;day[field]=(day[field]??0)+value;total.observed[field]++}
       }
       total.byDate[record.data]=day;
       sums.set(campaign.id,total);
@@ -326,6 +326,11 @@
         const sale={sale_id:saleId,sale_date:date,platform:'Google Ads MCC',product:campaign.nome_exibicao||campaign.nome_mcc,commission_type:'Valor de conversão MCC',account:accountForSource(source,campaign)||'',...amountFields,payment_status:'pending',observed_payment_status:'pending',confirmation_status:confirmationStatus,confirmation_source:period==='d1'?'MCC D−1':'MCC D0',confirmed_at:period==='d1'?new Date().toISOString():null,campaign_id:campaign.id,conversion_count:residual,source:'mcc_conversion_aggregate',source_ref:key,source_period:period,notes:note,active:residual>0};
         const previous=updates.get(key);if(!previous||period==='d1'||previous.source_period!=='d1')updates.set(key,sale);
       }
+    }
+    const temporal=manifest?.separacao_temporal||{},d0Date=normalizeManifestDate(null,temporal.D_zero?.datas_detectadas?.[0]);
+    if(d0Date&&(manifest?.campanhas||[]).length){
+      const presentD0=new Set((manifest.campanhas||[]).filter(source=>source?.metricas_D_zero&&source.metricas_D_zero.presente!==false).map(source=>String(source?.nome_campanha_exato||'').trim().toLocaleLowerCase('pt-BR')));
+      for(const campaign of base.campanhas){const name=String(campaign.nome_mcc||'').trim(),keyName=name.toLocaleLowerCase('pt-BR');if(!name||presentD0.has(keyName))continue;const key=`${campaign.id}|${d0Date}`,previous=updates.get(key);if(previous?.source_period==='d1')continue;updates.set(key,{sale_id:`mcc-conversion:${campaign.id}:${d0Date}`,sale_date:d0Date,platform:'Google Ads MCC',product:campaign.nome_exibicao||name,commission_type:'Valor de conversão MCC',account:campaign.conta_id||campaign.conta_sufixo||'',value_brl:null,value_usd:null,payment_status:'pending',observed_payment_status:'pending',confirmation_status:'not_confirmed',confirmation_source:'MCC D0',confirmed_at:null,campaign_id:campaign.id,conversion_count:0,source:'mcc_conversion_aggregate',source_ref:key,source_period:'d0',notes:'A captura MCC D0 mais recente não contém métricas para esta campanha/data; agregado anterior desativado.',active:false})}
     }
     return[...updates.values()];
   }

@@ -62,7 +62,7 @@ assert.equal(fallback.panelCampaignNumberReuseIssues(base,duplicates).length,1);
 // Run the real preview validation against a tiny read-only UI/DB harness.
 const elements=new Map(),issueChildren=[];
 function element(selector){
-  if(!elements.has(selector))elements.set(selector,{textContent:'',hidden:false,disabled:false,className:'',
+  if(!elements.has(selector))elements.set(selector,{textContent:'',hidden:false,disabled:false,className:'',children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},
     querySelectorAll(filter){const key=filter==='[data-numbering-issue]'?'numberingIssue':filter==='[data-numbering-history]'?'numberingHistory':'dateChange';return issueChildren.filter(item=>item.dataset[key]);},
     prepend(item){issueChildren.unshift(item);item.remove=()=>issueChildren.splice(issueChildren.indexOf(item),1);},
   });
@@ -70,8 +70,8 @@ function element(selector){
 }
 const result={manifest:incoming,critical:[]};
 let activeBase=base,closed=0;
-const ui=vm.createContext({window:{CampaignDatabase:db},numberingValidationToken:0,numberingIssues:[],currentResult:result,
-  q:element,document:{createElement:()=>({dataset:{},textContent:'',className:''})},
+const ui=vm.createContext({window:{CampaignDatabase:db},numberingValidationToken:0,numberingIssues:[],currentResult:result,slots:{d1:null},
+  q:element,document:{createElement:()=>({dataset:{},textContent:'',className:''})},renderD0DeltaPanel:()=>{},renderD1DeltaPanel:()=>{},clearD1DeltaPanel:()=>{},showD0DeltaUnavailable:()=>{},showD1DeltaUnavailable:()=>{},
   openPanelDatabase:async()=>({close(){closed++;}}),readPanelBase:async()=>activeBase,
   panelUpdateError:error=>error.message,
 });

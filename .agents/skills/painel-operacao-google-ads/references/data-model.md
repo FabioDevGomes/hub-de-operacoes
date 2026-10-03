@@ -28,7 +28,8 @@ Payloads de recuperação são privados em `data-local/`, ignorados pelo Git, e 
 
 `controle_macro_historico` é um campo aditivo opcional na base existente (não uma nova store/schema). Guarda os dias importados da planilha de controle macro, com data, investimento, faturamento, cliques, vendas e observação. A agregação em `src/control-macro/domain.js` combina esse histórico com `diario` por métrica:
 
-- Quando existe uma linha histórica para a data, os valores não vazios da planilha prevalecem para investimento, faturamento, cliques e vendas. MCC nunca substitui investimento ou faturamento dessa linha.
+- Nas datas exatas D0/D−1 do manifesto atual persistido, a captura mais recente prevalece para investimento, faturamento, cliques e vendas, inclusive valores menores ou zero. O adaptador fornece essas datas explicitamente ao domínio; o histórico da planilha permanece armazenado, mas não volta como fallback nessas datas.
+- Fora das datas da captura atual, quando existe uma linha histórica para a data, os valores não vazios da planilha prevalecem para investimento, faturamento, cliques e vendas.
 - A partir de `2026-09-13` (inclusive), MCC/D−1 preenche cliques e vendas somente quando o respectivo campo histórico está ausente (`null`). Zero explícito na planilha é válido e não deve ser substituído. Antes dessa data, lacunas históricas de cliques/vendas continuam ausentes.
 - Se não existe uma linha histórica para a data, os dados MCC agregados podem formar a linha do dia. Ausência de valor não é convertida em zero.
 - `salesAdjustmentMap()` mantém vendas e comissão provisórias separadas das métricas oficiais; pendências não se tornam conversões oficiais. Para exibição no Controle Macro, fornece também os lançamentos provisórios pendentes com produto/valor, somente em memória. Conversões oficiais usam campanha MCC → identidade de produto do catálogo; o agregado histórico da planilha não possui detalhe por produto e só recebe atribuição MCC quando a contagem oficial diária coincide. Anotações históricas explícitas são preservadas; sem outra evidência, manter a venda como produto não identificado. Nada disso altera o schema nem cria transações oficiais.
@@ -41,7 +42,15 @@ O Preparador MCC grava a base `atual` no mesmo IndexedDB `painel-campanhas` e em
 
 - Não solicitar nem importar novamente a planilha para a atualização diária do Controle Macro. Usar as cargas MCC D0 (parcial) e D−1 (fechamento do dia anterior) como fonte operacional dos novos dados.
 - Preservar `controle_macro_historico` já importado como histórico legado; não apagá-lo ou migrá-lo automaticamente.
-- **Limite importante:** o código atual ainda aplica a regra de precedência histórica acima se existir linha da planilha para a mesma data. A política futura de usar MCC como fonte em datas sobrepostas ainda não altera esse código. Se for necessário substituir valores históricos existentes por MCC, isso exige uma alteração de regra de negócio aprovada e testada; não presumir que uma nova carga MCC sobrescreveu a planilha.
+- A substituição nas datas atuais foi autorizada: usar a última captura persistida também quando os números diminuírem. Nas demais datas, manter a precedência histórica acima; não estender o recorte nem apagar a planilha.
+
+### Projeção da captura atual para cálculos financeiros
+
+`OverviewDomain.authoritativeMccSnapshots` normaliza D0/D−1 do manifesto persistido, moeda e datas. `replaceAuthoritativeDates` substitui as contribuições das datas atuais em totais acumulados, preservando dias anteriores e observações ausentes. O mapa diário de `campaignTotalsMap` mantém campos ausentes como `null`, não zero. Visão Geral, Mapa por Conta, análise CPA, Controle Macro e Produtos Testados recebem essa mesma fotografia; lucro, ROI, CPA, limites e saldo de teste são derivados dos valores corrigidos. A comissão e o investimento em BRL usam a taxa operacional vigente quando a MCC informa USD.
+
+Campanhas sem métricas no retrato atual não contribuem com linhas antigas do Diário nessas datas. Isso não confirma ausência de vendas, pausa ou zero, nem exclui seu histórico. Zero explicitamente informado continua observado. D−1 tem prioridade se dois períodos apontarem a mesma data. Vendas provisórias manuais continuam como ajustes separados, sem fabricação de conversões ou recebimentos. Em Produtos Testados, a proteção de sobreposição com `legacy_totais.end_date` continua independente por métrica.
+
+Faturamento permanece um domínio de vendas/comissões, não um demonstrativo de custo dos anúncios. Seus totais e gráfico consultam os agregados MCC atualizados no banco; não se subtrai investimento publicitário de vendas ou de movimentos de Caixa. Ver [billing.md](billing.md) para proteção de pagamentos e sincronização.
 
 ## Diário A–Q
 

@@ -46,7 +46,7 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
     CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)}},
     sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),
-    currentCost:c=>c.nome_campanha_exato==='MCC B'?20:10});
+    d0Totals:c=>({investment:c.nome_campanha_exato==='MCC B'?20:10})});
   const before=JSON.stringify(database);vm.runInContext(diaryAdapter,context);
   const snapshot=context.productDiarySnapshot('Mesmo produto','workbook','id-b');
   assert.equal(snapshot.rows.length,1);assert.equal(snapshot.rows[0].cells.C.value,20);assert.equal(snapshot.investment,20);

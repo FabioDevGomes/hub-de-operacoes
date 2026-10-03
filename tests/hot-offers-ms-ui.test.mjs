@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
+import {mediaScalersOfferUrl} from '../src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs';
 
 const html = await readFile(new URL('../src/curadoria/hot-offers-ms/index.html',import.meta.url),'utf8');
 const css = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms.css',import.meta.url),'utf8');
@@ -58,6 +59,26 @@ test('as abas compartilhadas seguem a ordem da E-commerce GM e preservam o Resum
   assert.deepEqual(tabs.map(([,key]) => key),['overview','trends','glimpse','images','history']);
   assert.deepEqual(tabs.slice(1).map(([, ,label]) => label),['Google Trends','Glimpse','Google Imagens','Histórico']);
   assert.match(html,/data-panel="overview"[\s\S]*?Decisão de curadoria[\s\S]*?Dados da oferta/,'o resumo mantém as ações próprias da Hot Offers MS');
+});
+
+test('Glimpse na Hot Offers MS acompanha o layout embutido da E-commerce GM', () => {
+  assert.match(html,/#offerSheet:has\(\[data-panel="glimpse"\]:not\(\.hidden\)\)\{padding:0\}/,'somente a aba Glimpse ocupa a mesma área da E-commerce GM');
+  assert.match(html,/#offerSheet:has\(\[data-panel="glimpse"\]:not\(\.hidden\)\) \.sheet-inner\{max-width:1280px;padding:24px\}/,'a largura e o recuo da aba Glimpse seguem a ficha da E-commerce GM');
+  assert.match(html,/#offerSheet \[data-panel="glimpse"\]>.card\{padding:0;margin:0;border:0;border-radius:0;background:transparent\}/,'o cartão extra não envolve visualmente a análise');
+  assert.match(html,/#offerSheet \[data-panel="glimpse"\]>.card>p:first-child\{display:none\}/,'o texto introdutório extra não aparece no painel');
+  assert.match(html,/data-panel="glimpse"[^>]*>[\s\S]*?iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'o Glimpse continua incorporado e mantém a mesma tela funcional');
+});
+
+test('Google Trends oferece link da oferta na MediaScalers usando somente Offer ID numérico', () => {
+  assert.equal(mediaScalersOfferUrl('2323'),'https://admin.mediascalers.com/offers/2323');
+  assert.equal(mediaScalersOfferUrl('4679'),'https://admin.mediascalers.com/offers/4679');
+  assert.equal(mediaScalersOfferUrl('../2323'),null,'IDs inválidos não podem alterar o destino do link');
+  assert.equal(mediaScalersOfferUrl(''),null);
+  assert.match(html,/class="trends-search-actions"[\s\S]*?id="openTrends"[\s\S]*?id="openPlatformOffer"/,'as ações ficam lado a lado na aba Google Trends');
+  assert.match(html,/<a class="btn hidden" id="openPlatformOffer" target="_blank" rel="noopener noreferrer">Abrir oferta na plataforma<\/a>/);
+  assert.match(view,/platformLink\.href = platformUrl/,'a view associa a URL validada à oferta ativa');
+  assert.match(view,/platformLink\.removeAttribute\('href'\)/,'sem Offer ID válido o link fica sem destino');
+  assert.match(css,/\.trends-search-row\{display:grid;grid-template-columns:minmax\(220px,1fr\) auto/);
 });
 
 test('as colunas Google Trends, Glimpse e Imagens seguem a ordem do E-commerce GM após Produto', () => {

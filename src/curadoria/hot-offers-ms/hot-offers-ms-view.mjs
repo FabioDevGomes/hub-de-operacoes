@@ -17,6 +17,12 @@ const COLUMNS = Object.freeze([
 ]);
 const COLUMN_KEY = 'hot-offers-ms-columns-v1';
 const VISIBILITY_KEY = 'hot-offers-ms-hidden-v1';
+const PLATFORM_OFFER_URL = 'https://admin.mediascalers.com/offers/';
+
+export function mediaScalersOfferUrl(offerId) {
+  const id = String(offerId ?? '');
+  return /^\d+$/.test(id) ? PLATFORM_OFFER_URL + id : null;
+}
 
 function storedSet(key, allowed = null) {
   try {
@@ -178,6 +184,14 @@ export function mountHotOffersMsView({root, actions}) {
   }
   function renderTrends(item, record) {
     const codes = Domain.offerCountryCodes(item), selected = new Set((record.assessments?.at(-1)?.countries || []).slice(0,5));
+    const platformLink = $('#openPlatformOffer'), platformUrl = mediaScalersOfferUrl(item.offerId);
+    if (platformUrl) {
+      platformLink.href = platformUrl;
+      platformLink.classList.remove('hidden');
+    } else {
+      platformLink.removeAttribute('href');
+      platformLink.classList.add('hidden');
+    }
     $('#trendCountries').innerHTML = codes.length ? codes.map(code => '<button type="button" class="trends-country-action ' + (selected.has(code) ? 'selected' : '') + '" data-country="' + escape(code) + '" aria-pressed="' + selected.has(code) + '">' + escape(code) + (item.manualCountries?.includes(code) ? ' · manual' : '') + '</button>').join('') : '<span class="sub">Nenhum país identificado; adicione países manualmente no resumo.</span>';
     $('#trendCountries').insertAdjacentHTML('beforeend','<div class="candidate-entry"><input class="control" id="manualCountry" maxlength="2" placeholder="País (ex.: BR)" aria-label="Adicionar país manual"><button class="btn" id="addManualCountry" type="button">Adicionar país</button></div>');
     pendingProductAge = record.assessments?.at(-1)?.productAge || '';

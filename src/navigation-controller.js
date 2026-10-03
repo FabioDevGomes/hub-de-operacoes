@@ -26,8 +26,9 @@
       if(by('pageTitle'))by('pageTitle').textContent=view.title;
       if(by('pageSubtitle'))by('pageSubtitle').textContent=view.subtitle;
       document.title=view.title;
-      by('registerSale')?.classList.toggle('hidden',view.id!=='totals');
       const group=entry.group||by(view.navId)?.closest('[data-sidebar-group]')?.dataset.sidebarGroup;
+      by('registerSale')?.classList.toggle('hidden',view.id!=='totals');
+      by('correctCampaignDate')?.classList.toggle('hidden',group!=='operation'&&group!=='products');
       if(group)document.defaultView?.HubSidebar?.setOpenGroup(group);
     }
 

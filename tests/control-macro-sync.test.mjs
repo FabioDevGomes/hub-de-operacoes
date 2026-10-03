@@ -8,12 +8,13 @@ const domain = require('../src/control-macro/domain.js');
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 const databaseContext = vm.createContext({ window:{}, structuredClone });
 vm.runInContext(await readFile(new URL('../src/database.js', import.meta.url), 'utf8'), databaseContext);
+vm.runInContext(await readFile(new URL('../src/overview-domain.js', import.meta.url), 'utf8'), databaseContext);
 const db = databaseContext.window.CampaignDatabase;
 let persisted = db.create();
 persisted.campanhas = [{ id:'synthetic', nome_mcc:'Wego6 campanha', nome_exibicao:'Wego6' }];
 persisted.diario = [{ campanha_id:'synthetic', data:'2026-09-29', celulas:{ O:{value:100}, P:{value:50}, C:{value:10}, F:{value:1} } }];
 const state = { database:null, controlMacroRows:null, productCatalog:{aliases:{}} };
-const context = vm.createContext({ state, CampaignDatabase:db, ControlMacroDomain:domain, ProductCatalog:{normalize:value=>value||{aliases:{}}},
+const context = vm.createContext({ state, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:domain, ProductCatalog:{normalize:value=>value||{aliases:{}}},
   accountProductIdentity:(campaign,catalog)=>({label:catalog.aliases[String(campaign.nome_exibicao||'').toLocaleLowerCase('pt-BR')]||campaign.nome_exibicao||campaign.nome_mcc}),
   embeddedManifest:null,
   renderLegacyMigrationNotice(){}, render(){},
@@ -42,4 +43,10 @@ assert.equal(vm.runInContext('derivedCache', context), null);
 persisted.diario[0].celulas.O.value = 120;
 await context.restoreLocalBase({ persist:false, renderPage:false });
 assert.equal(september()[0].investment, 120, 'atualização de outra aba também invalida o resumo anterior');
+persisted.manifesto_atual={separacao_temporal:{D_zero:{datas_detectadas:['2026-09-29']}},campanhas:[{nome_campanha_exato:'Wego6 campanha',metricas_D_zero:{presente:true,data:{valor:'2026-09-29'},moeda:{valor:'BRL'},custo_total:{valor:20},valor_conversao:{valor:30},cliques_google:{valor:5},conversoes:{valor:1}}}]};
+persisted.controle_macro_historico=[{date:'2026-09-29',investment:500,revenue:400,clicks:100,sales:10}];
+await context.restoreLocalBase({persist:false,renderPage:false});
+assert.equal(september()[0].investment,20,'última captura menor prevalece sobre Diário e planilha após restauração');
+assert.equal(september()[0].revenue,30);assert.equal(september()[0].profit,10);assert.equal(september()[0].clicks,5);
+assert.equal(persisted.diario[0].celulas.O.value,120,'projeção não reescreve o histórico persistido');
 console.log('Control Macro sync: async load and cross-tab cache refresh ok');

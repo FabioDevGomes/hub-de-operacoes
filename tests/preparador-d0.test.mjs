@@ -24,6 +24,8 @@ assert.ok(html.includes('Campanha duplicada em D0; métricas não associadas.'),
 assert.ok(html.includes('function panelStatusObservation(field)'),'normalização do status da MCC ausente no Preparador');
 assert.ok(html.includes("const disqualified = search.includes('nao qualificad')"),'Preparador não reconhece “Não qualificado” no masculino');
 assert.ok(html.includes("new BroadcastChannel('painel-campanhas')"),'Preparador não avisa a Visão Geral após atualizar a base');
+assert.ok(html.includes("location.hostname !== '127.0.0.1' || location.port !== '8765'"),'Preparador precisa bloquear localhost, que tem IndexedDB separado da origem canônica do Hub');
+assert.ok(html.includes('O endereço localhost usa outra base local e não atualiza a Visão Geral.'),'Preparador deve explicar por que a origem canônica é necessária');
 assert.ok(html.includes('const PANEL_DB_VERSION = HubDatabase.DB_VERSION;'),'Preparador MCC não participa da migração aditiva do Hub');
 for (const store of ['billing_sales','billing_movements','billing_audit','billing_meta']) assert.ok(infrastructure.includes(store),`Preparador MCC não cria a store aditiva ${store}`);
 assert.ok(infrastructure.includes("events: {keyPath:'event_id'}"),'Preparador MCC não cria o armazenamento append-only dos eventos');

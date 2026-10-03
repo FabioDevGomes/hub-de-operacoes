@@ -72,7 +72,8 @@ assert.equal(laterPausedCollection.base.campanhas[0].pausa_confirmada_em, '2026-
 assert.deepEqual(laterPausedCollection.base.diario.map(item=>item.data), ['2026-09-29'], 'dados posteriores não são acrescentados após pausa confirmada');
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
-const viewContext = vm.createContext({ CampaignDatabase:db, state:{ database:result.base, manifest:all, productCatalog:null } });
+vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
+const viewContext = vm.createContext({ CampaignDatabase:db, OverviewDomain:context.window.OverviewDomain, state:{ database:result.base, manifest:all, productCatalog:null } });
 const viewHelpers = ['currentCampaignRows','derivedContext','campaignRows','activeCampaignRows'].map(name => template.match(new RegExp(`function ${name}\\([^\\n]+`))[0]).join('\n');
 vm.runInContext(`let derivedCache=null;\n${viewHelpers}`, viewContext);
 const visibleRows = viewContext.derivedContext().campaigns;

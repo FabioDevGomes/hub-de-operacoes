@@ -57,7 +57,7 @@
     const clicksPerSale=clicks!=null&&totalSales>0?clicks/totalSales:null;
     return{investment,revenue:totalRevenue,profit,roi,clicks,sales:totalSales,officialSales:sales,pendingSales,pendingRevenue,clicksPerSale};
   }
-  function aggregateMccDaily(dailyRecords=[],adjustments=new Map(),{campaignProducts=new Map()}={}){
+  function aggregateMccDaily(dailyRecords=[],adjustments=new Map(),{campaignProducts=new Map(),authoritativeDates=[]}={}){
     const days=new Map();
     const get=(date)=>{
       if(!days.has(date))days.set(date,{date,hasMccData:true,source:'mcc',sums:{investment:0,revenue:0,clicks:0,sales:0},observed:{investment:false,revenue:false,clicks:false,sales:false},pendingSales:0,pendingRevenue:0,productSales:new Map()});
@@ -69,6 +69,7 @@
       const label=String(product||'').trim()||null,key=JSON.stringify([label,Boolean(provisional)]),current=day.productSales.get(key)||{product:label,sales:0,amount:0,amountComplete:true,provisional:Boolean(provisional)};
       current.sales+=count;const value=parseNumber(amount);if(value==null)current.amountComplete=false;else current.amount+=value;day.productSales.set(key,current);
     };
+    for(const date of authoritativeDates||[]){const normalized=parseDate(date);if(normalized)get(normalized)}
     for(const record of dailyRecords||[]){
       const date=parseDate(record?.data||record?.date);
       if(!date)continue;
@@ -144,12 +145,13 @@
     return output;
   }
   function annotatedProductSalesCount(observation){return[...String(observation||'').matchAll(/(?:^|[·;]\s*)(\d+)\s+[^·;()]+?\s+\(R\$\s*[\d.,]+\)/gi)].reduce((sum,match)=>sum+Number(match[1]),0)}
-  function combineDailyRows(mccRows=[],historicalRows=[]){
-    const mccByDate=new Map((mccRows||[]).map(row=>[row.date,row])),historyByDate=new Map((historicalRows||[]).map(row=>[row.date,row])),dates=new Set([...mccByDate.keys(),...historyByDate.keys()]);
+  function combineDailyRows(mccRows=[],historicalRows=[],{authoritativeDates=[]}={}){
+    const authoritative=new Set((authoritativeDates||[]).map(parseDate).filter(Boolean)),mccByDate=new Map((mccRows||[]).map(row=>[row.date,row])),historyByDate=new Map((historicalRows||[]).map(row=>[row.date,row])),dates=new Set([...mccByDate.keys(),...historyByDate.keys(),...authoritative]);
     for(let time=Date.parse(`${SUSPENSION_START}T00:00:00Z`);time<=Date.parse(`${SUSPENSION_END}T00:00:00Z`);time+=86400000)dates.add(new Date(time).toISOString().slice(0,10));
     const combined=[];
     for(const date of dates){
       const mcc=mccByDate.get(date),history=historyByDate.get(date),suspended=isSuspensionDate(date);
+      if(authoritative.has(date)){if(mcc){const note=history?.observation||mcc.observation||'',observation=[note,suspended&&!normalizeText(note).includes('suspens')?SUSPENSION_OBSERVATION:''].filter(Boolean).join(' · ');combined.push({...mcc,source:'mcc',hasMccData:true,observation,productSales:reconcileProductSales(mcc.productSales,mcc.officialSales,mcc.pendingSales)})}continue}
       if(history){
         const canFillClicksSales=date>=MCC_CLICKS_SALES_FALLBACK_FROM;
         const clicksFromMcc=history.clicks==null&&canFillClicksSales&&mcc?.clicks!=null;

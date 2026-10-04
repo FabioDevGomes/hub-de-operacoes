@@ -19,7 +19,7 @@ function harness(products,removed=0){
   const choices={name:null,remove:false},dialogs={prompt:()=>choices.name,confirm:()=>choices.remove};
   const controller=ctx.window.TestedProductsView.mount({root:h.root,getSnapshot:()=>({products,removed}),domain,format,
     preferences:{getItem:key=>saved.get(key)||'[]',setItem:(key,value)=>saved.set(key,value)},
-    actions:{rename:async(...args)=>calls.push(['rename',...args]),hide:async(...args)=>calls.push(['hide',...args]),restore:async()=>calls.push(['restore']),download:()=>calls.push(['download']),purge:()=>calls.push(['purge'])},
+    actions:{rename:async(...args)=>calls.push(['rename',...args]),hide:async(...args)=>calls.push(['hide',...args]),restore:async()=>calls.push(['restore']),purge:()=>calls.push(['purge'])},
     dialogs,toast:(...args)=>messages.push(args)});
   return {...h,controller,saved,calls,dialogs,choices,messages};
 }

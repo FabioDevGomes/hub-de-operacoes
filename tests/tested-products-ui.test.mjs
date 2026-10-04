@@ -2,6 +2,9 @@ import assert from'node:assert/strict';
 import{readFile}from'node:fs/promises';
 
 const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8')+await readFile(new URL('../dist/tested-products/view.js',import.meta.url),'utf8')+await readFile(new URL('../dist/tested-products/domain.js',import.meta.url),'utf8')+await readFile(new URL('../dist/tested-products/tested-products.css',import.meta.url),'utf8');
+assert.equal((html.match(/id="downloadCatalog"/g)||[]).length,0,'exportação independente do catálogo não deve mais ser apresentada');
+assert.ok(html.includes('Baixar backup completo JSON'),'o botão único de backup completo está ausente');
+assert.ok(html.includes('payload.catalogo_produtos=ProductCatalog.normalize(state.productCatalog)'),'backup completo não inclui os ajustes do catálogo');
 assert.ok(html.includes('tested-products/view.js?v=4'),'módulo de Produtos Testados não invalida o cache da nova apresentação de lucro');
 assert.ok(html.includes('id="testedActiveProductsCount"'),'indicador de produtos com campanhas ativas ausente');
 assert.ok(html.includes('products.filter(product=>product.active).length'),'indicador não conta produtos ativos consolidados');

@@ -255,8 +255,13 @@ export function mountHotOffersMsView({root, actions}) {
   $('#closeSheet').onclick = () => { sheet.classList.add('hidden'); activeOfferKey = null; actions.closeOffer(); };
   $('#saveDecision').onclick = () => actions.saveDecision(activeOfferKey,$('#decisionStatus').value,$('#decisionNotes').value);
   $('#openTrends').onclick = () => actions.openTrends($('#trendsTerm').value.trim() || offerByKey(activeOfferKey)?.productName || '');
-  $('#addTrendCandidate').onclick = () => actions.addTrendCandidate(activeOfferKey,$('#trendCandidate').value);
-  $('#trendCandidate').addEventListener('keydown',event => { if (event.key === 'Enter') { event.preventDefault(); actions.addTrendCandidate(activeOfferKey,event.currentTarget.value); } });
+  async function submitTrendCandidate(input = $('#trendCandidate')) {
+    const saved = await actions.addTrendCandidate(activeOfferKey,input.value);
+    if (saved) input.value = '';
+    input.focus();
+  }
+  $('#addTrendCandidate').onclick = () => { void submitTrendCandidate(); };
+  $('#trendCandidate').addEventListener('keydown',event => { if (event.key === 'Enter') { event.preventDefault(); void submitTrendCandidate(event.currentTarget); } });
   $('#imagesTerm').addEventListener('change',() => actions.saveImageSearchTerm(activeOfferKey,$('#imagesTerm').value));
   $('#imageCountries').addEventListener('click',event => {
     const item = offerByKey(activeOfferKey); if (!item) return;

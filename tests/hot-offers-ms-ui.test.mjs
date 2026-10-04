@@ -38,6 +38,15 @@ test('a view encaminha filtros e ações sem acessar persistência', () => {
   assert.match(page,/mountCurationListFocus\('hot-offers-ms'/,'o retorno da ficha deve preservar foco/rolagem');
 });
 
+test('Enter salva a candidata positiva e atualiza a lista na hora, como na E-commerce GM', () => {
+  const addCandidate = page.match(/async function addTrendCandidate\(offerKey,value\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(addCandidate,'ação de salvar candidata ausente');
+  assert.match(addCandidate,/await Storage\.put\(Storage\.STORES\.trends,stored\)[\s\S]*?trends = \[\.\.\.trends\.filter[\s\S]*?show\(\); view\.refreshOffer\(item,'trends'\)/,'a persistência atualiza primeiro o estado da view, antes de renderizar a ficha novamente');
+  assert.match(addCandidate,/return true/,'o formulário só limpa o campo quando a persistência confirma sucesso');
+  assert.match(view,/async function submitTrendCandidate\(input = \$\('#trendCandidate'\)\)[\s\S]*?await actions\.addTrendCandidate\(activeOfferKey,input\.value\)[\s\S]*?if \(saved\) input\.value = ''[\s\S]*?input\.focus\(\)/,'após salvar, a candidata aparece, o campo limpa e o foco fica pronto para a próxima');
+  assert.match(view,/event\.key === 'Enter'[\s\S]*?event\.preventDefault\(\); void submitTrendCandidate\(event\.currentTarget\)/,'Enter envia a candidata sem submeter a página nem exigir clique adicional');
+});
+
 test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM', () => {
   assert.match(html,/\.filter-grid\{display:grid;grid-template-columns:[^}]+;[^}]*overflow-x:auto\}/,'a barra deve ter uma única grade horizontal rolável');
   assert.match(html,/\.filter-grid \.control\{[^}]*font-size:\.74rem/,'os campos devem usar o tamanho de fonte do E-commerce GM');

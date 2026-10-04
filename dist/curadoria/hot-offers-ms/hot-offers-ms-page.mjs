@@ -1,6 +1,6 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261002-platform-offer-link';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261004-live-trend-candidate';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
@@ -168,10 +168,18 @@ async function saveTrend(offerKey,status,draft = {}) {
 async function addTrendCandidate(offerKey,value) {
   const item = currentOffer(offerKey), term = String(value || '').trim(); if (!item || !term) return;
   const old = trendsFor(offerKey), candidates = [...(old.keywordCandidates || [])];
-  if (candidates.some(entry => Domain.normalize(entry) === Domain.normalize(term))) { view.showToast('Essa candidata já está registrada.'); return; }
+  if (candidates.some(entry => Domain.normalize(entry) === Domain.normalize(term))) { view.showToast('Essa candidata já está na lista.'); return false; }
   const stored = {...old,offerKey,offerId:item.offerId,productName:item.productName,keywordCandidates:[...candidates,term]};
-  await Storage.put(Storage.STORES.trends,stored); trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored];
-  view.refreshOffer(item,'trends'); view.showToast('Candidata adicionada.');
+  try {
+    await Storage.put(Storage.STORES.trends,stored);
+    trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored];
+    show(); view.refreshOffer(item,'trends');
+    view.showToast('Candidata à palavra-chave adicionada.');
+    return true;
+  } catch {
+    view.showToast('Não foi possível salvar a candidata.');
+    return false;
+  }
 }
 async function removeTrendCandidate(offerKey,index) {
   const item = currentOffer(offerKey); if (!item) return;

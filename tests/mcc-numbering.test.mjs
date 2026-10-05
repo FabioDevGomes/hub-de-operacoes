@@ -70,11 +70,12 @@ function element(selector){
 }
 const result={manifest:incoming,critical:[]};
 let activeBase=base,closed=0;
-const ui=vm.createContext({window:{CampaignDatabase:db},numberingValidationToken:0,numberingIssues:[],currentResult:result,slots:{d1:null},
+const ui=vm.createContext({window:{CampaignDatabase:db},numberingValidationToken:0,numberingIssues:[],currentResult:result,slots:{d1:null,d0:{captureHistory:{id:'current'}}},selectedD0CaptureId:'current',
   q:element,document:{createElement:()=>({dataset:{},textContent:'',className:''})},renderD0DeltaPanel:()=>{},renderD1DeltaPanel:()=>{},clearD1DeltaPanel:()=>{},showD0DeltaUnavailable:()=>{},showD1DeltaUnavailable:()=>{},
   openPanelDatabase:async()=>({close(){closed++;}}),readPanelBase:async()=>activeBase,
   panelUpdateError:error=>error.message,
 });
+ui.updateD0ApplyAvailability=()=>{element('#apply-manifest').disabled=ui.selectedD0CaptureId!==ui.slots.d0.captureHistory.id||ui.numberingIssues.length>0||Boolean(ui.currentResult?.critical?.length);};
 const validationStart=html.indexOf('    async function validatePreparedNumbering(');
 const validationEnd=html.indexOf('    function resetResults(',validationStart);
 vm.runInContext(html.slice(validationStart,validationEnd),ui);

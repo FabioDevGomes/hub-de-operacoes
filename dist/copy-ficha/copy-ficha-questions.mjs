@@ -1,4 +1,4 @@
-import {parseOfferText,offerEvidenceForDiscount,offerProductPrices} from './copy-ficha-domain.mjs?v=19';
+import {parseOfferText,offerEvidenceForDiscount,offerProductPrices} from './copy-ficha-domain.mjs?v=21';
 
 const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
 const missing='Não identificado no Ctrl+A.';

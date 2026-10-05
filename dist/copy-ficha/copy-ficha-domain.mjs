@@ -262,6 +262,24 @@ function packageDiscountBadge(block){
   return single?{percent:singlePercent,basePercent:singlePercent,additionalPercent:null,text:clean(single[0]),stacked:false}:{percent:null,basePercent:null,additionalPercent:null,text:'',stacked:false};
 }
 
+function germanPerPackageDiscountCandidates(text){
+  const lines=String(text||'').split(/\r?\n/).map(normalizePastedLine).filter(Boolean),starts=[];
+  lines.forEach((line,index)=>{if(/^vorher\s*:/i.test(line))starts.push(index)});
+  const packagePriceLabels=lines.filter(line=>/^preis\s+pro\s+packung\b/i.test(line)).length;
+  const totalPriceLabels=lines.filter(line=>/^gesamtpreis\b/i.test(line)).length;
+  if(starts.length<2||packagePriceLabels!==starts.length||totalPriceLabels!==starts.length)return null;
+  return starts.map((start,index)=>{
+    const nextStart=starts[index+1]??lines.length,block=lines.slice(start,nextStart),priceLabel=block.findIndex(line=>/^preis\s+pro\s+packung\b/i.test(line));
+    const badge=block.map(line=>line.match(/\bsparen\s+sie\s+mit\s+diesem\s+paket(?:\s+ganze)?\s+(\d{1,2}(?:[.,]\d+)?)\s*%/i)).find(Boolean);
+    if(priceLabel<0||!badge)return null;
+    const prices=priceEntries(block.slice(0,priceLabel+1)),distinct=[];
+    for(const entry of prices)if(!distinct.some(item=>item.value===entry.value))distinct.push(entry);
+    if(distinct.length!==2||distinct[0].value<=distinct[1].value)return null;
+    const regularPrice=distinct[0].value,promoPrice=distinct[1].value,amount=Math.round((regularPrice-promoPrice+Number.EPSILON)*100)/100;
+    return {percent:number(badge[1]),amount,label:lines[start-1]||'',displayedPrice:promoPrice,priceBasis:'package',quantity:null,calculatedPercent:calculateDiscount(regularPrice,promoPrice)};
+  }).filter(Boolean);
+}
+
 function parseQuantityEachPackages(text){
   const lines=String(text||'').split(/\r?\n/).map(normalizePastedLine).filter(Boolean);
   if(!lines.some(line=>/^choose\s+your\s+packages?\b/i.test(line))||
@@ -310,7 +328,7 @@ function discountOfferCandidates(text){
   });
   const sectionBreak=/^(?:zero\s+commitment\b|customer\s+information\b|shipping\s+address\b|enter\s+your\s+shipping\s+details\b|payment(?:\s+methods?)?\b|order\s+summary\b|complete\s+(?:your\s+secure\s+)?order\b|terms\s*(?:&|and)\s*conditions\b|why\s+choose\b)/i;
   const boundaries=quantityCards.length>=2?quantityCards:badgeCards.length>=2?badgeCards.map(index=>({index,quantity:null,label:''})):quantityCards;
-  return boundaries.map((start,index)=>{
+  const detected=boundaries.map((start,index)=>{
     const previousBoundary=index?boundaries[index-1].index:-1,nextBoundary=boundaries[index+1]?.index??lines.length;
     const explicitBreak=lines.findIndex((line,lineIndex)=>lineIndex>start.index&&lineIndex<nextBoundary&&sectionBreak.test(line));
     const end=explicitBreak<0?nextBoundary:explicitBreak,block=lines.slice(start.index,end),badge=packageDiscountBadge(block);
@@ -329,6 +347,7 @@ function discountOfferCandidates(text){
     const displayedPrice=unitValues.length===1?unitValues[0]:regularValues.length===2?Math.min(...regularValues):null;
     return percent!==null?{percent,amount,label:start.label||block[0]||'',displayedPrice,priceBasis:unitValues.length===1?'unit':'package',quantity}:null;
   }).filter(Boolean);
+  return [...detected,...(germanPerPackageDiscountCandidates(text)??[])];
 }
 
 function offerEvidenceCandidates(raw){
@@ -363,6 +382,7 @@ function explicitDiscountPercentages(text){
 
 function parsePackages(text,productCandidate=''){
   const lines=String(text||'').split(/\r?\n/).map(clean).filter(Boolean),starts=[];
+  if(germanPerPackageDiscountCandidates(text)!==null)return [];
   const recurringPackages=parseQuantityEachPackages(text);
   if(recurringPackages)return recurringPackages;
   const pairPackages=parsePairQuantityPackages(text);
@@ -413,6 +433,7 @@ export function parseOfferText(raw='',url=''){
   const discountPercentCandidates=[...discountOffers.map(item=>item.percent),...explicitDiscountPercentages(offerText)],highestPercent=discountPercentCandidates.length?Math.max(...discountPercentCandidates):percentages.length?Math.max(...percentages):null;
   const highestOffer=discountOffers.filter(item=>Math.abs(item.percent-highestPercent)<=0.6&&item.amount!==null&&item.amount!==undefined).sort((a,b)=>b.amount-a.amount)[0]||null;
   const highestSavings=highestOffer?{amount:highestOffer.amount,package:highestOffer.package||null}:discountAmountForPercent(packages,highestPercent);
+  const highestSavingsCalculatedPercent=highestOffer?.calculatedPercent??null,highestSavingsPercentMismatch=highestSavingsCalculatedPercent!==null&&highestPercent!==null&&Math.abs(highestSavingsCalculatedPercent-highestPercent)>0.6;
   return {
     percentages:unique(percentages.map(percent)),
     amounts:unique(amounts).slice(0,30),
@@ -428,6 +449,8 @@ export function parseOfferText(raw='',url=''){
     packages,
     highestSavingsAmount:highestSavings?.amount??null,
     highestSavingsPackageLabel:highestSavings?.package?.label||highestOffer?.label||'',
+    highestSavingsCalculatedPercent,
+    highestSavingsPercentMismatch,
     guaranteeDays:guarantee.length?guarantee[0]:null,
     freeShippingCandidate:/\b(free shipping|frete gr[aá]tis|spedizione gratuita|env[ií]o gratis|livraison gratuite|kostenloser versand|fri frakt)\b/i.test(flat),
     fastShippingCandidate:/\b(fast shipping|fast delivery(?:\s+guaranteed)?|quick delivery|express shipping|envio r[aá]pido|spedizione rapida|env[ií]o r[aá]pido|exp[eé]dition rapide|schneller versand|snabb leverans)\b/i.test(flat),

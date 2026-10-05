@@ -88,8 +88,16 @@ export function formatDuration(value){
 }
 
 export function dailyDurationLaunchHistory(entries,date){
+  return sortDailyLaunchHistory((Array.isArray(entries)?entries:[]).filter(entry=>entry?.date===date&&entry?.type==='duration'&&entry?.source!=='excel_import'));
+}
+
+export function dailyLaunchHistory(entries,date,waterItemId='item-agua'){
+  return sortDailyLaunchHistory((Array.isArray(entries)?entries:[]).filter(entry=>entry?.date===date&&entry?.source!=='excel_import'&&(entry?.type==='duration'||entry?.itemId===waterItemId&&entry?.type==='number')));
+}
+
+function sortDailyLaunchHistory(entries){
   const timestamp=value=>{const parsed=Date.parse(value||'');return Number.isFinite(parsed)?parsed:null};
-  return(Array.isArray(entries)?entries:[]).filter(entry=>entry?.date===date&&entry?.type==='duration'&&entry?.source!=='excel_import').slice().sort((a,b)=>{
+  return entries.slice().sort((a,b)=>{
     const aTime=timestamp(a.createdAt),bTime=timestamp(b.createdAt);
     if(aTime==null&&bTime!=null)return 1;
     if(aTime!=null&&bTime==null)return-1;

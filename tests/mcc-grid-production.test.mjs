@@ -9,6 +9,7 @@ import { D0_FIELDS, HEADER_ALIASES } from '../extensions/mcc-d0-bridge/mcc-grid-
 
 const root = new URL('../', import.meta.url);
 const html = await readFile(new URL('dist/preparador-MCC/index.html', root), 'utf8');
+assert.ok(html.includes("metaLine('MCC', managerLabel)"),'os cartões D−1 e D0 exibem o nome e o ID da MCC recebida');
 const popupHtml = await readFile(new URL('extensions/mcc-d0-bridge/popup.html', root), 'utf8');
 const popup = await readFile(new URL('extensions/mcc-d0-bridge/popup.js', root), 'utf8');
 const background = await readFile(new URL('extensions/mcc-d0-bridge/background.js', root), 'utf8');
@@ -67,7 +68,7 @@ const rowValues = [
   ['Oferta Ativa', '7527 - Conta Alpha\n111-222-3333', 'Qualificada', '1,234', '10', '0.00', 'US$ 1.25', '75%', '20%', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 12.50']
 ];
 
-function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length + ' de ' + rowValues.length, dateRange = 'Sep 23, 2026 – Sep 23, 2026', linkedColumns = [0], leadingCell = true, leadingCellCounts = null, leadingCellLink = false, leadingCellText = '' } = {}) {
+function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length + ' de ' + rowValues.length, dateRange = 'Sep 23, 2026 – Sep 23, 2026', linkedColumns = [0], leadingCell = true, leadingCellCounts = null, leadingCellLink = false, leadingCellText = '', managerName='MCC de teste', managerAccountId='999-888-7777' } = {}) {
   const header = new Row(headers.map((label, index) => new Cell(label, {
     role: 'columnheader',
     ariaLabel: index === 7 ? '% de impr. (1ª posição)' : ''
@@ -87,7 +88,7 @@ function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length +
     title: 'Campanhas - Google Ads',
     documentElement: { lang: 'en-US' },
     defaultView: { innerHeight: 900, innerWidth: 1200, navigator: { language: 'en-US' } },
-    body: { innerText: footer },
+    body: { innerText: `${managerName}\n${managerAccountId}\n${footer}` },
     querySelectorAll(selector) {
       if (selector.includes('[role="grid"]')) return [grid];
       if (selector.includes('[aria-label]')) return [dateControl];
@@ -184,7 +185,7 @@ function makeEssfieldDocument(footer = '1 - 2 de 2', { statuses = ['Qualificada'
   return {
     title:'Campanhas - Google Ads', documentElement:{lang:'en-US'},
     defaultView:{ innerHeight:900, innerWidth:1200, navigator:{language:'en-US'} },
-    body:{ innerText:footer },
+    body:{ innerText:`MCC de teste\n999-888-7777\n${footer}` },
     querySelectorAll(selector) {
       if (selector.includes('[role="grid"]')) return [grid];
       if (selector.includes('[aria-label]')) return [dateControl];
@@ -235,7 +236,10 @@ const dateOnlyButtonSnapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, visible
 assert.equal(dateOnlyButtonSnapshot.reportDate.value, '2026-09-23', 'aceita datas explícitas no texto visível de um botão, mesmo sem aria-label descritivo');
 const valid = validateMccD0Capture(snapshot);
 assert.equal(valid.ok, true, JSON.stringify(valid.errors));
-assert.equal(valid.capture.schema, 'mcc-d0-grid-v2', 'o contrato D0 exige o número completo da conta');
+assert.equal(valid.capture.schema, 'mcc-d0-grid-v3', 'o contrato D0 exige o número completo da conta e a identidade da MCC');
+assert.equal(valid.capture.managerAccountId,'999-888-7777','o ID da MCC é separado do número da conta cliente');
+assert.equal(valid.capture.managerAccountName,'MCC de teste','o nome visível da MCC acompanha a captura');
+assert.equal(valid.capture.capturedAt, snapshot.capturedAt, 'o instante lido na MCC acompanha o D0 até o Preparador');
 assert.equal(valid.capture.records[0].currency, 'USD', 'extrai a moeda somente de código/símbolo explícito');
 assert.equal(valid.capture.records[0].impressions, '0', 'zero permanece explícito');
 assert.equal(valid.capture.records[0].avg_cost, '—', 'traço permanece ausência, não zero');
@@ -247,6 +251,12 @@ const ambiguousAccountId = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocumen
   values:[[rowValues[0][0], '7527 - Conta Alpha\n111-222-3333\n999-888-7777', ...rowValues[0].slice(2)], rowValues[1]]
 }).doc);
 assert.ok(validateMccD0Capture(ambiguousAccountId).errors.some(error => error.code === 'account_id'), 'a captura para se a célula contiver dois números de conta');
+const missingManager = makeDocument().doc;
+missingManager.body.innerText='Pesquise uma página ou campanha\nNotificações\n1 - 2 de 2';
+assert.ok(validateMccD0Capture(collectMccGrid(D0_FIELDS,HEADER_ALIASES,missingManager)).errors.some(error=>error.code==='manager_identity'),'a captura é bloqueada quando falta o contexto MCC');
+const ambiguousManager = makeDocument().doc;
+ambiguousManager.body.innerText='MCC uma\n111-222-3333\nMCC outra\n222-333-4444\n1 - 2 de 2';
+assert.ok(validateMccD0Capture(collectMccGrid(D0_FIELDS,HEADER_ALIASES,ambiguousManager)).errors.some(error=>error.code==='manager_identity'),'a captura é bloqueada quando há contexto MCC ambíguo');
 
 const referenceNow = new Date('2026-09-24T15:00:00.000Z');
 assert.equal(expectedMccD1Date(referenceNow), '2026-09-23', 'ontem é calculado no fuso operacional, não em UTC');
@@ -254,7 +264,7 @@ assert.equal(expectedMccD1Date(new Date('2026-09-24T02:30:00.000Z')), '2026-09-2
 const d1Snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 23, 2026' }).doc);
 const validD1 = validateMccD1Capture(d1Snapshot, { now:referenceNow });
 assert.equal(validD1.ok, true, JSON.stringify(validD1.errors));
-assert.equal(validD1.capture.schema, 'mcc-d1-grid-v2');
+assert.equal(validD1.capture.schema, 'mcc-d1-grid-v3');
 assert.equal(validD1.capture.periodRole, 'd1');
 assert.equal(validD1.capture.records[0].impressions, '0', 'D−1 preserva zero confirmado');
 assert.equal(validD1.capture.records[0].avg_cost, '—', 'D−1 preserva ausência sem convertê-la em zero');
@@ -346,6 +356,40 @@ assert.equal(parsedGrid.records[0].raw.abs_top_share, '0');
 assert.equal(parsedGrid.records[0].raw.top_share, '—');
 assert.equal(parsedGrid.records[1].raw.impressions, '1234');
 
+// Another MCC may have a single pending campaign and an ordinal account label.
+// Keep the example synthetic; no operational account IDs or campaign names.
+const otherMccDocument = makeDocument({
+  values:[['04/10 - Produto Sintético 01 (MS-BB-DE) 70% - U$ 60','1ª da MCC de teste .example.shop\n444-555-6666','Pendente\nTodos os anúncios estão em análise','0','0','0,00','—','—','—','US$ 101,01/dia','CPA desejado','US$ 0,00']],
+  footer:'2 filtros · 1 campanha\n1 - 1 de 1',dateRange:'04/10/2026',linkedColumns:[0,1],managerName:'MCC Nutra de teste',managerAccountId:'888-777-6666'
+}).doc;
+otherMccDocument.documentElement.lang='pt-BR';
+const otherMccSnapshot=collectMccGrid(D0_FIELDS,HEADER_ALIASES,otherMccDocument);
+const otherMccValidation=validateMccD0Capture(otherMccSnapshot);
+assert.equal(otherMccValidation.ok,true,JSON.stringify(otherMccValidation.errors));
+assert.equal(otherMccValidation.capture.managerAccountName,'MCC Nutra de teste');
+assert.equal(otherMccValidation.capture.managerAccountId,'888-777-6666');
+const otherMccParsed=parserContext.__parseSource(await parserContext.__gridAdapter(otherMccValidation.capture),'d0');
+assert.equal(otherMccParsed.records.length,1);
+assert.equal(otherMccParsed.records[0].conta_id,'444-555-6666');
+assert.equal(otherMccParsed.records[0].status_qualificacao,'Pendente');
+assert.equal(otherMccParsed.records[0].raw.budget,'101.01');
+assert.equal(otherMccParsed.records[0].raw.cost,'0');
+assert.equal(otherMccParsed.records[0].raw.impressions,'0');
+assert.equal(otherMccParsed.records[0].raw.abs_top_share,'—');
+assert.equal(otherMccParsed.records[0].raw.top_share,'—');
+
+const percentageStart=html.indexOf('    function uniqueRecord('),percentageEnd=html.indexOf('    function percentageValidationNotApplicable(',percentageStart);
+vm.runInContext(html.slice(percentageStart,percentageEnd),parserContext);
+const smallD1={...otherMccParsed,role:'d1'};
+const percentageMetrics=key=>parserContext.stateValue(smallD1.records[0].raw[key],parserContext.parseNumber);
+const smallD1Campaigns=[{nome_campanha_exato:smallD1.records[0].nome_campanha_exato,metricas_D_menos_1:{porcentagem_impressao_primeira_posicao:percentageMetrics('abs_top_share'),porcentagem_impressao_parte_superior:percentageMetrics('top_share')}}];
+const smallD1Validation=parserContext.buildPercentageValidation(smallD1,smallD1Campaigns);
+assert.equal(smallD1Validation.teste_regressao_aprovado,true,'a one-campaign D−1 validates its one available campaign');
+assert.equal(smallD1Validation.amostragem_quantidade_exigida,1);
+assert.equal(smallD1Validation.amostragem_minima_tres_campanhas_ok,false,'do not claim to have checked three samples');
+const missingSmallD1Header={...smallD1,mapping:{...smallD1.mapping}};delete missingSmallD1Header.mapping.top_share;
+assert.equal(parserContext.buildPercentageValidation(missingSmallD1Header,smallD1Campaigns).teste_regressao_aprovado,false,'small MCCs still require both distinct mapped percentage columns');
+
 // Testa a ordenação pura por valores, preservando linhas associadas à campanha.
 const sortStart = html.indexOf('    function sortPreviewRows(');
 const sortEnd = html.indexOf('    function renderPreviewTable(', sortStart);
@@ -388,7 +432,7 @@ const receiverStart = html.indexOf('window.__hubReceiveMccD0Grid = async capture
 const receiverEnd = html.indexOf("q('#apply-manifest').addEventListener", receiverStart);
 assert.ok(receiverStart >= 0 && receiverEnd > receiverStart);
 const receiverSource = html.slice(receiverStart, receiverEnd);
-assert.ok(receiverSource.includes("installParsedSource('d0', parsed)"));
+assert.ok(receiverSource.includes("installParsedSource('d0', parsed, { capturedAt:capture.capturedAt })"));
 assert.ok(!receiverSource.includes('applyManifestToPanel'), 'o receptor só prepara a prévia; não aplica a base');
 assert.ok(receiverSource.includes("renderPreviewTable(currentResult.manifest, 'd0')"));
 
@@ -462,7 +506,7 @@ try {
   const deliveredD1 = await deliverD1GridToPreparador(validD1.capture);
   assert.equal(deliveredD1.ok, true);
   assert.equal(deliveredD1.waitingForD0, true);
-  assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v2');
+  assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v3');
 } finally {
   for (const [key, descriptor] of previous) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);

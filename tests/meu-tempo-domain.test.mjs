@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,dailyDurationLaunchHistory,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,dailyDurationLaunchHistory,dailyLaunchHistory,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
 assert.deepEqual(DEFAULT_ITEMS.map(({id,name,categoryId})=>({id,name,categoryId})),[
@@ -58,6 +58,13 @@ const launchHistory=[
 ];
 const launchHistoryBefore=JSON.stringify(launchHistory);
 assert.deepEqual(dailyDurationLaunchHistory(launchHistory,'2026-09-19').map(entry=>entry.id),['latest','earlier','unknown-time'],'histórico diário mostra durações manuais da data selecionada em ordem recente, sem importações Excel');
+const allDailyLaunches=[...launchHistory,
+  {id:'water-earlier',date:'2026-09-19',itemId:'item-agua',type:'number',value:350,source:'manual',createdAt:'2026-09-19T13:00:00.000Z'},
+  {id:'water-latest',date:'2026-09-19',itemId:'item-agua',type:'number',value:-175,source:'manual',createdAt:'2026-09-19T14:45:00.000Z'},
+  {id:'water-imported',date:'2026-09-19',itemId:'item-agua',type:'number',value:700,source:'excel_import',createdAt:'2026-09-19T15:00:00.000Z'},
+  {id:'other-number',date:'2026-09-19',itemId:'weight',type:'number',value:70,source:'manual',createdAt:'2026-09-19T16:00:00.000Z'}
+];
+assert.deepEqual(dailyLaunchHistory(allDailyLaunches,'2026-09-19').map(entry=>entry.id),['water-latest','latest','water-earlier','earlier','unknown-time'],'histórico diário combina duração e lançamentos manuais de água em ordem cronológica, sem incluir outros números ou importações Excel');
 assert.equal(JSON.stringify(launchHistory),launchHistoryBefore,'ordenar o histórico não altera os lançamentos recebidos');
 
 const entries=[

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {calculateDiscount,discountAmountForPercent,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from '../src/copy-ficha/copy-ficha-domain.mjs';
+import {calculateDiscount,discountAmountForPercent,offerEvidenceForDiscount,parseOfferText,generateAssets,buildFicha,fichaJson,formatSitelinks,generationBlockers,generationBlockerFields,generationBlockerPackageIndexes} from '../src/copy-ficha/copy-ficha-domain.mjs';
 
 const input={
   product:'MyoGlow',countryCode:'US',htmlLanguage:'en-US',currency:'USD',
@@ -90,6 +90,50 @@ assert.deepEqual(germanDurationDetected.packages.map(item=>[item.label,item.regu
   ['60-Tage-Vorrat',65.99,28.99,'Enthält 2 Boxen – Vorrat für 2 Monate']
 ],'o formato alemão agrupa títulos repetidos, interpreta € após o valor e ignora economia, preço diário e frete');
 assert.ok(germanDurationDetected.packages.every(item=>item.confidence==='high'),'papéis de preço ligados a “Preis pro Packung” ficam detectados com confiança alta');
+
+const germanPerPackagePaste=`Rabatt reserviert für 00:00 Minuten
+ExampleProduct
+Einsteiger
+Einsteiger
+vorher:
+79,95 €
+49,95 €
+Preis pro Packung
+Gesamtpreis 54,90 €
+4,95 € Versandkosten
+Jetzt bestellen
+Bestseller
+Bestseller
+vorher:
+79,95 €
+36,65 €
+Preis pro Packung
+Gesamtpreis 109,95 €
+Sie erhalten einmalig 3 Dosen.
+Sparen Sie mit diesem Paket ganze 46%
+Kostenloser Versand
+Jetzt bestellen
+Verkaufshit
+Verkaufshit
+vorher:
+79,95 €
+39,97 €
+Preis pro Packung
+Gesamtpreis 79,95 €
+Sie erhalten einmalig 2 Dosen.
+Sparen Sie mit diesem Paket 27%
+Kostenloser Versand
+Jetzt bestellen`;
+const germanPerPackageDetected=parseOfferText(germanPerPackagePaste);
+assert.equal(germanPerPackageDetected.highestPercent,46,'reconhece o percentual do cartão alemão estruturado sem usar percentuais aleatórios do resto da página');
+assert.equal(germanPerPackageDetected.highestSavingsAmount,43.3,'calcula o desconto pela diferença entre os valores anterior e atual por pacote');
+assert.equal(germanPerPackageDetected.highestSavingsPackageLabel,'Bestseller','mantém o valor associado ao cartão com selo de 46%');
+assert.equal(germanPerPackageDetected.highestSavingsCalculatedPercent,54.2,'mantém disponível o percentual derivado da diferença dos preços para revisão');
+assert.equal(germanPerPackageDetected.highestSavingsPercentMismatch,true,'sinaliza a divergência entre o percentual anunciado e o cálculo pelos preços');
+assert.deepEqual(germanPerPackageDetected.packages,[],'não deixa o parser genérico misturar preço unitário, total do pacote e frete neste formato específico');
+assert.deepEqual(offerEvidenceForDiscount(germanPerPackagePaste,46),{percent:46,amount:43.3,label:'Bestseller',displayedPrice:36.65,priceBasis:'package',quantity:null,calculatedPercent:54.2,ambiguousPrice:false});
+assert.equal(offerEvidenceForDiscount('Discount 46%\n79,95 €\n36,65 €',46),null,'duas cifras soltas sem os marcadores alemães não bastam para inferir um valor de desconto');
+assert.equal(parseOfferText('Save 50% Off\nRegular price $80\nNow $40').highestSavingsPercentMismatch,false,'formatos existentes não recebem aviso de divergência quando o selo confere');
 
 const checkoutPaste=`Your OFF Discount Has Been Applied!
 banner

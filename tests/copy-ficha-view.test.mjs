@@ -47,6 +47,7 @@ assert.match(view,/autoFilledFields:collectAutoFilledFieldIds\(/,'o salvamento i
 assert.match(view,/restoreAutoFilledFieldIds\(root\.querySelectorAll\('input,select,textarea'\),draft\.autoFilledFields\)/,'a abertura do rascunho restaura a origem dos campos');
 assert.match(view,/if\(Array\.isArray\(previous\.packages\)\)draft\.packages=previous\.packages/,'a remoção do quadro não apaga dados legados do rascunho salvo');
 assert.ok(view.includes("applyDetected(root,'copyDiscount',result.highestPercent,{force:true})")&&view.includes('result.highestSavingsAmount'),'a análise substitui o percentual antigo pelo maior identificado e preenche o valor associado a ele');
+assert.ok(view.includes('result.highestSavingsPercentMismatch')&&view.includes('o cartão anuncia'),'a análise alerta quando o valor derivado pelos preços diverge do percentual anunciado');
 assert.ok(!view.includes('Pacotes para a ficha')&&!view.includes('copyPackages')&&!view.includes('copyAddPackage')&&!view.includes('copy-ficha-package'),'a interface remove os quadros e campos de pacote da ficha');
 assert.ok(!view.includes('packages:[]')&&!view.includes('copyPackages'),'os pacotes não são usados na geração das perguntas nem da ficha');
 assert.match(view,/Usar sugestão de produto:/,'uma detecção divergente oferece ação explícita sem substituir o valor manual');

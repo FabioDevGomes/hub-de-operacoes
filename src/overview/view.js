@@ -5,6 +5,19 @@
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
     function sortCell(cell){if(!cell||cell.value==null||cell.value==='')return null;if(typeof cell.value==='number')return cell.value;const text=String(cell.text??cell.value).trim();const normalized=text.replace(/[^0-9,.-]/g,'').replaceAll('.','').replace(',','.');const number=Number(normalized);return Number.isFinite(number)?number:text.toLocaleLowerCase('pt-BR')}
     function displayCell(cell){if(!cell||cell.value==null||cell.value==='')return'—';return esc(cell.text??cell.value)}
+    const roiDialog=$('#minimumRoiDialog'),roiForm=$('#minimumRoiForm'),roiLimit=$('#minimumRoiLimit'),roiPercent=$('#minimumRoiPercent'),roiError=$('#minimumRoiError'),roiHelp=$('#minimumRoiHelp');let roiRevenue=null;
+    function inputNumber(value,decimals=2){return Number(value).toFixed(decimals).replace('.',',')}
+    function setRoiError(message){roiError.textContent=message||'';roiDialog.dataset.syncValid=message?'false':'true'}
+    function showRoiDialog(campaignId,currentRoi,currentLimit,totalRevenue){
+      roiDialog.dataset.campaignId=String(campaignId||'');roiRevenue=Number(totalRevenue);roiLimit.value=inputNumber(currentLimit);roiPercent.value=String(currentRoi??'').replace('.',',');
+      roiLimit.disabled=!(Number.isFinite(roiRevenue)&&roiRevenue>0);roiHelp.textContent=roiLimit.disabled?'A receita total é zero; o limite permanece em R$ 0,00. Você ainda pode definir o ROI mínimo.':'O cálculo usa a receita total considerada para esta campanha. São aceitos percentuais negativos acima de −100%.';
+      setRoiError('');if(typeof roiDialog.showModal==='function')roiDialog.showModal();else roiDialog.open=true;roiPercent.focus?.();
+    }
+    function updateLimitFromRoi(){try{const minimum=OverviewDomain.parseMinimumRoi(roiPercent.value),limit=OverviewDomain.testLimitForRoi(roiRevenue,minimum);roiLimit.value=inputNumber(limit);setRoiError('')}catch(error){setRoiError(error.message)}}
+    function updateRoiFromLimit(){try{const minimum=OverviewDomain.roiForTestLimit(roiRevenue,roiLimit.value);roiPercent.value=String(minimum).replace('.',',');setRoiError('')}catch(error){setRoiError(error.message)}}
+    roiPercent.oninput=updateLimitFromRoi;roiLimit.oninput=()=>{if(!roiLimit.disabled)updateRoiFromLimit()};
+    $('#minimumRoiCancel').onclick=()=>roiDialog.close?.();
+    roiForm.onsubmit=event=>{event.preventDefault();let minimum;try{minimum=OverviewDomain.parseMinimumRoi(roiPercent.value);OverviewDomain.testLimitForRoi(roiRevenue,minimum);if(roiDialog.dataset.syncValid==='false')throw new Error('Corrija os campos antes de confirmar.')}catch(error){setRoiError(error.message);return}const campaignId=roiDialog.dataset.campaignId;roiDialog.close?.();if(typeof roiDialog.close!=='function')roiDialog.open=false;void actions.editMinimumRoi(campaignId,minimum)};
     const overviewInfoIcon='<svg class="kpi-info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="8" cy="8" r="5.7" fill="none" stroke="currentColor" stroke-width=".7"/><circle cx="8" cy="4.7" r=".75" fill="currentColor"/><path d="M8 6.8v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
     function metricCoverageTooltip(period,metrics,dayTotals,activeCount,pausedCount){const total=dayTotals.length;if(!total)return`Cobertura ${period}: sem campanhas avaliadas.`;const details=metrics.map(([label,field])=>`${label} ${OverviewDomain.sumObservedMetric(dayTotals,field).observedCount}/${total}`).join(', ');return`Cobertura ${period} — campanhas com dado: ${details}. Escopo: ${activeCount} ativas${pausedCount?` e ${pausedCount} pausadas`:''}.`}
     function renderD0MetricSummary(rows){
@@ -31,7 +44,7 @@
         saleLabel=manualSales?`${manualSales===1?'1 venda provisória':`${manualSales} vendas provisórias`}`:'',
         statusTitle=numberReuse?`A numeração ${numberReuse.group} já apareceu em outra campanha. Use um novo número antes da próxima coleta.`:paused?(pauseConfirmedAt?`Campanha pausada na data ${dateLabel(pauseConfirmedAt)}`:c._lastSeen?`Última aparição em ${dateLabel(c._lastSeen)}`:'Última aparição'):rejected?'A MCC informou reprovação ou não qualificação':statusLabel,
         budgetCaption=budget?.salesCount?`ROI mínimo ${fmtPct(budget.minimumRoi)} · ${fmtNum(budget.salesCount)} venda${budget.salesCount===1?'':'s'}`:'',
-        limitContent=budget?`${fmtMoney(testLimit.value)}${budgetCaption?`<a class="test-budget-detail test-budget-roi-link" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-roi="${budget.minimumRoi}" aria-label="Editar ROI mínimo" title="Editar ROI mínimo">${esc(budgetCaption)}</a>`:''}`:displayCell(testLimit),
+        limitContent=budget?`${fmtMoney(testLimit.value)}${budgetCaption?`<a class="test-budget-detail test-budget-roi-link" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-roi="${budget.minimumRoi}" data-current-limit="${budget.limit}" data-total-revenue="${budget.revenue}" aria-label="Editar ROI mínimo e limite de teste" title="Editar ROI mínimo e limite de teste">${esc(budgetCaption)}</a>`:''}`:displayCell(testLimit),
         remainingTitle=budget?(budget.remaining>=0?'Investimento ainda permitido até o limite.':`Limite de teste excedido em ${fmtMoney(Math.abs(budget.remaining))}.`):'',
         remainingValue=budget?.remaining??sortCell(testRemaining),
         remainingAlert=typeof remainingValue==='number'&&remainingValue<140,
@@ -64,7 +77,7 @@
       $('#kpis').innerHTML=kpiMarkup+renderD0MetricSummary(rows)+renderD0ProfitSummary(rows);$('#kpis').classList.add('has-d0-summary');
       $('#totalsBody').innerHTML=rows.map(row=>renderRow(row,headers,snapshot.referenceDate)).join('');
       $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}renderTotals()});
-      $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();void actions.editMinimumRoi(link.dataset.campaignId,link.dataset.currentRoi)};link.ondblclick=event=>event.stopPropagation()});
+      $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();showRoiDialog(link.dataset.campaignId,link.dataset.currentRoi,link.dataset.currentLimit,link.dataset.totalRevenue)};link.ondblclick=event=>event.stopPropagation()});
       $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals()};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals()};$('#totalsD0').onclick=()=>{state.totalsMode='d0';renderTotals()};
       $('#campaignStatusFilter').value=state.campaignStatusFilter;
       $('#totalsCaption').textContent=state.totalsMode==='d0'?'Total do dia por campanha, inclusive pausadas; o filtro de situação afeta apenas a tabela':state.totalsMode==='d1'?`Retrato fechado de D−1${dates.d1?` · ${dateLabel(dates.d1)}`:''}`:'Totais do histórico por campanha, incluindo o retrato mais recente de D zero';$('#totalsCount').textContent=`${activeCount} ativas${pausedCount?` · ${pausedCount} pausada${pausedCount===1?'':'s'}`:''}`

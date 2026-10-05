@@ -188,7 +188,18 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
     if (recordRows.length < maxRecords) recordRows.push(record);
   }
 
-  const bodyText = collapse(doc.body?.innerText || doc.body?.textContent);
+  const rawBodyText = doc.body?.innerText || doc.body?.textContent || '';
+  const bodyText = collapse(rawBodyText);
+  const bodyLines = String(rawBodyText).split(/\r?\n/).map(collapse).filter(Boolean).slice(0, 40);
+  const managerHeaders = [];
+  for (let index = 0; index < bodyLines.length; index++) {
+    const name = bodyLines[index];
+    if (!/^MCC(?:\s+.+)?$/i.test(name)) continue;
+    const managerAccountId = bodyLines[index + 1]?.match(/^(\d{3}-\d{3}-\d{4})$/)?.[1] || null;
+    if (managerAccountId) managerHeaders.push({ managerAccountId, managerAccountName:name });
+  }
+  const uniqueManagerHeaders = [...new Map(managerHeaders.map(item => [`${item.managerAccountId}|${item.managerAccountName.toLocaleLowerCase()}`, item])).values()];
+  const managerIdentity = uniqueManagerHeaders.length === 1 ? uniqueManagerHeaders[0] : { managerAccountId:null, managerAccountName:null };
   const pageMatches = [...bodyText.matchAll(/\b(\d+)\s*[-–]\s*(\d+)\s+(?:de|of)\s+([\d,.]+)/gi)];
   const pagination = pageMatches.length ? pageMatches.map(match => ({
     first: Number(match[1]), last: Number(match[2]), total: Number(match[3].replace(/,/g, '')),
@@ -231,6 +242,8 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
     ok: true,
     capturedAt: new Date().toISOString(),
     title: collapse(doc.title),
+    ...managerIdentity,
+    managerIdentityAmbiguous: uniqueManagerHeaders.length > 1,
     strategy: 'roles ARIA [grid]/[table], columnheader/row/cell; vínculo essfield quando disponível; fallback table/tr/th/td',
     associationMethod: useFieldIds ? 'essfield' : 'header-offset',
     headers: headerInfo,

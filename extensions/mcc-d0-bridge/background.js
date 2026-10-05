@@ -1,4 +1,4 @@
-import { deliverD0CsvToPreparador, deliverD0GridToPreparador, deliverD1GridToPreparador } from './bridge.mjs';
+import { deliverD0GridToPreparador, deliverD1GridToPreparador } from './bridge.mjs';
 import { collectMccGrid } from './mcc-grid-reader.mjs';
 import { collectMccSelectableText } from './mcc-text-reader.mjs';
 import { scrollMccPageToBottom } from './mcc-page-scroll.mjs';
@@ -28,23 +28,6 @@ function waitUntilLoaded(tabId, timeoutMs = 20000) {
       else if (tab?.status === 'complete') finish(resolve);
     });
   });
-}
-
-async function forwardD0Csv(payload) {
-  const existing = await chrome.tabs.query({ currentWindow: true, url: PREPARADOR_MATCH });
-  const tab = existing[0]
-    ? await chrome.tabs.update(existing[0].id, { active: true })
-    : await chrome.tabs.create({ url: PREPARADOR_URL, active: true });
-  if (!tab?.id) throw new Error('Não foi possível abrir uma aba do Preparador MCC.');
-
-  await waitUntilLoaded(tab.id);
-  const [execution] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: deliverD0CsvToPreparador,
-    args: [payload]
-  });
-  if (!execution?.result?.ok) throw new Error(execution?.result?.message || 'O Preparador não aceitou o arquivo.');
-  return execution.result;
 }
 
 async function forwardD0Grid(capture) {
@@ -175,9 +158,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha segura na captura de texto da MCC.' }));
     return true;
   }
-  if (message?.type !== 'FORWARD_D0_CSV') return undefined;
-  forwardD0Csv(message.payload)
-    .then(result => sendResponse({ ok: true, result }))
-    .catch(error => sendResponse({ ok: false, message: error?.message || 'Falha na ponte com o Preparador MCC.' }));
-  return true;
+  return undefined;
 });

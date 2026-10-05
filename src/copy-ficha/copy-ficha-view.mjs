@@ -1,5 +1,5 @@
-import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=20';
-import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=2';
+import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=21';
+import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=3';
 import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=1';
 import {renderTemplate} from './copy-ficha-template.mjs?v=2';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
@@ -216,7 +216,9 @@ function analyze(root){
     detected.append(useSuggestion);
   }
   const analysisMessage=hasManualProduct?`O campo Produto já tem um valor manual e foi preservado. A análise detectou “${result.productCandidate}”; use o botão ao lado se quiser aplicar a sugestão.${result.productCandidateNeedsReview?` ${result.productCandidateEvidence} Confira se é o produto anunciado ou apenas a marca.`:''}`:result.productCandidateNeedsReview?`${result.productCandidateEvidence} Revise se este nome identifica o produto anunciado ou apenas a marca.`:applied.length?`Preenchido automaticamente: ${applied.join(', ')}. Revise os dados antes de criar a ficha.`:'Os dados detectados foram mantidos como candidatos. Revise os campos acima.';
-  by(root,'copyAnalysisNote').textContent=analysisMessage;
+  const discountMismatch=result.highestSavingsPercentMismatch
+    ?`O preço por pacote implica ${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:1}).format(result.highestSavingsCalculatedPercent)}% de desconto, mas o cartão anuncia ${result.highestPercent}%. Confira essa divergência antes de usar o valor.`:'';
+  by(root,'copyAnalysisNote').textContent=[analysisMessage,discountMismatch].filter(Boolean).join(' ');
   updatePendingHighlights(root);
   saveDraft(root);
 }

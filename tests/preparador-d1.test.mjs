@@ -16,6 +16,7 @@ assert.equal(dateTools.expectedMccD1ReportDate(new Date('2026-09-24T02:30:00.000
 assert.equal(dateTools.reportDatePairIssue({ dates:['2026-09-23'] }, { dates:['2026-09-24'] }), null);
 assert.match(dateTools.reportDatePairIssue({ dates:['2026-09-23'] }, { dates:['2026-09-25'] }), /não são consecutivas/);
 assert.match(dateTools.reportDatePairIssue({ dates:['2026-09-23','2026-09-24'] }, { dates:['2026-09-25'] }), /única data explícita/);
+assert.match(dateTools.reportDatePairIssue({ dates:['2026-09-23'],managerAccountId:'111-222-3333',managerAccountName:'MCC teste A' }, { dates:['2026-09-24'],managerAccountId:'222-333-4444',managerAccountName:'MCC teste B' }), /MCCs diferentes/);
 
 const decoderStart = html.indexOf('    const MCC_GRID_COLUMNS = [');
 const decoderEnd = html.indexOf('    function uniqueRecord(', decoderStart);
@@ -37,7 +38,7 @@ vm.runInContext(`${html.slice(accountIdStart, accountIdEnd)}${html.slice(decoder
 const requiredFields = ['campaign','account','status','impressions','clicks','conversions','avg_cost','abs_top_share','top_share','budget','bid_strategy','cost'];
 const captureDate = expectedMccD1Date();
 const capture = {
-  schema:'mcc-d1-grid-v2', periodRole:'d1', source:'mcc_chrome_extension', reportDate:captureDate, locale:'en-US',
+  schema:'mcc-d1-grid-v3', periodRole:'d1', source:'mcc_chrome_extension', managerAccountId:'111-222-3333', managerAccountName:'MCC de teste', reportDate:captureDate, locale:'en-US',
   pagination:{ first:1, last:1, total:1 }, campaignCount:1,
   fields:Object.fromEntries(requiredFields.map(key=>[key,{found:true,hidden:false,ambiguous:false}])),
   records:[{campaign:'Campanha D1',account:'Conta Alpha',account_id:'111-222-3333',status:'Qualificada',currency:'USD',impressions:'0',clicks:'—',conversions:'0',avg_cost:'US$ 0.00',abs_top_share:'0%',top_share:'—',budget:'US$ 45.00/day',bid_strategy:'Maximizar conversões',cost:'US$ 0.00'}]
@@ -87,10 +88,15 @@ assert.deepEqual(JSON.parse(JSON.stringify(d1Projection(directManifest))),JSON.p
 const offerOne = directManifest.campanhas.find(campaign=>campaign.nome_campanha_exato==='Oferta um');
 assert.equal(offerOne.metricas_D_menos_1.conta_id.valor,'111-222-3333');
 assert.equal(offerOne.metricas_D_zero.conta_id.valor,'111-222-3333');
+assert.equal(offerOne.mcc_id,'111-222-3333','o manifesto relaciona campanhas ao ID administrador, sem confundir com conta_cliente');
+assert.equal(offerOne.mcc_nome,'MCC de teste','o rótulo visível da MCC é incluído no manifesto');
+assert.deepEqual(JSON.parse(JSON.stringify(directManifest.identificacao_mcc)),{id:'111-222-3333',nome:'MCC de teste'});
 assert.equal(offerOne.metricas_D_menos_1.impressoes.estado, 'zero_confirmado');
 assert.equal(offerOne.metricas_D_menos_1.cliques_google.estado, 'ausente');
 const accountConflictSource={...d0Source,records:d0Source.records.map((record,index)=>index===0?{...record,conta_id:'999-888-7777'}:record)};
 assert.ok(businessContext.__buildManifest(directD1Source,accountConflictSource).critical.includes('Há associação financeira ambígua.'),'IDs de conta diferentes em D−1 e D0 bloqueiam a associação');
+const managerConflictSource={...d0Source,managerAccountId:'222-333-4444',managerAccountName:'MCC diferente'};
+assert.ok(businessContext.__buildManifest(directD1Source,managerConflictSource).critical.includes('D−1 e D0 pertencem a MCCs diferentes.'),'IDs administradores diferentes bloqueiam a combinação D−1/D0');
 
 const allCampaignsCapture = { ...parityCapture,
   fields:{ ...parityCapture.fields, campaign_state:{ found:true, hidden:false, ambiguous:false } },
@@ -108,7 +114,7 @@ assert.equal(allCampaignsResult.manifest.campanhas.find(item => item.nome_campan
 assert.equal(allCampaignsResult.critical.length, 0);
 
 const attemptStart = html.indexOf('    function attemptBuild() {');
-const attemptEnd = html.indexOf('    async function loadDecoded(', attemptStart);
+const attemptEnd = html.indexOf('    function installParsedSource(', attemptStart);
 assert.ok(attemptStart >= 0 && attemptEnd > attemptStart, 'orquestração da prévia não encontrada');
 const stateContext = vm.createContext({
   slots:{d1:null,d0:null}, currentManifest:null, currentResult:null, previewRole:'d1', currentFilename:'manifesto_mcc.json',

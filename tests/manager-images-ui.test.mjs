@@ -27,11 +27,13 @@ assert.ok(html.includes('candidatas a palavras-chave negativas'),'orientação d
 assert.ok(html.includes('data-manager-image-candidate-input'),'entrada de outros produtos ausente');
 assert.ok(html.includes('negativeKeywordCandidates'),'candidatos a negativas não são persistidos');
 assert.ok(html.includes('image-candidate-summary'),'resumo persistente das candidatas ausente');
-assert.ok(html.includes("import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=4'")&&html.includes('KeywordCandidatesUI.renderKeywordCandidates'),'Lista de Gerente não usa o componente compartilhado de candidatas');
+assert.ok(html.includes("import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=5'")&&html.includes('KeywordCandidatesUI.renderKeywordCandidates'),'Lista de Gerente não usa o componente compartilhado de candidatas');
 assert.ok(html.includes("keywordCandidateMarkerHtml(hasCandidates?1:0,'negative')"),'Lista de Gerente não sinaliza candidatas negativas na lista de imagens');
 assert.ok(html.includes('ImagesDomain.imageSearchUrlExcluding(term,country,candidate)'),'pesquisa da candidata negativa não usa o termo do produto com exclusão e país do cartão');
 assert.ok(html.includes('data-manager-image-candidates'),'recipiente compartilhado das candidatas negativas ausente');
-assert.ok(html.includes('data-manager-image-edit-candidates')&&html.includes('data-manager-image-save-candidates'),'edição de candidatas negativas não está disponível para qualquer sinal visual');
+assert.ok(html.includes('data-manager-image-edit-candidates')&&html.includes('persistManagerImageCandidates(country,[...current,value],status)'),'a candidata do Gerente deve ser persistida no Enter');
+assert.ok(!html.includes('data-manager-image-candidate-add')&&!html.includes('data-manager-image-save-candidates')&&!html.includes('data-manager-image-cancel-candidates'),'o editor não deve exibir Adicionar, Salvar candidatas ou Cancelar junto ao campo');
+assert.ok(css.includes('.image-candidate-entry{grid-template-columns:minmax(0,1fr);margin-top:8px}'),'campo de candidata não tem espaço adicional após o rótulo');
 assert.ok(html.includes('negativeKeywordCandidates:imageCandidates({negativeKeywordCandidates})'),'candidatas devem ser salvas mesmo com resultado Dominante');
 assert.ok(html.includes("if(current?.status!=='mixed')await saveManagerImageResult(selectedCountry,status,candidates)")&&html.includes('const productKey=activeKey,product=productIndex.get(productKey)'),'selecionar Mista precisa persistir a avaliação sem candidatas antes de abrir o editor opcional, usando a chave capturada antes do write');
 assert.ok(css.includes('.image-candidate.saved'),'destaque das candidatas salvas ausente');

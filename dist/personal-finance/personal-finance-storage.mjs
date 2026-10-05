@@ -1,4 +1,4 @@
-import { createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=22';
+import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=26';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
@@ -145,7 +145,7 @@ export async function latestExpenseMonthWithValues() {
         if (!cursor) return;
         try {
           const entry = normalizeEntry(cursor.value);
-          const hasValue = entry.planned_amount != null || entry.actual_amount != null
+          const hasValue = entry.planned_amount != null || entry.actual_amount != null || isNubankCardCategory(entry) && cardDebtAmount(entry) != null
             || entry.currency === 'BRL' && isLunchDinnerCategory(entry);
           if (hasValue && hasMonthlyOccurrence(entry)) {
             latestMonthKey = entry.month_key;
@@ -188,8 +188,7 @@ export async function createMonth({ monthKey, planSource = 'defaults' }) {
         let groups, categories, previousEntries, previousDebts, previousFunds;
         const maybeWrite = () => {
           if (!groups || !categories || !previousEntries || !previousDebts || !previousFunds) return;
-          const previous = planSource === 'previous' ? previousEntries : [];
-          const { month, entries } = createMonthSnapshot({ monthKey, categories, groups, previousEntries: previous, planSource });
+          const { month, entries } = createMonthSnapshot({ monthKey, categories, groups, previousEntries, planSource });
           monthsStore.add(month);
           created = true;
           for (const entry of entries) entriesStore.add(entry);

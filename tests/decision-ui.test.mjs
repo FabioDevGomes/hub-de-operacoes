@@ -20,6 +20,7 @@ assert.match(buttonHtml('Campanha no ar','data-example','123'),/data-curation-fo
 assert.match(buttonHtml('Campanha no ar','data-example','123'),/>Campanha no ar<\/button>/);
 assert.ok(styles.includes('.decision-badge.launch,.decision-option.launch{border-color:#8a6f18;background:#332b0f;color:#ffe46d}'),'Subir campanha não usa o tom amarelo nos botões');
 assert.ok(styles.includes('.decision-badge.live,.decision-option.live{border-color:#276249;background:#102d24;color:#83e5bb}'),'Campanha no ar não usa o tom verde nos botões');
-assert.ok(styles.includes('.decision-row-launch>td{background:rgba(171,130,35,.2)}'),'linha de Subir campanha não usa destaque amarelo');
-assert.ok(styles.includes('.decision-row-live>td{background:rgba(16,74,54,.25)}'),'linha de Campanha no ar não usa destaque verde');
+assert.ok(styles.includes('#rows tr.decision-row-launch>td{background:rgba(171,130,35,.2)}'),'a mesma decisão Subir campanha deve usar o fundo dourado compartilhado mesmo diante de estilos locais');
+assert.ok(styles.includes('#rows tr.decision-row-live>td{background:rgba(16,74,54,.25)}'),'a mesma decisão Campanha no ar deve usar o fundo verde compartilhado mesmo diante de estilos locais');
+assert.ok(styles.includes('#rows tr.decision-row-launch:hover>td{background:rgba(190,145,40,.32)!important}')&&styles.includes('#rows tr.decision-row-live:hover>td{background:rgba(20,92,66,.34)!important}'),'o estado de hover mantém os mesmos tons semânticos em todas as listas');
 console.log('decision ui ok');

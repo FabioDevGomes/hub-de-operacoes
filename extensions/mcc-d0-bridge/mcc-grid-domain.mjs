@@ -85,6 +85,9 @@ export function validateMccD0Capture(snapshot) {
     errors.push({ code: 'incomplete', message: `Captura incompleta ou não verificável: ${snapshot.rowsCaptured ?? 0} campanhas capturadas de ${Number.isFinite(total) ? total : 'total não confirmado'}. Na MCC, role a grade até o final para carregar todas as campanhas e tente novamente; é necessário usar a primeira e única página completa.` });
   }
   if (!snapshot.records?.length) errors.push({ code: 'empty', message: 'Nenhuma campanha foi capturada da grade MCC.' });
+  if (snapshot.managerIdentityAmbiguous || !/^\d{3}-\d{3}-\d{4}$/.test(String(snapshot.managerAccountId || '')) || !/^MCC(?:\s+.+)?$/i.test(String(snapshot.managerAccountName || '').trim())) {
+    errors.push({ code:'manager_identity', message:'Não consegui identificar sem ambiguidade o nome e o ID da MCC no cabeçalho da página. Abra a conta de administrador desejada e tente novamente.' });
+  }
   if (duplicateCampaigns.length) errors.push({ code: 'duplicates', campaigns: [...duplicateCampaigns], message: `Captura bloqueada por campanha duplicada: ${duplicateCampaigns.join(', ')}. O mesmo nome aparece em mais de uma linha da MCC.` });
   for (const field of REQUIRED_GRID_FIELDS) {
     const info = snapshot.fields?.[field];
@@ -115,8 +118,11 @@ export function validateMccD0Capture(snapshot) {
   return errors.length ? { ok: false, errors } : {
     ok: true,
     capture: {
-      schema: 'mcc-d0-grid-v2',
+      schema: 'mcc-d0-grid-v3',
       source: 'mcc_chrome_extension',
+      capturedAt: snapshot.capturedAt || null,
+      managerAccountId:snapshot.managerAccountId,
+      managerAccountName:String(snapshot.managerAccountName).trim(),
       reportDate: snapshot.reportDate.value,
       locale: snapshot.locale || 'en-US',
       pagination: snapshot.pagination,
@@ -167,7 +173,7 @@ export function validateMccD1Capture(snapshot, { now = new Date() } = {}) {
     ok: true,
     capture: {
       ...validation.capture,
-      schema: 'mcc-d1-grid-v2',
+      schema: 'mcc-d1-grid-v3',
       periodRole: 'd1'
     }
   };

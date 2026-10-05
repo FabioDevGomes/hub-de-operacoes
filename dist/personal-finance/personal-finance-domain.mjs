@@ -53,7 +53,7 @@ export function normalizeCategory(category) {
 export function normalizeEntry(entry) {
   const month_key = String(entry?.month_key || '');
   if (!isoMonth(month_key)) throw new Error('Mês inválido.');
-  return {
+  const normalized = {
     entry_id: id(entry?.entry_id || `${month_key}:${entry?.category_id || ''}`, 'Identificador do lançamento mensal'),
     month_key,
     category_id: id(entry?.category_id, 'Categoria'),
@@ -64,6 +64,10 @@ export function normalizeEntry(entry) {
     planned_amount: amountOrNull(entry?.planned_amount, 'Valor planejado'),
     actual_amount: amountOrNull(entry?.actual_amount, 'Valor realizado'),
   };
+  if (Object.hasOwn(entry || {}, 'card_debt_amount')) {
+    normalized.card_debt_amount = amountOrNull(entry.card_debt_amount, 'Dívida atual do cartão');
+  }
+  return normalized;
 }
 
 export function overlayCurrentCategoryNames(entries, categories = []) {
@@ -178,7 +182,7 @@ export function hasMonthlyOccurrence(entry) {
 }
 
 export function canEditActualForMonth(monthKey, now = new Date()) {
-  return isoMonth(monthKey) && monthKey === localMonthKey(now);
+  return isoMonth(monthKey) && monthKey <= localMonthKey(now);
 }
 
 export function canEditActualForEntry(entry, now = new Date()) {
@@ -204,10 +208,35 @@ export function isLunchDinnerCategory(value) {
   return /almoco\s*(?:\/|e)\s*janta/.test(normalized);
 }
 
+export function isBreakfastCategory(value) {
+  const name = typeof value === 'string' ? value : value?.category_name || value?.name || '';
+  const normalized = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return /\bcafe da manha\b/.test(normalized);
+}
+
 export function isNubankCardCategory(value) {
   const name = typeof value === 'string' ? value : value?.category_name || value?.name || '';
   const normalized = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return /^(?:cartao|cart)\s+nub(?:ank)?$/.test(normalized);
+}
+
+export function cardDebtAmount(entry) {
+  if (!isNubankCardCategory(entry)) return null;
+  if (Object.hasOwn(entry || {}, 'card_debt_amount')) return amountOrNull(entry.card_debt_amount, 'Dívida atual do cartão');
+  return amountOrNull(entry?.planned_amount, 'Valor planejado') ?? amountOrNull(entry?.actual_amount, 'Valor realizado');
+}
+
+export function cardPaymentAmount(entry) {
+  if (!isNubankCardCategory(entry)) return null;
+  const hasInvoiceField = Object.hasOwn(entry || {}, 'card_debt_amount') || entry?.planned_amount != null;
+  return hasInvoiceField ? amountOrNull(entry?.actual_amount, 'Valor realizado') : null;
+}
+
+export function openCardDebtAmount(entry) {
+  const invoice = cardDebtAmount(entry);
+  if (invoice == null) return null;
+  const paid = cardPaymentAmount(entry) ?? 0;
+  return Math.max(0, Math.round((invoice - paid + Number.EPSILON) * 100) / 100);
 }
 
 export function monthlyAmountRemaining(plannedAmount, actualAmount) {
@@ -223,6 +252,50 @@ export function reserveMinusOpenExpenses(openExpenses, reserveBalance) {
   return Math.round((reserve - open + Number.EPSILON) * 100) / 100;
 }
 
+export function summarizeMonthlyOpenDebts(entries = [], debts = [], cardDebtTotals = {}, now = new Date()) {
+  const totals = Object.fromEntries(CURRENCIES.map(code => [code, { plannedRemaining:0, currentGlobalPlannedRemaining:0, cardDebt:0, registeredDebts:0, total:0 }]));
+  const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+  for (const entry of entries) {
+    if (!entry || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry)) continue;
+    if (isNubankCardCategory(entry)) continue;
+    const planned = amountOrNull(entry.planned_amount, 'Valor planejado');
+    if (planned == null) continue;
+    const actual = amountOrNull(entry.actual_amount, 'Valor realizado') ?? 0;
+    const remaining = Math.max(0, round(planned - actual));
+    totals[entry.currency].plannedRemaining += remaining;
+    if (entry.month_key === localMonthKey(now) && isGlobalExpenseInScope(entry, now)) {
+      totals[entry.currency].currentGlobalPlannedRemaining += remaining;
+    }
+  }
+  for (const code of CURRENCIES) {
+    const cardDebt = cardDebtTotals?.[code]?.cardDebt ?? cardDebtTotals?.[code];
+    totals[code].cardDebt = amountOrNull(cardDebt, 'Fatura em aberto do cartão') ?? 0;
+  }
+  for (const debt of debts) {
+    if (!debt || debt.status === 'paid' || !CURRENCIES.includes(debt.currency)) continue;
+    totals[debt.currency].registeredDebts += amountOrNull(debt.amount, 'Valor da dívida') ?? 0;
+  }
+  for (const code of CURRENCIES) {
+    const total = totals[code];
+    total.plannedRemaining = round(total.plannedRemaining);
+    total.currentGlobalPlannedRemaining = round(total.currentGlobalPlannedRemaining);
+    total.registeredDebts = round(total.registeredDebts);
+    total.total = round(total.plannedRemaining + total.cardDebt + total.registeredDebts);
+  }
+  return totals;
+}
+
+export function sumGlobalOpenCommitments(expenseTotals = {}, monthlyOpenDebt = null) {
+  const plannedRemaining = amountOrNull(expenseTotals?.remaining, 'Saldo do planejamento') ?? 0;
+  if (monthlyOpenDebt) {
+    const currentMonthPlan = amountOrNull(monthlyOpenDebt.currentGlobalPlannedRemaining, 'Saldo planejado do mês') ?? 0;
+    const currentMonthDebt = amountOrNull(monthlyOpenDebt.total, 'Dívidas em aberto do mês') ?? 0;
+    return Math.round((Math.max(0, plannedRemaining - currentMonthPlan) + currentMonthDebt + Number.EPSILON) * 100) / 100;
+  }
+  const cardDebt = amountOrNull(expenseTotals?.cardDebt, 'Fatura em aberto do cartão') ?? 0;
+  return Math.round((plannedRemaining + cardDebt + Number.EPSILON) * 100) / 100;
+}
+
 function isGlobalExpenseInScope(entry, now) {
   if (!isoMonth(entry?.month_key)) return false;
   const currentMonthKey = localMonthKey(now);
@@ -236,10 +309,21 @@ function isGlobalExpenseInScope(entry, now) {
 
 export function createGlobalExpenseTotals(now = new Date()) {
   const totals = Object.fromEntries(CURRENCIES.map(code => [code, { plannedCents:0, actualCents:0, remainingCents:0 }]));
+  const cardDebtByCategory = new Map();
   const cents = value => Math.round((Number(value) + Number.EPSILON) * 100);
   return {
     add(entry) {
-      if (!entry || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry) || !isGlobalExpenseInScope(entry, now)) return;
+      if (!entry || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry)) return;
+      if (isNubankCardCategory(entry)) {
+        if (entry.month_key <= localMonthKey(now)) {
+          const previous = cardDebtByCategory.get(entry.category_id);
+          if (!previous || previous.month_key < entry.month_key) {
+            cardDebtByCategory.set(entry.category_id, { month_key:entry.month_key, currency:entry.currency, amount:openCardDebtAmount(entry) });
+          }
+        }
+        return;
+      }
+      if (!isGlobalExpenseInScope(entry, now)) return;
       const total = totals[entry.currency];
       const planned = entry.planned_amount;
       const actual = entry.actual_amount;
@@ -247,26 +331,35 @@ export function createGlobalExpenseTotals(now = new Date()) {
       if (planned != null) {
         const plannedCents = cents(planned);
         total.plannedCents += plannedCents;
-        total.remainingCents += plannedCents - actualCents;
+        total.remainingCents += Math.max(0, plannedCents - actualCents);
       }
       if (actual != null) total.actualCents += actualCents;
     },
     result() {
-      return Object.fromEntries(CURRENCIES.map(code => {
+      const result = Object.fromEntries(CURRENCIES.map(code => {
         const planned = totals[code].plannedCents / 100;
         const actual = totals[code].actualCents / 100;
-        return [code, { planned, actual, remaining:totals[code].remainingCents / 100 }];
+        return [code, { planned, actual, remaining:totals[code].remainingCents / 100, cardDebt:0 }];
       }));
+      for (const debt of cardDebtByCategory.values()) {
+        if (debt.amount != null && CURRENCIES.includes(debt.currency)) result[debt.currency].cardDebt += debt.amount;
+      }
+      for (const code of CURRENCIES) result[code].cardDebt = Math.round((result[code].cardDebt + Number.EPSILON) * 100) / 100;
+      return result;
     },
   };
 }
 
 export function dailyBudgetPace(entry, monthKey, now = new Date()) {
-  if (!isLunchDinnerCategory(entry) || entry?.currency !== 'BRL' || !isoMonth(monthKey) || monthKey > localMonthKey(now)) return null;
+  const isLunchDinner = isLunchDinnerCategory(entry);
+  const isBreakfast = isBreakfastCategory(entry);
+  if ((!isLunchDinner && !isBreakfast) || entry?.currency !== 'BRL' || !isoMonth(monthKey) || monthKey > localMonthKey(now)) return null;
   const [year, month] = monthKey.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const elapsedDays = monthKey < localMonthKey(now) ? daysInMonth : Math.max(1, Math.min(daysInMonth, now.getDate()));
-  const monthlyBudget = amountOrNull(entry.planned_amount, 'Orçamento mensal') ?? LUNCH_DINNER_MONTHLY_BUDGET;
+  const plannedBudget = amountOrNull(entry.planned_amount, 'Orçamento mensal');
+  if (isBreakfast && plannedBudget == null) return null;
+  const monthlyBudget = plannedBudget ?? LUNCH_DINNER_MONTHLY_BUDGET;
   const dailyBudget = monthlyBudget / daysInMonth;
   const expectedToDate = Math.round((dailyBudget * elapsedDays + Number.EPSILON) * 100) / 100;
   const actual = amountOrNull(entry.actual_amount, 'Gasto realizado');
@@ -301,13 +394,16 @@ export function summarizePeriodEntries(entries = [], monthKeys = []) {
       months:Object.fromEntries(monthKeys.map(monthKey => [monthKey, { planned:null, actual:null }])),
     };
     const month = row.months[entry.month_key];
-    if (entry.planned_amount != null) {
-      row.planned_amount = (row.planned_amount ?? 0) + entry.planned_amount;
-      month.planned = (month.planned ?? 0) + entry.planned_amount;
+    const isCard = isNubankCardCategory(entry);
+    const planned = isCard ? cardDebtAmount(entry) : entry.planned_amount;
+    const actual = isCard ? cardPaymentAmount(entry) : entry.actual_amount;
+    if (planned != null) {
+      row.planned_amount = (row.planned_amount ?? 0) + planned;
+      month.planned = (month.planned ?? 0) + planned;
     }
-    if (entry.actual_amount != null) {
-      row.actual_amount = (row.actual_amount ?? 0) + entry.actual_amount;
-      month.actual = (month.actual ?? 0) + entry.actual_amount;
+    if (actual != null) {
+      row.actual_amount = (row.actual_amount ?? 0) + actual;
+      month.actual = (month.actual ?? 0) + actual;
     }
     rows.set(key, row);
   }
@@ -375,10 +471,11 @@ export function createMonthSnapshot({ monthKey, categories = [], groups = [], pr
   const entries = categoryRows.filter(category => category.active && activeGroupIds.has(category.group_id)).map(category => {
     const old = prior.get(category.category_id);
     const isLunchDinner = isLunchDinnerCategory(category);
-    const planned = copyPrevious && old
+    const isCard = isNubankCardCategory(category);
+    const planned = isCard ? null : copyPrevious && old
       ? old.planned_amount ?? (isLunchDinner ? LUNCH_DINNER_MONTHLY_BUDGET : null)
       : category.default_plan ?? (isLunchDinner ? LUNCH_DINNER_MONTHLY_BUDGET : null);
-    return normalizeEntry({
+    const entry = {
       entry_id: `${monthKey}:${category.category_id}`,
       month_key: monthKey,
       category_id: category.category_id,
@@ -388,7 +485,9 @@ export function createMonthSnapshot({ monthKey, categories = [], groups = [], pr
       currency: category.currency,
       planned_amount: planned,
       actual_amount: null,
-    });
+    };
+    if (isCard) entry.card_debt_amount = old ? openCardDebtAmount(old) : null;
+    return normalizeEntry(entry);
   });
   return { month: normalizeMonth({ month_key: monthKey, plan_source: copyPrevious ? 'previous' : 'defaults', created_at: createdAt }), entries };
 }
@@ -403,14 +502,27 @@ export function snapshotNewCategory(category, group, monthKey) {
     group_id: normalized.group_id,
     group_name: group?.name || normalized.group_id,
     currency: normalized.currency,
-    planned_amount: normalized.default_plan,
+    planned_amount: isNubankCardCategory(normalized) ? null : normalized.default_plan,
     actual_amount: null,
+    ...(isNubankCardCategory(normalized) ? { card_debt_amount:null } : {}),
   });
 }
 
 export function updateEntryAmount(entry, field, value) {
-  if (!['planned_amount', 'actual_amount'].includes(field)) throw new Error('Campo mensal inválido.');
-  return normalizeEntry({ ...entry, [field]: amountOrNull(value, field === 'planned_amount' ? 'Valor planejado' : 'Valor realizado') });
+  if (!['planned_amount', 'actual_amount', 'card_debt_amount'].includes(field)) throw new Error('Campo mensal inválido.');
+  const label = field === 'planned_amount' ? 'Valor planejado' : field === 'actual_amount' ? 'Valor realizado' : 'Dívida atual do cartão';
+  const updated = { ...(entry || {}) };
+  const isCard = isNubankCardCategory(entry);
+  const legacyActualOnlyCard = isCard && !Object.hasOwn(entry || {}, 'card_debt_amount') && entry?.planned_amount == null && entry?.actual_amount != null;
+  if (isCard && (field === 'planned_amount' || field === 'card_debt_amount')) {
+    if (legacyActualOnlyCard) updated.actual_amount = null;
+    updated.planned_amount = entry?.planned_amount ?? null;
+    updated.card_debt_amount = amountOrNull(value, 'Fatura do Cartão Nubank');
+  } else {
+    if (legacyActualOnlyCard && field === 'actual_amount') updated.card_debt_amount = cardDebtAmount(entry);
+    updated[field] = amountOrNull(value, label);
+  }
+  return normalizeEntry(updated);
 }
 
 export function monthlyCategoryStatus(entry, settings = DEFAULT_SETTINGS) {
@@ -459,13 +571,13 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
   }
   if (firstContributionMonth) {
     for (const entry of entries) {
-      if (entry?.month_key < firstContributionMonth || (!includeFutureActual && entry?.month_key > throughMonthKey) || entry?.actual_amount == null || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry)) continue;
+      if (entry?.month_key < firstContributionMonth || (!includeFutureActual && entry?.month_key > throughMonthKey) || entry?.actual_amount == null || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry) || isNubankCardCategory(entry)) continue;
       spent[entry.currency] += Number(entry.actual_amount) || 0;
     }
   }
   const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-  // A reserva representa somente os aportes registrados; os gastos são
-  // acompanhados nas despesas e não alteram automaticamente a disponibilidade.
+  // O saldo bruto da reserva preserva os aportes; gastos e dívida são
+  // abatidos separadamente ao calcular o saldo disponível global.
   const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(contributed[code])]));
   return {
     contributions,
@@ -485,7 +597,9 @@ export function summarizeByCurrency(entries = [], debts = [], funds = [], settin
     ...Object.keys(reserveBalances || {}),
   ]);
   return Object.fromEntries([...currencies].filter(value => CURRENCIES.includes(value)).sort().map(code => {
-    const categoryRows = entries.filter(item => item.currency === code && hasMonthlyOccurrence(item));
+    const categoryRows = entries.filter(item => item.currency === code && hasMonthlyOccurrence(item)).map(item => isNubankCardCategory(item)
+      ? { ...item, planned_amount:cardDebtAmount(item), actual_amount:cardPaymentAmount(item) }
+      : item);
     const selectedDebts = debts.filter(item => item.currency === code && item.status !== 'paid');
     const availableRows = funds.filter(item => item.currency === code && item.type === 'available');
     const reserveRows = funds.filter(item => item.currency === code && item.type === 'reserve');

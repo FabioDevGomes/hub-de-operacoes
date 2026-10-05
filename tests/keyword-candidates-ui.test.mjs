@@ -66,6 +66,17 @@ assert.equal(container.children[0].children[0].className, 'keyword-candidate ima
 assert.equal(container.children[0].children[0].children.length, 1, 'saved negative candidates do not expose per-word search or removal');
 assert.equal(container.children[1].className, 'btn primary image-search-button image-candidate-search-all');
 
+removed = null;
+renderKeywordCandidates(container, {
+  candidates: ['persistent'], variant: 'negative', saved: true, showRemoveForSaved: true,
+  onRemove: (value, index) => { removed = [value, index]; },
+});
+const persistentCandidate = container.children[0].children[0];
+assert.equal(persistentCandidate.className, 'keyword-candidate image-candidate saved', 'candidata permanece marcada como salva mesmo exibindo remoção');
+assert.equal(persistentCandidate.children.length, 2, 'telas que habilitam remoção mantêm o X após salvar/reabrir');
+persistentCandidate.children[1].onclick({preventDefault() {}, stopPropagation() {}});
+assert.deepEqual(removed, ['persistent', 0]);
+
 searched = null;
 renderKeywordCandidates(container, {
   candidates: ['trend idea'], variant: 'positive', onSearch: (value, index) => { searched = [value, index]; },

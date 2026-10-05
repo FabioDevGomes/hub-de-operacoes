@@ -19,6 +19,39 @@ Payment
 90-Day Money-Back Guarantee`;
 const data={rawText:raw,product:'ExampleBoard',htmlLanguage:'en-US',countryCode:'US',currency:'USD',freeShipping:'no',fastShipping:'no',guaranteeStatus:'confirmed',guaranteeDays:90,urgencyConfirmed:'no',scarcityConfirmed:'no',affiliateUrl:'https://example.com/affiliate',destination:'C:\\Example\\pag01',confirmedDiscountPercent:75,confirmedDiscountAmount:600};
 const row=(input,id)=>buildOfferQuestionAnswers(input).find(item=>item.id===id);
+const germanPerPackageRaw=`Rabatt reserviert für 00:00 Minuten
+ExampleProduct
+Einsteiger
+Einsteiger
+vorher:
+79,95 €
+49,95 €
+Preis pro Packung
+Gesamtpreis 54,90 €
+4,95 € Versandkosten
+Jetzt bestellen
+Bestseller
+Bestseller
+vorher:
+79,95 €
+36,65 €
+Preis pro Packung
+Gesamtpreis 109,95 €
+Sie erhalten einmalig 3 Dosen.
+Sparen Sie mit diesem Paket ganze 46%
+Kostenloser Versand
+Jetzt bestellen
+Verkaufshit
+Verkaufshit
+vorher:
+79,95 €
+39,97 €
+Preis pro Packung
+Gesamtpreis 79,95 €
+Sie erhalten einmalig 2 Dosen.
+Sparen Sie mit diesem Paket 27%
+Kostenloser Versand
+Jetzt bestellen`;
 
 test('lowest displayed product price is independent of the largest discount',()=>{
   assert.deepEqual(minimumOfferProductPrice(raw),{value:40,basis:'unit',quantity:1,terms:''});
@@ -74,6 +107,13 @@ test('absent facts remain unidentified instead of zero or invented benefits',()=
 test('a reviewed percentage does not inherit unrelated biggest-discount savings',()=>{
   assert.match(row({...data,confirmedDiscountPercent:50,confirmedDiscountAmount:''},'discountAmount').answer,/\$40\.00/);
   assert.equal(row({...data,confirmedDiscountPercent:65,confirmedDiscountAmount:''},'discountAmount').pending,true);
+});
+test('German per-package card calculates the savings value for the matching confirmed discount',()=>{
+  const input={...data,rawText:germanPerPackageRaw,htmlLanguage:'de-DE',countryCode:'DE',currency:'EUR',confirmedDiscountPercent:46,confirmedDiscountAmount:''};
+  const answer=row(input,'discountAmount');
+  assert.match(answer.answer,/43,30\s*€.*EUR/);
+  assert.equal(answer.pending,false);
+  assert.deepEqual(minimumOfferProductPrice(germanPerPackageRaw),{value:36.65,basis:'package',quantity:null,terms:''});
 });
 test('copy block contains all eight questions and only their answers',()=>{
   const rows=buildOfferQuestionAnswers(data),text=formatOfferQuestionAnswers(rows);

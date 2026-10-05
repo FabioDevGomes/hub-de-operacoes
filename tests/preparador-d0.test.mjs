@@ -9,16 +9,9 @@ const sidebar=await readFile(new URL('../dist/sidebar-component.js',import.meta.
 assert.ok(html.includes("'D0_metricas_parciais'"),'D0 ainda não é classificado como métricas parciais');
 assert.ok(html.includes('metricas_D_zero:metrics0'),'manifesto não contém as métricas completas de D0');
 assert.ok(html.includes('totais_controle_D_zero'),'totais de validação de D0 ausentes');
-assert.ok(html.includes("slot === 'd0'")&&html.includes("metaLine('Impressões', sourceMetricTotal(data, 'impressions'))")&&html.includes("metaLine('Cliques', sourceMetricTotal(data, 'clicks'))"),'resumo da captura D0 deve mostrar impressões e cliques em vez da origem e do arquivo');
-assert.ok(html.includes("metaLine('Origem', data.source === 'mcc_chrome_extension'")&&html.includes("metaLine('Arquivo', data.name)"),'resumo da captura D−1 deve preservar origem e nome do arquivo');
-const functionSource=name=>html.match(new RegExp(`function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n    \\}`))?.[0]||'';
-const summaryHelpers=['parseNumber','stateValue','field','sumValues','sourceMetricTotal'].map(functionSource).join('\n');
-assert.ok(summaryHelpers.includes('sourceMetricTotal'),'totalizador das métricas D0 ausente');
-const summaryContext={Intl,Number,ABSENT:new Set(['','--','—']),normalize:value=>String(value??'').trim().toLowerCase()};
-vm.runInNewContext(`${summaryHelpers};globalThis.sourceMetricTotal=sourceMetricTotal;`,summaryContext);
-const metricSource={records:[{raw:{impressions:'1200',clicks:'25'}},{raw:{impressions:'0',clicks:'10'}},{raw:{impressions:'--',clicks:'x'}}]};
-assert.equal(summaryContext.sourceMetricTotal(metricSource,'impressions'),'1.200 (parcial; 1 sem valor)');
-assert.equal(summaryContext.sourceMetricTotal(metricSource,'clicks'),'35 (parcial; 1 inválido(s))');
+assert.ok(html.includes("originDetail.textContent = 'Grade da MCC · extensão'"),'D0 deve identificar a captura recebida da MCC');
+assert.ok(html.includes("metaLine('Campanhas válidas'")&&html.includes("metaLine('Data detectada'")&&html.includes("metaLine('Moedas'")&&html.includes("metaLine('Tipo de captura'"),'D0 deve apresentar os mesmos metadados essenciais do cartão D−1');
+assert.ok(!html.includes("metaLine('Impressões'")&&!html.includes("metaLine('Cliques'")&&!html.includes("metaLine('Arquivo'")&&!html.includes('decodeFile')&&!html.includes('decodePastedText'),'resumo da captura não deve parecer um arquivo nem manter recursos de entrada manual');
 assert.ok(html.includes("campaign.metricas_D_zero, 'd0'"),'aplicação direta não grava a linha diária de D0');
 assert.ok(html.includes('Campanha duplicada em D0; métricas não associadas.'),'mensagem antiga de D0 ainda limita a coleta ao custo');
 assert.ok(html.includes('function panelStatusObservation(field)'),'normalização do status da MCC ausente no Preparador');
@@ -72,9 +65,9 @@ assert.ok(html.includes("error.code = 'CAMPAIGN_NUMBER_REUSE'"),'aplicação nã
 assert.ok(!html.includes('function confirmPanelConflicts('),'confirmação antiga de divergências ainda aparece durante a atualização');
 assert.ok(html.includes('const overwrite = preview.conflicts.length > 0;'),'valores fechados do CSV não substituem silenciosamente os parciais após a validação');
 assert.ok(
-  html.indexOf('id="validation-panel"') < html.indexOf('id="apply-panel"')
-  && html.indexOf('id="apply-panel"') < html.indexOf('id="preview-panel"'),
-  'Atualizar base não aparece imediatamente após a Validação automática'
+  html.indexOf('id="validation-panel"') < html.indexOf('id="preview-panel"')
+  && !html.includes('id="apply-panel"'),
+  'o antigo painel 3 de status deve ser removido e a prévia deve seguir a validação'
 );
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim())new vm.Script(match[1]);
 console.log('preparador D0 completo ok');

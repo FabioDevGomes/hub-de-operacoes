@@ -1,108 +1,46 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import vm from 'node:vm';
-import {webcrypto} from 'node:crypto';
-import {File} from 'node:buffer';
-import {createCsvTransferPayload} from '../extensions/mcc-d0-bridge/payload.mjs';
-import {deliverD0CsvToPreparador} from '../extensions/mcc-d0-bridge/bridge.mjs';
+import {deliverD0GridToPreparador, deliverD1GridToPreparador} from '../extensions/mcc-d0-bridge/bridge.mjs';
 
 const root = new URL('../', import.meta.url);
-const html = await readFile(new URL('dist/preparador-MCC/index.html', root), 'utf8');
+const html = await readFile(new URL('src/preparador-MCC/index.html', root), 'utf8');
 const manifest = JSON.parse(await readFile(new URL('extensions/mcc-d0-bridge/manifest.json', root), 'utf8'));
-const extensionIcon = await readFile(new URL('extensions/mcc-d0-bridge/icon.png', root));
-const systemIcon = await readFile(new URL('dist/favicon.png', root));
-const extensionFiles = ['popup.js', 'background.js', 'bridge.mjs', 'payload.mjs', 'mcc-grid-reader.mjs', 'mcc-grid-domain.mjs'];
+const extensionFiles = ['popup.js', 'background.js', 'bridge.mjs', 'mcc-grid-reader.mjs', 'mcc-grid-domain.mjs'];
 const extensionSource = (await Promise.all(extensionFiles.map(file => readFile(new URL(`extensions/mcc-d0-bridge/${file}`, root), 'utf8')))).join('\n');
 const backgroundSource = await readFile(new URL('extensions/mcc-d0-bridge/background.js', root), 'utf8');
 
+assert.equal(manifest.version, '1.2.7', 'a extensão deve anunciar a versão da mudança');
 assert.deepEqual(manifest.permissions, ['scripting', 'activeTab'], 'activeTab deve ser a única permissão adicional para leitura sob ação explícita');
 assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*'], 'o acesso de host deve ficar restrito à rota local do Preparador');
-assert.equal(manifest.action.default_icon, 'icon.png', 'a ação da extensão deve usar a marca do Hub');
-assert.deepEqual(manifest.icons, {'64':'icon.png'}, 'a extensão deve declarar a mesma marca para sua identidade');
-assert.deepEqual(extensionIcon, systemIcon, 'o ícone da extensão deve ser uma cópia exata do favicon do sistema');
-assert.ok(!/function\s+(?:parseSource|buildManifest)\b/.test(extensionSource), 'o comparador diagnóstico não pode incluir o parser do Hub nem gerar manifesto');
+assert.ok(!/<textarea\b|type="file"|Selecionar arquivo|Ctrl\+V/i.test(html), 'a tela não deve exibir controles nem instruções para colagem ou seleção manual de arquivos');
+assert.equal((html.match(/class="capture-box" data-slot=/g) || []).length, 2, 'a tela deve manter os slots de recebimento D−1 e D0');
+assert.ok(html.includes('window.__hubReceiveMccD0Grid') && html.includes('window.__hubReceiveMccD1Grid'), 'os receptores D0/D−1 estruturados continuam disponíveis');
+assert.ok(html.includes('id="apply-manifest"'), 'a confirmação final do Preparador precisa continuar presente');
+assert.ok(!extensionSource.includes('FORWARD_D0_CSV') && !extensionSource.includes('deliverD0CsvToPreparador'), 'a extensão não deve manter o caminho legado de encaminhamento de CSV');
+assert.ok(!extensionSource.includes('createCsvTransferPayload') && !extensionSource.includes('DataTransfer'), 'a extensão não deve converter arquivos em transferências manuais');
 assert.ok(extensionSource.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'") && extensionSource.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"), 'o popup preserva as duas capturas diretas');
-assert.ok(!extensionSource.includes('id="send-form"') && !extensionSource.includes('id="read-grid"') && !extensionSource.includes('id="read-text"'), 'opções CSV e experimentais não aparecem no popup');
-const readHandler = backgroundSource.slice(backgroundSource.indexOf('async function readActiveMccGrid'), backgroundSource.indexOf('chrome.runtime.onMessage.addListener'));
-assert.ok(readHandler.length > 0 && !readHandler.includes('forwardD0Csv'), 'a leitura da grade não pode acionar a ponte de envio ao Preparador');
-assert.ok(extensionSource.includes('current-page-matches-apparent-total') && extensionSource.includes('partial-or-virtualized'), 'a prévia deve distinguir completude aparente de leitura parcial');
-assert.ok(html.includes("input.addEventListener('change', () => { if(input.files?.[0]) loadDecoded(slot, decodeFile(input.files[0])); input.value=''; });"), 'a ponte deve cair no mesmo change handler do campo de arquivo existente');
-assert.ok(html.includes('class="paste-box" data-slot="d0"') && html.includes('id="apply-manifest"'), 'o destino D0 e a confirmação final do Preparador precisam continuar presentes');
+assert.ok(backgroundSource.includes('deliverD0GridToPreparador') && backgroundSource.includes('deliverD1GridToPreparador'), 'o service worker mantém o encaminhamento estrutural da extensão');
 
-const parserStart = html.indexOf('    const ABSENT = new Set');
-const parserEnd = html.indexOf('    function uniqueRecord(', parserStart);
-assert.ok(parserStart >= 0 && parserEnd > parserStart, 'não foi possível localizar o decodificador/parser atual para teste de paridade');
-const parserSource = `${html.slice(parserStart, parserEnd)}\nglobalThis.__mccParity = { decodeFile, parseSource };`;
-const parserContext = vm.createContext({ crypto: webcrypto, TextDecoder });
-vm.runInContext(await readFile(new URL('../src/storage/hub-database.js', import.meta.url),'utf8'), parserContext);
-vm.runInContext(parserSource, parserContext, { filename: 'preparador-mcc-parser.js' });
-const {decodeFile, parseSource} = parserContext.__mccParity;
-
-const csvText = '\uFEFFRelatório D0: 23/09/2026\r\nCampaign,Campaign status,Status,Account,Currency code,Impr.,Clicks,Conversions,Cost\r\n"Ação VitaSlimex 05 (GM-BB-FR) 75% - US$ 75",Enabled,Eligible,7527,USD,123,8,1,12.34\r\nTotal: Campaigns,,,,,123,8,1,12.34\r\n';
-const originalBytes = new TextEncoder().encode(csvText);
-const originalFile = new File([originalBytes], 'Relatório D0.csv', {type:'text/csv', lastModified:1727100000000});
-
-// Caminho manual existente: o arquivo original é decodificado e interpretado pelo Preparador.
-const manualDecoded = await decodeFile(originalFile);
-const manualResult = parseSource(manualDecoded, 'd0');
-
-// Caminho da extensão: serializa bytes, reconstrói um File no campo D0 e aciona o mesmo handler.
-const payload = await createCsvTransferPayload(originalFile);
-assert.equal(payload.size, originalBytes.byteLength);
-assert.deepEqual([...Buffer.from(payload.base64, 'base64')], [...originalBytes], 'o transporte base64 precisa preservar todos os bytes originais');
-
-let bridgedResult;
-let parseOnChange;
-let bridgedWork;
-const input = {
-  files: [],
-  value: '',
-  dispatchEvent(event) {
-    assert.equal(event.type, 'change');
-    parseOnChange();
-    return true;
-  }
-};
-const box = { querySelector(selector) { assert.equal(selector, 'input.file-input[type="file"]'); return input; } };
-const previousGlobals = new Map(['location', 'document', 'DataTransfer', 'File', 'Event'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
-class TestDataTransfer {
-  constructor() {
-    this._files = [];
-    this.items = {add: file => this._files.push(file)};
-  }
-  get files() { return this._files; }
-}
-class TestEvent {
-  constructor(type) { this.type = type; }
-}
+const oldGlobals = new Map(['location', 'window'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+const received = [];
 Object.assign(globalThis, {
   location: {origin:'http://127.0.0.1:8765', pathname:'/preparador-MCC/'},
-  document: {querySelector(selector) { assert.equal(selector, '.paste-box[data-slot="d0"]'); return box; }},
-  DataTransfer: TestDataTransfer,
-  File,
-  Event: TestEvent
+  window: {
+    async __hubReceiveMccD0Grid(capture) { received.push(['d0', capture]); return {ok:true, campaignCount:capture.records.length}; },
+    async __hubReceiveMccD1Grid(capture) { received.push(['d1', capture]); return {ok:true, campaignCount:capture.records.length}; }
+  }
 });
 try {
-  parseOnChange = () => {
-    bridgedWork = (async () => {
-      if (input.files?.[0]) bridgedResult = parseSource(await decodeFile(input.files[0]), 'd0');
-      input.value = '';
-    })();
-  };
-  const delivery = deliverD0CsvToPreparador(payload);
-  assert.deepEqual(delivery, {ok:true, name:originalFile.name, size:originalBytes.byteLength});
-  await bridgedWork;
+  const d0 = {schema:'mcc-d0-grid-v3', source:'mcc_chrome_extension', records:[{campaign:'D0'}]};
+  const d1 = {schema:'mcc-d1-grid-v3', periodRole:'d1', source:'mcc_chrome_extension', records:[{campaign:'D1'}]};
+  assert.deepEqual(await deliverD0GridToPreparador(d0), {ok:true, campaignCount:1});
+  assert.deepEqual(await deliverD1GridToPreparador(d1), {ok:true, campaignCount:1});
+  assert.deepEqual(received, [['d0', d0], ['d1', d1]], 'as capturas estruturadas chegam aos receptores existentes sem passar por campos de arquivo');
 } finally {
-  for (const [key, descriptor] of previousGlobals) {
+  for (const [key, descriptor] of oldGlobals) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
     else delete globalThis[key];
   }
 }
 
-assert.deepEqual(JSON.parse(JSON.stringify(bridgedResult)), JSON.parse(JSON.stringify(manualResult)), 'o mesmo CSV precisa gerar o mesmo resultado lógico por seleção manual e pela extensão');
-assert.equal(manualResult.records.length, 1, 'a paridade deve contemplar a campanha real e excluir a linha agregada total');
-assert.equal(manualResult.records[0].nome_campanha_exato, 'Ação VitaSlimex 05 (GM-BB-FR) 75% - US$ 75');
-assert.equal(manualResult.records[0].conta, '7527');
-assert.equal(manualResult.records[0].moeda, 'USD');
-
-console.log('paridade extensão MCC D0/manual ok — mesmos bytes, hash, decodificação e resultado lógico; nenhuma gravação realizada');
+console.log('paridade MCC: D0/D−1 estruturados continuam funcionando sem colagem ou fluxo de arquivos');

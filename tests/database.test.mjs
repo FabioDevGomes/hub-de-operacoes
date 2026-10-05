@@ -253,9 +253,12 @@ assert.throws(()=>db.setCampaignStartDate(slimOriginal,slimCampaign.id,'2026-02-
 const roiEdited=db.setCampaignMinimumRoi(slimOriginal,slimCampaign.id,17.5);
 assert.equal(roiEdited.campanhas[0].roi_minimo_pct,17.5,'ROI mínimo personalizado fica associado à identidade da campanha');
 assert.deepEqual(JSON.parse(JSON.stringify(roiEdited.diario)),JSON.parse(JSON.stringify(slimOriginal.diario)),'editar ROI mínimo não altera o Diário');
+const roiNegative=db.setCampaignMinimumRoi(slimOriginal,slimCampaign.id,-3);
+assert.equal(roiNegative.campanhas[0].roi_minimo_pct,-3,'ROI mínimo negativo permitido fica associado à campanha');
+assert.throws(()=>db.setCampaignMinimumRoi(slimOriginal,slimCampaign.id,-100),/maior que -100/,'ROI menor ou igual a -100% é rejeitado');
 const roiReimported=db.importManifest(roiEdited,dailyManifest('2026-09-28',[oldSlim]),()=>({date:'2026-09-28',cells:{B:{value:0}}})).base;
 assert.equal(roiReimported.campanhas[0].roi_minimo_pct,17.5,'importar novamente a mesma campanha preserva o ROI mínimo personalizado');
-assert.throws(()=>db.setCampaignMinimumRoi(slimOriginal,slimCampaign.id,'17.5%'),/igual ou maior que zero/,'a camada de persistência recebe somente valor numérico já validado');
+assert.throws(()=>db.setCampaignMinimumRoi(slimOriginal,slimCampaign.id,'17.5%'),/maior que -100/,'a camada de persistência recebe somente valor numérico já validado');
 assert.throws(()=>db.setCampaignMinimumRoi(slimOriginal,'campanha-inexistente',17),/Campanha não encontrada/);
 reusedNumber=db.importManifest(reusedNumber,dailyManifest('2026-09-16',[newMedic6]),()=>({date:'2026-09-16',cells:{A:{value:46281},B:{value:0}}})).base;
 assert.equal(reusedNumber.campanhas.filter(x=>x.nome_exibicao==='MagicGLP 6').length,2);
@@ -370,6 +373,17 @@ assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campa
 const noPrefix=db.importManifest(db.create(),{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha sem prefixo',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'Loja sem prefixo'},conta_id:{valor:'444-555-6666'}}}]},()=>[],{trackEvents:false}).base;
 assert.equal(noPrefix.campanhas[0].conta_id,'444-555-6666');
 assert.equal(noPrefix.campanhas[0].conta_sufixo,undefined,'novas contas não dependem do prefixo');
+
+const managerManifest={...fullAccountManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC e-com'},campanhas:[{...fullAccountManifest.campanhas[0],mcc_id:'888-777-6666',mcc_nome:'MCC e-com'}]};
+const managerLinked=db.importManifest(db.create(),managerManifest,()=>[],{trackEvents:false}).base;
+assert.equal(managerLinked.campanhas[0].mcc_id,'888-777-6666','a campanha mantém separado o ID da MCC e da conta cliente');
+assert.deepEqual(managerLinked.mccs.map(item=>({id:item.id,nome:item.nome})),[{id:'888-777-6666',nome:'MCC e-com'}],'a base tem um catálogo compartilhado de MCCs para outras telas');
+const renamedManager=db.importManifest(managerLinked,{...managerManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC atualizada'},campanhas:[{...managerManifest.campanhas[0],mcc_nome:'MCC atualizada'}]},()=>[],{trackEvents:false}).base;
+assert.equal(renamedManager.campanhas[0].mcc_id,'888-777-6666');
+assert.equal(renamedManager.mccs[0].nome,'MCC atualizada','mudança de rótulo atualiza o catálogo sem perder a chave técnica');
+assert.deepEqual(JSON.parse(JSON.stringify(renamedManager.mccs[0].nomes_anteriores)),['MCC e-com'],'o catálogo preserva o rótulo anterior');
+assert.deepEqual(JSON.parse(JSON.stringify(db.normalize({...managerLinked,mccs:undefined}).mccs)),[],'base legada sem catálogo continua normalizável');
+assert.throws(()=>db.importManifest(db.create(),{...managerManifest,campanhas:[{...managerManifest.campanhas[0],mcc_id:'conta-inválida'}]},()=>[],{trackEvents:false}),/ID de MCC inválido/);
 
 const ambiguousBase=db.create();
 ambiguousBase.campanhas.push({id:'old-c',nome_mcc:'Campanha antiga C',nome_exibicao:'Campanha antiga C',status:'pausada',conta_sufixo:'1234'});

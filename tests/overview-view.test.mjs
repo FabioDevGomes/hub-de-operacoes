@@ -82,10 +82,10 @@ test('overview alerts coexist, user text is escaped and absent metrics never bec
   assert.match(html,/policy-limited-row/);assert.match(html,/&lt;Oferta&gt;/);assert.match(html,/&quot;política&quot;/);
   assert.doesNotMatch(html,/<Oferta>/);assert.match(html,/<td class="num">—<\/td>/);assert.match(html,/num negative">BRL -30.00/);
 });
-test('overview local controls preserve stable ID and invoke writes only after explicit ROI action',()=>{
+test('overview ROI dialog synchronizes budget and percentage; saves only after explicit confirmation',()=>{
   const s=setup([row('Oferta exata','ativa',10)]);s.setList('.sort-btn',[{sort:'campaign'}]);
   s.setList('#totalsBody tr',[{campaign:'Oferta exata',source:'manifest',campaignId:'stable-id'}]);
-  s.setList('.test-budget-roi-link',[{campaignId:'stable-id',currentRoi:'20'}]);
+  s.setList('.test-budget-roi-link',[{campaignId:'stable-id',currentRoi:'20',currentLimit:'318.75',totalRevenue:'382.5'}]);
   s.controller.render();assert.deepEqual(s.calls,[]);
   s.root.querySelectorAll('.sort-btn')[0].onclick();assert.equal(s.state.sortKey,'campaign');assert.equal(s.state.sortDir,'asc');
   s.root.querySelectorAll('.sort-btn')[0].onclick();assert.equal(s.state.sortDir,'desc');
@@ -95,7 +95,16 @@ test('overview local controls preserve stable ID and invoke writes only after ex
   s.get('#totalsConsolidated').onclick();assert.equal(s.state.totalsMode,'consolidated');
   s.root.querySelectorAll('#totalsBody tr')[0].ondblclick();
   let prevented=0,stopped=0;s.root.querySelectorAll('.test-budget-roi-link')[0].onclick({preventDefault(){prevented++},stopPropagation(){stopped++}});
-  assert.deepEqual(s.calls,[['product','Oferta exata','manifest','stable-id'],['roi','stable-id','20']]);
+  assert.deepEqual(s.calls,[['product','Oferta exata','manifest','stable-id']]);
+  assert.equal(s.get('#minimumRoiDialog').open,true,'o link abre o diálogo');
+  assert.equal(s.get('#minimumRoiLimit').value,'318,75');assert.equal(s.get('#minimumRoiPercent').value,'20');
+  s.get('#minimumRoiPercent').value='-3';s.get('#minimumRoiPercent').oninput();
+  assert.equal(s.get('#minimumRoiLimit').value,'394,33','alterar ROI recalcula o limite máximo');
+  s.get('#minimumRoiLimit').value='510,00';s.get('#minimumRoiLimit').oninput();
+  assert.equal(s.get('#minimumRoiPercent').value,'-25','alterar limite calcula ROI negativo');
+  let submitted=0;s.get('#minimumRoiForm').onsubmit({preventDefault(){submitted++}});
+  assert.deepEqual(s.calls,[['product','Oferta exata','manifest','stable-id'],['roi','stable-id',-25]]);
+  assert.equal(s.get('#minimumRoiDialog').open,false,'OK fecha o diálogo depois da confirmação');assert.equal(submitted,1);
   assert.equal(prevented,1);assert.equal(stopped,1);
 });
 test('overview recent-paused filter retains inclusive seven-day boundary and excludes unknown date',()=>{

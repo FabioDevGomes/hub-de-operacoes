@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const html = await readFile(new URL('../dist/curadoria/index.html', import.meta.url), 'utf8');
-assert.ok(html.includes("import * as KeywordCandidatesUI from './keyword-candidates-ui.mjs?v=1'"));
+assert.ok(html.includes("import * as KeywordCandidatesUI from './keyword-candidates-ui.mjs?v=2'"));
 assert.ok(html.includes('id="spyHeroTrendKeywordInput"') && html.includes('id="spyHeroTrendKeywordAdd"'));
 assert.ok(html.includes('id="spyHeroTrendKeywordList"') && html.includes('Candidatas à palavra-chave'));
 assert.ok(html.includes('data-trends-result="point_peak"') && html.includes('Pico pontual'));

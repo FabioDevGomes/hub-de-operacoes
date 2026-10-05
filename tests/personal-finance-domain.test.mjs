@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
+  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
 } from '../src/personal-finance/personal-finance-domain.mjs';
 
 assert.equal(DEFAULT_CONSOLIDATED_MONTH_COUNT, 8, 'o consolidado abre com oito meses por padrão');
@@ -36,8 +36,10 @@ assert.throws(() => monthWeekRange('2026-09', 0), /semana de 1 a 6/);
 assert.throws(() => monthWeekRange('2026-09', 1.5), /semana de 1 a 6/);
 const today = new Date(2026, 8, 25);
 assert.equal(canEditActualForMonth('2026-09', today), true, 'realizado pode ser editado no mês atual');
-assert.equal(canEditActualForMonth('2026-08', today), false, 'realizado fica bloqueado em meses anteriores');
+assert.equal(canEditActualForMonth('2026-08', today), true, 'realizado continua editável para corrigir meses anteriores');
 assert.equal(canEditActualForMonth('2026-10', today), false, 'realizado fica bloqueado em meses futuros');
+assert.equal(canEditActualForEntry({ month_key:'2026-08', category_name:'Aluguel' }, today), true, 'qualquer realizado de competência anterior pode ser corrigido');
+assert.equal(canEditActualForEntry({ month_key:'2026-13', category_name:'Aluguel' }, today), false, 'mês inválido não libera edição de realizado');
 const octoberWeekOne = { month_key:'2026-10', category_name:'laser / jantar fora / cerveja – semana 1' };
 const octoberWeekTwo = { month_key:'2026-10', category_name:'laser / jantar fora / cerveja – semana 2' };
 assert.equal(canEditActualForEntry(octoberWeekOne, new Date(2026, 8, 26)), false, 'semana 1 seguinte não abre antes do fim da semana fiscal atual');
@@ -51,6 +53,9 @@ assert.equal(canMarkQuickPayInFutureMonthlyView({ month_key:'2026-09', category_
 assert.equal(LUNCH_DINNER_MONTHLY_BUDGET, 1250, 'o orçamento mensal de almoço e janta é R$ 1.250');
 assert.equal(isLunchDinnerCategory('Almoço/janta Cartão Nub'), true, 'o nome importado é reconhecido ignorando acentos');
 assert.equal(isLunchDinnerCategory('Academia'), false, 'outras categorias não recebem o orçamento especial');
+assert.equal(isBreakfastCategory('Café da manhã'), true, 'o Café da manhã reconhece o nome da categoria ignorando acentos');
+assert.equal(isBreakfastCategory('Café da manhã Cartão'), true, 'a projeção também reconhece sufixos no nome da categoria');
+assert.equal(isBreakfastCategory('Lanche da tarde'), false, 'a projeção não alcança outras categorias de refeição');
 const renamedCategorySnapshot = { month_key:'2026-09', category_id:'meals', category_name:'almoço/janta Cartão Nub', group_id:'g-expenses', group_name:'Despesas', currency:'BRL', planned_amount:1250, actual_amount:500 };
 const renamedCategoryEntry = overlayCurrentCategoryNames([renamedCategorySnapshot], [{ category_id:'meals', name:'almoço/janta' }])[0];
 assert.equal(renamedCategoryEntry.category_name, 'almoço/janta', 'Mensal e Consolidado podem exibir o nome atual da categoria pelo identificador');
@@ -63,6 +68,14 @@ assert.equal(lunchPace.expectedToDate, 1041.67, 'a meta acumulada é proporciona
 assert.equal(lunchPace.dailyBudget, 1250 / 30, 'o limite diário deriva do orçamento mensal');
 assert.equal(lunchPace.actualDailyAverage, 40.32, 'a média diária usa o gasto acumulado dividido pelos dias decorridos');
 assert.equal(lunchPace.status, 'near', 'gasto abaixo da meta acumulada, mas acima de 80%, fica perto do limite');
+const breakfastPace = dailyBudgetPace({ category_name:'Café da manhã', currency:'BRL', planned_amount:100, actual_amount:70 }, '2026-09', today);
+assert.equal(breakfastPace.monthlyBudget, 100, 'Café da manhã usa seu planejamento mensal como orçamento');
+assert.equal(breakfastPace.daysInMonth, 30, 'a projeção do Café da manhã usa os dias do mês');
+assert.equal(breakfastPace.elapsedDays, 25, 'a projeção do Café da manhã conta os dias decorridos');
+assert.equal(breakfastPace.expectedToDate, 83.33, 'a meta do Café da manhã divide o plano mensal pelos dias e acumula até hoje');
+assert.equal(breakfastPace.status, 'near', 'Café da manhã aplica a mesma comparação de ritmo diário');
+assert.equal(dailyBudgetPace({ category_name:'Café da manhã', currency:'BRL', planned_amount:null, actual_amount:10 }, '2026-09', today), null, 'sem planejamento mensal, o Café da manhã não recebe uma meta presumida');
+assert.equal(dailyBudgetPace({ category_name:'Café da manhã', currency:'USD', planned_amount:100, actual_amount:10 }, '2026-09', today), null, 'a projeção do Café da manhã mantém a separação de moedas');
 assert.equal(monthlyAmountRemaining(1250, 1041), 209, 'o restante mensal de almoço/janta usa o orçamento integral menos o gasto realizado');
 assert.equal(monthlyAmountRemaining(100, 70), 30, 'o restante mensal mantém o cálculo usado por uma categoria comum como café da manhã');
 assert.equal(monthlyAmountRemaining(1250, null), null, 'sem gasto informado, não inventa um saldo restante realizado');
@@ -251,34 +264,86 @@ const reserveKpis = summarizeByCurrency([
 assert.equal(reserveKpis.BRL.reserves, 500, 'o resumo financeiro usa a disponibilidade global igual aos aportes brutos');
 assert.equal(reserveKpis.BRL.netPosition, 1000, 'a posição líquida combina disponibilidade mensal e reserva sem abatimento de gastos');
 const globalAsOf = new Date(2026, 8, 26);
+const partiallyConsumedPlan = createGlobalExpenseTotals(globalAsOf);
+partiallyConsumedPlan.add({ month_key:'2026-09', category_id:'rent', category_name:'Aluguel', currency:'BRL', planned_amount:300, actual_amount:100 });
+assert.equal(partiallyConsumedPlan.result().BRL.remaining, 200, 'o saldo global do planejamento considera somente os R$ 200 ainda não consumidos');
+assert.equal(sumGlobalOpenCommitments(partiallyConsumedPlan.result().BRL), 200, 'o saldo disponível considera os R$ 200 restantes e não soma os R$ 100 realizados novamente');
+assert.equal(reserveMinusOpenExpenses(sumGlobalOpenCommitments(partiallyConsumedPlan.result().BRL), 50000), 49800, 'a reserva desconta somente o saldo restante do planejamento');
+const monthOpenDebts = summarizeMonthlyOpenDebts([
+  { month_key:'2026-10', category_id:'week1', category_name:'Semana 1', currency:'BRL', planned_amount:300, actual_amount:87 },
+  { month_key:'2026-10', category_id:'week2', category_name:'Semana 2', currency:'BRL', planned_amount:100, actual_amount:140 },
+  { month_key:'2026-10', category_id:'nubank', category_name:'Cart nubank', currency:'BRL', planned_amount:null, actual_amount:null, card_debt_amount:1200 },
+  { month_key:'2026-10', category_id:'usd-plan', category_name:'USD plan', currency:'USD', planned_amount:90, actual_amount:10 },
+], [
+  { currency:'BRL', amount:50, status:'open' },
+  { currency:'BRL', amount:300, status:'paid' },
+  { currency:'USD', amount:20, status:'open' },
+], { BRL:{ cardDebt:1200 }, USD:{ cardDebt:0 } }, new Date(2026, 9, 2));
+assert.deepEqual(monthOpenDebts.BRL, { plannedRemaining:213, currentGlobalPlannedRemaining:213, cardDebt:1200, registeredDebts:50, total:1463 }, 'dívida aberta do mês soma o saldo planejado restante, fatura e dívidas não pagas; pago e estouro não aumentam o total');
+assert.deepEqual(monthOpenDebts.USD, { plannedRemaining:80, currentGlobalPlannedRemaining:80, cardDebt:0, registeredDebts:20, total:100 }, 'dívidas abertas permanecem separadas por moeda');
+assert.equal(sumGlobalOpenCommitments({ remaining:613, cardDebt:1200 }, monthOpenDebts.BRL), 1863, 'a diferença soma dívida mensal completa e planos de meses seguintes sem repetir os R$ 213 atuais nem a fatura');
+const openCardInvoice = { month_key:'2026-10', category_id:'nubank', category_name:'Cartão Nubank', group_id:'g-home', group_name:'Casa', currency:'BRL', planned_amount:null, actual_amount:null, card_debt_amount:1689 };
+assert.equal(cardDebtAmount(openCardInvoice), 1689, 'o campo Planejado da linha Nubank apresenta o total da fatura');
+assert.equal(cardPaymentAmount(openCardInvoice), null, 'fatura sem pagamento mantém Realizado vazio');
+assert.equal(openCardDebtAmount(openCardInvoice), 1689, 'fatura inteira permanece em aberto antes do pagamento');
+const cardBeforePaymentSummary = summarizeByCurrency([openCardInvoice]);
+assert.equal(cardBeforePaymentSummary.BRL.planned, 1689, 'a fatura do Nubank segue a coluna Planejado nos totais mensais');
+assert.equal(cardBeforePaymentSummary.BRL.trackedActualCount, 0, 'fatura sem pagamento não cria um lançamento realizado');
+const paidCardInvoice = updateEntryAmount(openCardInvoice, 'actual_amount', 1689);
+assert.equal(cardPaymentAmount(paidCardInvoice), 1689, 'Realizado guarda o pagamento informado');
+assert.equal(openCardDebtAmount(paidCardInvoice), 0, 'registrar o pagamento integral zera o saldo da fatura sem apagar o valor planejado');
+const paidCardSummary = summarizeByCurrency([paidCardInvoice]);
+assert.equal(paidCardSummary.BRL.actual, 1689, 'o pagamento lançado no Nubank aparece como Realizado nos totais');
+assert.equal(paidCardSummary.BRL.remaining, 0, 'fatura integralmente paga deixa saldo planejado zerado');
+const partiallyPaidCardInvoice = updateEntryAmount(openCardInvoice, 'actual_amount', 500);
+assert.equal(openCardDebtAmount(partiallyPaidCardInvoice), 1189, 'pagamento parcial reduz o saldo aberto da fatura');
+const cardPeriodSummary = summarizePeriodEntries([partiallyPaidCardInvoice], ['2026-10']);
+assert.deepEqual({ planned:cardPeriodSummary[0].planned_amount, actual:cardPeriodSummary[0].actual_amount, month:cardPeriodSummary[0].months['2026-10'] }, { planned:1689, actual:500, month:{ planned:1689, actual:500 } }, 'visões por período usam a fatura em Planejado e o valor quitado em Realizado');
+const cardTotalsAfterPayment = createGlobalExpenseTotals(new Date(2026, 9, 2));
+cardTotalsAfterPayment.add(paidCardInvoice);
+assert.equal(cardTotalsAfterPayment.result().BRL.cardDebt, 0, 'fatura paga deixa de entrar como dívida global');
+const nextMonthAfterCardPayment = createMonthSnapshot({ monthKey:'2026-11', categories:[{ category_id:'nubank', name:'Cartão Nubank', group_id:'g-home', currency:'BRL', default_plan:null, active:true }], groups, previousEntries:[paidCardInvoice], planSource:'previous' });
+assert.equal(nextMonthAfterCardPayment.entries[0].card_debt_amount, 0, 'mês novo carrega somente o saldo da fatura ainda não pago');
+assert.equal(nextMonthAfterCardPayment.entries[0].actual_amount, null, 'mês novo inicia Realizado em branco sem alterar o pagamento anterior');
+const cardDebtBeforePayment = sumGlobalOpenCommitments({ ...partiallyConsumedPlan.result().BRL, cardDebt:300 });
+const availableBeforeCardPayment = reserveMinusOpenExpenses(cardDebtBeforePayment, 50000);
+const cardDebtAfterPayment = sumGlobalOpenCommitments({ ...partiallyConsumedPlan.result().BRL, cardDebt:0 });
+const availableAfterCardPayment = reserveMinusOpenExpenses(cardDebtAfterPayment, 49700);
+assert.equal(availableAfterCardPayment, availableBeforeCardPayment, 'pagar a fatura reduz reserva e fatura em aberto pelo mesmo valor, sem alterar o saldo livre');
 const globalExpensesAfterFuturePayment = createGlobalExpenseTotals(globalAsOf);
 globalExpensesAfterFuturePayment.add({ month_key:'2026-09', category_id:'das', category_name:'DAS', currency:'BRL', planned_amount:86.05, actual_amount:null });
 globalExpensesAfterFuturePayment.add({ month_key:'2026-10', category_id:'das', category_name:'DAS', currency:'BRL', planned_amount:86.05, actual_amount:86.05 });
 globalExpensesAfterFuturePayment.add({ month_key:'2026-11', category_id:'nubank', category_name:'Cart nubank', currency:'BRL', planned_amount:169, actual_amount:null });
-assert.deepEqual(globalExpensesAfterFuturePayment.result().BRL, { planned:341.1, actual:86.05, remaining:255.05 }, 'o consolidado global inclui todo valor mensal planejado, inclusive Cart nubank em meses além da próxima fatura');
+assert.deepEqual(globalExpensesAfterFuturePayment.result().BRL, { planned:172.1, actual:86.05, remaining:86.05, cardDebt:0 }, 'o consolidado global mantém a fatura especial fora das despesas planejadas e acompanha o saldo aberto separadamente');
 
-const reserveComparisonForSpend = actualAmount => {
+const reserveComparisonForSpend = (actualAmount, { paidBy = 'cash' } = {}) => {
   const totals = createGlobalExpenseTotals(new Date(2026, 9, 2));
   totals.add({ month_key:'2026-10', category_id:'week1', category_name:'Lazer semana 1', currency:'BRL', planned_amount:300, actual_amount:actualAmount });
   totals.add({ month_key:'2026-10', category_id:'future', category_name:'Demais despesas futuras', currency:'BRL', planned_amount:44742, actual_amount:null });
-  const netFutureBalance = totals.result().BRL.remaining;
-  return { netFutureBalance, difference:reserveMinusOpenExpenses(netFutureBalance, 44957) };
+  if (paidBy === 'card') totals.add({ month_key:'2026-10', category_id:'nubank', category_name:'Cart nubank', currency:'BRL', planned_amount:null, actual_amount:null, card_debt_amount:actualAmount });
+  const expenseTotals = totals.result().BRL;
+  const netFutureBalance = expenseTotals.remaining;
+  const commitments = sumGlobalOpenCommitments(expenseTotals);
+  const reserveBalance = paidBy === 'cash' ? 44957 - actualAmount : 44957;
+  return { netFutureBalance, difference:reserveMinusOpenExpenses(commitments, reserveBalance) };
 };
-assert.deepEqual(reserveComparisonForSpend(300), { netFutureBalance:44742, difference:215 }, 'quando o realizado iguala o planejado, o saldo futuro líquido preserva a diferença da reserva');
-assert.deepEqual(reserveComparisonForSpend(400), { netFutureBalance:44642, difference:315 }, 'gastar R$ 100 acima do planejado reduz o saldo futuro líquido em R$ 100 e aumenta a diferença da reserva em R$ 100');
+assert.deepEqual(reserveComparisonForSpend(300), { netFutureBalance:44742, difference:-85 }, 'pagar em dinheiro o planejado consumido reduz a reserva pelo mesmo valor');
+assert.deepEqual(reserveComparisonForSpend(400), { netFutureBalance:44742, difference:-185 }, 'pagar em dinheiro R$ 100 acima do planejado reduz a reserva e a diferença em mais R$ 100');
+assert.deepEqual(reserveComparisonForSpend(300, { paidBy:'card' }), { netFutureBalance:44742, difference:-85 }, 'compras no cartão ficam reservadas na fatura em aberto enquanto a reserva não é reduzida');
+assert.deepEqual(reserveComparisonForSpend(400, { paidBy:'card' }), { netFutureBalance:44742, difference:-185 }, 'o excedente no cartão reduz a diferença uma vez pela fatura aberta');
 
 const globalOpenExpenses = createGlobalExpenseTotals(globalAsOf);
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'planned', category_name:'Planejada', currency:'BRL', planned_amount:1000, actual_amount:100 });
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:200 });
 globalOpenExpenses.add({ month_key:'2026-10', category_id:'overpaid', category_name:'Pago acima', currency:'BRL', planned_amount:50, actual_amount:75 });
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'usd', category_name:'Despesa USD', currency:'USD', planned_amount:100, actual_amount:25 });
-assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:875 }, 'o saldo global soma planejado menos realizado por linha; gastos sem planejado ficam fora e excedentes reduzem o líquido');
-assert.deepEqual(globalOpenExpenses.result().USD, { planned:100, actual:25, remaining:75 }, 'o saldo global em dólares mantém a moeda separada e subtrai somente o realizado dentro do planejamento daquela linha');
+assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:900, cardDebt:0 }, 'o saldo global mantém somente os planos ainda não consumidos; gastos sem plano e excedentes não criam saldo planejado negativo');
+assert.deepEqual(globalOpenExpenses.result().USD, { planned:100, actual:25, remaining:75, cardDebt:0 }, 'o saldo global em dólares mantém a moeda separada e subtrai somente o realizado dentro do planejamento daquela linha');
 const globalOpenWithUncoveredSpending = createGlobalExpenseTotals(globalAsOf);
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'lunch', category_name:'Almoço', currency:'BRL', planned_amount:100, actual_amount:110 });
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:10 });
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'within-plan', category_name:'Dentro do plano', currency:'BRL', planned_amount:100, actual_amount:10 });
-assert.equal(globalOpenWithUncoveredSpending.result().BRL.remaining, 80, 'R$ 110 realizados em uma linha planejada em R$ 100 reduzem o saldo em R$ 10; gasto sem planejado fica fora e gasto dentro do plano reduz o aberto');
+assert.equal(globalOpenWithUncoveredSpending.result().BRL.remaining, 90, 'o gasto acima do planejado consome o saldo da linha até zero; o excedente é reconciliado pela reserva ou pela fatura, não como saldo planejado negativo');
 
 const futureOnlyExpenses = createGlobalExpenseTotals(globalAsOf);
 for (const [week, actual] of [[1, 700], [2, 299], [3, 784], [4, 410]]) {
@@ -287,7 +352,7 @@ for (const [week, actual] of [[1, 700], [2, 299], [3, 784], [4, 410]]) {
 futureOnlyExpenses.add({ month_key:'2026-08', category_id:'past-month', category_name:'Conta passada', currency:'BRL', planned_amount:500, actual_amount:null });
 futureOnlyExpenses.add({ month_key:'2026-09', category_id:'current-month', category_name:'Conta mensal', currency:'BRL', planned_amount:300, actual_amount:200 });
 futureOnlyExpenses.add({ month_key:'2026-10', category_id:'future-week1', category_name:'Lazer semana 1', currency:'BRL', planned_amount:300, actual_amount:null });
-assert.deepEqual(futureOnlyExpenses.result().BRL, { planned:600, actual:200, remaining:400 }, 'o total global exclui competências passadas e semanas atuais encerradas, preservando o saldo do mês e as competências futuras');
+assert.deepEqual(futureOnlyExpenses.result().BRL, { planned:600, actual:200, remaining:400, cardDebt:0 }, 'o total global exclui competências passadas e semanas atuais encerradas, preservando o saldo do mês e as competências futuras');
 assert.equal(reserveMinusOpenExpenses(45850, 45740), -110, 'com as semanas históricas excluídas, R$ 45.740 de reserva menos R$ 45.850 de despesas futuras resulta em -R$ 110');
 
 const cleanBundle = validateBundle({ schema:'personal_finance_v1', groups, categories, months:[first.month], entries:first.entries, debts:[], funds:[] });

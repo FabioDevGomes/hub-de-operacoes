@@ -29,7 +29,7 @@ assert.ok(html.includes('Candidatas à palavra-chave'),'campo de candidatas do G
 assert.ok(html.includes('id="managerTrendsKeywordInput"')&&html.includes('Digite uma ideia e pressione Enter'),'campo de candidata não está sempre disponível no quadro de pesquisa');
 assert.ok(html.includes("if(event.key==='Enter'){event.preventDefault();addManagerTrendKeywordCandidate(product)}"),'Enter não adiciona a candidata à palavra-chave');
 assert.ok(html.includes('keywordCandidates:candidates')&&html.includes("await putAll('trends',[stored])"),'candidatas do Google Trends não são persistidas no registro do produto');
-assert.ok(html.includes("import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=4'")&&html.includes('KeywordCandidatesUI.renderKeywordCandidates'),'a Lista de Gerente não reutiliza o componente compartilhado de candidatas');
+assert.ok(html.includes("import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=5'")&&html.includes('KeywordCandidatesUI.renderKeywordCandidates'),'a Lista de Gerente não reutiliza o componente compartilhado de candidatas');
 assert.ok(html.includes("keywordCandidateMarkerHtml(count,'positive')"),'Lista de Gerente não sinaliza candidatas positivas de Trends na listagem');
 assert.ok(html.includes("onSearch:term=>{const tab=window.open(TrendsDomain.exploreUrl(term),'google-trends-radar')"),'a pesquisa da candidata não usa seu próprio termo com o padrão de URL do Trends');
 assert.ok(html.includes('TrendsDomain.exploreUrl(term),\'google-trends-radar\''),'pesquisa de candidata na Lista de Gerente não reutiliza o padrão de URL do Trends');

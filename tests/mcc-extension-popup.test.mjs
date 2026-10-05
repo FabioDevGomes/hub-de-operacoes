@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.4', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.7', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura a grade da MCC/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
 assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
@@ -122,4 +122,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.4');
+console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.7');

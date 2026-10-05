@@ -24,16 +24,17 @@ test('Preparador published page matches canonical source and preserves executabl
   assert.match(html,/h1\s*\{[^}]*font-size:\s*clamp\(\.93rem,\s*1\.8vw,\s*1\.41rem\)/,'título do Preparador deve seguir a escala compacta compartilhada do Hub');
   assert.match(html,/\.subtitle\s*\{[^}]*font-size:\s*\.92rem/,'texto auxiliar deve seguir a escala tipográfica das telas compartilhadas');
   assert.match(html,/Carregue o D0 ou os relatórios D−1 e D0, confira as diferenças e atualize a base\./,'descrição do Preparador deve resumir o fluxo de carga');
-  assert.match(html,/\.upload-grid\s*\{[^}]*align-items:\s*start/,'captura carregada não deve esticar o cartão vazio');
-  assert.match(html,/\.paste-box\.loaded\s*\{[^}]*grid-template-areas:\s*"label label" "area meta"/,'resumo carregado deve ficar ao lado da área de colagem');
-  assert.match(html,/\.paste-box\.loaded \.file-meta\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,'indicadores da captura devem formar blocos curtos em três colunas');
-  assert.match(html,/\.file-meta\[hidden\]\s*\{\s*display:\s*none/,'resumo vazio não deve renderizar uma borda sem conteúdo');
-  assert.match(html,/\.paste-box\.loaded \.paste-area\s*\{[^}]*height:\s*60px/,'área da captura deve ficar compacta após o carregamento');
-  assert.ok(html.includes("classList.toggle('has-capture', Object.values(slots).some(item => Boolean(item && !item.error)))"),'cartão vazio não acompanha o tamanho inicial depois da captura');
-  assert.match(html,/\.paste-box\.loaded \.paste-actions\s*\{\s*display:\s*none/,'orientações de colagem não devem ocupar espaço depois da captura');
-  assert.equal((html.match(/class="file-input" type="file" accept="\.csv,text\/csv"/g)||[]).length,2,'D−1 e D0 devem manter o fallback CSV');
-  assert.match(html,/\.upload-grid\.has-capture \.paste-box:not\(\.loaded\):not\(\.error\) \.paste-actions \.helper\s*\{\s*display:\s*none/,'compactar o cartão vazio não deve esconder seu seletor CSV');
-  assert.match(html,/\.file-meta\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,'resumo da captura deve distribuir os dados em uma grade compacta');
+  assert.match(html,/\.capture-grid\s*\{[^}]*align-items:\s*start/,'cartões das capturas devem manter alinhamento compacto');
+  assert.match(html,/\.capture-box\.loaded\s*\{[^}]*display:\s*block/,'captura carregada deve usar o cartão de resumo');
+  assert.equal((html.match(/class="capture-summary" hidden/g)||[]).length,2,'D−1 e D0 devem exibir resumos no mesmo formato');
+  assert.match(html,/\.capture-origin-mark\s*\{[^}]*width:\s*40px/,'resumo deve mostrar um identificador visual da origem, não um ícone de arquivo');
+  assert.match(html,/originMark\.textContent = 'MCC'/,'identificador da captura deve mostrar a origem MCC');
+  assert.ok(html.includes("originDetail.textContent = 'Grade da MCC · extensão'"),'resumo deve informar a origem da captura recebida');
+  assert.ok(html.includes("metaLine('Campanhas válidas'") && html.includes("metaLine('Data detectada'") && html.includes("metaLine('Moedas'") && html.includes("metaLine('Tipo de captura'"),'resumo deve apresentar campanha, data, moedas e tipo de captura');
+  assert.ok(!html.includes("metaLine('Arquivo'") && !html.includes('data.name'),'a interface não deve associar os dados a um nome de arquivo');
+  assert.match(html,/\.capture-meta\[hidden\]\s*\{\s*display:\s*none/,'resumo vazio não deve renderizar uma borda sem conteúdo');
+  assert.ok(!/<textarea\b|type="file"|Selecionar arquivo|Ctrl\+V/i.test(html),'a tela não deve incluir controles de colagem ou seleção manual de arquivo');
+  assert.match(html,/\.capture-meta\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,'resumo da captura deve distribuir os dados em uma grade de duas colunas');
   // Behavioral parsing, receiver, safety and persistence regressions remain in
   // preparador-d0/d1, mcc-grid-production, mcc-numbering and mcc-extension-parity.
 });

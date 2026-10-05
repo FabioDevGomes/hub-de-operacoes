@@ -3,15 +3,23 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 test('Glimpse é uma ferramenta compartilhada nas duas listas',async()=>{
-  const [manager,top,page,styles,shortcut,glimpsePage,glimpseStyles]=await Promise.all([
+  const [manager,top,page,hotOffersPage,styles,shortcut,glimpsePage,glimpseStyles,peopleAlsoSearchStyles,distPage,distScript,distHighlightStyles]=await Promise.all([
     readFile(new URL('../src/curadoria/gerentes/index.html',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/top-performance/index.html',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/index.html',import.meta.url),'utf8'),
+    readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms-page.mjs',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/trends-sheet.css',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse-shortcut.mjs',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/glimpse-page.mjs',import.meta.url),'utf8'),
-    readFile(new URL('../src/curadoria/glimpse/glimpse.css',import.meta.url),'utf8')
+    readFile(new URL('../src/curadoria/glimpse/glimpse.css',import.meta.url),'utf8'),
+    readFile(new URL('../src/curadoria/glimpse/people-also-search.css',import.meta.url),'utf8'),
+    readFile(new URL('../dist/curadoria/glimpse/index.html',import.meta.url),'utf8'),
+    readFile(new URL('../dist/curadoria/glimpse/glimpse-page.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../dist/curadoria/glimpse/people-also-search.css',import.meta.url),'utf8')
   ]);
+  assert.equal(distPage,page,'a página Glimpse servida corresponde à fonte atual');
+  assert.equal(distScript,glimpsePage,'o renderizador Glimpse servido corresponde à fonte atual');
+  assert.equal(distHighlightStyles,peopleAlsoSearchStyles,'os estilos do destaque são publicados pelo build');
   assert.match(manager,/data-sort="glimpse"/);
   assert.match(manager,/glimpse-storage\.mjs/);
   assert.match(top,/data-open-top-glimpse/);
@@ -27,17 +35,26 @@ test('Glimpse é uma ferramenta compartilhada nas duas listas',async()=>{
   assert.match(page,/id="signalReasons"/);
   assert.match(page,/Intenção das queries/);
   assert.match(page,/Sinais emergentes/);
-  assert.match(page,/glimpse-page\.mjs\?v=3/);
+  assert.match(page,/glimpse-page\.mjs\?v=5/);
+  assert.match(page,/people-also-search\.css\?v=1/);
+  assert.match(page,/id="peopleAlsoSearchPanel"[\s\S]*?<h2 id="peopleAlsoSearchTitle">People Also Search<\/h2>/,'People Also Search ganha um painel destacado próprio');
+  assert.match(page,/<header class="hero"/,'a versão independente do Glimpse mantém cabeçalho e contexto próprios');
+  assert.match(glimpsePage,/if\(embedded\)document\.querySelector\('\.hero'\)\?\.classList\.add\('hidden'\)/,'o cabeçalho interno só é ocultado quando a página roda incorporada numa ficha que já mostra o contexto da oferta');
   assert.match(glimpsePage,/addEventListener\('paste',\(\)=>setTimeout\(\(\)=>analyzeInput\(true\),0\)\)/);
   assert.match(glimpsePage,/Análise preparada automaticamente\. Revise os dados; clique em Concluir para salvar\./);
   assert.match(glimpsePage,/Domain\.movementValueLabel\(p\.movement\.percent\)/);
   assert.match(glimpsePage,/i\.intent\?\.commercialCount\?\?legacyCommercial/);
   assert.match(glimpsePage,/renderV2Details\(analysis\)/);
+  assert.match(glimpsePage,/function renderPeopleAlsoSearch\(section\)/,'a seção de People Also Search é renderizada como painel próprio');
+  assert.match(glimpsePage,/detected=Boolean\(section&&section\.state!==\'not_detected\'\)/,'análises sem a seção, inclusive registros legados sem esse campo, não mostram um destaque vazio');
+  assert.match(glimpsePage,/items\.map\(item=>`<span class="people-also-search-item">\$\{safe\(item\)\}<\/span>`\)/,'termos do Glimpse aparecem destacados e escapados como texto');
+  assert.match(glimpsePage,/renderPeopleAlsoSearch\(p\.peopleAlsoSearch\)/,'o destaque usa os itens extraídos do campo colado');
   assert.match(glimpsePage,/analysis\.signal\.reasons/);
   assert.match(glimpsePage,/Analisador \$\{item\.analyzerVersion\}/,'histórico identifica explicitamente a versão gravada sem recalcular coletas antigas');
   assert.match(glimpsePage,/movementCard\.dataset\.direction=/);
   assert.match(glimpseStyles,/strong\[data-direction="negative"\]\{color:var\(--red\)\}/);
   assert.match(glimpseStyles,/strong\[data-direction="positive"\]\{color:var\(--green\)\}/);
+  assert.match(peopleAlsoSearchStyles,/\.people-also-search\{border-color:rgba\(90,177,255,\.72\)/,'o painel recebe contraste visual para destacar a informação capturada');
   assert.match(glimpsePage,/\$\('#finish'\)\.onclick=async\(\)=>\{if\(draft&&!history\.some/);
   assert.match(styles,/\.glimpse-badge:hover,\.glimpse-badge:focus-visible/);
   assert.match(styles,/filter:brightness\(1\.25\)/);
@@ -51,6 +68,7 @@ test('Glimpse é uma ferramenta compartilhada nas duas listas',async()=>{
   assert.match(shortcut,/imagesTab\.before\(button\)/,'a aba Glimpse deve ficar entre Google Trends e Google Imagens');
   assert.match(shortcut,/id='topGlimpseFrame'/,'a tela Glimpse deve abrir dentro da ficha para manter os botões de navegação');
   assert.match(shortcut,/url\.searchParams\.set\('embedded','1'\)/,'o Glimpse embutido deve preservar o contexto da oferta');
+  assert.match(hotOffersPage,/embedded:'1'/,'a ficha da Hot Offers MS também declara o modo incorporado e compartilha a remoção do cabeçalho duplicado');
   assert.match(shortcut,/closest\('\[data-open-top-glimpse\]'\)[\s\S]*?event\.preventDefault\(\);event\.stopPropagation\(\)[\s\S]*?row\.click\(\);button\.click\(\)/,'abrir Glimpse pela coluna deve manter a ficha com suas abas e selecionar a aba Glimpse');
   assert.match(glimpsePage,/embedded&&window\.parent!==window/,'a tela embutida deve retornar à ficha, sem navegar para fora');
   assert.match(glimpsePage,/hub-glimpse-close/,'Concluir/Cancelar no Glimpse embutido deve retornar à ficha');

@@ -28,6 +28,7 @@ export function renderKeywordCandidates(container, {
   candidates = [],
   variant = 'positive',
   saved = false,
+  showRemoveForSaved = false,
   searchLabel = 'Pesquisar',
   searchContext = 'Google Trends',
   searchAllLabel = 'Pesquisar imagens (excluindo todas)',
@@ -68,7 +69,7 @@ export function renderKeywordCandidates(container, {
       text.textContent = value;
       row.append(text);
 
-      if (!saved && typeof onRemove === 'function') {
+      if ((!saved || showRemoveForSaved) && typeof onRemove === 'function') {
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'keyword-candidate-remove';
@@ -132,7 +133,7 @@ export function renderKeywordCandidates(container, {
       row.append(search);
     }
 
-    if (!saved && typeof onRemove === 'function') {
+    if ((!saved || showRemoveForSaved) && typeof onRemove === 'function') {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'keyword-candidate-remove';

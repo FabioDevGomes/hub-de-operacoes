@@ -7,7 +7,7 @@ import * as Decisions from '../decision-ui.mjs';
 import * as AutomaticSignal from '../automatic-signal-domain.mjs';
 import * as AutomaticSignalUI from '../automatic-signal-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs';
+import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -74,7 +74,9 @@ export function mountHotOffersMsView({root, actions}) {
     const record = imagesFor(item.offerKey), progress = Images.progress(record.assessments, Domain.offerCountryCodes(item));
     const latest = [...progress.latest.values()].sort((a,b) => String(b.capturedAt || '').localeCompare(String(a.capturedAt || '')))[0];
     const text = progress.total ? progress.done + ' de ' + progress.total : Images.resultLabel(latest?.status);
-    return '<button type="button" class="table-action ' + (progress.done ? 'saved' : '') + '" data-curation-focus="images" data-action="images" data-key="' + escape(item.offerKey) + '" title="Abrir Google Imagens">' + escape(text) + '</button>';
+    const hasCandidates = [...progress.latest.values()].some(assessment => (assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []).some(value => String(value ?? '').trim()));
+    const marker = KeywordCandidatesUI.keywordCandidateMarkerHtml(hasCandidates ? 1 : 0,'negative');
+    return '<button type="button" class="table-action ' + (progress.done ? 'saved' : '') + '" data-curation-focus="images" data-action="images" data-key="' + escape(item.offerKey) + '" title="Abrir Google Imagens">' + escape(text) + marker + '</button>';
   }
   function glimpseBadge(item) {
     const analysis = glimpseFor(item);
@@ -143,7 +145,7 @@ export function mountHotOffersMsView({root, actions}) {
     renderFilterOptions($('#categoryFilter'),state.offers.map(item => item.category),'Todas as categorias',$('#categoryFilter').value);
     renderHeaders();
     const items = visibleOffers(), visibleColumns = COLUMNS.filter(([key]) => !hiddenColumns.has(key));
-    $('#rows').innerHTML = items.map(item => '<tr data-offer="' + escape(item.offerKey) + '" class="' + (decisionFor(item.offerKey).currentStatus === 'Subir campanha' ? 'decision-row-launch' : decisionFor(item.offerKey).currentStatus === 'Campanha no ar' ? 'decision-row-live' : '') + '">' + visibleColumns.map(([key]) => cell(key,item)).join('') + '</tr>').join('');
+    $('#rows').innerHTML = items.map(item => '<tr data-offer="' + escape(item.offerKey) + '" class="' + Decisions.rowClass(decisionFor(item.offerKey).currentStatus) + '">' + visibleColumns.map(([key]) => cell(key,item)).join('') + '</tr>').join('');
     $('#empty').classList.toggle('hidden',items.length > 0);
     if (!items.length) $('#empty').textContent = state.offers.length ? 'Nenhuma oferta corresponde aos filtros.' : 'Cole a primeira coleta completa para começar.';
     renderSummary();
@@ -267,8 +269,7 @@ export function mountHotOffersMsView({root, actions}) {
     });
     TrendsUI.renderResultButtons($('#trendResults'),record.assessments?.at(-1)?.status || '',value=>actions.saveTrend(item.offerKey,value,{term:$('#trendsTerm').value.trim() || item.productName,countries:$$('[data-country].selected',$('#trendCountries')).map(button=>button.dataset.country),productAge:pendingProductAge}));
     $('#trendsTerm').value = record.assessments?.at(-1)?.searchTerm || item.productName;
-    $('#trendCandidates').innerHTML = '<div class="candidate-list" id="trendCandidateList"></div>';
-    KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidateList'),{candidates:record.keywordCandidates||[],variant:'positive',searchContext:'Google Trends',onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index)});
+    KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates'),{candidates:record.keywordCandidates||[],variant:'positive',searchContext:'Google Trends',onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index)});
     $('#trendsHistory').innerHTML = (record.assessments || []).slice().reverse().map(entry => '<div class="history-row"><span>' + escape(dateTime(entry.capturedAt)) + '</span><b>' + escape(Trends.resultLabel(entry.status)) + '</b><span>' + escape([entry.searchTerm,(entry.countries || []).join(', '),entry.productAge || ''].filter(Boolean).join(' · ')) + '</span></div>').join('') || '<p class="sub">Sem avaliações de Trends.</p>';
   }
   function renderImages(item, record) {
@@ -276,7 +277,9 @@ export function mountHotOffersMsView({root, actions}) {
     $('#imagesTerm').value = record.searchTerm || item.productName;
     $('#imageCountries').innerHTML = countries.map(country => {
       const assessment = latest.get(country), editing = imageCandidateEditing.has(country), candidates = editing ? (imageCandidateDrafts.get(country) || []) : (assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []);
-      return '<article class="image-country-card"><div class="image-country-head"><h3>' + escape(country) + (item.manualCountries?.includes(country) ? ' · manual' : '') + '</h3><button class="btn" type="button" data-image-search="' + escape(country) + '">Pesquisar imagens</button></div><div class="image-result-actions" data-image-actions="' + escape(country) + '"></div><div class="sub">' + escape(assessment ? Images.resultLabel(assessment.status) + ' · ' + dateTime(assessment.capturedAt) : 'Ainda não avaliado') + '</div><div class="image-candidate-summary"><div class="image-country-head"><b>Candidatas negativas</b><button class="btn" type="button" data-image-edit="' + escape(country) + '">' + (editing ? 'Editando' : candidates.length ? 'Editar' : 'Adicionar') + '</button></div><div class="candidate-list" data-image-candidate-list="' + escape(country) + '"></div>' + (editing ? '<div class="candidate-entry"><input class="control" data-image-candidate-input="' + escape(country) + '" placeholder="Nome do outro produto"><button class="btn" type="button" data-image-candidate-add="' + escape(country) + '">Adicionar</button><button class="btn primary" type="button" data-image-candidate-save="' + escape(country) + '">Salvar candidatas</button><button class="btn" type="button" data-image-candidate-cancel="' + escape(country) + '">Cancelar</button></div>' : '') + '</div></article>';
+      const savedCandidateCount = new Set((assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []).map(value => String(value || '').trim()).filter(Boolean)).size;
+      const statusLabel = savedCandidateCount ? Images.resultLabel(assessment?.status) + ' · ' + savedCandidateCount + ' candidata' + (savedCandidateCount === 1 ? '' : 's') : Images.resultLabel(assessment?.status);
+      return '<article class="card image-country-card"><div class="image-country-head"><div class="image-country-title"><h2>' + escape(country) + '</h2>' + (item.manualCountries?.includes(country) ? '<small class="manual-country-label">Manual</small>' : '') + '<span class="sheet-status ' + (assessment ? 'ok' : '') + '">' + escape(statusLabel) + '</span></div><button class="btn primary image-search-button" type="button" data-image-search="' + escape(country) + '">Pesquisar imagens</button></div><div class="image-result-actions" data-image-actions="' + escape(country) + '"></div><div class="image-candidate-summary"><div class="image-candidate-summary-head"><b>candidatas a palavras-chave negativas</b></div><div class="image-candidate-entry"><input class="control" data-image-candidate-input="' + escape(country) + '" placeholder="Digite outra candidata e pressione Enter" aria-label="Nova candidata a palavra-chave negativa · ' + escape(country) + '"></div><div class="image-candidate-list" data-image-candidate-list="' + escape(country) + '"></div></div></article>';
     }).join('') || '<p class="sub">Sem países para validar. Adicione países manualmente no resumo.</p>';
     for (const container of $$('[data-image-actions]')) {
       const country = container.dataset.imageActions, assessment = latest.get(country);
@@ -284,7 +287,7 @@ export function mountHotOffersMsView({root, actions}) {
     }
     for (const container of $$('[data-image-candidate-list]')) {
       const country = container.dataset.imageCandidateList, assessment = latest.get(country), editing = imageCandidateEditing.has(country), candidates = editing ? (imageCandidateDrafts.get(country) || []) : (assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []);
-      KeywordCandidatesUI.renderKeywordCandidates(container,{candidates,variant:'negative',saved:!editing,searchContext:'Google Imagens · ' + country,emptyText:'Nenhum outro produto informado ainda.',onSearchAll:values=>actions.openImagesExcluding($('#imagesTerm').value.trim() || item.productName,country,values),onRemove:editing?(_candidate,index)=>{const list=[...(imageCandidateDrafts.get(country)||[])];list.splice(index,1);imageCandidateDrafts.set(country,list);renderImages(item,record)}:null});
+      KeywordCandidatesUI.renderKeywordCandidates(container,{candidates,variant:'negative',saved:true,showRemoveForSaved:true,searchContext:'Google Imagens · ' + country,emptyText:'Nenhum outro produto informado ainda.',onSearchAll:values=>actions.openImagesExcluding($('#imagesTerm').value.trim() || item.productName,country,values),onRemove:(_candidate,index)=>{const list=[...candidates];list.splice(index,1);void saveImageCandidateChange(item,country,list,assessment?.status)}});
     }
     $('#imagesHistory').innerHTML = (record.assessments || []).slice().reverse().map(entry => '<div class="history-row"><span>' + escape(dateTime(entry.capturedAt)) + '</span><b>' + escape(entry.country) + ' · ' + escape(Images.resultLabel(entry.status)) + '</b><span>' + escape([entry.searchTerm || item.productName,(entry.negativeKeywordCandidates || entry.relatedProducts || []).length ? 'Negativas: ' + (entry.negativeKeywordCandidates || entry.relatedProducts).join(', ') : ''].filter(Boolean).join(' · ')) + '</span></div>').join('') || '<p class="sub">Sem avaliações de Imagens.</p>';
   }
@@ -293,6 +296,32 @@ export function mountHotOffersMsView({root, actions}) {
     imageCandidateEditing.delete(country); imageCandidateDrafts.delete(country);
     actions.saveImage(item.offerKey,country,status,candidates);
   }
+  async function saveImageCandidateChange(item,country,candidates,status) {
+    if (!status) { view.showToast('Selecione um resultado visual antes de salvar candidatas.'); return false; }
+    imageCandidateDrafts.set(country,candidates); imageCandidateEditing.add(country);
+    try {
+      await actions.saveImage(item.offerKey,country,status,candidates,{candidateOnly:true});
+      return true;
+    } catch {
+      const record=imagesFor(item.offerKey),latest=Images.latestByCountry(record.assessments || []).get(country);
+      imageCandidateDrafts.set(country,latest?.negativeKeywordCandidates || latest?.relatedProducts || []);
+      renderImages(item,record);
+      view.showToast('Não foi possível salvar as candidatas negativas.');
+      return false;
+    }
+  }
+  async function addImageCandidate(item,country,input,record,latest) {
+    const value=input.value.trim(); if (!value) return;
+    const assessment=latest.get(country),saved=assessment?.negativeKeywordCandidates || assessment?.relatedProducts || [];
+    const current=imageCandidateEditing.has(country) ? (imageCandidateDrafts.get(country) || []) : saved;
+    if (current.some(candidate=>Domain.normalize(candidate)===Domain.normalize(value))) { view.showToast('Essa candidata já está na lista.'); input.value=''; input.focus(); return; }
+    const status=assessment?.status;
+    if (!status) { view.showToast('Selecione um resultado visual antes de salvar candidatas.'); return; }
+    input.disabled=true;
+    if (await saveImageCandidateChange(item,country,[...current,value],status)) $('[data-image-candidate-input="' + CSS.escape(country) + '"]')?.focus();
+    else input.disabled=false;
+  }
+  function clearImageCandidateDrafts() { imageCandidateDrafts.clear(); imageCandidateEditing.clear(); }
   function switchTab(tab) {
     activeTab = tab;
     $$('.tabs [data-tab]',sheet).forEach(button => button.classList.toggle('active',button.dataset.tab === tab));
@@ -318,7 +347,7 @@ export function mountHotOffersMsView({root, actions}) {
   $('#importScope').addEventListener('change',invalidateImportPreview);
   $('#completeListConfirm').addEventListener('change',invalidateImportPreview);
   $('#clearFilters').onclick = () => { for (const control of $$('.filter-grid .control')) control.value = control.id === 'visibilityFilter' ? 'visible' : ''; render(); };
-  $('#closeSheet').onclick = () => { sheet.classList.add('hidden'); activeOfferKey = null; actions.closeOffer(); };
+  $('#closeSheet').onclick = () => { sheet.classList.add('hidden'); clearImageCandidateDrafts(); activeOfferKey = null; actions.closeOffer(); };
   $('#saveDecision').onclick = () => actions.saveDecision(activeOfferKey,$('#decisionStatus').value,$('#decisionNotes').value);
   $('#openTrends').onclick = () => actions.openTrends($('#trendsTerm').value.trim() || offerByKey(activeOfferKey)?.productName || '');
   async function submitTrendCandidate(input = $('#trendCandidate')) {
@@ -333,19 +362,9 @@ export function mountHotOffersMsView({root, actions}) {
     const item = offerByKey(activeOfferKey); if (!item) return;
     const search = event.target.closest('[data-image-search]');
     if (search) { actions.openImages($('#imagesTerm').value.trim() || item.productName,search.dataset.imageSearch); return; }
-    const edit = event.target.closest('[data-image-edit]');
-    if (edit) { const record = imagesFor(item.offerKey),latest = Images.latestByCountry(record.assessments || []),country = edit.dataset.imageEdit; imageCandidateDrafts.set(country,[...(latest.get(country)?.negativeKeywordCandidates || latest.get(country)?.relatedProducts || [])]); imageCandidateEditing.add(country); renderImages(item,record); $('[data-image-candidate-input="' + CSS.escape(country) + '"]')?.focus(); return; }
-    const add = event.target.closest('[data-image-candidate-add]');
-    if (add) { const country = add.dataset.imageCandidateAdd,input = $('[data-image-candidate-input="' + CSS.escape(country) + '"]'),value = input?.value.trim() || '',draft = imageCandidateDrafts.get(country) || []; if (!value) return; if (!draft.some(candidate=>Domain.normalize(candidate)===Domain.normalize(value))) imageCandidateDrafts.set(country,[...draft,value]); renderImages(item,imagesFor(item.offerKey)); $('[data-image-candidate-input="' + CSS.escape(country) + '"]')?.focus(); return; }
-    const cancel = event.target.closest('[data-image-candidate-cancel]');
-    if (cancel) { const country = cancel.dataset.imageCandidateCancel; imageCandidateEditing.delete(country); imageCandidateDrafts.delete(country); renderImages(item,imagesFor(item.offerKey)); return; }
-    const save = event.target.closest('[data-image-candidate-save]');
-    if (save) { const country = save.dataset.imageCandidateSave,record = imagesFor(item.offerKey),assessment = Images.latestByCountry(record.assessments || []).get(country); if (!assessment?.status) { $('#toast').textContent = 'Selecione um resultado visual antes de salvar as candidatas.'; $('#toast').classList.add('show'); setTimeout(()=>$('#toast').classList.remove('show'),2400); return; } const candidates = imageCandidateDrafts.get(country) || []; imageCandidateEditing.delete(country); imageCandidateDrafts.delete(country); actions.saveImage(item.offerKey,country,assessment.status,candidates); }
   });
-  $('#imageCountries').addEventListener('keydown',event=>{if(event.target.matches('[data-image-candidate-input]')&&event.key==='Enter'){event.preventDefault();$('[data-image-candidate-add="'+CSS.escape(event.target.dataset.imageCandidateInput)+'"]')?.click()}});
+  $('#imageCountries').addEventListener('keydown',event=>{const input=event.target.closest('[data-image-candidate-input]');if(!input||event.key!=='Enter')return;event.preventDefault();const item=offerByKey(activeOfferKey);if(!item)return;const record=imagesFor(item.offerKey),latest=Images.latestByCountry(record.assessments||[]);void addImageCandidate(item,input.dataset.imageCandidateInput,input,record,latest)});
   $('#trendCountries').addEventListener('click',event => { const button = event.target.closest('[data-country]'); if (button) { button.classList.toggle('selected'); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); } });
-  $('#trendCountries').addEventListener('click',event => { if (event.target.closest('#addManualCountry')) actions.addManualCountry(activeOfferKey,$('#manualCountry').value); });
-  $('#trendCountries').addEventListener('keydown',event => { if (event.target.id === 'manualCountry' && event.key === 'Enter') { event.preventDefault(); actions.addManualCountry(activeOfferKey,event.target.value); } });
   $('.tabs',sheet).addEventListener('click',event => { const button = event.target.closest('[data-tab]'); if (button) switchTab(button.dataset.tab); });
   $('#rows').addEventListener('click',event => {
     const sort = event.target.closest('[data-sort]');
@@ -409,7 +428,7 @@ export function mountHotOffersMsView({root, actions}) {
     $('#backToCollections').onclick = renderCollections;
     if (!dialog.open) dialog.showModal();
   }
-  const close = () => { sheet.classList.add('hidden'); activeOfferKey = null; };
+  const close = () => { sheet.classList.add('hidden'); clearImageCandidateDrafts(); activeOfferKey = null; };
   return {
     render(next) { state = {...state,...next}; render(); },
     showImportPreview,

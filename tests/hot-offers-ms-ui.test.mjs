@@ -6,6 +6,7 @@ import {mediaScalersOfferUrl} from '../src/curadoria/hot-offers-ms/hot-offers-ms
 const html = await readFile(new URL('../src/curadoria/hot-offers-ms/index.html',import.meta.url),'utf8');
 const css = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms.css',import.meta.url),'utf8');
 const sidebarCss = await readFile(new URL('../src/sidebar-component.css',import.meta.url),'utf8');
+const sharedCurationCss = await readFile(new URL('../src/curadoria/trends-sheet.css',import.meta.url),'utf8');
 const view = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs',import.meta.url),'utf8');
 const page = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms-page.mjs',import.meta.url),'utf8');
 
@@ -33,7 +34,22 @@ test('a view encaminha filtros e ações sem acessar persistência', () => {
   assert.doesNotMatch(view,/paymentMax/,'a view não deve encaminhar o filtro de pagamento máximo');
   for (const label of ['Google Trends','Google Imagens','Glimpse','Histórico','Afiliação','Movimento','Decisão']) assert.ok((html + view).includes(label),label + ' ausente da tela');
   for (const callback of ['saveDecision','saveTrend','saveImage','openGlimpse','openCollection','addManualCountry','openImagesExcluding']) assert.ok((view + page).includes('actions.' + callback) || page.includes('function ' + callback),callback + ' não é encaminhado');
-  assert.match(view,/Candidatas negativas/,'a ficha deve permitir registrar candidatas para exclusão em Imagens');
+  assert.match(view,/candidatas a palavras-chave negativas/,'o rótulo deve repetir o padrão da ficha E-commerce GM');
+  assert.match(view,/image-country-title[\s\S]*?sheet-status[\s\S]*?image-search-button/,'cabeçalho, status e botão de pesquisa devem seguir o cartão compartilhado');
+  assert.match(view,/class="image-candidate-entry"[\s\S]*?data-image-candidate-input[\s\S]*?class="image-candidate-list"/,'campo e lista devem usar as classes de layout compartilhadas');
+  assert.doesNotMatch(view,/class="candidate-entry"><input[^>]*data-image-candidate-input|class="candidate-list" data-image-candidate-list/,'Imagens não deve reutilizar o layout genérico de Trends');
+  assert.match(view,/data-image-candidate-input=.*Digite outra candidata e pressione Enter/,'o campo de negativa deve ficar disponível sem abrir Adicionar/Editar');
+  assert.match(view,/event\.target\.closest\('\[data-image-candidate-input\]'\)[\s\S]*?event\.key!=='Enter'[\s\S]*?void addImageCandidate/,'Enter deve persistir a candidata sem clicar em Adicionar');
+  assert.match(view,/saved:true,showRemoveForSaved:true[\s\S]*?onRemove:\(_candidate,index\)=>\{const list=\[\.\.\.candidates\]/,'o X deve ficar disponível nas candidatas salvas e remover da lista exibida');
+  assert.match(view,/clearImageCandidateDrafts\(\); activeOfferKey = null/,'reabrir a ficha deve renderizar as candidatas persistidas, sem recuperar rascunhos de outra sessão/oferta');
+  assert.doesNotMatch(view,/data-image-edit/,'a remoção de candidatas salvas não deve depender de abrir Editar');
+  assert.doesNotMatch(view,/imageCandidateStatuses/,'a inclusão não pode depender de um mapa de status inexistente; deve usar o status da avaliação carregada');
+  assert.match(view,/const status=assessment\?\.status;[\s\S]*?saveImageCandidateChange\(item,country,\[\.\.\.current,value\],status\)/,'Enter deve reaproveitar o status da avaliação atual ao persistir a candidata');
+  assert.match(view,/current=imageCandidateEditing\.has\(country\) \? \(imageCandidateDrafts\.get\(country\) \|\| \[\]\) : saved/,'adicionar uma candidata deve preservar as já salvas antes de persistir');
+  assert.match(view,/saveImageCandidateChange\(item,country,\[\.\.\.current,value\],status\)/,'incluir candidata deve salvar automaticamente junto do resultado visual atual');
+  assert.match(view,/candidateOnly:true/,'a ação de candidata deve usar o fluxo de persistência automática');
+  assert.doesNotMatch(view,/data-image-candidate-add|data-image-candidate-save|data-image-candidate-cancel/,'Adicionar, Salvar candidatas e Cancelar devem ser removidos do campo');
+  assert.match(page,/candidateOnly=false/,'a persistência identifica alterações de candidatas sem confundi-las com uma nova avaliação visual');
   assert.doesNotMatch(view,/indexedDB|openHotOffersMsDB|\.put\(/,'a view não deve abrir nem gravar no banco');
   assert.match(page,/mountCurationListFocus\('hot-offers-ms'/,'o retorno da ficha deve preservar foco/rolagem');
 });
@@ -47,10 +63,42 @@ test('Enter salva a candidata positiva e atualiza a lista na hora, como na E-com
   assert.match(view,/event\.key === 'Enter'[\s\S]*?event\.preventDefault\(\); void submitTrendCandidate\(event\.currentTarget\)/,'Enter envia a candidata sem submeter a página nem exigir clique adicional');
 });
 
+test('o X remove a candidata positiva de Trends e sincroniza o estado antes de redesenhar a ficha', () => {
+  const removeCandidate = page.match(/async function removeTrendCandidate\(offerKey,index\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(removeCandidate,'ação de remover candidata ausente');
+  assert.match(view,/variant:'positive'[\s\S]*?onRemove:\(_candidate,index\)=>actions\.removeTrendCandidate\(item\.offerKey,index\)/,'o X encaminha a remoção da candidata para a Hot Offers MS');
+  assert.match(removeCandidate,/await Storage\.put\(Storage\.STORES\.trends,stored\)[\s\S]*?trends = \[\.\.\.trends\.filter[\s\S]*?show\(\); view\.refreshOffer\(item,'trends'\)/,'a view recebe o registro atualizado antes de redesenhar e não repõe o chip removido');
+  assert.match(removeCandidate,/Não foi possível remover a candidata/,'falhas de persistência são comunicadas sem fingir que removeu');
+  assert.match(css,/#offerSheet \.trends-keyword-heading\{font-weight:400\}/,'o título Candidatas à palavra-chave fica sem negrito apenas na ficha Hot Offers MS');
+});
+
 test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM', () => {
   assert.match(html,/\.filter-grid\{display:grid;grid-template-columns:[^}]+;[^}]*overflow-x:auto\}/,'a barra deve ter uma única grade horizontal rolável');
   assert.match(html,/\.filter-grid \.control\{[^}]*font-size:\.74rem/,'os campos devem usar o tamanho de fonte do E-commerce GM');
   assert.match(html,/\.filter-grid \.btn\{[^}]*font-size:\.74rem;white-space:nowrap/,'os botões devem manter a mesma tipografia e não quebrar linha');
+});
+
+test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261004-open-offer-button/,'a página deve carregar o CSS compartilhado atualizado da ação de oferta');
+  assert.match(html,/hot-offers-ms-page\.mjs\?v=12/,'a página invalida o cache após corrigir a remoção de candidatas');
+  assert.match(html,/hot-offers-ms\.css\?v=20261004-trend-candidate-remove/,'o CSS local invalida o cache para remover o negrito do título');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261004-live-trend-candidate/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
+  assert.match(sharedCurationCss,/button\.decision-badge\{border:1px solid #40516b;font-weight:400;cursor:pointer\}/,'o padrão comum usa borda neutra e texto sem negrito forte');
+  assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:rgba\(171,130,35,\.2\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
+  assert.match(sharedCurationCss,/#rows tr\.decision-row-live>td\{background:rgba\(16,74,54,\.25\)\}/,'Campanha no ar usa o mesmo verde compartilhado');
+  assert.doesNotMatch(css,/\.decision-badge\{[^}]*\}/,'Hot Offers MS não deve redefinir a apresentação compartilhada');
+  assert.match(view,/Decisions\.buttonHtml\(decisionFor\(item\.offerKey\)\.currentStatus/,'a célula usa o renderizador comum de decisões');
+  assert.match(view,/Decisions\.rowClass\(decisionFor\(item\.offerKey\)\.currentStatus\)/,'o destaque da linha usa a classe compartilhada da decisão');
+});
+
+test('a coluna Imagens da Hot Offers MS sinaliza candidatas negativas no padrão da E-commerce GM', () => {
+  const badge = view.match(/function imageBadge\(item\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(badge,'renderizador do badge de Imagens ausente');
+  assert.match(badge,/\[\.\.\.progress\.latest\.values\(\)\]\.some/,'a presença é verificada nas avaliações mais recentes por país');
+  assert.match(badge,/keywordCandidateMarkerHtml\(hasCandidates \? 1 : 0,'negative'\)/,'o marcador deve usar o componente compartilhado e sua variante negativa');
+  assert.match(badge,/escape\(text\) \+ marker/,'a exclamação deve aparecer junto ao progresso no mesmo badge');
+  assert.doesNotMatch(badge,/verificados?/,'a coluna Hot Offers mantém o formato compacto numérico');
 });
 
 test('o cabeçalho usa a convenção de título das telas de Curadoria', () => {
@@ -68,6 +116,8 @@ test('as abas compartilhadas seguem a ordem da E-commerce GM e preservam o Resum
   assert.deepEqual(tabs.map(([,key]) => key),['overview','trends','glimpse','images','history']);
   assert.deepEqual(tabs.slice(1).map(([, ,label]) => label),['Google Trends','Glimpse','Google Imagens','Histórico']);
   assert.match(html,/data-panel="overview"[\s\S]*?Decisão de curadoria[\s\S]*?Dados da oferta/,'o resumo mantém as ações próprias da Hot Offers MS');
+  assert.ok(sharedCurationCss.includes('#offerSheet .tabs{position:sticky;top:0;z-index:5;display:flex;gap:5px;align-items:center;flex-wrap:nowrap;')&&sharedCurationCss.includes('border:1px solid var(--line);border-radius:11px')&&sharedCurationCss.includes('#offerSheet .tabs .btn{flex:0 0 auto;border:0;')&&sharedCurationCss.includes('#offerSheet .tabs .btn.active{background:#18304d;color:#fff}'),'abas devem ficar agrupadas, sem bordas/divisores individuais, no padrão compartilhado');
+  assert.ok(sharedCurationCss.includes('#offerSheet.sheet{padding:0}')&&sharedCurationCss.includes('#offerSheet .sheet-inner{width:100%;max-width:1280px;margin:0 auto;padding:24px}')&&sharedCurationCss.includes('#offerSheet .sheet-top h1{margin:5px 0 3px;font-size:1.2rem;line-height:normal}')&&sharedCurationCss.includes('#offerSheet .sheet-top .eyebrow{color:#42e7c0;font-size:.72rem;line-height:normal;letter-spacing:.14em;font-weight:400}'),'a Hot Offers MS deve usar a mesma largura e tipografia de cabeçalho da E-commerce GM');
 });
 
 test('Glimpse na Hot Offers MS acompanha o layout embutido da E-commerce GM', () => {

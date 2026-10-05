@@ -182,24 +182,34 @@ async function addTrendCandidate(offerKey,value) {
   }
 }
 async function removeTrendCandidate(offerKey,index) {
-  const item = currentOffer(offerKey); if (!item) return;
+  const item = currentOffer(offerKey); if (!item) return false;
   const old = trendsFor(offerKey), candidates = [...(old.keywordCandidates || [])]; candidates.splice(index,1);
   const stored = {...old,offerKey,offerId:item.offerId,productName:item.productName,keywordCandidates:candidates};
-  await Storage.put(Storage.STORES.trends,stored); trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored]; view.refreshOffer(item,'trends');
+  try {
+    await Storage.put(Storage.STORES.trends,stored);
+    trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored];
+    show(); view.refreshOffer(item,'trends');
+    view.showToast('Candidata à palavra-chave removida.');
+    return true;
+  } catch {
+    view.showToast('Não foi possível remover a candidata.');
+    return false;
+  }
 }
 function openTrends(term) {
   const tab = window.open(Trends.exploreUrl(term),'google-trends-hot-offers-ms');
   if (tab) tab.focus(); else view.showToast('O navegador bloqueou a aba. Libere pop-ups para este endereço local.');
 }
 async function addManualCountry(offerKey,value) {
-  const item = currentOffer(offerKey), code = String(value || '').trim().toUpperCase(); if (!item) return;
-  if (!/^[A-Z]{2}$/.test(code)) { view.showToast('Informe um código de país com duas letras.'); return; }
-  if (Domain.offerCountryCodes(item).includes(code)) { view.showToast(code + ' já está disponível para este produto.'); return; }
+  const item = currentOffer(offerKey), code = String(value || '').trim().toUpperCase(); if (!item) return false;
+  if (!/^[A-Z]{2}$/.test(code)) { view.showToast('Informe um código de país com duas letras.'); return false; }
+  if (Domain.offerCountryCodes(item).includes(code)) { view.showToast(code + ' já está disponível para este produto.'); return false; }
   const updated = {...item,manualCountries:[...new Set([...(item.manualCountries || []),code])]};
   await Storage.put(Storage.STORES.offers,updated); offers = offers.map(entry => entry.offerKey === offerKey ? updated : entry);
   show(); view.refreshOffer(updated,'trends'); view.showToast(code + ' adicionado manualmente; não faz parte do dado da fonte.');
+  return true;
 }
-async function saveImage(offerKey,country,status,candidates=[]) {
+async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=false}={}) {
   const item = currentOffer(offerKey); if (!item) return;
   const old = imagesFor(offerKey), assessment = {
     assessmentId:crypto.randomUUID(),country,status,negativeKeywordCandidates:[...new Set(candidates.map(value=>String(value||'').trim()).filter(Boolean))],searchTerm:old.searchTerm || item.productName,
@@ -209,7 +219,7 @@ async function saveImage(offerKey,country,status,candidates=[]) {
   await Storage.put(Storage.STORES.images,stored); images = [...images.filter(entry => entry.offerKey !== offerKey),stored];
   show(); view.refreshOffer(item,'images');
   fireObservability(CurationObservability.recordAssessment({origin:'hot-offers-ms',subjectId:subjectId(item),productKey:item.productKey,productName:item.productName,offerRefs:offerRefs(item),kind:'images',assessment,summary:{status:Images.resultLabel(status),country,searchTerm:assessment.searchTerm,sampleSize:20,negativeKeywordCandidates:assessment.negativeKeywordCandidates,capturedAt:assessment.capturedAt}}));
-  view.showToast('Avaliação visual salva: ' + Images.resultLabel(status) + ' · ' + country + '.');
+  view.showToast(candidateOnly ? 'Candidatas negativas salvas · ' + country + '.' : 'Avaliação visual salva: ' + Images.resultLabel(status) + ' · ' + country + '.');
 }
 async function saveImageSearchTerm(offerKey,term) {
   const item = currentOffer(offerKey); if (!item) return;

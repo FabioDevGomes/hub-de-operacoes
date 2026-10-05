@@ -83,11 +83,26 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.equal(mediaScalersOfferUrl('4679'),'https://admin.mediascalers.com/offers/4679');
   assert.equal(mediaScalersOfferUrl('../2323'),null,'IDs inválidos não podem alterar o destino do link');
   assert.equal(mediaScalersOfferUrl(''),null);
-  assert.match(html,/class="trends-search-actions"[\s\S]*?id="openTrends"[\s\S]*?id="openPlatformOffer"/,'as ações ficam lado a lado na aba Google Trends');
-  assert.match(html,/<a class="btn hidden" id="openPlatformOffer" target="_blank" rel="noopener noreferrer">Abrir oferta na plataforma<\/a>/);
-  assert.match(view,/platformLink\.href = platformUrl/,'a view associa a URL validada à oferta ativa');
-  assert.match(view,/platformLink\.removeAttribute\('href'\)/,'sem Offer ID válido o link fica sem destino');
-  assert.match(css,/\.trends-search-row\{display:grid;grid-template-columns:minmax\(220px,1fr\) auto/);
+  assert.match(html,/class="trends-search-actions"><button class="btn primary" id="openTrends"/,'a pesquisa fica como única ação ao lado do termo, igual à E-commerce GM');
+  assert.doesNotMatch(html,/id="openPlatformOffer"/,'o link de oferta não fica mais agrupado à pesquisa de Trends');
+  assert.match(view,/function renderMediaScalersOfferLink\(item\)/,'a ação de oferta tem renderizador próprio da ficha');
+  assert.match(view,/ageRow\.after\(group\)/,'a ação fica após o seletor de momento do produto, como na E-commerce GM');
+  assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
+  assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
+  assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
+  assert.match(html,/trends-sheet\.css\?v=20261004-open-offer-button/,'a ficha carrega a folha compartilhada atualizada');
+  assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
+  assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
+  assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');
+  assert.match(view,/candidateEntry\.classList\.add\('trends-keyword-entry'\)/,'o editor de candidatas segue a estrutura usada pela E-commerce GM');
+  assert.match(view,/KeywordCandidatesUI\.renderKeywordCandidates\(\$\('#trendCandidates'\)/,'a lista usa diretamente o componente compartilhado');
+  assert.match(view,/countryChips\.after\(countryEditor,message\)/,'a inclusão manual de país segue o padrão compartilhado da E-commerce GM');
+  assert.match(view,/className = 'manual-country-entry'/,'a edição manual de país usa o layout compartilhado');
+  assert.match(view,/Países explícitos da oferta/,'o título segue a ficha E-commerce GM');
+  assert.match(view,/Selecione um resultado para salvar a avaliação/,'o resultado usa o cabeçalho compacto comum sem afirmar que a ficha fecha');
+  assert.match(sharedCurationCss,/#offerSheet \.trends-search-row\{display:flex;gap:10px;align-items:end\}/,'a busca usa a disposição canônica da E-commerce GM sem dividir espaço com o link');
+  assert.match(sharedCurationCss,/#offerSheet \.trends-result-actions\{grid-template-columns:repeat\(7,minmax\(0,1fr\)\);gap:6px\}/,'os resultados usam a mesma grade do E-commerce GM');
+  assert.match(sharedCurationCss,/#offerSheet \.trends-country-action\{border:1px solid #40516b;background:#172337/,'os países mantêm o estilo compartilhado');
 });
 
 test('as colunas Google Trends, Glimpse e Imagens seguem a ordem do E-commerce GM após Produto', () => {

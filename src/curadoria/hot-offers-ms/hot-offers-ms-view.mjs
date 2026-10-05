@@ -182,18 +182,84 @@ export function mountHotOffersMsView({root, actions}) {
     }).join('') || '<p class="sub">Sem histórico de coletas para esta oferta.</p>';
     $('#glimpseFrame').dataset.productKey = item.productKey;
   }
-  function renderTrends(item, record) {
-    const codes = Domain.offerCountryCodes(item), selected = new Set((record.assessments?.at(-1)?.countries || []).slice(0,5));
-    const platformLink = $('#openPlatformOffer'), platformUrl = mediaScalersOfferUrl(item.offerId);
-    if (platformUrl) {
-      platformLink.href = platformUrl;
-      platformLink.classList.remove('hidden');
-    } else {
-      platformLink.removeAttribute('href');
-      platformLink.classList.add('hidden');
+  function prepareTrendEditors(item) {
+    const candidateInput = $('#trendCandidate'), candidateEntry = candidateInput?.parentElement, candidates = $('#trendCandidates');
+    if (candidateEntry && candidates && !$('#trendKeywordEditor')) {
+      const editor = document.createElement('div'), heading = document.createElement('div');
+      editor.id = 'trendKeywordEditor'; editor.className = 'trends-keyword-editor';
+      heading.className = 'trends-keyword-heading'; heading.textContent = 'Candidatas à palavra-chave';
+      candidateEntry.classList.remove('candidate-entry'); candidateEntry.classList.add('trends-keyword-entry');
+      candidateInput.placeholder = 'Digite uma ideia e pressione Enter';
+      candidateInput.setAttribute('aria-label','Candidata à palavra-chave');
+      candidates.classList.add('trends-keyword-list');
+      candidateEntry.before(editor); editor.append(heading,candidateEntry,candidates);
     }
-    $('#trendCountries').innerHTML = codes.length ? codes.map(code => '<button type="button" class="trends-country-action ' + (selected.has(code) ? 'selected' : '') + '" data-country="' + escape(code) + '" aria-pressed="' + selected.has(code) + '">' + escape(code) + (item.manualCountries?.includes(code) ? ' · manual' : '') + '</button>').join('') : '<span class="sub">Nenhum país identificado; adicione países manualmente no resumo.</span>';
-    $('#trendCountries').insertAdjacentHTML('beforeend','<div class="candidate-entry"><input class="control" id="manualCountry" maxlength="2" placeholder="País (ex.: BR)" aria-label="Adicionar país manual"><button class="btn" id="addManualCountry" type="button">Adicionar país</button></div>');
+    if (candidateInput && candidateInput.dataset.offerKey !== item.offerKey) {
+      candidateInput.value = '';
+      candidateInput.dataset.offerKey = item.offerKey;
+    }
+
+    const countryChips = $('#trendCountries');
+    let countryEditor = $('#manualCountryEditor');
+    if (!countryEditor && countryChips) {
+      countryEditor = document.createElement('div'); countryEditor.id = 'manualCountryEditor'; countryEditor.className = 'manual-country-entry';
+      const label = document.createElement('label'), input = document.createElement('input'), button = document.createElement('button');
+      label.htmlFor = 'manualCountry'; label.append('Adicionar país pelo código (ex.: BR)');
+      input.id = 'manualCountry'; input.className = 'control'; input.type = 'text'; input.maxLength = 2;
+      input.autocapitalize = 'characters'; input.autocomplete = 'off'; input.spellcheck = false;
+      button.id = 'addManualCountry'; button.className = 'btn primary'; button.type = 'button'; button.textContent = 'Adicionar país';
+      label.append(input); countryEditor.append(label,button);
+      const message = document.createElement('div'); message.id = 'manualCountryMessage';
+      message.className = 'manual-country-message trends-country-empty'; message.setAttribute('role','status'); message.setAttribute('aria-live','polite');
+      countryChips.after(countryEditor,message);
+      const addCountry = async () => {
+        const code = input.value.trim().toUpperCase();
+        if (await actions.addManualCountry(activeOfferKey,code)) {
+          input.value = '';
+          message.textContent = code + ' foi adicionado e ficará separado da captura original.';
+        }
+      };
+      button.onclick = addCountry;
+      input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); addCountry(); } };
+    }
+    const countryInput = $('#manualCountry');
+    if (countryInput && countryInput.dataset.offerKey !== item.offerKey) {
+      countryInput.value = '';
+      countryInput.dataset.offerKey = item.offerKey;
+      $('#manualCountryMessage').textContent = '';
+    }
+
+    const resultCard = $('.trends-result-card',sheet), resultTitle = $('h2',resultCard);
+    if (resultCard && resultTitle && !$('.trends-result-head',resultCard)) {
+      const head = document.createElement('div'), copy = document.createElement('div'), note = document.createElement('p');
+      head.className = 'trends-result-head'; note.textContent = 'Selecione um resultado para salvar a avaliação.';
+      resultTitle.before(head); copy.append(resultTitle,note); head.append(copy);
+    }
+    $('#trendMessage')?.classList.add('trends-result-message');
+  }
+
+  function renderMediaScalersOfferLink(item) {
+    const ageRow = $('.trends-product-age',$('.trends-country-card',sheet));
+    if (!ageRow) return;
+    let group = ageRow.nextElementSibling;
+    if (!group?.classList.contains('trends-offer-links-group')) {
+      group = document.createElement('div');
+      group.className = 'trends-offer-links-group hidden';
+      ageRow.after(group);
+    }
+    const offerId = String(item.offerId ?? '').trim(), url = mediaScalersOfferUrl(offerId);
+    group.classList.toggle('hidden',!url);
+    group.innerHTML = url
+      ? `<span>Oferta específica na MediaScalers</span><div class="trends-offer-links"><a class="btn trends-offer-link" href="${url}" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ${escape(offerId)} na MediaScalers">Abrir oferta #${escape(offerId)}</a></div>`
+      : '';
+  }
+
+  function renderTrends(item, record) {
+    prepareTrendEditors(item);
+    const codes = Domain.offerCountryCodes(item), selected = new Set((record.assessments?.at(-1)?.countries || []).slice(0,5));
+    renderMediaScalersOfferLink(item);
+    $('h2',$('.trends-country-card',sheet)).textContent = 'Países explícitos da oferta';
+    $('#trendCountries').innerHTML = codes.length ? codes.map(code => '<button type="button" class="trends-country-action ' + (selected.has(code) ? 'selected' : '') + '" data-country="' + escape(code) + '" aria-pressed="' + selected.has(code) + '">' + escape(code) + (item.manualCountries?.includes(code) ? ' · manual' : '') + '</button>').join('') : '<span class="sub">Nenhum país identificado; adicione um país manualmente abaixo.</span>';
     pendingProductAge = record.assessments?.at(-1)?.productAge || '';
     TrendsUI.renderProductAgeButtons($('#productAgeActions'),pendingProductAge,value=>{
       pendingProductAge=value;

@@ -12,7 +12,7 @@
     for(const campaign of manifest?.campanhas||[])for(const[period,field]of Object.entries(dateFields)){
       const metrics=campaign?.[field];if(!metrics)continue;
       const date=manifestDate(metrics.data,fallbackDates[period]);if(!date)continue;dates.add(date);
-      const present=metrics.presente!==false,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),factor=currency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
+      const observed=metrics.presente!==false,retained=period==='d0'&&metrics.retida_no_dia===true,present=observed||retained,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),factor=currency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
       let investment=manifestField(metrics.custo_total),costCurrency=currency;
       if(period==='d0'){
         const cost=campaign.custo_D_zero,rawCost=manifestField(cost?.custo_total_destino_totais_coluna_M);
@@ -20,7 +20,7 @@
       }
       const costFactor=costCurrency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
       const commission=manifestField(metrics.valor_conversao)??manifestField(metrics.comissao_recebida);
-      rows.push({campaignName:String(campaign.nome_campanha_exato||''),...(Array.isArray(campaign.datas_coleta)?{scopeDates:[...campaign.datas_coleta]}:{}),period,date,present,investment:!present||investment==null?null:investment*costFactor,impressions:present?manifestField(metrics.impressoes):null,clicks:present?manifestField(metrics.cliques_google):null,conversions:present?manifestField(metrics.conversoes):null,commission:!present||commission==null?null:commission*factor});
+      rows.push({campaignName:String(campaign.nome_campanha_exato||''),...(Array.isArray(campaign.datas_coleta)?{scopeDates:[...campaign.datas_coleta]}:{}),period,date,present,observed,retained,captureScope:campaign.captura_D_zero_escopo||null,captureComplete:campaign.captura_D_zero_completa??null,investment:!present||investment==null?null:investment*costFactor,impressions:present?manifestField(metrics.impressoes):null,clicks:present?manifestField(metrics.cliques_google):null,conversions:present?manifestField(metrics.conversoes):null,commission:!present||commission==null?null:commission*factor});
     }
     const rowsByCampaignDate=new Map();for(const row of rows){const key=`${row.campaignName.toLocaleLowerCase('pt-BR')}|${row.date}`,previous=rowsByCampaignDate.get(key);if(!previous||row.period==='d1')rowsByCampaignDate.set(key,row)}
     return{dates:[...dates].sort(),rows:[...rowsByCampaignDate.values()].sort((a,b)=>a.date.localeCompare(b.date))};

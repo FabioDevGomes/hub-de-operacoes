@@ -82,6 +82,19 @@ test('overview daily profit follows D0, marks polarity and exposes observed cove
   const missing=setup([row('Sem comissão','ativa',10,{d0Totals:{investment:10,commission:null}})]);missing.controller.render();
   assert.match(missing.get('#kpis').innerHTML,/<span class="kpi-label">Lucro do dia<\/span>[\s\S]*?<strong class="kpi-value ">—<\/strong>/);
 });
+test('overview D0 total includes same-day retained campaigns without a partial label',()=>{
+  const active=row('Ativa','ativa',10,{d0Totals:{investment:10,impressions:10,clicks:2}});
+  active.c.metricas_D_zero={presente:true};active.c.captura_D_zero_escopo='active_only';active.c.captura_D_zero_completa=false;
+  const paused=row('Pausada','pausada',20,{d0Totals:{investment:20,impressions:20,clicks:4}});
+  paused.c.metricas_D_zero={presente:false,retida_no_dia:true};paused.c.captura_D_zero_escopo='active_only';paused.c.captura_D_zero_completa=false;
+  const s=setup([active,paused]);s.controller.render();
+  let kpis=s.get('#kpis').innerHTML;
+  assert.doesNotMatch(kpis,/parcial|captura “Todas as campanhas”/i);
+  assert.match(kpis,/BRL 30\.00/,'investimento D0 inclui ativa e ausente retida mesmo com o filtro da tabela em ativas');
+  assert.match(kpis,/overview-kpi-detail-value">30/,'impressões e cliques dos registros retidos somam no cartão D0');
+  active.c.captura_D_zero_completa=true;paused.c.captura_D_zero_completa=true;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.doesNotMatch(kpis,/parcial|últimos valores D0 conhecidos/i,'a cobertura técnica não altera o rótulo visual do total');
+});
 test('overview D0 indicators exclude stale rows absent from the latest MCC capture',()=>{
   const captured=row('Capturada','ativa',20,{d0Totals:{investment:20,impressions:50,clicks:5,commission:30},d0ProfitTotals:{investment:20,commission:30}});
   const stale=row('Ausente da captura','pausada',113,{d0Totals:{investment:113,impressions:113,clicks:10,commission:85},d0ProfitTotals:{investment:113,commission:85}});

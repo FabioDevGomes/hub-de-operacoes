@@ -105,12 +105,19 @@ assert.equal(snapshot.cellOffset, 1, 'usa o vínculo da célula Campanha para co
 assert.equal(snapshot.rowsCaptured, 2);
 assert.equal(snapshot.uniqueCampaignCount, 2);
 assert.equal(snapshot.completeness, 'current-page-matches-apparent-total');
+assert.equal(snapshot.campaignFilterScope,'unknown','não presume o filtro quando a MCC não mostra o resumo da visualização');
 assert.equal(snapshot.reportDate.value, '2026-09-23', 'aceita apenas um dia explícito no filtro da MCC');
 assert.equal(snapshot.fields.abs_top_share.found, true, 'resolve help_outline usando o nome acessível do cabeçalho');
 assert.equal(snapshot.records[0].impressions, '0');
 assert.equal(snapshot.records[0].avg_cost, '—');
 assert.equal(snapshot.records[0].abs_top_share, '0%');
 assert.equal(snapshot.records[1].impressions, '1,234');
+assert.equal(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({footer:'Total: todas as campanhas na sua visualização atual, exceto as removidas'}).doc).campaignFilterScope,'all_campaigns');
+assert.equal(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({footer:'Total: todas as campanhas ativadas na sua visualização atual'}).doc).campaignFilterScope,'active_only');
+assert.equal(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({footer:'Total: all enabled campaigns in your current view'}).doc).campaignFilterScope,'active_only');
+const activeFilterCapture=validateMccD0Capture(collectMccGrid(D0_FIELDS,HEADER_ALIASES,makeDocument({footer:'1 - 2 de 2\nTotal: todas as campanhas ativadas na sua visualização atual'}).doc));
+assert.equal(activeFilterCapture.ok,true,JSON.stringify(activeFilterCapture.errors));
+assert.equal(activeFilterCapture.capture.campaignFilterScope,'active_only','o filtro reconhecido acompanha a captura validada até o Preparador');
 
 const linkedAccount = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ linkedColumns: [0, 1] }).doc);
 assert.equal(linkedAccount.ok, true, linkedAccount.error || 'links em outras colunas não devem criar deslocamentos concorrentes');

@@ -124,6 +124,7 @@ export function validateMccD0Capture(snapshot) {
       managerAccountId:snapshot.managerAccountId,
       managerAccountName:String(snapshot.managerAccountName).trim(),
       reportDate: snapshot.reportDate.value,
+      campaignFilterScope: ['all_campaigns','active_only'].includes(snapshot.campaignFilterScope) ? snapshot.campaignFilterScope : 'unknown',
       locale: snapshot.locale || 'en-US',
       pagination: snapshot.pagination,
       campaignCount: records.length,

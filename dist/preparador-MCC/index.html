@@ -935,7 +935,7 @@
       const text = [`Relatório D0: ${capture.reportDate}`, headerRow, ...rows].join('\r\n');
       const bytes = new TextEncoder().encode(text);
       const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-      return { text, encoding: 'mcc_dom_structured', hash, size: bytes.byteLength, name: `captura_mcc_d0_${capture.reportDate}.csv`, source: 'mcc_chrome_extension', managerAccountId:capture.managerAccountId, managerAccountName:String(capture.managerAccountName).trim() };
+      return { text, encoding: 'mcc_dom_structured', hash, size: bytes.byteLength, name: `captura_mcc_d0_${capture.reportDate}.csv`, source: 'mcc_chrome_extension', managerAccountId:capture.managerAccountId, managerAccountName:String(capture.managerAccountName).trim(), campaignFilterScope:['all_campaigns','active_only'].includes(capture.campaignFilterScope)?capture.campaignFilterScope:'unknown' };
     }
 
     async function decodeMccD1GridCapture(capture) {
@@ -1119,6 +1119,7 @@
         schema:'manifesto_mcc_v2',
         gerado_em_utc:new Date().toISOString(),
         identificacao_mcc:managerAccountId && managerAccountName ? { id:managerAccountId, nome:managerAccountName } : null,
+        captura_D_zero:hasD0?{ escopo:d0?.campaignFilterScope||'unknown', campanhas_capturadas:d0?.records.length??0, capturada_em:d0?.capturedAt||null }:null,
         origem_geracao:{ modo:'gerado_do_zero_a_partir_dos_CSVs', modo_entrada:mode, origem_entrada_D_menos_1:d1?.source || (hasD1 ? 'csv_manual' : 'nao_fornecido'), origem_entrada_D_zero:d0?.source || (hasD0 ? 'csv_manual' : 'nao_fornecido'), manifesto_anterior_lido:false, processamento:'local_no_navegador', envio_externo:false },
         regras:{ chave_campanha:'nome exato da campanha na MCC', associacao_entre_arquivos:'somente igualdade exata; ordem das linhas ignorada', valores_ausentes:'null com estado ausente; nunca convertidos em zero', percentuais:'pontos percentuais conforme exibidos no CSV', moedas:'preservadas; nenhuma conversão financeira aplicada' },
         fontes:descriptors,

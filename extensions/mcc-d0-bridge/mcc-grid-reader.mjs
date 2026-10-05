@@ -190,6 +190,12 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
 
   const rawBodyText = doc.body?.innerText || doc.body?.textContent || '';
   const bodyText = collapse(rawBodyText);
+  const normalizedBodyText = bodyText.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const campaignFilterScope = /total:\s*(?:todas as campanhas ativadas|all enabled campaigns|all active campaigns)\s+(?:na\s+sua\s+visualizacao(?:\s+atual)?|in\s+your\s+(?:current\s+)?view)/i.test(normalizedBodyText)
+    ? 'active_only'
+    : /total:\s*(?:todas as campanhas|all campaigns)\s+(?:na\s+sua\s+visualizacao(?:\s+atual)?|in\s+your\s+(?:current\s+)?view)/i.test(normalizedBodyText)
+      ? 'all_campaigns'
+      : 'unknown';
   const bodyLines = String(rawBodyText).split(/\r?\n/).map(collapse).filter(Boolean).slice(0, 40);
   const managerHeaders = [];
   for (let index = 0; index < bodyLines.length; index++) {
@@ -273,6 +279,7 @@ export function collectMccGrid(fields, headerAliases, doc = document) {
     duplicateFields,
     totalRowsApparent: pagination?.total ?? (ariaRowCount != null ? Math.max(0, ariaRowCount - 1) : null),
     reportDate,
+    campaignFilterScope,
     completeness: virtualized ? 'partial-or-virtualized'
       : pagination && pagination.first === 1 && pagination.last === pagination.total && pagination.total === recordRows.length
         ? 'current-page-matches-apparent-total'

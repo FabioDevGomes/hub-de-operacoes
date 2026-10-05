@@ -1,4 +1,16 @@
 .curobs{display:grid;gap:12px;color:var(--text)}
+.app:has(#curationObservabilityView:not(.hidden)) .topbar .actions .btn,
+.app:has(#curationObservabilityView:not(.hidden)) #statusbar .pill,
+#curationObservabilityView .curobs-toolbar,
+#curationObservabilityView .curobs-panel,
+#curationObservabilityView .curobs-button,
+#curationObservabilityView .curobs-state,
+#curationObservabilityView .curobs-detail-content,
+#curationObservabilityView .curobs-detail-block,
+#curationObservabilityView .curobs-snapshot,
+#curationObservabilityView .curobs-correlation,
+#curationObservabilityView .curobs-snapshot-grid>div,
+#curationObservabilityView .curobs-live{border:0}
 .curobs-toolbar,.curobs-panel{border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,rgba(17,31,52,.96),rgba(12,24,42,.96));box-shadow:var(--shadow)}
 .curobs-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px}
 .curobs-kicker{color:var(--cyan);font-size:.66rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase}

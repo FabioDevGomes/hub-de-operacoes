@@ -1,0 +1,83 @@
+/*
+ * Cores tipográficas comuns do Hub.
+ * Estados de negócio (alerta, sucesso, atenção e neutro informativo) continuam
+ * sendo definidos pelos estilos próprios de cada componente.
+ */
+:root {
+  --hub-primary-text: #c3cede;
+  --text: var(--hub-primary-text);
+  --cb-text: var(--hub-primary-text);
+  --smartadv-text: var(--hub-primary-text);
+}
+
+html,
+body {
+  color: var(--hub-primary-text);
+}
+
+/* Seleções neutras de interface. */
+.list-tabs button.active,
+.view-toggle button.active,
+.sale-source-tab.active,
+.time-tabs button.active,
+.time-history-subtabs button.active,
+.billing-mode button.active,
+.billing-presets button.active,
+.pf-view-toggle button:hover,
+.pf-view-toggle button.active,
+.sheet-tabs button.active,
+#offerSheet .tabs .btn.active,
+.target-button.active b,
+#clickbankTopOffersRoot .sort-btn:hover,
+#clickbankTopOffersRoot .sort-btn.active,
+#hotOffersMsRoot .sort-btn:hover,
+#hotOffersMsRoot .sort-btn.active {
+  color: var(--hub-primary-text);
+}
+
+/* Texto primário das tabelas: regras de estado mais específicas preservam
+   vermelho, verde, âmbar e demais cores semânticas dos dados. */
+td,
+td.name,
+.account-cell strong,
+.account-matrix tbody tr.selected .account-cell.has-campaigns strong,
+.curobs-table td:nth-child(2),
+.time-table .activity,
+.time-matrix td.has-value,
+.trends-preview strong,
+.copy-product:hover,
+.copy-product:focus-visible,
+.focus b,
+.copy:hover,
+.item-visibility:hover,
+.product-name,
+html body .people-also-search-item,
+.curobs-expand:hover,
+.curobs-live,
+.pf-difference-value strong.is-balanced,
+.pf-empty strong,
+.pf-period-adjust-button:hover,
+.pf-icon-button:hover,
+.billing-kpi strong,
+.macro-chart-switch .btn.active,
+.overview-roi-dialog,
+.overview-roi-input {
+  color: var(--hub-primary-text);
+}
+
+/* Form values are primary text too; placeholders and labels remain muted. */
+.pf-period-length input,
+.pf-import-panel textarea,
+.pf-amount-input,
+.pf-modal input,
+.pf-modal select,
+.pf-modal textarea {
+  color: var(--hub-primary-text);
+}
+
+/* Neutral dashboard figures. Keep green/red financial signals on their own
+   semantic rules instead of recoloring them here. */
+.pf-reserve-projection:not(.pf-money-usd) > div:not(.is-positive):not(.is-negative) strong,
+.pf-net-position b:not(.positive):not(.negative) {
+  color: var(--hub-primary-text);
+}

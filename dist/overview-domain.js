@@ -47,7 +47,11 @@
   }
   function profitForTotals(totals){if(!totals)return null;const investment=numeric(totals.investment),commission=numeric(totals.commission);if(investment==null||commission==null)return null;return money(commission-investment)}
   function totalsColumns(mode,totalLabel='total'){
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI na 1ª venda'],['saleRoiSecond','ROI na 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
+  }
+  const columnWidths=Object.freeze({date:52,campaign:250,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:110,limit:130,remaining:106,status:82});
+  function visibleColumns(columns,selected){
+    return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
   }
   function parseMinimumRoi(value){
     const text=String(value??'').trim();
@@ -105,10 +109,10 @@
     return{limit,remaining:spent==null?null:money(limit-spent),minimumRoi,salesCount:saleCount,revenue:totalRevenue};
   }
   function sortRows(input,state,sortCell){const rows=[...(input||[])];
-      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name.toLocaleLowerCase('pt-BR'),zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,conv:r=>r.totals?.conversions??null,roi:r=>r.roi,profit:r=>r.profit,account:r=>r.account,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining)};
+      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name.toLocaleLowerCase('pt-BR'),zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,conv:r=>r.totals?.conversions??null,roi:r=>r.roi,saleRoiFirst:r=>r.saleHistory?.[0]?.snapshot?.roi_percent??null,saleRoiSecond:r=>r.saleHistory?.[1]?.snapshot?.roi_percent??null,profit:r=>r.profit,account:r=>r.account,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining)};
        rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?av.localeCompare(bv,'pt-BR',{numeric:true,sensitivity:'base'}):av-bv;return state.sortDir==='asc'?result:-result});
     return rows;
   }
   function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&paused||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
-  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns});
+  root.OverviewDomain=Object.freeze({sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns});
 })(typeof window==='object'?window:globalThis);

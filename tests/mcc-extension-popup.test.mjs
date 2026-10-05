@@ -89,10 +89,10 @@ for (const button of [d0, d1]) {
   assert.equal(status.children[0].textContent, 'Captura bloqueada: campanha duplicada');
 }
 assert.deepEqual(requests, ['SCROLL_ACTIVE_MCC_TO_BOTTOM', 'CAPTURE_AND_FORWARD_MCC_D0', 'CAPTURE_AND_FORWARD_MCC_D1']);
-response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-01', waitingForD0:true } };
+response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-01', previewReady:true, waitingForD0:false } };
 await d1.click();
 assert.ok(!status.classes.has('error'));
-assert.match(status.textContent, /Aguardando D0/);
+assert.match(status.textContent, /D−1 validado e prévia pronta/);
 
 // O service worker restringe a rolagem à aba ativa do Google Ads e injeta
 // somente o helper geométrico, sem invocar o leitor da grade.

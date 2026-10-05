@@ -35,7 +35,7 @@ Erros de nomes duplicados aparecem em um quadro vermelho com o título **Captura
 1. Na MCC, selecione uma única data explícita correspondente a ontem no fuso `America/Sao_Paulo`; texto relativo como “Yesterday” sem a data resolvida não é aceito.
 2. Use **Rolar MCC até o final** para que todas as campanhas estejam materializadas; aguarde a confirmação e clique em **Capturar D−1 da MCC**. A rolagem não lê nem encaminha dados.
 3. A captura usa o mesmo leitor semântico e os mesmos campos obrigatórios de D0, mas envia o contrato `mcc-d1-grid-v3`. Data errada, intervalo, grade incompleta, cabeçalho ausente, nome duplicado, número completo da conta ilegível, identidade da MCC ausente ou moeda ambígua bloqueiam a entrega.
-4. O Preparador instala os dados no slot D−1 existente. Se D0 ainda não estiver carregado, mostra “D−1 recebido e validado. Aguardando D0 para gerar a prévia.” Não é criado manifesto aplicável nem gravação isolada.
+4. O Preparador instala os dados no slot D−1 existente e gera a prévia mesmo sem D0. A base só é atualizada após validação e clique explícito em “Atualizar base”. Se D0 for carregado depois, a prévia passa a combinar os dois períodos.
 5. Quando D0 estiver carregado, o Preparador exige uma única data em cada período e que D0 seja o dia imediatamente seguinte a D−1. Nomes, contas, moedas e percentuais seguem as validações normais do manifesto `manifesto_mcc_v2`.
 6. Revise a prévia combinada. A base continua inalterada até clicar manualmente em **Atualizar base**.
 
@@ -55,7 +55,7 @@ Os quadros D0 e D−1 exibem o estado e o resumo da captura estruturada enviada 
 
 Na captura direta, o service worker envia somente os dados validados e chama `window.__hubReceiveMccD0Grid` ou `window.__hubReceiveMccD1Grid` em `world: 'MAIN'`. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub.
 
-Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Prefixos ambíguos continuam sem vínculo automático. D−1 precisa corresponder a ontem no fuso `America/Sao_Paulo`; quando D0 também estiver carregado, as datas devem ser consecutivas. D−1 isolado aguarda D0 e nunca atualiza a base.
+Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Prefixos ambíguos continuam sem vínculo automático. D−1 precisa corresponder a ontem no fuso `America/Sao_Paulo`; quando D0 também estiver carregado, as datas devem ser consecutivas. D−1 ou D0, isoladamente, pode atualizar somente o período recebido depois que a prévia for validada e o usuário clicar em **Atualizar base**.
 
 ## Testes
 

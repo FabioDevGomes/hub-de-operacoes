@@ -1,0 +1,49 @@
+/* Escala única das fichas Google Trends. Não alcança listas, Imagens ou Glimpse.
+   Os IDs existentes delimitam os três hosts, sem mudar renderização/persistência. */
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel){
+  --trends-font-body:.9rem;
+  --trends-font-detail:.875rem;
+  --trends-font-heading:1.125rem;
+  --trends-font-tag:.75rem;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:var(--trends-font-body);
+  line-height:1.45;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) h2{
+  font-size:var(--trends-font-heading);
+  line-height:1.35;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) :is(p,label,small,.sub,.form-label,.field-label,.sheet-message,.sheet-status,.trends-concentrated,.trends-country-empty,.trends-keyword-heading,.trends-keyword-empty,.trends-limit,.trends-preview,.history-row,.trends-product-age>span,.trends-preview-grid span,.trends-offer-links-group>span,.trends-gurumedia-offers>span){
+  font-size:var(--trends-font-detail);
+  line-height:1.45;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) :is(.btn,.control,.trends-country-action,.trends-keyword-candidate,.keyword-candidate-search,.trends-offer-link,.trends-gurumedia-link){
+  font-family:inherit;
+  font-size:var(--trends-font-detail);
+  line-height:1.45;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) :is(.btn,.trends-country-action){
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:36px;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) .control{
+  min-height:38px;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) .trends-result-action{
+  min-height:40px;
+  white-space:normal;
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) .manual-country-label{
+  font-size:var(--trends-font-tag);
+}
+html body :is(#offerSheet [data-panel="trends"],#managerTrendsPanel,#trendsSheetPanel) .manual-country-entry label{
+  max-width:330px;
+}
+/* Navegação/retorno da ficha: a escala só muda enquanto Trends está aberto. */
+html body :is(#offerSheet:has([data-panel="trends"]:not(.hidden)),#productSheet:has(#managerTrendsPanel:not(.hidden)),.product-sheet:has(#trendsSheetPanel:not(.hidden))) :is(.tabs .btn,.sheet-tabs button,.sheet-top>.btn,.sheettop>.btn){
+  font-family:inherit;
+  font-size:.875rem;
+  line-height:1.45;
+}

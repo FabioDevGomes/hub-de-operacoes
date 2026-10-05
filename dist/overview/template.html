@@ -1,6 +1,11 @@
         <div id="kpis" class="kpis"></div>
         <div class="card panel">
-          <div class="panel-head"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><div class="panel-controls"><select id="campaignStatusFilter" class="search" style="width:auto" aria-label="Filtrar campanhas por situação"><option value="all">Todas</option><option value="active">Ativas</option><option value="paused">Pausadas</option><option value="paused7">Pausadas nos últimos 7 dias</option></select><div class="view-toggle" role="group" aria-label="Período da visão geral"><button id="totalsConsolidated" class="active" type="button">Consolidado</button><button id="totalsD1" type="button">D−1</button><button id="totalsD0" type="button">D zero</button></div><span id="totalsCount" class="tag"></span></div></div>
+          <div class="panel-head"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><div class="panel-controls"><select id="campaignStatusFilter" class="search" style="width:auto" aria-label="Filtrar campanhas por situação"><option value="all">Todas</option><option value="active">Ativas</option><option value="paused">Pausadas</option><option value="paused7">Pausadas nos últimos 7 dias</option></select><div class="view-toggle" role="group" aria-label="Período da visão geral"><button id="totalsConsolidated" class="active" type="button">Consolidado</button><button id="totalsD1" type="button">D−1</button><button id="totalsD0" type="button">D zero</button></div>
+            <details id="overviewColumnPicker" class="overview-column-picker">
+              <summary class="btn">Colunas</summary>
+              <div class="overview-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions"></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
+            </details>
+            <span id="totalsCount" class="tag"></span></div></div>
           <div class="table-wrap"><table class="totals-table"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody></table></div>
         </div>
         <dialog id="minimumRoiDialog" class="overview-roi-dialog" aria-labelledby="minimumRoiTitle">

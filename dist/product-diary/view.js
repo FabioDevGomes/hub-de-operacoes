@@ -6,8 +6,21 @@
     function formatExcelDate(serial){const d=excelDate(serial);return new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(d)}
     function formatProductCell(col,cell){if(!cell||cell.value==null||cell.value==='')return'—';if(col==='A')return typeof cell.value==='number'?formatExcelDate(cell.value):esc(cell.text??cell.value);if(['E','G','K','L'].includes(col)){const v=Number(cell.value);return Number.isFinite(v)?fmtPct(Math.abs(v)<=1?v*100:v):''}if(['I','J','O','P'].includes(col)&&typeof cell.value==='number')return fmtNum(cell.value,2);return esc(cell.text??cell.value)}
     function formatProductDiaryCell(col,row,manualSalesByDate,pauseConfirmedAt){const value=formatProductCell(col,row.cells[col]),count=productDiaryManualSaleCount(row,manualSalesByDate),pauseNote=col==='Q'&&pauseConfirmedAt&&productDiaryRowDate(row)===pauseConfirmedAt?`<small class="product-pause-note">Campanha pausada na data ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}</small>`:'';if(col==='F')return count?`<span>${value}</span><small class="product-manual-sale-note">+${count} manual · provisória</small>`:value;if(col!=='Q')return value;const notes=[];if(value!=='—')notes.push(`<span>${value}</span>`);if(count)notes.push(`<small class="product-manual-sale-note">Venda manual provisória (${count}); aguarda MCC D−1</small>`);if(pauseNote)notes.push(pauseNote);return notes.join('')||'—'}
+    function saleTimestamp(value){const date=new Date(value);return value&&Number.isFinite(date.getTime())?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(date):'—'}
+    function saleDate(value){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value).split('-').reverse().join('/'):'—'}
+    function renderSales(sales){
+      $('#productSalesBody').innerHTML=sales.length?sales.map(sale=>{
+        const snapshot=sale.snapshot,roi=snapshot?.roi_percent,edited=snapshot&&(snapshot.sale_amount_brl!==sale.valor_brl||snapshot.sale_date!==sale.data||snapshot.sale_time!==sale.hora),
+          note=snapshot?snapshot.unavailable_reason||'ROI preservado no lançamento':'Sem fotografia histórica de ROI',
+          status=sale.status==='conciliada'?'Confirmada pela MCC':'Manual · provisória',
+          title=snapshot?`${note}. Taxa operacional USD/BRL: ${snapshot.exchange_rate==null?'não disponível':fmtNum(snapshot.exchange_rate,4)}.`:note;
+        return `<tr><td>${sale.sequence}ª</td><td>${esc(saleDate(snapshot?.sale_date||sale.data))}${snapshot?.sale_time||sale.hora?' '+esc(snapshot?.sale_time||sale.hora):''}</td><td class="num">${fmtMoney(snapshot?.sale_amount_brl??sale.valor_brl)}</td><td class="num">${fmtMoney(snapshot?.investment_brl??null)}</td><td class="num">${fmtMoney(snapshot?.revenue_brl??null)}</td><td class="num ${roi==null?'':roi<0?'negative':roi>0?'positive':''}" title="${esc(title)}">${roi==null?'—':fmtPct(roi)}<small>${esc(note)}</small></td><td>${esc(saleTimestamp(snapshot?.registered_at||sale.registrada_em))}</td><td>${esc(snapshot?.metrics_date?saleDate(snapshot.metrics_date):'Sem referência MCC')}<small>${esc(status)}</small>${edited?'<small>Lançamento editado; fotografia original preservada.</small>':''}</td></tr>`;
+      }).join(''):'<tr><td colspan="8" class="empty">Nenhuma venda manual registrada nesta campanha.</td></tr>';
+    }
     function renderProduct(name,source='manifest',campaignId=null){
-      const {sheetName,rows,displayRows,manualSalesByDate,summary,investment,pauseConfirmedAt}=getSnapshot(name,source,campaignId);
+      const {sheetName,rows,displayRows,manualSalesByDate,summary,investment,pauseConfirmedAt,saleHistory=[]}=getSnapshot(name,source,campaignId);
+      $('#productSaleHistory').classList.toggle('hidden',!!summary);
+      renderSales(summary?[]:saleHistory);
       const boundedRows=pauseConfirmedAt?productDiaryRowsThroughDate(displayRows,pauseConfirmedAt):displayRows,provisionalSaleDates=new Set(manualSalesByDate.keys()),diaryRows=productDiaryRowsThroughDate(productDiaryRowsWithManualSales(boundedRows,manualSalesByDate),pauseConfirmedAt);
       const latest=boundedRows.at(-1)?.cells||{};
       if(summary){

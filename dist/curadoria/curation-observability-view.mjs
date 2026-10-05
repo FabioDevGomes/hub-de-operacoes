@@ -1,7 +1,7 @@
 import * as Repository from './curation-observability-storage.mjs';
 import * as Domain from './curation-observability-domain.mjs';
 
-const SOURCE_LABELS={'guru-media-lista-gerente':'Lista de Gerente','guru-media-ecommerce-gm':'E-commerce GM',manager:'Lista de Gerente',top:'E-commerce GM'};
+const SOURCE_LABELS={'guru-media-lista-gerente':'Lista de Gerente','guru-media-ecommerce-gm':'E-commerce GM','smartadv-offers':'SmartAdv',manager:'Lista de Gerente',top:'E-commerce GM'};
 const $=(root,selector)=>root.querySelector(selector);
 const safe=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const dateTime=value=>{const date=new Date(value);return Number.isNaN(date.getTime())?'—':new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(date)};
@@ -19,7 +19,7 @@ export async function mount({root,getOperationalEvents=()=>[]}={}){
     <section class="curobs-panel">
       <div class="curobs-filters">
         <label>Produto exato<input data-filter="productName" type="search" placeholder="Nome do produto" autocomplete="off"></label>
-        <label>Origem<select data-filter="origin"><option value="">Todas</option><option value="guru-media-lista-gerente">Lista de Gerente</option><option value="guru-media-ecommerce-gm">E-commerce GM</option></select></label>
+        <label>Origem<select data-filter="origin"><option value="">Todas</option><option value="guru-media-lista-gerente">Lista de Gerente</option><option value="guru-media-ecommerce-gm">E-commerce GM</option><option value="smartadv-offers">SmartAdv</option></select></label>
         <label>Tipo<select data-filter="eventType"><option value="">Todos</option><option value="trends_saved">Trends salvo</option><option value="images_saved">Imagens salvo</option><option value="glimpse_completed">Glimpse concluído</option><option value="decision_changed">Decisão alterada</option><option value="snapshot_decisao_created">Snapshot de decisão</option></select></label>
         <label>Decisão<select data-filter="decisionStatus"><option value="">Todas</option><option>Não definido</option><option>Subir campanha</option><option>Campanha no ar</option><option>Revisar</option><option>Ocultar</option></select></label>
         <label>Correlação<select data-filter="correlationStatus"><option value="">Todos</option><option value="pending">Pendente</option><option value="confirmed">Confirmada</option></select></label>

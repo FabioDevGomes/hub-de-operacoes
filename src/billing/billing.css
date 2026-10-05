@@ -33,3 +33,15 @@
 .billing-custom-period input{padding-left:5px;padding-right:5px}
 .billing-custom-period>.btn{display:flex;align-items:center;justify-content:center;line-height:1;text-align:center}
 @media(max-width:700px){.billing-custom-period{flex-wrap:wrap}}
+.billing-root .card,
+.billing-root .billing-mode,
+.billing-root .billing-presets,
+.billing-root .billing-month-navigation,
+.billing-root .billing-notice,
+.billing-root .billing-cash-note,
+.billing-root .billing-status,
+.billing-root .billing-confirmation,
+.billing-root .tag,
+.billing-root .btn,
+.billing-root .billing-audit,
+.billing-root .billing-modal-card{border:0}

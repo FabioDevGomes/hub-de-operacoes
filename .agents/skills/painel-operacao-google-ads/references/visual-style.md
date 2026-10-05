@@ -1,0 +1,36 @@
+# Padrão visual reutilizável
+
+Este guia registra a direção visual aprovada para a evolução gradual do Hub. A Visão Geral é o primeiro piloto e passa a ser a referência para implementações novas. Reutilize a linguagem visual, não force o mesmo arranjo de conteúdo em domínios diferentes. Se o piloto for ajustado após revisão, atualize este guia antes de propagar o ajuste.
+
+## Direção visual
+
+A cobertura do padrão de bordas inclui CPA, Diário (inclusive resumo legado), quadros e subabas de Meu Tempo, selos de moeda do Controle de gastos, chips da Ficha e Presell e abas da prévia MCC. Nas fichas de Curadoria, use a regra compartilhada em `trends-sheet.css` com prioridade suficiente para os hosts por ID. Botões de ação comuns conservam seus contornos próprios; abas, os botões de backup da tela Top Offers CB e o botão de recolher o menu nessa tela recebem a remoção. Preserve cores de alerta, foco e bordas de validação.
+
+- Para o padrão de bordas aprovado, use a skill `padrao-bordas-hub` instalada no Codex: painéis, cartões, abas e etiquetas sem contorno externo; preserve divisórias internas, campos editáveis, alvos de colagem e foco acessível. Este padrão substitui a preferência geral anterior por contornos em painéis, sem autorizar mudanças de domínio.
+- Preserve o tema escuro azul-marinho do Hub. Use as variáveis globais já existentes (`--bg`, `--panel`, `--panel2`, `--line`, `--text`, `--muted`, `--blue`, `--cyan`, `--green`, `--amber` e `--red`) em vez de criar uma paleta paralela.
+- Mantenha a navegação lateral compacta para liberar largura ao conteúdo. Mudanças de largura devem ser escopadas ao piloto até que sejam validadas para o shell inteiro.
+- Na Visão Geral, disponha os indicadores em seis cartões equilibrados e compactos: campanhas ativas, D−1, D0, lucro do dia, manifesto/datas e base/vendas provisórias pendentes de confirmação. Use largura máxima próxima de 250px, altura em torno de 94px e hierarquia clara entre título, valor principal e métricas secundárias; em D−1 e D0, título e valor de investimento podem ficar na mesma linha. Preserve a legibilidade e a adaptação em telas estreitas; não invente indicadores nem altere cálculos para preencher espaços visuais.
+- As informações de manifesto, datas, base local e vendas provisórias aparecem nos cartões da Visão Geral, sem repetir os chips de status nessa tela. O cartão de vendas provisórias usa fundo sólido, mantém o ponto âmbar quando há pendências e verde quando não há, além de um ícone vetorial acessível com explicação ao passar o mouse; a faixa de chips compactos continua disponível nas demais telas.
+- Nos controles da tabela da Visão Geral, mantenha os fundos e estados selecionados, mas sem contornos externos no filtro, no seletor de período e na etiqueta de contagem.
+- Dê preferência a painéis sem bordas externas, com cantos arredondados e espaçamento regular. Use o contraste dos fundos para separar áreas, sem adicionar decoração que concorra com os dados.
+- A tabela é a área principal de trabalho e deve parecer um painel próprio: título/caption e controles agrupados acima; cabeçalho de coluna em faixa claramente distinta; separadores de linha visíveis e fundos alternados discretos; tipografia de cabeçalho legível, nomes e números alinhados com consistência, foco/hover visíveis e status em badges. Preserve a proporção útil das colunas e role dentro do painel quando não couberem; quebre somente os títulos longos de cabeçalho para evitar texto cortado, mantendo o indicador de ordenação visível. Na coluna “Dias sem impressões”, centralize o título em até duas linhas e posicione o indicador de ordenação sem deslocar o texto. Não reduza fonte ou conteúdo para forçar tudo na largura.
+- Preserve cores semânticas existentes: verde para resultado favorável, vermelho para alerta/resultado desfavorável, âmbar para atenção e azul/ciano para navegação ou destaque neutro. Nunca use a cor de destaque de navegação para substituir estado de negócio.
+
+## Composição e responsividade
+
+- Use uma ordem previsível, inspirada nos dashboards de referência: navegação lateral compacta, título/ações no cabeçalho, faixa de indicadores em cartões, painel principal com sua própria barra de título/controles e tabela; inclua gráficos ou painéis secundários somente quando houver dados existentes que os justifiquem. Aplique o arranjo visual ao contexto do Hub, sem copiar nomes de campos ou conteúdo do exemplo.
+- Prefira CSS Grid/Flex com `minmax(0, 1fr)`, `min-width: 0` e pontos de quebra explícitos. Em telas estreitas, reorganize cartões e controles em vez de comprimir texto ou criar rolagem horizontal para a página inteira.
+- Preserve a rolagem interna de tabelas apenas quando ela for necessária para manter o cabeçalho e o conteúdo utilizáveis; não crie dois eixos de rolagem concorrentes sem motivo.
+- Escopo primeiro: seletores específicos da tela piloto. Só mova regras para folhas compartilhadas quando o mesmo contrato visual for confirmado em todos os consumidores.
+- Mantenha foco de teclado perceptível, rótulos acessíveis, contraste suficiente e alvos de interação utilizáveis em todos os tamanhos.
+
+## Regras de implementação
+
+Para as fichas completas de Google Trends, Glimpse e Google Imagens, siga o [guia consolidado da Curadoria](../../../../docs/curation-analysis-pattern.md). A referência concreta é E-commerce GM; Top Offers CB reutiliza shell/abas e componentes, apresenta Glimpse sem cartão extra e Imagens com progresso, concluir/retornar e histórico. Países ClickBank continuam exclusivamente manuais e os bancos permanecem separados.
+
+- Nas colunas Google Trends, Glimpse e Imagens das listas de Curadoria, a E-commerce GM é a referência de cores. Reutilize `trends-badge` e `image-badge` com a classe do resultado real, não apenas `saved`; quando ainda não houver pesquisa/análise/verificação, as três colunas usam a mesma cápsula neutra `#182337`/`#ccd4df`. Resultados avaliados preservam as cores semânticas; Glimpse fica verde quando há análise salva. A sombra discreta dos três atalhos é compartilhada em `src/curadoria/trends-sheet.css`, sem borda externa; preserve hover, foco acessível, tooltips e marcadores de candidatas. O mesmo estado deve ter a mesma cor em todos os consumidores, inclusive Hot Offers MS, SmartAdv e Top Offers CB.
+
+- Separe visual de domínio: uma mudança de layout não deve alterar consultas, fórmulas, ordenação, filtros, persistência, identificadores ou fluxos de confirmação.
+- Reutilize os componentes compartilhados existentes para navegação, botões e padrões globais; não copie marcação ou lógica de outra view.
+- Para a Visão Geral, use como referência concreta a composição em cartões e painel de tabela com cabeçalho/linhas bem definidos; conserve o tema escuro aprovado, as cores semânticas e os dados/campos do Hub. Não faça apenas microajustes de borda ou contraste quando o pedido for aplicar o layout. Valide desktop e larguras menores no servidor local e compare visualmente. Após aprovação, replique em outras telas por etapas, registrando diferenças justificadas por domínio.
+- Execute os testes da view afetada, o build e a suíte completa; inspecione o diff gerado em `dist/` para não incluir alterações alheias.

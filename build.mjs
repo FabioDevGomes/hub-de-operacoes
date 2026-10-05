@@ -34,6 +34,7 @@ await cp(resolve(root, "src/overview-info-icon.png"), resolve(root, "dist/overvi
 await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-component.js"));
 await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navigation-controller.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
+await cp(resolve(root, "src/theme-colors.css"), resolve(root, "dist/theme-colors.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
 // Publish only the canonical page; historical copies are not build inputs.

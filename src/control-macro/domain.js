@@ -88,7 +88,7 @@
         let remaining=pendingSales;
         for(const sale of Array.isArray(adjustment?.productSales)?adjustment.productSales:[]){
           const count=Math.min(remaining,Math.max(0,parseNumber(sale?.sales)??1));if(count<=0)continue;
-          addProductSales(day,{product:sale?.product||productForCampaign(campaignId),sales:count,amount:sale?.amount,provisional:true});remaining-=count;
+          addProductSales(day,{product:productForCampaign(campaignId)||sale?.product,sales:count,amount:sale?.amount,provisional:true});remaining-=count;
         }
         if(remaining>0)addProductSales(day,{product:productForCampaign(campaignId),sales:remaining,provisional:true});
       }

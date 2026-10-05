@@ -13,3 +13,5 @@
 .copy-ficha-validation .copy-ficha-field>label{display:flex;align-items:flex-end;min-height:1.25rem;line-height:1.2}
 .copy-ficha-validation .copy-ficha-input,.copy-ficha-validation .copy-ficha-select{box-sizing:border-box;height:40px;min-height:40px}
 .copy-ficha-discount-pair{align-items:start}
+.copy-ficha-shell{width:100%;margin-inline:auto}
+.copy-ficha-shell .copy-ficha-card,.copy-ficha-shell .copy-ficha-package,.copy-ficha-shell .copy-ficha-question-list,.copy-ficha-shell .copy-ficha-output-empty,.copy-ficha-shell .presell-result,.copy-ficha-shell .copy-ficha-chip{border:0}

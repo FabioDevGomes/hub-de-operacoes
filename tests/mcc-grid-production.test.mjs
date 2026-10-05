@@ -419,7 +419,7 @@ assert.ok(html.includes('1ª posição<span class="sort-arrow"'), 'a prévia exp
 assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'"));
 assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"));
 assert.ok(popupHtml.indexOf('id="capture-d1"') < popupHtml.indexOf('id="capture-d0"'), 'o botão Capturar D−1 deve aparecer antes do Capturar D0');
-assert.ok(popup.includes('Aguardando D0 para gerar a prévia.'));
+assert.ok(popup.includes('D−1 validado e prévia pronta. A base só muda se você clicar em “Atualizar base”.'));
 assert.ok(background.includes('validateMccD0Capture(snapshot)'));
 assert.ok(background.includes('validateMccD1Capture(snapshot)'));
 assert.ok(background.includes('deliverD0GridToPreparador'));
@@ -450,7 +450,7 @@ const mainWindow = {
   },
   async __hubReceiveMccD1Grid(capture) {
     captureReceivedInMain = capture;
-    return { ok:true, campaignCount:capture.campaignCount, previewReady:false, waitingForD0:true };
+    return { ok:true, campaignCount:capture.campaignCount, previewReady:true, waitingForD0:false };
   }
 };
 const forwardContext = vm.createContext({
@@ -485,7 +485,8 @@ assert.equal(forwarded.previewReady, true);
 assert.equal(captureReceivedInMain, valid.capture, 'a ponte entrega a captura ao receptor real, não ao window isolado');
 const forwardedD1 = await forwardContext.__forwardD1Grid(validD1.capture);
 assert.equal(injectedWorld, 'MAIN', 'a entrega D−1 também usa o mundo da página');
-assert.equal(forwardedD1.waitingForD0, true);
+assert.equal(forwardedD1.waitingForD0, false);
+assert.equal(forwardedD1.previewReady, true);
 assert.equal(captureReceivedInMain, validD1.capture, 'a ponte entrega o contrato D−1 ao receptor D−1');
 
 const previous = new Map(['location','window'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -495,7 +496,7 @@ Object.assign(globalThis, {
   location: { origin:'http://127.0.0.1:8765', pathname:'/preparador-MCC/' },
   window: {
     async __hubReceiveMccD0Grid(capture) { receivedCapture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:true}; },
-    async __hubReceiveMccD1Grid(capture) { receivedD1Capture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:false,waitingForD0:true}; }
+    async __hubReceiveMccD1Grid(capture) { receivedD1Capture = capture; return {ok:true,campaignCount:capture.campaignCount,previewReady:true,waitingForD0:false}; }
   }
 });
 try {
@@ -505,7 +506,8 @@ try {
   assert.equal(delivered.campaignCount, 2);
   const deliveredD1 = await deliverD1GridToPreparador(validD1.capture);
   assert.equal(deliveredD1.ok, true);
-  assert.equal(deliveredD1.waitingForD0, true);
+  assert.equal(deliveredD1.waitingForD0, false);
+  assert.equal(deliveredD1.previewReady, true);
   assert.equal(receivedD1Capture.schema, 'mcc-d1-grid-v3');
 } finally {
   for (const [key, descriptor] of previous) {

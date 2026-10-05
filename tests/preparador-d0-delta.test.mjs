@@ -7,8 +7,8 @@ const functionSource=name=>html.match(new RegExp(`function ${name}\\([^\\n]*\\) 
 const helpers=['canonicalAccountId','buildD0DeltaRows','buildD0DeltaTotals','formatD0DeltaValue','formatD0DeltaSum','normalizeD0CaptureHistory','readD0CaptureHistory','writeD0CaptureHistory','removeD0CaptureHistoryEntry','formatD0CaptureTabLabel','formatD0CaptureFullTime','updateD0ApplyAvailability'].map(functionSource).join('\n');
 assert.ok(helpers.includes('buildD0DeltaRows'),'comparador de D0 ausente');
 const applyButton={disabled:false};
-const context={Intl,Number,Map,Boolean,String,Math,Date,JSON,Array,Object,q:()=>applyButton,currentResult:{manifest:{},critical:[]},slots:{d0:{captureHistory:{id:'current'}}},d0CaptureHistory:[{id:'current',state:'calculated'}],selectedD0CaptureId:'current',numberingIssues:[]};
-vm.runInNewContext(`const D0_CAPTURE_HISTORY_KEY='painel-preparador-mcc-capturas-d0-v1';${helpers};globalThis.buildD0DeltaRows=buildD0DeltaRows;globalThis.buildD0DeltaTotals=buildD0DeltaTotals;globalThis.formatD0DeltaValue=formatD0DeltaValue;globalThis.formatD0DeltaSum=formatD0DeltaSum;globalThis.normalizeD0CaptureHistory=normalizeD0CaptureHistory;globalThis.readD0CaptureHistory=readD0CaptureHistory;globalThis.writeD0CaptureHistory=writeD0CaptureHistory;globalThis.removeD0CaptureHistoryEntry=removeD0CaptureHistoryEntry;globalThis.formatD0CaptureTabLabel=formatD0CaptureTabLabel;globalThis.formatD0CaptureFullTime=formatD0CaptureFullTime;globalThis.updateD0ApplyAvailability=updateD0ApplyAvailability;`,context);
+const context={Intl,Number,Map,Boolean,String,Math,Date,JSON,Array,Object,q:()=>applyButton,currentResult:{manifest:{validacao_manifesto:{modo_entrada:'D_zero_somente'}},critical:[]},slots:{d0:{captureHistory:{id:'current'}}},d0CaptureHistory:[{id:'current',state:'calculated'}],selectedD0CaptureId:'current',numberingIssues:[],numberingValidationReady:true};
+vm.runInNewContext(`const D0_CAPTURE_HISTORY_KEY='painel-preparador-mcc-capturas-d0-v1';const D0_CAPTURE_HISTORY_LIMIT=7;${helpers};globalThis.buildD0DeltaRows=buildD0DeltaRows;globalThis.buildD0DeltaTotals=buildD0DeltaTotals;globalThis.formatD0DeltaValue=formatD0DeltaValue;globalThis.formatD0DeltaSum=formatD0DeltaSum;globalThis.normalizeD0CaptureHistory=normalizeD0CaptureHistory;globalThis.readD0CaptureHistory=readD0CaptureHistory;globalThis.writeD0CaptureHistory=writeD0CaptureHistory;globalThis.removeD0CaptureHistoryEntry=removeD0CaptureHistoryEntry;globalThis.formatD0CaptureTabLabel=formatD0CaptureTabLabel;globalThis.formatD0CaptureFullTime=formatD0CaptureFullTime;globalThis.updateD0ApplyAvailability=updateD0ApplyAvailability;`,context);
 
 const metric=(value,estado='confirmado')=>({valor:value,estado});
 const campaign=(name,{impressions,clicks,cost,currency='BRL',state=null,qualification=null,account=null,manager=null})=>({nome_campanha_exato:name,...(manager?{mcc_id:manager}:{}),metricas_D_zero:{impressoes:metric(impressions),cliques_google:metric(clicks),custo_total:metric(cost),moeda:metric(currency),conta_id:account?metric(account):metric(null,'ausente'),estado_campanha:state==null?metric(null,'ausente'):metric(state),status_qualificacao:qualification==null?metric(null,'ausente'):metric(qualification)}});
@@ -93,6 +93,18 @@ assert.deepEqual(JSON.parse(JSON.stringify(context.readD0CaptureHistory(captureS
 assert.deepEqual(JSON.parse(JSON.stringify(context.removeD0CaptureHistoryEntry(captureHistory,'d0-second'))),[captureHistory[0],captureHistory[2]],'remover uma aba preserva todos os demais registros e a origem MCC');
 assert.deepEqual(JSON.parse(JSON.stringify(context.removeD0CaptureHistoryEntry(captureHistory,'missing'))),captureHistory,'ID inexistente não remove outras capturas');
 assert.equal(captureHistory.length,3,'filtrar uma captura não altera o histórico de entrada');
+const mccHistory=(managerAccountId,managerAccountName,prefix,count,startMinute=0)=>Array.from({length:count},(_,index)=>({id:`${prefix}-${index}`,capturedAt:new Date(Date.UTC(2026,9,4,0,startMinute+index)).toISOString(),managerAccountId,managerAccountName,state:'calculated',comparableDate:true,rows:[]}));
+const captureHistoryOverflow=[...mccHistory('223-139-0435','MCC e-com','ecom',10),...mccHistory('353-379-6641','MCC nutra','nutra',2,20)];
+const limitedHistory=context.normalizeD0CaptureHistory(captureHistoryOverflow);
+assert.equal(limitedHistory.length,9,'mantém até sete capturas para cada MCC');
+assert.deepEqual(JSON.parse(JSON.stringify(limitedHistory.filter(entry=>entry.managerAccountId==='223-139-0435').map(entry=>entry.id))),['ecom-3','ecom-4','ecom-5','ecom-6','ecom-7','ecom-8','ecom-9'],'preserva as sete capturas mais recentes da primeira MCC');
+assert.deepEqual(JSON.parse(JSON.stringify(limitedHistory.filter(entry=>entry.managerAccountId==='353-379-6641').map(entry=>entry.id))),['nutra-0','nutra-1'],'a fila de cada MCC é limitada independentemente');
+const overflowStorage={value:null,getItem(){return this.value;},setItem(key,value){this.key=key;this.value=value;}};
+assert.equal(context.writeD0CaptureHistory(overflowStorage,captureHistoryOverflow),true,'salva o histórico limitado por MCC');
+assert.equal(JSON.parse(overflowStorage.value).length,9,'cada MCC pode manter até sete capturas');
+const legacyOverflowStorage={value:JSON.stringify(captureHistoryOverflow),getItem(){return this.value;},setItem(key,value){this.key=key;this.value=value;}};
+assert.equal(context.readD0CaptureHistory(legacyOverflowStorage).length,9,'leitura limita históricos antigos já existentes por MCC');
+assert.equal(JSON.parse(legacyOverflowStorage.value).length,9,'leitura persiste a remoção dos registros excedentes sem afetar outras MCCs');
 assert.equal(context.formatD0CaptureTabLabel(captureHistory[0].capturedAt),'02/10 · 20:00','exibe somente hora e minuto da captura no fuso de Brasília');
 assert.match(context.formatD0CaptureFullTime(captureHistory[0].capturedAt),/20:00$/,'detalhes da captura também omitem os segundos');
 assert.equal(context.writeD0CaptureHistory({setItem(){throw new Error('quota');}},captureHistory),false,'falha de armazenamento não interrompe o Preparador');
@@ -101,10 +113,13 @@ context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,false,'a c
 context.selectedD0CaptureId='d0-first';context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,true,'abas antigas ficam somente para consulta');
 context.selectedD0CaptureId='current';context.currentResult.critical.push('falha');context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,true,'falhas de validação continuam bloqueando a atualização');
 context.currentResult.critical=[];context.d0CaptureHistory[0].state='unavailable';context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,true,'comparação indisponível não libera a atualização antes da validação');
+context.d0CaptureHistory[0].state='calculated';context.slots={d1:{},d0:null};context.currentResult.manifest.validacao_manifesto.modo_entrada='D_menos_1_somente';context.numberingValidationReady=false;context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,true,'D−1 continua bloqueado enquanto a validação local está em andamento');
+context.numberingValidationReady=true;context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,false,'D−1 sozinho validado pode atualizar a base sem captura D0');
+context.currentResult.critical.push('falha');context.updateD0ApplyAvailability();assert.equal(applyButton.disabled,true,'D−1 sozinho continua bloqueado por falha crítica');
 
 assert.ok(html.indexOf('id="d0-changes-panel"')<html.indexOf('id="validation-panel"'),'tabela de alterações deve ocupar a posição anterior da validação automática');
 assert.ok(html.indexOf('id="d0-changes-panel"')<html.indexOf('id="preview-panel"'),'tabela de alterações precisa vir antes da prévia do manifesto');
-assert.ok(html.includes('renderD0DeltaPanel(result.manifest, comparisonBase, dateChanges, slots.d0?.captureHistory)'),'tabela deve comparar contra a base local já lida para validar a numeração e associar a captura recebida');
+assert.ok(html.includes('if (slots.d0 && !slots.d0.error) renderD0DeltaPanel(result.manifest, comparisonBase, dateChanges, slots.d0.captureHistory)'),'D0 só deve registrar diferenças quando uma captura atual foi fornecida');
 assert.ok(html.includes('id="d0-changes-table"')&&html.includes('<th>Situação</th>')&&html.includes('Custo</th>'),'tabela D0 deve exibir campanha, situação, impressões, cliques e custo');
 assert.ok(html.includes('buildD0DeltaTotals(entry.rows)')&&html.includes('delta-total-row')&&html.includes("'Totais'"),'a tabela D0 deve incluir uma linha final com os totais');
 assert.ok(html.includes('custos ficam separados por moeda')&&html.includes('* indica campos não comparáveis'),'a legenda deve explicar o agrupamento de moedas e somas parciais');
@@ -124,11 +139,13 @@ assert.ok(html.includes("status = ['pausada','pausado','paused'].includes(normal
 assert.ok(html.includes('Nenhuma diferença quantificável, campanha nova ou campanha explicitamente pausada nesta captura.'),'estado vazio deve indicar que campanhas novas e pausas explícitas também foram verificadas');
 assert.ok(html.includes('knownMccCampaigns')&&html.includes('previousMccCampaigns'),'o comparador identifica campanhas novas e deltas dentro do escopo da mesma MCC');
 assert.ok(html.includes('campanhas ausentes do histórico da MCC são identificadas como novas'),'a prévia deve explicar como interpreta a primeira captura da MCC');
-const deltaPanelStart=html.indexOf('id="d0-changes-panel"'),validationPanelStart=html.indexOf('id="validation-panel"');
-assert.ok(html.slice(deltaPanelStart,validationPanelStart).includes('id="apply-manifest"'),'botão Atualizar base deve ficar no cabeçalho do quadro de alterações D0');
+const d1PanelStart=html.indexOf('id="d1-changes-panel"'),d0PanelStart=html.indexOf('id="d0-changes-panel"'),validationPanelStart=html.indexOf('id="validation-panel"');
+assert.ok(html.slice(d1PanelStart,d0PanelStart).includes('id="apply-manifest"'),'o único botão Atualizar base deve poder ser movido para o painel D−1');
+assert.ok(html.includes('function placeApplyActions(hasD0)')&&html.includes("hasD0 ? '#d0-changes-panel' : '#d1-changes-panel'"),'o botão deve acompanhar o período recebido');
 assert.equal([...html.matchAll(/id="apply-manifest"/g)].length,1,'deve haver somente um botão Atualizar base');
-assert.match(html,/#d0-changes-panel > \.panel-head\s*\{\s*padding:\s*12px 16px/,'cabeçalho de alterações D0 deve ter espaçamento compacto');
-assert.match(html,/#d0-changes-panel #apply-manifest\s*\{\s*padding:\s*6px 10px;\s*font-size:\s*\.88rem/,'botão Atualizar base deve ser menor no cabeçalho compacto');
+assert.equal([...html.matchAll(/class="slot-note">Opcional/g)].length,2,'D−1 e D0 devem ser opcionais individualmente');
+assert.match(html,/#d0-changes-panel > \.panel-head, #d1-changes-panel > \.panel-head\s*\{\s*padding:\s*12px 16px/,'cabeçalhos de alterações devem ter espaçamento compacto');
+assert.match(html,/#d0-changes-panel #apply-manifest, #d1-changes-panel #apply-manifest\s*\{\s*padding:\s*6px 10px;\s*font-size:\s*\.88rem/,'botão Atualizar base deve ser menor em ambos os cabeçalhos compactos');
 assert.ok(html.includes('id="apply-feedback" role="status" aria-live="polite"'),'status da atualização deve aparecer no cabeçalho com anúncio acessível');
 assert.ok(html.indexOf('id="apply-feedback"')<html.indexOf('id="apply-manifest"'),'status deve ficar no espaço entre o título e o botão');
 assert.ok(!html.includes('id="apply-panel"')&&!html.includes('Status da atualização'),'seção 3 de status da atualização deve ser removida');

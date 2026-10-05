@@ -50,7 +50,9 @@ captureD1Button.addEventListener('click', async () => {
     const result = response.result;
     const nextStep = result.waitingForD0
       ? 'D−1 recebido e validado. Aguardando D0 para gerar a prévia.'
-      : 'Revise a prévia; a base só muda se você clicar em “Atualizar base”.';
+      : result.previewReady
+        ? 'D−1 validado e prévia pronta. A base só muda se você clicar em “Atualizar base”.'
+        : 'Revise a prévia; a base só muda se você clicar em “Atualizar base”.';
     showCaptureStatus(captureStatus, `D−1 (${result.reportDate}) · ${result.campaignCount} campanhas. ${nextStep}`);
   } catch (error) {
     showCaptureError(captureStatus, error);

@@ -30,6 +30,14 @@ test('Macro renders existing totals, provenance and provisional values without m
   assert.match(h.get('#macroKpis').innerHTML,/Histórico completo/);
   assert.deepEqual(rows,original);
 });
+test('Macro removes provisional labels from MCC-confirmed sales and keeps the compact product name',()=>{
+  const h=harness([{...row,sales:1,officialSales:1,pendingSales:0,pendingRevenue:0,productSales:[{product:'Wego6',sales:1,amount:433.91,provisional:false}]}]);
+  h.state.macroMonth='2026-09';h.controller.render();
+  const html=h.get('#macroDailyBody').innerHTML;
+  assert.match(html,/<td>1<\/td>/);
+  assert.match(html,/1 Wego6 \(BRL 433\.91\)/);
+  assert.doesNotMatch(html,/inclui .* provisória|; provisória/);
+});
 test('Macro month controls preserve selection when data is refreshed',()=>{
   const h=harness([row]);h.state.macroMonth='2026-09';h.controller.render();
   h.get('#macroPreviousMonth').onclick();assert.equal(h.state.macroMonth,'2026-08');

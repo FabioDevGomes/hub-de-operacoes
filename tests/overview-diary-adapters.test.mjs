@@ -14,7 +14,8 @@ test('overview adapter retains temporal financial projection, manual adjustments
     cache={historyTotals:new Map(),salesAdjustments:new Map([[stored.id,sales]]),totalsRowsByMode:new Map()};
   const base={consolidated:{investment:100,commission:200,conversions:2},d1:{investment:10,commission:20,conversions:0},d0:{investment:30,commission:0,conversions:0}};
   let calculations=0;
-  Object.assign(context,{OverviewDomain:context.window.OverviewDomain,state:{totalsMode:'consolidated',rate:5},
+  vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
+  Object.assign(context,{OverviewDomain:context.window.OverviewDomain,SaleRoiDomain:context.window.SaleRoiDomain,state:{totalsMode:'consolidated',rate:5},
     campaignRows:()=>[campaign],activeCampaignRows:()=>[campaign],derivedContext:()=>cache,
     workbookTotalsMap:()=>new Map(),databaseCampaign:()=>stored,manifestDates:()=>({d0:'2026-09-30',d1:'2026-09-29'}),
     campaignHistoricalTotals:()=>({}),totalsForMode:(_c,_h,mode=context.state.totalsMode)=>{calculations++;return base[mode]},
@@ -42,7 +43,8 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
       {campanha_id:'id-b',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:20}}}],
     rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc})),
     database={campanhas:campaigns,diario},calls=[];
-  Object.assign(context,{state:{database,workbook:null},campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
+  vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
+  Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
     CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)}},
     sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),

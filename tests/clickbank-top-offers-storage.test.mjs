@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import * as Storage from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs';
+
+assert.equal(Storage.DB_NAME, 'radar-clickbank-top-offers');
+assert.equal(Storage.DB_VERSION, 3);
+assert.deepEqual(Object.values(Storage.STORES), ['captures','offerMetadata','trends','images','decisions']);
+assert.equal(Storage.BACKUP_FORMAT, 'radar-clickbank-top-offers-backup-v3');
+assert.equal(Storage.LEGACY_BACKUP_V2_FORMAT, 'radar-clickbank-top-offers-backup-v2');
+assert.equal(Storage.LEGACY_BACKUP_FORMAT, 'radar-clickbank-top-offers-backup-v1');
+const source = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs', import.meta.url), 'utf8');
+assert.match(source, /createObjectStore\(STORES\.captures,\s*\{keyPath:\s*'captureId'\}\)/);
+assert.match(source, /for \(const name of \[STORES\.offerMetadata, STORES\.trends, STORES\.images\]\)/, 'a migração adiciona stores de análise sem recriar capturas');
+assert.match(source, /createObjectStore\(STORES\.decisions,\s*\{keyPath:\s*'offerKey'\}\)/, 'a migração cria decisões por oferta sem recriar capturas');
+assert.match(source, /createObjectStore\(name,\s*\{keyPath:\s*'offerKey'\}\)/);
+assert.match(source, /tx\.objectStore\(STORES\.captures\)\.add\(capture\)/, 'capturas são acrescentadas sem substituir a coleção anterior');
+assert.match(source, /export async function exportBackup\(\)/);
+assert.match(source, /offerMetadata: await getAll\(STORES\.offerMetadata\)/, 'o backup completo inclui países manuais');
+assert.match(source, /trends: await getAll\(STORES\.trends\)/, 'o backup completo inclui avaliações e candidatas de Trends');
+assert.match(source, /images: await getAll\(STORES\.images\)/, 'o backup completo inclui avaliações e negativas de Imagens');
+assert.match(source, /decisions: await getAll\(STORES\.decisions\)/, 'o backup completo inclui as decisões próprias da ClickBank');
+assert.match(source, /payload\?\.format === LEGACY_BACKUP_FORMAT/, 'backups v1 continuam importáveis sem análises adicionais');
+assert.match(source, /payload\?\.format === LEGACY_BACKUP_V2_FORMAT/, 'backups v2 continuam importáveis sem decisões');
+assert.match(source, /export async function putDecision\(record\)/, 'as decisões são salvas na store local própria');
+assert.match(source, /export async function mergeBackup\(payload\)/);
+assert.match(source, /result\.conflicts\+\+/);
+assert.match(source, /for \(const storeName of Object\.values\(STORES\)\)/, 'a restauração mescla cada tipo de registro e mantém conflitos existentes');
+assert.doesNotMatch(source, /\.clear\(|\.delete\(/, 'storage não limpa nem apaga registros');
+assert.doesNotMatch(source, /indexedDB\.open\(['"]radar-top-performance['"]/, 'Top Offers CB não compartilha a base E-commerce GM');
+assert.doesNotMatch(source, /indexedDB\.open\(['"]radar-hot-offers-ms['"]/, 'Top Offers CB não compartilha a base Hot Offers MS');
+
+console.log('clickbank top offers storage ok');

@@ -103,3 +103,14 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-report-status-filter{flex:1 1 160px}
 .account-report-status-filter select{flex:1;min-width:0}
 }
+.account-summary-row{display:flex;align-items:flex-end;gap:10px;overflow-x:auto;margin-bottom:12px;padding-bottom:3px}
+#accountReportView .account-summary-row .account-filters{display:flex;flex:0 0 auto;gap:8px;margin:0}
+#accountReportView .account-summary-row .account-filter{width:150px;flex:0 0 150px}
+#accountReportView .account-summary-row .account-kpis{flex:1 0 auto;flex-wrap:nowrap;margin:0;align-items:center}
+#accountReportView .account-summary-row .account-kpi{flex:1 0 auto;min-width:0;white-space:nowrap}
+.app:has(#accountReportView:not(.hidden)) .topbar .actions .btn,
+.app:has(#accountReportView:not(.hidden)) #statusbar .pill,
+#accountReportView .card,
+#accountReportView .table-wrap,
+#accountReportView .tag,
+#accountReportView .status-tag{border:0}

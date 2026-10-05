@@ -14,6 +14,7 @@ const pages = [
   ['Radar SpyHero', '../dist/curadoria/index.html', 'data-hub-sidebar-active="radar"'],
   ['Lista de Gerente', '../dist/curadoria/gerentes/index.html', 'data-hub-sidebar-active="manager"'],
   ['E-commerce GM', '../dist/curadoria/top-performance/index.html', 'data-hub-sidebar-active="ecommerce"'],
+  ['Top Offers CB', '../dist/curadoria/clickbank-top-offers/index.html', 'data-hub-sidebar-active="clickbank-top-offers"'],
   ['Hot Offers MS', '../dist/curadoria/hot-offers-ms/index.html', 'data-hub-sidebar-active="hot-offers-ms"'],
   ['Asset Studio', '../dist/asset-studio/index.html', 'data-hub-sidebar-active="asset-studio"'],
 ];
@@ -38,7 +39,7 @@ for (const group of groupOrder) {
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
   'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
-  'E-commerce GM', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
+  'E-commerce GM', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
   'Produtos testados', 'Diário de campanha',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.ok(source.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''"), 'submenu Produtos não é inserido dentro do grupo Operação');

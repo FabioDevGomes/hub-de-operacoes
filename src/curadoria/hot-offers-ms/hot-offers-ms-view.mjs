@@ -68,7 +68,7 @@ export function mountHotOffersMsView({root, actions}) {
     const label = Trends.resultLabel(latest?.status);
     const context = [...new Set([...(latest?.countries || []), latest?.country].filter(Boolean))].slice(0,5);
     const text = context.length ? label + ' · ' + context.join(', ') : label;
-    return '<button type="button" class="table-action ' + (latest ? 'saved' : '') + '" data-curation-focus="trends" data-action="trends" data-key="' + escape(item.offerKey) + '" title="Abrir Google Trends">' + escape(text) + '</button>';
+    return '<button type="button" class="table-action trends-badge ' + escape(latest?.status || '') + '" data-curation-focus="trends" data-action="trends" data-key="' + escape(item.offerKey) + '" title="Abrir Google Trends">' + escape(text) + '</button>';
   }
   function imageBadge(item) {
     const record = imagesFor(item.offerKey), progress = Images.progress(record.assessments, Domain.offerCountryCodes(item));
@@ -76,11 +76,11 @@ export function mountHotOffersMsView({root, actions}) {
     const text = progress.total ? progress.done + ' de ' + progress.total : Images.resultLabel(latest?.status);
     const hasCandidates = [...progress.latest.values()].some(assessment => (assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []).some(value => String(value ?? '').trim()));
     const marker = KeywordCandidatesUI.keywordCandidateMarkerHtml(hasCandidates ? 1 : 0,'negative');
-    return '<button type="button" class="table-action ' + (progress.done ? 'saved' : '') + '" data-curation-focus="images" data-action="images" data-key="' + escape(item.offerKey) + '" title="Abrir Google Imagens">' + escape(text) + marker + '</button>';
+    return '<button type="button" class="table-action image-badge ' + escape(latest?.status || '') + '" data-curation-focus="images" data-action="images" data-key="' + escape(item.offerKey) + '" title="Abrir Google Imagens">' + escape(text) + marker + '</button>';
   }
   function glimpseBadge(item) {
     const analysis = glimpseFor(item);
-    return '<button type="button" class="table-action ' + (analysis ? 'saved' : '') + '" data-curation-focus="glimpse" data-action="glimpse" data-key="' + escape(item.offerKey) + '" title="' + escape(analysis ? 'Última análise ' + dateTime(analysis.capturedAt) : 'Abrir Glimpse') + '">' + escape(Glimpse.compactSummary(analysis)) + '</button>';
+    return '<button type="button" class="table-action glimpse-badge ' + (analysis ? 'saved' : '') + '" data-curation-focus="glimpse" data-action="glimpse" data-key="' + escape(item.offerKey) + '" title="' + escape(analysis ? 'Última análise ' + dateTime(analysis.capturedAt) : 'Abrir Glimpse') + '">' + escape(Glimpse.compactSummary(analysis)) + '</button>';
   }
   function signalBadge(item) {
     const signal = AutomaticSignal.computeAutomaticSignal({trends:{latestAssessment:Trends.latestAssessment(trendsFor(item.offerKey).assessments)},images:imagesFor(item.offerKey),glimpse:glimpseFor(item)});

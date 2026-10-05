@@ -30,6 +30,12 @@ assert.deepEqual(mcc, [
   { date: '2026-09-18', hasMccData: true, source: 'mcc', investment: 100, revenue: 335, profit: 235, roi: 235, clicks: 20, sales: 3, officialSales: 2, pendingSales: 1, pendingRevenue: 85, clicksPerSale: 20 / 3, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }, { product: 'Wego6', sales: 1, amount: 85, provisional: true }] },
   { date: '2026-09-19', hasMccData: true, source: 'mcc', investment: 0, revenue: 0, profit: 0, roi: null, clicks: 0, sales: 0, officialSales: 0, pendingSales: 0, pendingRevenue: 0, clicksPerSale: null, productSales: [] },
 ]);
+const compactProvisional = domain.aggregateMccDaily(
+  [{ campanha_id:'campaign-long', data:'2026-09-20', celulas:{ F:{value:0}, P:{value:0} } }],
+  new Map([['campaign-long',{byDate:{'2026-09-20':{pendingConversions:1,commissionAdjustment:312.62,productSales:[{product:'ResQVac - CTC $49.99 - Presell Page - Accepts Paypal',sales:1,amount:312.62}]}}}]]),
+  {campaignProducts:new Map([['campaign-long','ResQVac']])}
+);
+assert.deepEqual(compactProvisional[0].productSales,[{product:'ResQVac',sales:1,amount:312.62,provisional:true}], 'venda provisória usa o rótulo curto da identidade do produto da campanha');
 
 const workbook = {
   sheets: [

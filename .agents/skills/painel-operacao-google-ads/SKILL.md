@@ -24,6 +24,7 @@ Esta é a fonte canônica do conhecimento técnico específico do repositório. 
 ## Roteamento das referências
 
 - [Arquitetura e telas](references/architecture.md): estrutura, rotas, fontes canônicas e build.
+- [Padrão visual reutilizável](references/visual-style.md): tema escuro, navegação compacta, cartões, tabelas, responsividade e adoção gradual do piloto da Visão Geral.
 - [Modelo e persistência](references/data-model.md): IndexedDB, schema da base, eventos e snapshots.
 - [Importação MCC](references/mcc-import.md): CSV D−1/D0, captura estrutural direta D0 pela extensão, Preparador, ingestão de telemetria e integração com Controle Macro.
 - A versão estável da extensão `extensions/mcc-d0-bridge` associa a grade por `essfield` e encaminha a captura ao receptor do Preparador no contexto `MAIN`; a gravação continua dependendo do clique explícito em “Atualizar base”. Os experimentos locais de texto/comparação continuam isolados e somente de leitura. Consulte [Importação MCC](references/mcc-import.md) e a própria documentação da extensão.

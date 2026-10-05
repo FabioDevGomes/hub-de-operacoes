@@ -76,3 +76,11 @@ test('diary pure date/sheet helpers retain real rows and deduplicate display-onl
   assert.equal(rows.length,2);assert.equal(rows[1].cells.F,undefined);assert.equal(sheet.rows.length,2);
   assert.equal(domain.productDiaryRowsWithManualSales(rows,adjustments).length,2);
 });
+test('campaign diary exposes every manual-sale photograph, including confirmed and later sales, without recalculating them',()=>{
+  const photo={roi_percent:-25,investment_brl:200,revenue_brl:150,sale_date:'2026-09-29',sale_time:'10:00',sale_amount_brl:150,registered_at:'2026-09-29T13:00:00Z',metrics_date:'2026-09-29',exchange_rate:5},
+    history=[{sequence:1,status:'conciliada',snapshot:photo,valor_brl:150,data:'2026-09-29',hora:'10:00'},{sequence:2,status:'provisoria',snapshot:null,data:'2026-09-30',valor_brl:100},{sequence:3,status:'provisoria',snapshot:{...photo,roi_percent:50},valor_brl:180,data:'2026-10-01'}],before=JSON.stringify(history),s=setup({...empty(),saleHistory:history});
+  s.controller.render('Oferta');const html=s.get('#productSalesBody').innerHTML;
+  assert.match(html,/<td>1ª<\/td>/);assert.match(html,/<td>3ª<\/td>/);assert.match(html,/class="num negative"[^>]*>-25%/);assert.match(html,/class="num positive"[^>]*>50%/);
+  assert.match(html,/Confirmada pela MCC/);assert.match(html,/Sem fotografia histórica de ROI/);assert.match(html,/fotografia original preservada/);
+  assert.equal(JSON.stringify(history),before);assert.equal(s.get('#productSaleHistory').classList.contains('hidden'),false);
+});

@@ -1,12 +1,13 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261004-live-trend-candidate';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261005-analytics-badges';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
 
 const root = document.querySelector('#hotOffersMsRoot');
 let offers = [], collections = [], snapshots = [], decisions = [], trends = [], images = [], glimpse = [];
@@ -30,6 +31,7 @@ const view = mountHotOffersMsView({root,actions:{
   openGlimpse,
 }});
 const listFocus = mountCurationListFocus('hot-offers-ms',{blockingSelector:'#offerSheet:not(.hidden)'});
+mountGlimpseHeaderAction({frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
 
 function show() { view.render({offers,collections,snapshots,decisions,trends,images,glimpse}); }
 function latestCollection(scope) {
@@ -241,7 +243,14 @@ function openGlimpse(item) {
   if (frame.src !== url) frame.src = url;
 }
 window.addEventListener('message',event => {
-  if (event.origin !== location.origin || event.source !== document.querySelector('#glimpseFrame').contentWindow || event.data?.type !== 'hub-glimpse-close') return;
+  const frame = document.querySelector('#glimpseFrame');
+  if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+  if (event.data?.type === 'hub-glimpse-resize') {
+    const height = Number(event.data.height);
+    if (Number.isFinite(height)) frame.style.height = `${Math.max(320,Math.ceil(height))}px`;
+    return;
+  }
+  if (event.data?.type !== 'hub-glimpse-close') return;
   void refresh().then(() => { view.returnFromGlimpse(); view.showToast('Análise Glimpse atualizada.'); });
 });
 

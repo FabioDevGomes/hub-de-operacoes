@@ -23,7 +23,7 @@ test('Preparador published page matches canonical source and preserves executabl
   }
   assert.match(html,/h1\s*\{[^}]*font-size:\s*clamp\(\.93rem,\s*1\.8vw,\s*1\.41rem\)/,'título do Preparador deve seguir a escala compacta compartilhada do Hub');
   assert.match(html,/\.subtitle\s*\{[^}]*font-size:\s*\.92rem/,'texto auxiliar deve seguir a escala tipográfica das telas compartilhadas');
-  assert.match(html,/Carregue o D0 ou os relatórios D−1 e D0, confira as diferenças e atualize a base\./,'descrição do Preparador deve resumir o fluxo de carga');
+  assert.match(html,/Carregue D−1, D0 ou ambos, confira as diferenças e atualize a base\./,'descrição do Preparador deve deixar claro que qualquer período pode ser carregado sozinho');
   assert.match(html,/\.capture-grid\s*\{[^}]*align-items:\s*start/,'cartões das capturas devem manter alinhamento compacto');
   assert.match(html,/\.capture-box\.loaded\s*\{[^}]*display:\s*block/,'captura carregada deve usar o cartão de resumo');
   assert.equal((html.match(/class="capture-summary" hidden/g)||[]).length,2,'D−1 e D0 devem exibir resumos no mesmo formato');

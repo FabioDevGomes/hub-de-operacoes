@@ -13,7 +13,7 @@
       --bg: light-dark(#f3f6fa, #10141b);
       --surface: light-dark(#ffffff, #191f29);
       --surface-soft: light-dark(#f8fafc, #202733);
-      --text: light-dark(#172033, #f2f5fa);
+      --text: light-dark(#172033, #c3cede);
       --muted: light-dark(#667085, #9da8b8);
       --border: light-dark(#d9e0e9, #344052);
       --blue: light-dark(#155dcc, #75a7ff);
@@ -27,7 +27,7 @@
       --shadow: 0 14px 40px light-dark(rgba(23, 32, 51, .08), rgba(0, 0, 0, .22));
     }
     * { box-sizing: border-box; }
-    html { min-height: 100%; overflow-y: scroll; scrollbar-gutter: stable; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    html { min-height: 100%; overflow-y: scroll; scrollbar-gutter: stable; font-family: "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
     body { margin: 0; min-width: 320px; min-height: 100%; overflow: visible; }
     button, input, textarea { font: inherit; }
     button { min-height: 44px; }
@@ -66,21 +66,22 @@
     .local-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font-weight: 650; font-size: .88rem; white-space: nowrap; }
     .local-mark::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
     .steps { display: grid; gap: 14px; }
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+    .panel { background: var(--surface); border: 0; border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
     .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
-    #d0-changes-panel > .panel-head { padding: 12px 16px; }
-    #d0-changes-panel .panel-head h2 { font-size: 1rem; }
-    #d0-changes-panel #apply-manifest { padding: 6px 10px; font-size: .88rem; }
+    #d0-changes-panel > .panel-head, #d1-changes-panel > .panel-head { padding: 12px 16px; }
+    #d0-changes-panel .panel-head h2, #d1-changes-panel .panel-head h2 { font-size: 1rem; }
+    .apply-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; min-width: 0; }
+    #d0-changes-panel #apply-manifest, #d1-changes-panel #apply-manifest { padding: 6px 10px; font-size: .88rem; }
     .title-row { display: flex; align-items: center; gap: 12px; }
     .step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-weight: 750; flex: 0 0 auto; }
     .panel-body { padding: 20px; }
     .capture-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-    .capture-box { min-width: 0; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); padding: 12px 14px; }
+    .capture-box { min-width: 0; border: 0; border-radius: 13px; background: var(--surface-soft); padding: 12px 14px; }
     .capture-box.loaded { display: block; border-color: var(--green); background: var(--green-soft); padding: 14px; }
     .capture-box.error { border-color: var(--red); background: var(--red-soft); }
     .capture-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .capture-label strong { font-size: 1rem; }
-    .status-pill { padding: 4px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    .status-pill { padding: 4px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; background: var(--surface); color: var(--muted); border: 0; }
     .loaded .status-pill { color: var(--green); border-color: currentColor; }
     .error .status-pill { color: var(--red); border-color: currentColor; }
     .capture-box.error .capture-origin, .capture-box.error .capture-divider { display: none; }
@@ -110,7 +111,7 @@
     .pending { opacity: .55; box-shadow: none; }
     .pending .panel-body { display: none; }
     .check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .check { min-height: 54px; border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; display: flex; align-items: flex-start; gap: 10px; background: var(--surface-soft); }
+    .check { min-height: 54px; border: 0; border-radius: 10px; padding: 11px 12px; display: flex; align-items: flex-start; gap: 10px; background: var(--surface-soft); }
     .check-icon { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .78rem; font-weight: 800; flex: 0 0 auto; }
     .check.pass .check-icon { background: var(--green-soft); color: var(--green); }
     .check.warn .check-icon { background: var(--amber-soft); color: var(--amber); }
@@ -118,7 +119,7 @@
     .check strong { display: block; font-size: .88rem; margin-bottom: 2px; }
     .check span:last-child { color: var(--muted); font-size: .78rem; line-height: 1.35; }
     .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .summary { border: 1px solid var(--border); border-radius: 11px; padding: 14px; background: var(--surface-soft); }
+    .summary { border: 0; border-radius: 11px; padding: 14px; background: var(--surface-soft); }
     .summary span { display: block; color: var(--muted); font-size: .78rem; margin-bottom: 5px; }
     .summary strong { font-size: 1.35rem; font-weight: 750; font-variant-numeric: tabular-nums; }
     .summary.good strong { color: var(--green); }
@@ -129,7 +130,7 @@
     .d0-capture-group-title { margin: 0 0 5px; color: var(--muted); font-size: .76rem; font-weight: 700; }
     .d0-capture-group-tabs { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 0 2px 3px; scrollbar-width: thin; }
     .d0-capture-tab-item { position: relative; display: inline-flex; flex: 0 0 auto; }
-    .d0-capture-tab { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 34px; padding: 6px 34px 6px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); color: var(--muted); cursor: pointer; font-size: .78rem; font-weight: 650; white-space: nowrap; }
+    .d0-capture-tab { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 34px; padding: 6px 34px 6px 10px; border: 0; border-radius: 9px; background: var(--surface-soft); color: var(--muted); cursor: pointer; font-size: .78rem; font-weight: 650; white-space: nowrap; }
     .d0-capture-tab[aria-selected="true"] { border-color: var(--blue); background: var(--blue-soft); color: var(--text); }
     .d0-capture-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     .d0-capture-tab-count { color: var(--green); font-size: .72rem; font-variant-numeric: tabular-nums; }
@@ -151,11 +152,11 @@
     .delta-total-row > * { border-top: 2px solid var(--border); border-bottom: 0; }
     .preview-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
     .preview-origin { color: var(--muted); font-size: .82rem; }
-    .source-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); }
+    .source-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 0; border-radius: 10px; background: var(--surface-soft); }
     .source-tab { min-height: 34px; border: 0; border-radius: 7px; padding: 6px 12px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; }
     .source-tab[aria-pressed="true"] { background: var(--blue); color: light-dark(#fff, #101722); }
     .source-tab:disabled { opacity: .38; cursor: not-allowed; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 11px; }
+    .table-wrap { overflow-x: auto; border: 0; border-radius: 11px; }
     table { width: 100%; border-collapse: collapse; min-width: 850px; font-size: .82rem; }
     th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
     th { color: var(--muted); font-size: .74rem; font-weight: 700; background: var(--surface-soft); position: sticky; top: 0; }
@@ -194,15 +195,16 @@
     @media (max-width: 560px) {
       .hub-sidebar { padding: 20px 12px; }
       .hub-nav { grid-template-columns: 1fr; }
-      #d0-changes-panel > .panel-head { flex-wrap: wrap; }
-      #d0-changes-panel .apply-feedback { order: 3; flex: 1 1 100%; margin: 0; text-align: left; }
+      #d0-changes-panel > .panel-head, #d1-changes-panel > .panel-head { flex-wrap: wrap; }
+      .apply-actions { flex-wrap: wrap; }
+      .apply-feedback { text-align: left; }
     }
     @media (max-width: 430px) {
       .summary-grid { grid-template-columns: 1fr; }
       .capture-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=5">
+  <link rel="stylesheet" href="/sidebar-component.css?v=6">
   <link rel="stylesheet" href="/table-headers.css?v=1">
 </head>
 <body>
@@ -218,7 +220,7 @@
     <header class="topbar">
       <div>
         <h1>Preparador do Manifesto MCC</h1>
-        <p class="subtitle">Carregue o D0 ou os relatórios D−1 e D0, confira as diferenças e atualize a base.</p>
+        <p class="subtitle">Carregue D−1, D0 ou ambos, confira as diferenças e atualize a base.</p>
       </div>
       <div class="local-mark">Processamento local</div>
     </header>
@@ -241,7 +243,7 @@
             </article>
 
             <article class="capture-box" data-slot="d0">
-              <div class="capture-label"><div class="slot-title"><strong>Dados de D0</strong><span class="slot-note">Obrigatório</span></div><span class="status-pill">Aguardando</span></div>
+              <div class="capture-label"><div class="slot-title"><strong>Dados de D0</strong><span class="slot-note">Opcional</span></div><span class="status-pill">Aguardando</span></div>
               <div class="capture-summary" hidden>
                 <div class="capture-origin"><span class="capture-origin-mark" aria-hidden="true"></span><div class="capture-origin-copy"><strong></strong><span></span></div></div>
                 <div class="capture-divider"></div>
@@ -255,6 +257,10 @@
       <section class="panel" id="d1-changes-panel" aria-labelledby="d1-changes-title" hidden>
         <div class="panel-head">
           <div class="title-row"><h2 id="d1-changes-title">Alterações do fechamento D−1</h2></div>
+          <div class="apply-actions" id="apply-actions">
+            <span class="apply-feedback" id="apply-feedback" role="status" aria-live="polite" hidden></span>
+            <button class="button primary" id="apply-manifest" type="button" disabled>Atualizar base</button>
+          </div>
         </div>
         <div class="panel-body">
           <p class="delta-caption" id="d1-changes-caption"></p>
@@ -269,8 +275,6 @@
       <section class="panel" id="d0-changes-panel" aria-labelledby="d0-changes-title" hidden>
         <div class="panel-head">
           <div class="title-row"><h2 id="d0-changes-title">Alterações da captura D0</h2></div>
-          <span class="apply-feedback" id="apply-feedback" role="status" aria-live="polite" hidden></span>
-          <button class="button primary" id="apply-manifest" type="button" disabled>Atualizar base</button>
         </div>
         <div class="panel-body">
           <div class="d0-capture-tabs" id="d0-capture-tabs" role="tablist" aria-label="Capturas D0"></div>
@@ -289,7 +293,7 @@
       <section class="panel pending" id="validation-panel" aria-labelledby="step2-title">
         <div class="panel-head">
           <div class="title-row"><span class="step-number">2</span><h2 id="step2-title">Validação automática</h2></div>
-          <span class="auto-note" id="validation-status">Aguardando D0</span>
+          <span class="auto-note" id="validation-status">Aguardando captura</span>
         </div>
         <div class="panel-body">
           <div class="check-grid" id="checks" aria-live="polite"></div>
@@ -368,6 +372,7 @@
     let currentManifest = null;
     let currentResult = null;
     let numberingIssues = [];
+    let numberingValidationReady = false;
     let numberingValidationToken = 0;
     let previewRole = 'd1';
     let previewSort = { key:null, direction:null };
@@ -379,6 +384,7 @@
     const PANEL_BASE_KEY = 'atual';
     const PANEL_USD_BRL_RATE = 5.10;
     const D0_CAPTURE_HISTORY_KEY = 'painel-preparador-mcc-capturas-d0-v1';
+    const D0_CAPTURE_HISTORY_LIMIT = 7;
 
     const q = selector => document.querySelector(selector);
     const qa = selector => [...document.querySelectorAll(selector)];
@@ -389,7 +395,7 @@
     function normalizeD0CaptureHistory(value) {
       if (!Array.isArray(value)) return [];
       const numeric = item => typeof item === 'number' && Number.isFinite(item) ? item : null;
-      return value.filter(item => item && typeof item.id === 'string' && item.id && Number.isFinite(Date.parse(item.capturedAt)))
+      const normalized = value.filter(item => item && typeof item.id === 'string' && item.id && Number.isFinite(Date.parse(item.capturedAt)))
         .map(item => ({
           id:item.id.slice(0, 100), capturedAt:new Date(item.capturedAt).toISOString(),
           ...(/^\d{3}-\d{3}-\d{4}$/.test(String(item.managerAccountId || '')) && /^MCC(?:\s+.+)?$/i.test(String(item.managerAccountName || '').trim()) ? { managerAccountId:String(item.managerAccountId), managerAccountName:String(item.managerAccountName).trim().slice(0, 100) } : {}),
@@ -400,10 +406,24 @@
             .map(row => ({ campaign:row.campaign.slice(0, 500), currency:String(row.currency || '').slice(0, 8), impressions:numeric(row.impressions), clicks:numeric(row.clicks), cost:numeric(row.cost), status:row.status === 'Pausada' ? 'Pausada' : null, ...(row.newCampaign === true ? {newCampaign:true} : {}) }))
         }))
         .sort((left,right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
+      const byManager = new Map();
+      normalized.forEach(entry => {
+        const key = entry.managerAccountId || 'unknown';
+        if (!byManager.has(key)) byManager.set(key,[]);
+        byManager.get(key).push(entry);
+      });
+      return [...byManager.values()].flatMap(entries => entries.slice(-D0_CAPTURE_HISTORY_LIMIT))
+        .sort((left,right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
     }
 
     function readD0CaptureHistory(storage) {
-      try { return normalizeD0CaptureHistory(JSON.parse(storage.getItem(D0_CAPTURE_HISTORY_KEY) || '[]')); }
+      try {
+        const stored = JSON.parse(storage.getItem(D0_CAPTURE_HISTORY_KEY) || '[]');
+        const normalized = normalizeD0CaptureHistory(stored);
+        const validCount = Array.isArray(stored) ? stored.filter(item => item && typeof item.id === 'string' && item.id && Number.isFinite(Date.parse(item.capturedAt))).length : 0;
+        if (validCount > normalized.length) writeD0CaptureHistory(storage,normalized);
+        return normalized;
+      }
       catch { return []; }
     }
 
@@ -1047,49 +1067,48 @@
     }
 
     function buildManifest(d1, d0) {
-      if (!d0) throw new Error('O D0 é obrigatório para gerar o manifesto.');
-      const hasD1 = Boolean(d1);
+      if (!d1 && !d0) throw new Error('Informe os dados de D−1, D0 ou ambos para gerar o manifesto.');
+      const hasD1 = Boolean(d1), hasD0 = Boolean(d0), canCompare = hasD1 && hasD0;
       const names1 = new Set((d1?.records || []).map(r => r.nome_campanha_exato));
-      const names0 = new Set(d0.records.map(r => r.nome_campanha_exato));
+      const names0 = new Set((d0?.records || []).map(r => r.nome_campanha_exato));
       const names = [...new Set([...names1, ...names0])].sort((a,b) => a.localeCompare(b, 'pt-BR'));
-      const managerAccountId = d0.managerAccountId || d1?.managerAccountId || null;
-      const managerAccountName = d0.managerAccountName || d1?.managerAccountName || null;
+      const managerAccountId = d0?.managerAccountId || d1?.managerAccountId || null;
+      const managerAccountName = d0?.managerAccountName || d1?.managerAccountName || null;
+      const mode = canCompare ? 'D_menos_1_e_D_zero' : hasD1 ? 'D_menos_1_somente' : 'D_zero_somente';
       const campaigns = names.map(name => {
-        const r1 = uniqueRecord(d1, name), r0 = uniqueRecord(d0, name);
-        const observations = [];
-        let pending = Boolean(d1?.duplicateNames[name]) || name in d0.duplicateNames;
-        if (d1?.duplicateNames[name]) observations.push('Campanha duplicada em D−1; métricas não associadas.');
-        if (d0.duplicateNames[name]) observations.push('Campanha duplicada em D0; métricas não associadas.');
-        if (hasD1 && !names1.has(name)) observations.push('Campanha presente apenas em D0.');
-        if (hasD1 && !names0.has(name)) observations.push('Campanha presente apenas em D−1.');
-        if (r1 && r0 && (r1.conta_id && r0.conta_id ? r1.conta_id !== r0.conta_id : r1.conta && r0.conta && r1.conta !== r0.conta)) { pending = true; observations.push('Mesmo nome exato, mas contas diferentes entre D−1 e D0.'); }
-        if (r1 && r0 && r1.moeda && r0.moeda && r1.moeda !== r0.moeda) { pending = true; observations.push('Mesmo nome exato, mas moedas diferentes entre D−1 e D0.'); }
+        const r1 = uniqueRecord(d1, name), r0 = uniqueRecord(d0, name), observations = [];
+        let pending = Boolean(d1?.duplicateNames?.[name]) || Boolean(d0?.duplicateNames?.[name]);
+        if (d1?.duplicateNames?.[name]) observations.push('Campanha duplicada em D−1; métricas não associadas.');
+        if (d0?.duplicateNames?.[name]) observations.push('Campanha duplicada em D0; métricas não associadas.');
+        if (canCompare && !names1.has(name)) observations.push('Campanha presente apenas em D0.');
+        if (canCompare && !names0.has(name)) observations.push('Campanha presente apenas em D−1.');
+        if (canCompare && r1 && r0 && (r1.conta_id && r0.conta_id ? r1.conta_id !== r0.conta_id : r1.conta && r0.conta && r1.conta !== r0.conta)) { pending = true; observations.push('Mesmo nome exato, mas contas diferentes entre D−1 e D0.'); }
+        if (canCompare && r1 && r0 && r1.moeda && r0.moeda && r1.moeda !== r0.moeda) { pending = true; observations.push('Mesmo nome exato, mas moedas diferentes entre D−1 e D0.'); }
         const date1 = r1?.data_linha || (d1?.dates.length === 1 ? d1.dates[0] : null);
-        const date0 = r0?.data_linha || (d0.dates.length === 1 ? d0.dates[0] : null);
+        const date0 = r0?.data_linha || (d0?.dates.length === 1 ? d0.dates[0] : null);
         const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), estado_campanha:stateValue(r1?.estado_campanha), status_qualificacao:stateValue(r1?.status_qualificacao), status_campanha:stateValue(r1?.status_campanha), geo:stateValue(r1?.geo), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
-        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
-        metrics.conta_id = stateValue(r1?.conta_id);
-        metrics0.conta_id = stateValue(r0?.conta_id);
-        const todayCost = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), custo_total_destino_totais_coluna_M:field(r0,'cost',parseNumber), origem:{ arquivo:d0.name, linha:r0?.linha_origem ?? null } };
+        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0?.name ?? null, linha:r0?.linha_origem ?? null } };
+        metrics.conta_id = stateValue(r1?.conta_id); metrics0.conta_id = stateValue(r0?.conta_id);
+        const todayCost = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), custo_total_destino_totais_coluna_M:field(r0,'cost',parseNumber), origem:{ arquivo:d0?.name ?? null, linha:r0?.linha_origem ?? null } };
         if ([metrics.impressoes, metrics.cliques_google, metrics.conversoes, metrics.valor_conversao].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D−1.'); }
-        if ([metrics0.impressoes, metrics0.cliques_google, metrics0.conversoes, metrics0.valor_conversao, metrics0.custo_medio, metrics0.porcentagem_impressao_primeira_posicao, metrics0.porcentagem_impressao_parte_superior, metrics0.orcamento_diario, metrics0.custo_total].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D0.'); }
-        if (todayCost.custo_total_destino_totais_coluna_M.estado === 'invalido') { pending = true; observations.push('Custo total inválido em D0.'); }
+        if (hasD0 && [metrics0.impressoes, metrics0.cliques_google, metrics0.conversoes, metrics0.valor_conversao, metrics0.custo_medio, metrics0.porcentagem_impressao_primeira_posicao, metrics0.porcentagem_impressao_parte_superior, metrics0.orcamento_diario, metrics0.custo_total].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D0.'); }
+        if (hasD0 && todayCost.custo_total_destino_totais_coluna_M.estado === 'invalido') { pending = true; observations.push('Custo total inválido em D0.'); }
         if (r1 && !r1.moeda) { pending = true; observations.push('Moeda ausente em D−1.'); }
         if (r0 && !r0.moeda) { pending = true; observations.push('Moeda ausente em D0.'); }
         return { nome_campanha_exato:name, mcc_id:managerAccountId, mcc_nome:managerAccountName, situacao_manifesto:pending ? 'pendente' : 'pronto', metricas_D_menos_1:metrics, metricas_D_zero:metrics0, custo_D_zero:todayCost, cliques_plataforma:{ valor:null, estado:'nao_aplicavel_a_coleta_MCC', observacao:'Campo fora da coleta automática da MCC; não preencher com zero.' }, observacoes_alertas:observations };
       });
       const percentValidation = hasD1 ? buildPercentageValidation(d1, campaigns) : percentageValidationNotApplicable();
-      const descriptors = [d1 ? sourceDescriptor(d1) : null, sourceDescriptor(d0)].filter(Boolean);
+      const descriptors = [d1 ? sourceDescriptor(d1) : null, d0 ? sourceDescriptor(d0) : null].filter(Boolean);
       const critical = [];
-      if ((hasD1 && d1.dates.length !== 1) || d0.dates.length !== 1) critical.push('A data não foi determinada de forma única em pelo menos uma captura recebida.');
-      if (hasD1 && d1.managerAccountId && d0.managerAccountId && d1.managerAccountId !== d0.managerAccountId) critical.push('D−1 e D0 pertencem a MCCs diferentes.');
+      if ((hasD1 && d1.dates.length !== 1) || (hasD0 && d0.dates.length !== 1)) critical.push('A data não foi determinada de forma única em pelo menos uma captura recebida.');
+      if (canCompare && d1.managerAccountId && d0.managerAccountId && d1.managerAccountId !== d0.managerAccountId) critical.push('D−1 e D0 pertencem a MCCs diferentes.');
       if (descriptors.some(s => s.colunas_obrigatorias_ausentes.length)) critical.push('Há colunas obrigatórias ausentes ou não mapeadas.');
-      if ((hasD1 && Object.keys(d1.duplicateNames).length) || Object.keys(d0.duplicateNames).length) critical.push('Há campanhas duplicadas nas capturas recebidas.');
+      if ((hasD1 && Object.keys(d1.duplicateNames || {}).length) || (hasD0 && Object.keys(d0.duplicateNames || {}).length)) critical.push('Há campanhas duplicadas nas capturas recebidas.');
       if (campaigns.some(c => c.situacao_manifesto === 'pendente' && c.observacoes_alertas.some(x => x.includes('contas diferentes') || x.includes('moedas diferentes')))) critical.push('Há associação financeira ambígua.');
       if (hasD1 && !percentValidation.teste_regressao_aprovado) critical.push('Falha crítica no mapeamento ou na extração dos percentuais.');
-      const only1 = hasD1 ? [...names1].filter(name => !names0.has(name)).sort() : [];
-      const only0 = hasD1 ? [...names0].filter(name => !names1.has(name)).sort() : [];
-      let confidence = critical.length ? 'baixa' : (hasD1 && (only1.length || only0.length) ? 'média' : 'alta');
+      const only1 = canCompare ? [...names1].filter(name => !names0.has(name)).sort() : [];
+      const only0 = canCompare ? [...names0].filter(name => !names1.has(name)).sort() : [];
+      const confidence = critical.length ? 'baixa' : (canCompare && (only1.length || only0.length) ? 'média' : 'alta');
       const costByCurrency = (section, costField) => {
         const groups = {};
         campaigns.forEach(c => { const s = c[section], currency = s.moeda.valor; if (s.presente && currency) (groups[currency] ||= []).push(s[costField]); });
@@ -1100,13 +1119,13 @@
         schema:'manifesto_mcc_v2',
         gerado_em_utc:new Date().toISOString(),
         identificacao_mcc:managerAccountId && managerAccountName ? { id:managerAccountId, nome:managerAccountName } : null,
-        origem_geracao:{ modo:'gerado_do_zero_a_partir_dos_CSVs', modo_entrada:hasD1 ? 'D_menos_1_e_D_zero' : 'D_zero_somente', origem_entrada_D_menos_1:d1?.source || 'csv_manual', origem_entrada_D_zero:d0.source || 'csv_manual', manifesto_anterior_lido:false, processamento:'local_no_navegador', envio_externo:false },
+        origem_geracao:{ modo:'gerado_do_zero_a_partir_dos_CSVs', modo_entrada:mode, origem_entrada_D_menos_1:d1?.source || (hasD1 ? 'csv_manual' : 'nao_fornecido'), origem_entrada_D_zero:d0?.source || (hasD0 ? 'csv_manual' : 'nao_fornecido'), manifesto_anterior_lido:false, processamento:'local_no_navegador', envio_externo:false },
         regras:{ chave_campanha:'nome exato da campanha na MCC', associacao_entre_arquivos:'somente igualdade exata; ordem das linhas ignorada', valores_ausentes:'null com estado ausente; nunca convertidos em zero', percentuais:'pontos percentuais conforme exibidos no CSV', moedas:'preservadas; nenhuma conversão financeira aplicada' },
         fontes:descriptors,
-        separacao_temporal:{ D_menos_1:{ arquivo:d1?.name ?? null, datas_detectadas:d1?.dates ?? [], uso:'métricas fechadas', estado:hasD1 ? 'fornecido' : 'nao_fornecido' }, D_zero:{ arquivo:d0.name, datas_detectadas:d0.dates, uso:'métricas parciais completas do dia atual', estado:'fornecido' } },
+        separacao_temporal:{ D_menos_1:{ arquivo:d1?.name ?? null, datas_detectadas:d1?.dates ?? [], uso:'métricas fechadas', estado:hasD1 ? 'fornecido' : 'nao_fornecido' }, D_zero:{ arquivo:d0?.name ?? null, datas_detectadas:d0?.dates ?? [], uso:'métricas parciais completas do dia atual', estado:hasD0 ? 'fornecido' : 'nao_fornecido' } },
         campanhas:campaigns,
-        divergencias:{ comparacao_realizada:hasD1, motivo_comparacao_nao_realizada:hasD1 ? null : 'CSV D−1 não fornecido.', somente_D_menos_1:only1, somente_D_zero:only0, duplicadas_D_menos_1:d1?.duplicateNames ?? {}, duplicadas_D_zero:d0.duplicateNames, possiveis_diferencas_de_nome_nao_associadas:[] },
-        validacao_manifesto:{ modo_entrada:hasD1 ? 'D_menos_1_e_D_zero' : 'D_zero_somente', quantidades:{ linhas_campanha_entrada_D_menos_1:d1?.records.length ?? 0, linhas_campanha_entrada_D_zero:d0.records.length, nomes_unicos_D_menos_1:names1.size, nomes_unicos_D_zero:names0.size, campanhas_saida_unicas:campaigns.length, campanhas_prontas:campaigns.filter(c => c.situacao_manifesto === 'pronto').length, campanhas_pendentes:campaigns.filter(c => c.situacao_manifesto === 'pendente').length }, totais_controle_D_menos_1:{ impressoes:sumValues(values('metricas_D_menos_1','impressoes')), cliques_google:sumValues(values('metricas_D_menos_1','cliques_google')), conversoes:sumValues(values('metricas_D_menos_1','conversoes')) }, totais_controle_D_zero:{ impressoes:sumValues(values('metricas_D_zero','impressoes')), cliques_google:sumValues(values('metricas_D_zero','cliques_google')), conversoes:sumValues(values('metricas_D_zero','conversoes')) }, custo_total_D_menos_1_por_moeda:costByCurrency('metricas_D_menos_1','custo_total'), custo_total_D_zero_por_moeda:costByCurrency('metricas_D_zero','custo_total'), validacao_percentuais:percentValidation, nenhuma_campanha_duplicada_na_saida:new Set(campaigns.map(c => c.nome_campanha_exato)).size === campaigns.length, associacoes_feitas_apenas_por_nome_exato:true, nenhuma_associacao_financeira_ambigua:!critical.includes('Há associação financeira ambígua.'), alertas_criticos:[...new Set(critical)].sort(), confianca:confidence },
+        divergencias:{ comparacao_realizada:canCompare, motivo_comparacao_nao_realizada:canCompare ? null : `Comparação não realizada: ${!hasD1 ? 'D−1' : 'D0'} não fornecido.`, somente_D_menos_1:only1, somente_D_zero:only0, duplicadas_D_menos_1:d1?.duplicateNames ?? {}, duplicadas_D_zero:d0?.duplicateNames ?? {}, possiveis_diferencas_de_nome_nao_associadas:[] },
+        validacao_manifesto:{ modo_entrada:mode, quantidades:{ linhas_campanha_entrada_D_menos_1:d1?.records.length ?? 0, linhas_campanha_entrada_D_zero:d0?.records.length ?? 0, nomes_unicos_D_menos_1:names1.size, nomes_unicos_D_zero:names0.size, campanhas_saida_unicas:campaigns.length, campanhas_prontas:campaigns.filter(c => c.situacao_manifesto === 'pronto').length, campanhas_pendentes:campaigns.filter(c => c.situacao_manifesto === 'pendente').length }, totais_controle_D_menos_1:{ impressoes:sumValues(values('metricas_D_menos_1','impressoes')), cliques_google:sumValues(values('metricas_D_menos_1','cliques_google')), conversoes:sumValues(values('metricas_D_menos_1','conversoes')) }, totais_controle_D_zero:{ impressoes:sumValues(values('metricas_D_zero','impressoes')), cliques_google:sumValues(values('metricas_D_zero','cliques_google')), conversoes:sumValues(values('metricas_D_zero','conversoes')) }, custo_total_D_menos_1_por_moeda:costByCurrency('metricas_D_menos_1','custo_total'), custo_total_D_zero_por_moeda:costByCurrency('metricas_D_zero','custo_total'), validacao_percentuais:percentValidation, nenhuma_campanha_duplicada_na_saida:new Set(campaigns.map(c => c.nome_campanha_exato)).size === campaigns.length, associacoes_feitas_apenas_por_nome_exato:true, nenhuma_associacao_financeira_ambigua:!critical.includes('Há associação financeira ambígua.'), alertas_criticos:[...new Set(critical)].sort(), confianca:confidence },
         validacao_estrutura_json:{ gerado_do_zero:true, manifesto_anterior_lido:false }
       };
       let payload = JSON.stringify(manifest, null, 2);
@@ -1114,6 +1133,20 @@
       payload = JSON.stringify(manifest, null, 2);
       structuralValidation(payload);
       return { manifest, payload, critical, confidence };
+    }
+
+    function formatCaptureConsumption(records) {
+      const totals = new Map();
+      let missing = 0;
+      for (const record of records) {
+        const cost = stateValue(record.cost, parseNumber);
+        const currency = String(record.moeda || '').trim().toUpperCase();
+        if (cost.valor == null || !/^[A-Z]{3}$/.test(currency)) { missing++; continue; }
+        totals.set(currency, (totals.get(currency) || 0) + Math.round(cost.valor * 100));
+      }
+      if (!totals.size) return 'Não disponível';
+      const values = [...totals].map(([currency, cents]) => new Intl.NumberFormat('pt-BR', { style:'currency', currency }).format(cents / 100)).join(' · ');
+      return missing ? `${values} (parcial: ${missing} sem custo/moeda válidos)` : values;
     }
 
     function renderSlot(slot) {
@@ -1133,6 +1166,7 @@
       meta.hidden = false;
       const managerLabel = data.managerAccountName && data.managerAccountId ? `${data.managerAccountName} · ${data.managerAccountId}` : 'Não identificada';
       meta.replaceChildren(metaLine('MCC', managerLabel), metaLine('Campanhas válidas', campaignsLabel), metaLine('Data detectada', detectedDates), metaLine('Moedas', currencies), metaLine('Tipo de captura', 'Captura MCC'));
+      if (slot === 'd0') meta.append(metaLine('Consumo acumulado do dia', formatCaptureConsumption(data.records)));
     }
 
     function metaLine(label, value) { const row = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = label; b.textContent = String(value); row.append(a,b); return row; }
@@ -1308,8 +1342,15 @@
 
     function updateD0ApplyAvailability() {
       const selectedEntry = d0CaptureHistory.find(entry => entry.id === selectedD0CaptureId);
-      const viewingCurrentCapture = Boolean(currentResult?.manifest && selectedEntry?.state === 'calculated' && slots.d0?.captureHistory?.id && selectedD0CaptureId === slots.d0.captureHistory.id);
-      q('#apply-manifest').disabled = !viewingCurrentCapture || numberingIssues.length > 0 || Boolean(currentResult?.critical?.length);
+      const mode = currentResult?.manifest?.validacao_manifesto?.modo_entrada;
+      const viewingCurrentD0 = Boolean(slots.d0 && !slots.d0.error && selectedEntry?.state === 'calculated' && slots.d0.captureHistory?.id && selectedD0CaptureId === slots.d0.captureHistory.id);
+      const validD1Only = Boolean(mode === 'D_menos_1_somente' && slots.d1 && !slots.d1.error);
+      q('#apply-manifest').disabled = !numberingValidationReady || !(viewingCurrentD0 || validD1Only) || numberingIssues.length > 0 || Boolean(currentResult?.critical?.length);
+    }
+
+    function placeApplyActions(hasD0) {
+      const actions = q('#apply-actions'), host = q(`${hasD0 ? '#d0-changes-panel' : '#d1-changes-panel'} > .panel-head`);
+      if (actions.parentElement !== host) host.append(actions);
     }
 
     function renderD0CaptureEntry(entry) {
@@ -1540,14 +1581,15 @@
 
     function renderResults(result) {
       const { manifest, critical, confidence } = result, validation = manifest.validacao_manifesto, percent = validation.validacao_percentuais;
-      const hasD1 = validation.modo_entrada === 'D_menos_1_e_D_zero';
+      numberingValidationReady = false;
+      const hasD1 = ['D_menos_1_e_D_zero','D_menos_1_somente'].includes(validation.modo_entrada), hasD0 = ['D_menos_1_e_D_zero','D_zero_somente'].includes(validation.modo_entrada), canCompare = hasD1 && hasD0;
       const checks = q('#checks'); checks.replaceChildren();
       renderCheck(checks, manifest.fontes.every(s => s.datas_detectadas.length === 1) ? 'pass':'fail', 'Datas dos relatórios', `${manifest.separacao_temporal.D_menos_1.datas_detectadas.join(', ') || 'D−1 ausente'} · ${manifest.separacao_temporal.D_zero.datas_detectadas.join(', ') || 'D0 ausente'}`);
       renderCheck(checks, manifest.fontes.every(s => !s.colunas_obrigatorias_ausentes.length) ? 'pass':'fail', 'Cabeçalhos obrigatórios', manifest.fontes.every(s => !s.colunas_obrigatorias_ausentes.length) ? 'Todos foram mapeados':'Há colunas ausentes');
       renderCheck(checks, !hasD1 ? 'warn' : percent.colunas_percentuais_distintas ? 'pass':'fail', 'Percentuais de D−1', !hasD1 ? 'Não aplicável: manifesto somente de D0' : percent.colunas_percentuais_distintas ? 'Primeira posição e parte superior usam colunas diferentes':'Mapeamento conflitante');
       renderCheck(checks, validation.nenhuma_campanha_duplicada_na_saida ? 'pass':'fail', 'Campanhas únicas', `${validation.quantidades.campanhas_saida_unicas} campanhas no manifesto`);
       const divergenceCount = manifest.divergencias.somente_D_menos_1.length + manifest.divergencias.somente_D_zero.length;
-      renderCheck(checks, !hasD1 ? 'warn' : divergenceCount ? 'warn':'pass', 'Comparação D−1 × D0', !hasD1 ? 'Não aplicável: D−1 não informado' : divergenceCount ? `${divergenceCount} campanha(s) presente(s) em apenas uma captura`:'Mesmos nomes nas duas capturas');
+      renderCheck(checks, !canCompare ? 'warn' : divergenceCount ? 'warn':'pass', 'Comparação D−1 × D0', !canCompare ? `Não aplicável: ${!hasD1 ? 'D−1' : 'D0'} não informado` : divergenceCount ? `${divergenceCount} campanha(s) presente(s) em apenas uma captura`:'Mesmos nomes nas duas capturas');
       renderCheck(checks, percent.teste_regressao_aprovado ? 'pass':'fail', 'Teste de regressão', !hasD1 ? 'Regra estrutural aprovada; dados de D−1 não aplicáveis' : percent.teste_regressao_aprovado ? `${percent.amostragem_csv_manifesto.length} amostras conferidas`:'Amostragem ou extração falhou');
       const issues = q('#issues'); issues.replaceChildren();
       critical.forEach(text => { const li = document.createElement('li'); li.className = 'issue fail'; li.textContent = text; issues.append(li); });
@@ -1556,6 +1598,7 @@
       const summary = q('#summary'); summary.replaceChildren();
       [['Campanhas', validation.quantidades.campanhas_saida_unicas, ''], ['Pendências', validation.quantidades.campanhas_pendentes, validation.quantidades.campanhas_pendentes ? 'bad':'good'], ['Alertas críticos', critical.length, critical.length ? 'bad':'good'], ['Confiança', confidence[0].toUpperCase()+confidence.slice(1), confidence === 'alta' ? 'good':confidence === 'baixa' ? 'bad':'']].forEach(([label,value,cls]) => { const div=document.createElement('div'); div.className=`summary ${cls}`; const span=document.createElement('span'), strong=document.createElement('strong'); span.textContent=label; strong.textContent=String(value); div.append(span,strong); summary.append(div); });
       clearD0DeltaPanel(); clearD1DeltaPanel();
+      placeApplyActions(hasD0);
       renderPreviewTable(manifest, previewRole);
       setPanel('#validation-panel', true); setPanel('#preview-panel', true);
       const feedback = q('#apply-feedback');
@@ -1567,6 +1610,7 @@
 
     async function validatePreparedNumbering(result) {
       const token = ++numberingValidationToken, databaseApi = window.CampaignDatabase || fallbackPanelDatabase;
+      numberingValidationReady = false;
       let issues = [], dateChanges = [], historyWarnings = [], comparisonBase = null;
       try {
         const db = await openPanelDatabase();
@@ -1574,14 +1618,14 @@
         finally { db.close(); }
       } catch (error) {
         if (token !== numberingValidationToken || currentResult !== result) return;
-        showD0DeltaUnavailable();
+        if (slots.d0 && !slots.d0.error) showD0DeltaUnavailable();
         if (slots.d1 && !slots.d1.error) showD1DeltaUnavailable();
         numberingIssues = [];
         q('#apply-feedback').className = 'apply-feedback error'; q('#apply-feedback').textContent = `FALHA — A base não foi atualizada. Motivo: ${panelUpdateError(error)}`; q('#apply-feedback').hidden = false;
-        q('#apply-manifest').disabled = true; return;
+        numberingValidationReady = false; q('#apply-manifest').disabled = true; return;
       }
       if (token !== numberingValidationToken || currentResult !== result) return;
-      renderD0DeltaPanel(result.manifest, comparisonBase, dateChanges, slots.d0?.captureHistory);
+      if (slots.d0 && !slots.d0.error) renderD0DeltaPanel(result.manifest, comparisonBase, dateChanges, slots.d0.captureHistory);
       if (slots.d1 && !slots.d1.error) renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges);
       else clearD1DeltaPanel();
       numberingIssues = issues;
@@ -1600,8 +1644,10 @@
         q('#validation-status').textContent = result.critical.length ? `${result.critical.length} falha(s) crítica(s)` : (historyWarnings.length ? 'Validação concluída · avisos históricos' : 'Validação concluída');
         q('#apply-feedback').hidden = !result.critical.length;
         if (result.critical.length) { q('#apply-feedback').className = 'apply-feedback error'; q('#apply-feedback').textContent = 'Atualização bloqueada: corrija as falhas de validação.'; }
-        q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : (result.manifest.origem_geracao?.origem_entrada_D_zero === 'mcc_chrome_extension' ? 'Captura MCC validada e pronta para atualizar a base.' : 'Dados colados validados e prontos para atualizar a base.');
+        const receivedFromExtension = (result.manifest.fontes || []).some(source => source.origem_entrada === 'mcc_chrome_extension');
+        q('#announcer').textContent = result.critical.length ? 'Validação concluída com falhas críticas.' : (receivedFromExtension ? 'Captura MCC validada e pronta para atualizar a base.' : 'Dados colados validados e prontos para atualizar a base.');
       }
+      numberingValidationReady = true;
       updateD0ApplyAvailability();
     }
 
@@ -1640,51 +1686,31 @@
     }
 
     function resetResults() {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', false); setPanel('#preview-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando D0';
+      numberingValidationToken++; numberingIssues = []; numberingValidationReady = false; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', false); setPanel('#preview-panel', false); q('#apply-manifest').disabled = true; q('#validation-status').textContent = 'Aguardando captura';
     }
 
-    function showInputBlock(message, { title='D0 obrigatório', status='Aguardando D0' }={}) {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); q('#apply-manifest').disabled = true;
+    function showInputBlock(message, { title='Captura inválida', status='Correção necessária' }={}) {
+      numberingValidationToken++; numberingIssues = []; numberingValidationReady = false; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); q('#apply-manifest').disabled = true;
       const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'fail', title, message);
       const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=message; issues.append(li);
       q('#validation-status').textContent=status; q('#announcer').textContent=message;
     }
 
-    function showWaitingForD0() {
-      numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); q('#apply-manifest').disabled = true;
-      const message = 'D−1 recebido e validado. Aguardando D0 para gerar a prévia.';
-      const checks=q('#checks'); checks.replaceChildren(); renderCheck(checks, 'warn', 'Aguardando D0', message);
-      q('#issues').replaceChildren(); q('#validation-status').textContent='Aguardando D0'; q('#announcer').textContent=message;
-    }
-
-    async function detectPendingD1DateChanges(source) {
-      const token=numberingValidationToken, databaseApi=window.CampaignDatabase;
-      if (!databaseApi?.normalize || !source?.records?.length) return;
-      try {
-        const db=await openPanelDatabase(); let base;
-        try { base=databaseApi.normalize(await readPanelBase(db)); } finally { db.close(); }
-        if (token!==numberingValidationToken || slots.d0 || slots.d1!==source) return;
-        const partial={campanhas:source.records.map(record=>({nome_campanha_exato:record.nome_campanha_exato,metricas_D_menos_1:{conta:{valor:record.conta}}}))};
-        const dateChanges=databaseApi.campaignDateChangeCandidates?.(base,partial)||[];
-        renderD1DeltaPanel(source,base,dateChanges);
-        for (const item of dateChanges) { const li=document.createElement('li'); li.className='issue warn'; li.textContent=`Possível mudança de data detectada no D−1: ${item.oldName} → ${item.newName}. Aguarde o D0; a correção só será aplicada após confirmação em Atualizar base.`; q('#issues').append(li); }
-      } catch { if(token===numberingValidationToken && !slots.d0 && slots.d1===source)showD1DeltaUnavailable(); }
-    }
-
     function attemptBuild() {
-      if (!slots.d0) { if (slots.d1 && !slots.d1.error) showWaitingForD0(); else resetResults(); return; }
-      if (slots.d0.error || slots.d1?.error) { showInputBlock(slots.d0.error ? 'Os dados de D0 contêm erro e precisam ser corrigidos.' : 'Os dados de D−1 contêm erro. Corrija-os ou limpe tudo e informe somente o D0.'); return; }
-      const datePairIssue = reportDatePairIssue(slots.d1, slots.d0);
+      if (!slots.d0 && !slots.d1) { resetResults(); return; }
+      if (slots.d0?.error || slots.d1?.error) { showInputBlock(slots.d0?.error ? 'Os dados de D0 contêm erro e precisam ser corrigidos.' : 'Os dados de D−1 contêm erro. Corrija-os ou limpe essa captura.'); return; }
+      const datePairIssue = slots.d1 && slots.d0 ? reportDatePairIssue(slots.d1, slots.d0) : null;
       if (datePairIssue) { showInputBlock(datePairIssue, { title:'Datas incompatíveis', status:'Correção necessária' }); return; }
       try {
         const priorMode = currentResult?.manifest.validacao_manifesto.modo_entrada;
-        if (!slots.d1) previewRole = 'd0'; else if (!currentResult || priorMode === 'D_zero_somente') previewRole = 'd1';
+        if (!slots.d1) previewRole = 'd0'; else if (!slots.d0 || !currentResult || priorMode === 'D_zero_somente') previewRole = 'd1';
+        numberingValidationReady = false;
         const result = buildManifest(slots.d1, slots.d0); currentManifest = result.payload; currentResult = result;
         const d1Dates = result.manifest.separacao_temporal.D_menos_1.datas_detectadas, d0Dates = result.manifest.separacao_temporal.D_zero.datas_detectadas;
         const dateToken = d1Dates.length === 1 ? d1Dates[0] : d0Dates.length === 1 ? d0Dates[0] : 'data_indeterminada';
         currentFilename = `manifesto_mcc_${dateToken}.json`; renderResults(result); validatePreparedNumbering(result);
       } catch (error) {
-        numberingValidationToken++; numberingIssues = []; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
+        numberingValidationToken++; numberingIssues = []; numberingValidationReady = false; currentManifest = null; currentResult = null; clearD0DeltaPanel(); clearD1DeltaPanel(); setPanel('#validation-panel', true); setPanel('#preview-panel', false); const issues=q('#issues'); issues.replaceChildren(); const li=document.createElement('li'); li.className='issue fail'; li.textContent=`Falha ao preparar o manifesto: ${error.message}`; issues.append(li); q('#checks').replaceChildren(); q('#validation-status').textContent='Falha de processamento';
       }
     }
 
@@ -1709,7 +1735,6 @@
       previewSort = { key:null, direction:null };
       renderSlot(slot);
       attemptBuild();
-      if (slot === 'd1' && !slots.d0) detectPendingD1DateChanges(source);
     }
 
     qa('.source-tab').forEach(button => button.addEventListener('click', () => {
@@ -1750,7 +1775,7 @@
       if (slots.d0 && !slots.d0.error && !sourcesHaveDisjointAccounts(parsed, slots.d0)) { const datePairIssue = reportDatePairIssue(parsed, slots.d0); if (datePairIssue) throw new Error(datePairIssue); }
       installParsedSource('d1', parsed);
       if (slots.d0 && !currentResult?.manifest) throw new Error('O Preparador recebeu D−1, mas não conseguiu montar a prévia combinada.');
-      if (!slots.d0) return { ok:true, campaignCount:parsed.records.length, reportDate:capture.reportDate, previewReady:false, waitingForD0:true, source:'mcc_chrome_extension' };
+      if (!currentResult?.manifest) throw new Error('O Preparador recebeu os dados, mas não conseguiu montar a prévia D−1.');
       renderPreviewTable(currentResult.manifest, previewRole);
       return { ok:true, campaignCount:parsed.records.length, reportDate:capture.reportDate, previewReady:true, waitingForD0:false, source:'mcc_chrome_extension' };
     };

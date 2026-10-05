@@ -20,6 +20,16 @@ Na importação de várias MCCs com IDs completos, `manifesto_atual` é uma proj
 
 O ajuste de ROI mínimo da Visão Geral é por campanha e permanece no campo aditivo `campanhas[].roi_minimo_pct` da base existente. O diálogo calcula o limite máximo e o percentual um a partir do outro usando a receita da mesma projeção; ao confirmar, grava somente o percentual e recalcula limite/saldo na apresentação. Não há alteração de schema ou store. Percentual negativo é permitido somente acima de −100%, para manter válida a fórmula `limite = receita / (1 + ROI/100)`.
 
+### ROI no momento do registro de venda manual
+
+Cada novo lançamento rápido recebe `vendas_provisorias[].roi_no_registro` (version 1) antes do salvamento atômico da base e do espelho de Faturamento. A fotografia guarda ID da campanha, instante do registro, data/hora/valor originais da venda, investimento e receita acumulados em BRL, taxa operacional USD/BRL, última data MCC da campanha e ROI percentual. Não requer store nem migração de schema. O backup normal da base preserva a propriedade aditiva.
+
+`src/overview/sale-roi-domain.js` calcula `(receita acumulada - investimento acumulado) / investimento acumulado * 100`, com a venda recém-lançada incluída uma vez. Usa as substituições MCC autoritativas de `OverviewDomain` e a cobertura de vendas manuais de `CampaignDatabase.salesAdjustmentMap`, reconciliadas em uma cópia de apresentação contra D0/D−1, inclusive quando o Diário estiver defasado. O pareamento MCC é agregado/FIFO, não evidência de uma transação individual. Investimento ausente/zero ou receita indisponível produzem `roi_percent:null` e motivo, nunca zero artificial.
+
+A fotografia não é recalculada ao importar MCC, confirmar D−1, recarregar ou editar o lançamento; o Diário identifica correções e mantém os dados originais usados. Se o vínculo mudar de campanha, a fotografia original permanece armazenada, mas não é mostrada como ROI da nova campanha. Registros antigos não são preenchidos retroativamente. As colunas da Visão Geral usam as duas primeiras vendas manuais não canceladas em ordem de data/hora da venda (registro e ID desempatarão); vendas antigas sem fotografia mantêm sua posição e exibem `—`. Trata-se de vendas manuais registradas, não de uma identificação de transações individuais de todo o histórico agregado MCC. O Diário mostra todas, inclusive conciliadas e terceira venda em diante, em quadro próprio separado de A–Q e do recorte da pausa.
+
+Preferências de colunas pertencem à view: `localStorage['hub:overview:visible-columns:v1']`. Ocultar uma coluna não altera dados/cálculos, períodos ou filtros; Campanha permanece obrigatória. Colunas identificadas por chave mantêm largura, alinhamento e ordenação ao ocultar as anteriores. A preferência é independente do backup financeiro.
+
 ### Histórico legado consolidado — migração única de `totais`
 
 Não é uma store ou base nova: a migração v1 reutiliza `bases/atual` e acrescenta `legacy_totais_migration: {version, source, applied_at, report}` à base. Campanhas novas da carga usam `registro_origem: 'legacy_totais'`, `status: 'historico'`, nome completo em `nome_mcc`/`nome_exibicao` e `legacy_totais` com `schema`, `origin`, número histórico, `end_date`, `account_legacy`, métricas e valores derivados. Campanhas nativas inequívocas mantêm sua identidade/status e recebem apenas `legacy_totais`; seu histórico diário, MCC, D0/D−1, vendas e Event Log não são substituídos. Registros nativos sem marcador explícito continuam sendo considerados de origem `native` por compatibilidade.
@@ -40,7 +50,7 @@ Payloads de recuperação são privados em `data-local/`, ignorados pelo Git, e 
 - Fora das datas da captura atual, quando existe uma linha histórica para a data, os valores não vazios da planilha prevalecem para investimento, faturamento, cliques e vendas.
 - A partir de `2026-09-13` (inclusive), MCC/D−1 preenche cliques e vendas somente quando o respectivo campo histórico está ausente (`null`). Zero explícito na planilha é válido e não deve ser substituído. Antes dessa data, lacunas históricas de cliques/vendas continuam ausentes.
 - Se não existe uma linha histórica para a data, os dados MCC agregados podem formar a linha do dia. Ausência de valor não é convertida em zero.
-- `salesAdjustmentMap()` mantém vendas e comissão provisórias separadas das métricas oficiais; pendências não se tornam conversões oficiais. Para exibição no Controle Macro, fornece também os lançamentos provisórios pendentes com produto/valor, somente em memória. Conversões oficiais usam campanha MCC → identidade de produto do catálogo; o agregado histórico da planilha não possui detalhe por produto e só recebe atribuição MCC quando a contagem oficial diária coincide. Anotações históricas explícitas são preservadas; sem outra evidência, manter a venda como produto não identificado. Nada disso altera o schema nem cria transações oficiais.
+- `salesAdjustmentMap()` mantém vendas e comissão provisórias separadas das métricas oficiais; pendências não se tornam conversões oficiais. Para exibição no Controle Macro, fornece também os lançamentos provisórios pendentes com produto/valor, somente em memória. Nessa projeção, linhas autoritativas MCC D0/D−1 substituem os dados diários cobertos antes de reconciliar os ajustes, para que uma captura recém-confirmada não continue rotulada como provisória quando o Diário ainda está defasado; campos de conversão ausentes não são tratados como zero. Isso é somente visual e nunca regrava a venda ou o Diário. Conversões oficiais usam campanha MCC → identidade de produto do catálogo; o agregado histórico da planilha não possui detalhe por produto e só recebe atribuição MCC quando a contagem oficial diária coincide. Anotações históricas explícitas são preservadas; sem outra evidência, manter a venda como produto não identificado. Nada disso altera o schema nem cria transações oficiais.
 - Na Visão Geral, o lucro D0 usa a comissão observada somada ao `commissionAdjustment` provisório da mesma campanha e data D0, menos o investimento observado. O ajuste é apenas para a projeção diária: não converte a venda provisória em conversão oficial nem grava dados ao renderizar.
 - De `2026-06-10` a `2026-06-24`, inclusive, a tela mantém os dias sem dados com a observação de operação fora do ar por suspensões. Dias com vendas positivas recebem destaque verde suave; o destaque de suspensão vermelho suave tem precedência visual se ambos coincidirem.
 
@@ -95,8 +105,14 @@ Importações devem unir eventos por `event_id`. IDs são idempotentes e writes 
 - Meu Tempo: `painel-meu-tempo`, não misturar com campanhas.
 - Lista de Gerente: `radar-lista-gerente`.
 - E-commerce GM: `radar-top-performance`.
+- Hot Offers MS: `radar-hot-offers-ms`.
+- Top Offers CB: `radar-clickbank-top-offers`.
 - Glimpse: `radar-glimpse`, compartilhado por `productKey`.
 - Radar SpyHero: `radar-curadoria`.
+
+A página compartilhada de Glimpse analisa e persiste automaticamente cada nova colagem como snapshot sanitizado em `radar-glimpse`; o `analysisId` mantém o salvamento por **Concluir** idempotente. A referência na Observabilidade da Curadoria é iniciada em segundo plano apenas após a gravação original. A regra vale para Lista de Gerente, E-commerce GM, Hot Offers MS, Top Offers CB e SmartAdv, sem unificar os bancos próprios dessas telas.
+
+`radar-clickbank-top-offers` schema v2 retains the original `captures` store and additively creates `offerMetadata`, `trends`, and `images`, all analysis stores keyed by `offerKey`. Manual countries stay separate from source captures because the ClickBank Marketplace paste contains no GEO. The screen's full v2 JSON backup includes all four stores; merge restore preserves local conflicts and accepts v1 capture-only backups.
 
 ## Faturamento — domínio financeiro independente
 

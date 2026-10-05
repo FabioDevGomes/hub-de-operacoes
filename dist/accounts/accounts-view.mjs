@@ -1,11 +1,11 @@
 import {createAccountState, buildAccountReport, accountDomainUrl} from './accounts-domain.mjs?v=1';
 
 // UI only. The Hub supplies read-only campaign projections and shared formatters.
-export const accountReportTemplate = `<div class="account-filters">
+export const accountReportTemplate = `<div class="account-summary-row"><div class="account-filters">
           <div class="account-filter"><label for="accountReportAccount">Conta</label><select id="accountReportAccount" class="search"><option value="all">Todas</option></select></div>
           <div class="account-filter"><label for="accountReportProduct">Produto</label><select id="accountReportProduct" class="search"><option value="all">Todos</option></select></div>
         </div>
-        <div id="accountReportKpis" class="account-kpis"></div>
+        <div id="accountReportKpis" class="account-kpis"></div></div>
         <div class="account-report-grid">
           <div class="card panel"><div class="panel-head"><div><h2>Matriz de produtos por conta</h2><p>Número de campanhas por produto em cada conta.</p></div><div class="panel-controls account-report-controls"><div class="account-report-status-filter"><label for="accountReportStatus">Situação</label><select id="accountReportStatus" class="search" aria-label="Filtrar matriz e cobertura por situação"><option value="all">Todas</option><option value="ativa" selected>Ativas</option><option value="pausada">Pausadas</option></select></div><span id="accountReportPeriod" class="tag"></span></div></div><div class="account-matrix-wrap"><table class="account-matrix"><thead id="accountMatrixHead"></thead><tbody id="accountMatrixBody"></tbody></table></div></div>
           <aside class="account-side"><div class="card account-chart"><h3>Produtos por número de contas</h3><div id="accountProductBars"></div></div><div class="card account-chart"><h3>Quantidade de produtos por faixa de CPA</h3><div id="accountCpaRangeBars"></div><div id="accountDistribution" class="hidden" aria-hidden="true"></div></div></aside>

@@ -20,6 +20,8 @@
       { key: 'radar', label: 'Radar SpyHero', href: '/curadoria/' },
       { key: 'manager', label: 'Lista de Gerente GM', href: '/curadoria/gerentes/' },
       { key: 'ecommerce', label: 'E-commerce GM', href: '/curadoria/top-performance/' },
+      { key: 'clickbank-top-offers', label: 'Top Offers CB', href: '/curadoria/clickbank-top-offers/' },
+      { key: 'smartadv-offers', label: 'Ofertas SmartAdv', href: '/curadoria/smartadv-offers/' },
       { key: 'hot-offers-ms', label: 'Hot Offers MS', href: '/curadoria/hot-offers-ms/' },
     ] },
     { id: 'creation', label: 'Criação de ofertas', items: [

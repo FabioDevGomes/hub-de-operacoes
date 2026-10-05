@@ -9,6 +9,8 @@ assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
 assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));
 assert.ok(html.includes('id="pasteArea"')&&html.includes('id="confirmImport"'));
 assert.ok(html.includes('id="movementFilter"'));
+assert.ok(html.includes('.filter-grid #decisionFilter,.filter-grid #presenceFilter,.filter-grid #clearFilters,.filter-grid>.column-picker>summary{border:0}'),'contornos dos quatro controles apontados na E-commerce GM continuam visíveis');
+assert.ok(html.includes('.filter-grid #decisionFilter:focus-visible,.filter-grid #presenceFilter:focus-visible,.filter-grid #clearFilters:focus-visible,.filter-grid>.column-picker>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}'),'os controles sem borda precisam manter foco de teclado visível');
 assert.ok(html.includes('.filter-grid #countryFilter,.filter-grid #languageFilter,.filter-grid #featureFilter{display:none!important}'),'o filtro de recursos deve ficar removido da faixa visível de filtros da E-commerce GM');
 assert.ok(html.includes('.filter-grid input[type=number].control{width:100%;min-width:0}')&&html.includes('minmax(84px,.7fr) minmax(84px,.7fr) minmax(110px,1.1fr)'),'os filtros Payout mín. e Payout máx. devem caber nas próprias colunas sem sobreposição');
 assert.ok(html.includes('.filter-grid:has(.column-picker[open]){position:relative;z-index:20;overflow:visible}')&&html.includes('.filter-grid .column-menu{z-index:30}'),'o seletor de colunas deve se sobrepor à tabela e escapar do recorte da barra de filtros');
@@ -64,7 +66,7 @@ assert.ok(html.includes("sortKey='payout';sortDirection='desc';render()"),'Limpa
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'E-commerce GM não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecision'),'decisão da E-commerce GM não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20261004-google-images-standard'),'E-commerce GM não carrega os estilos compartilhados atualizados');
+assert.ok(html.includes('trends-sheet.css?v=20261005-glimpse-blue-actions'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
 assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=1'")&&html.includes("mountCurationListFocus('top-performance'"),'E-commerce GM não instala a preservação compartilhada de posição e linha');
 assert.ok(html.includes("highlightOnCapture:false")&&html.includes("function closeOffer({restoreFocus=true}={}){$('#offerSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),'E-commerce GM deve animar apenas após fechar a ficha e retornar à lista');
 assert.match(html,/async function saveTrend\(status\)\{[\s\S]*?closeOffer\(\{restoreFocus:false\}\);await refresh\(\);listFocus\.restore\(\);toast\(/,'salvar Trends precisa restaurar a linha depois que refresh recriar as linhas da lista');

@@ -13,12 +13,13 @@ const row=(name,status,investment,extra={})=>({
   totals:{investment,impressions:0,clicks:0,conversions:0},d0Totals:{investment,impressions:0,clicks:0},
   roi:null,profit:null,zeroDays:0,...extra
 });
-function setup(rows){
+function setup(rows,preferences){
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,referenceDate:'2026-09-30',
+    manifestCampaignCount:54,baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
-  const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,
+  const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args])}});
   return {...dom,state,snapshot,calls,controller};
 }
@@ -40,13 +41,31 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     s.state.totalsMode=mode;s.state.campaignStatusFilter='active';s.controller.render();
     const kpis=s.get('#kpis').innerHTML;
     assert.match(kpis,/Indicadores D0/);assert.match(kpis,/Indicadores D−1/);
-    assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.match(kpis,/Cliques 1\/2/);
+    assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.doesNotMatch(kpis,/class="kpi-info"|kpi-info-icon|Cliques 1\/2/);
+    assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6,'os seis cartões devem manter a mesma composição');
+    assert.match(kpis,/Manifesto MCC[\s\S]*54[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D zero[\s\S]*30\/09\/2026/);
+    assert.match(kpis,/Venda provisória[\s\S]*overview-info-icon/);
+    assert.match(kpis,/pendente de confirmação[\s\S]*Base: 4427 registros[\s\S]*05\/10\/2026, 14:57/);
+    assert.match(kpis,/overview-kpi-main-label">Investimento/);assert.match(kpis,/overview-kpi-detail-value">10/);
     assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row hidden"/);
     assert.match(s.get('#totalsCount').textContent,/1 ativas · 1 pausada/);
-    assert.equal((s.get('#totalsHead').innerHTML.match(/<th>/g)||[]).length,13);
+    assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,15);
     s.state.campaignStatusFilter='all';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis);
   }
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
+test('overview keeps a permanent information icon and changes pending-sale wording by count',()=>{
+  const s=setup([row('Campanha','ativa',0)]);
+  s.controller.render();let kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/class="kpi-label">Venda provisória,?<\/span>[\s\S]*<strong class="kpi-value">1<\/strong>[\s\S]*pendente de confirmação/);
+  assert.match(kpis,/overview-info-icon[^>]+aria-label="Informações sobre vendas provisórias"/);
+  assert.match(kpis,/class="dot warn overview-kpi-pending-dot"/,'pendências devem manter o ponto âmbar');
+  s.snapshot.pendingSaleCount=3;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">3<\/strong>[\s\S]*pendentes de confirmação/);
+  s.snapshot.pendingSaleCount=0;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">0<\/strong>/);assert.match(kpis,/class="dot overview-kpi-pending-dot"/,'sem pendências o ponto deve ficar verde');assert.match(kpis,/overview-info-icon/);
+  s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/Histórico não carregado[\s\S]*Atualização indisponível/);
 });
 test('overview daily profit follows D0, marks polarity and exposes observed coverage',()=>{
   const s=setup([
@@ -56,21 +75,21 @@ test('overview daily profit follows D0, marks polarity and exposes observed cove
   ]);
   s.controller.render();const kpis=s.get('#kpis').innerHTML,d0Position=kpis.indexOf('aria-label="Indicadores D0"'),profitPosition=kpis.indexOf('kpi-d0-profit');
   assert.ok(d0Position>=0&&profitPosition>d0Position,'quadro de lucro deve aparecer ao lado e após o grupo D0');
-  assert.match(kpis,/<span class="kpi-label">Lucro do dia<\/span><strong class="kpi-value negative">BRL -40\.00<\/strong>/);
+  assert.match(kpis,/<span class="kpi-label">Lucro do dia<\/span>[\s\S]*?<strong class="kpi-value negative">BRL -40\.00<\/strong>/);
   assert.match(kpis,/Resultado negativo\. Cobertura: 2\/3 campanhas com investimento e comissão\/ajuste disponíveis\./);
   const positive=setup([row('Lucro positivo','ativa',10,{d0Totals:{investment:10,commission:25}})]);positive.controller.render();
   assert.match(positive.get('#kpis').innerHTML,/<strong class="kpi-value positive">\+BRL 15\.00<\/strong>/);
   const missing=setup([row('Sem comissão','ativa',10,{d0Totals:{investment:10,commission:null}})]);missing.controller.render();
-  assert.match(missing.get('#kpis').innerHTML,/<span class="kpi-label">Lucro do dia<\/span><strong class="kpi-value ">—<\/strong>/);
+  assert.match(missing.get('#kpis').innerHTML,/<span class="kpi-label">Lucro do dia<\/span>[\s\S]*?<strong class="kpi-value ">—<\/strong>/);
 });
 test('overview D0 indicators exclude stale rows absent from the latest MCC capture',()=>{
   const captured=row('Capturada','ativa',20,{d0Totals:{investment:20,impressions:50,clicks:5,commission:30},d0ProfitTotals:{investment:20,commission:30}});
   const stale=row('Ausente da captura','pausada',113,{d0Totals:{investment:113,impressions:113,clicks:10,commission:85},d0ProfitTotals:{investment:113,commission:85}});
   stale.c.metricas_D_zero={presente:false};
   const s=setup([captured,stale]);s.controller.render();const kpis=s.get('#kpis').innerHTML;
-  const d0Kpis=kpis.slice(kpis.indexOf('aria-label="Indicadores D0"'),kpis.indexOf('class="kpi kpi-d0-profit"'));
+  const d0Kpis=kpis.slice(kpis.indexOf('aria-label="Indicadores D0"'),kpis.indexOf('kpi-d0-profit'));
   assert.match(d0Kpis,/BRL 20\.00[\s\S]*Impressões[\s\S]*50[\s\S]*Cliques[\s\S]*5/);
-  assert.match(d0Kpis,/Cliques 1\/1/);
+  assert.doesNotMatch(d0Kpis,/class="kpi-info"|kpi-info-icon|Cliques 1\/1/);
   assert.match(kpis,/Resultado positivo\. Cobertura: 1\/1 campanhas com investimento e comissão\/ajuste disponíveis\./);
   assert.doesNotMatch(d0Kpis,/BRL 133\.00|Cliques 1\/2/);
 });
@@ -80,7 +99,7 @@ test('overview alerts coexist, user text is escaped and absent metrics never bec
   const html=s.get('#totalsBody').innerHTML;
   assert.match(html,/Ativa · Reprovada · Renumerar/);assert.match(html,/2 vendas provisórias/);assert.match(html,/Limitada pela política/);
   assert.match(html,/policy-limited-row/);assert.match(html,/&lt;Oferta&gt;/);assert.match(html,/&quot;política&quot;/);
-  assert.doesNotMatch(html,/<Oferta>/);assert.match(html,/<td class="num">—<\/td>/);assert.match(html,/num negative">BRL -30.00/);
+  assert.doesNotMatch(html,/<Oferta>/);assert.match(html,/<td data-column="current" class="num">—<\/td>/);assert.match(html,/num negative">BRL -30.00/);
 });
 test('overview ROI dialog synchronizes budget and percentage; saves only after explicit confirmation',()=>{
   const s=setup([row('Oferta exata','ativa',10)]);s.setList('.sort-btn',[{sort:'campaign'}]);
@@ -114,4 +133,20 @@ test('overview recent-paused filter retains inclusive seven-day boundary and exc
   assert.equal(domain.rowVisible(paused(''),'paused7','2026-09-30'),false);
   assert.equal(domain.rowVisible({c:{_status:'ativa'}},'paused7','2026-09-30'),false);
   assert.equal(domain.rowVisible(paused(''),'all','2026-09-30'),true);
+});
+test('overview sale ROI photographs stay independent of period, sort numerically and keep unavailable last',()=>{
+  const rows=[row('First','ativa',100,{saleHistory:[{snapshot:{roi_percent:0,sale_date:'2026-09-30',investment_brl:100,revenue_brl:100}},{snapshot:{roi_percent:50}}]}),row('Missing','ativa',50),row('Loss','ativa',10,{saleHistory:[{snapshot:{roi_percent:-50}}]})],s=setup(rows);
+  for(const mode of ['consolidated','d1','d0']){s.state.totalsMode=mode;s.controller.render();assert.match(s.get('#totalsHead').innerHTML,/ROI na 1ª venda/);assert.match(s.get('#totalsBody').innerHTML,/data-column="saleRoiFirst" class="num "[^>]*>0%/);assert.match(s.get('#totalsBody').innerHTML,/data-column="saleRoiSecond" class="num positive"[^>]*>50%/)}
+  for(const sortDir of ['asc','desc'])assert.equal(domain.sortRows(rows,{sortKey:'saleRoiFirst',sortDir},()=>null).at(-1).identity.name,'Missing');
+});
+test('column choices persist locally, keep campaign identifiable and maintain visible sort across periods and remount',()=>{
+  const values=new Map(),preferences={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},s=setup([row('Oferta','ativa',10)],preferences);
+  s.setList('[data-column-choice]',[{columnChoice:'current'},{columnChoice:'saleRoiSecond'}]);s.controller.render();
+  for(const input of s.root.querySelectorAll('[data-column-choice]')){input.checked=false;input.onchange()}
+  assert.equal(s.state.sortKey,'campaign');assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"|data-column="saleRoiSecond"/);
+  assert.match(s.get('#totalsBody').innerHTML,/data-column="campaign"/);assert.match(s.get('#totalsBody').innerHTML,/data-column="saleRoiFirst"/);
+  s.get('#totalsD0').onclick();assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/);
+  const next=setup([row('Oferta','ativa',10)],preferences);next.controller.render();assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="current"/);
+  next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.size,0);
+  const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,15);
 });

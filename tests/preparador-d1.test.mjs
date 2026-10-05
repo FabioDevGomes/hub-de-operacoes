@@ -74,6 +74,23 @@ const d0Text = directD1Decoded.text.replace(/^Relatório D−1:/, 'Relatório D0
 const d0Source = businessContext.__parseSource({ ...directD1Decoded, text:d0Text, name:'captura_mcc_d0.csv', source:'csv_manual' }, 'd0');
 const directManifest = businessContext.__buildManifest(directD1Source, d0Source).manifest;
 const manualManifest = businessContext.__buildManifest(manualD1Source, d0Source).manifest;
+const d1OnlyResult = businessContext.__buildManifest(directD1Source, null);
+const d1OnlyManifest = d1OnlyResult.manifest;
+assert.equal(d1OnlyManifest.validacao_manifesto.modo_entrada, 'D_menos_1_somente');
+assert.equal(d1OnlyManifest.separacao_temporal.D_menos_1.estado, 'fornecido');
+assert.equal(d1OnlyManifest.separacao_temporal.D_zero.estado, 'nao_fornecido');
+assert.equal(d1OnlyManifest.fontes.length, 1);
+assert.equal(d1OnlyManifest.divergencias.comparacao_realizada, false);
+assert.equal(d1OnlyManifest.divergencias.somente_D_menos_1.length, 0, 'um relatório isolado não é apresentado como uma divergência entre fontes');
+assert.equal(d1OnlyManifest.validacao_manifesto.totais_controle_D_zero.impressoes, null);
+assert.equal(d1OnlyResult.critical.length, 0, 'D−1 isolado válido não exige D0');
+assert.equal(d1OnlyManifest.campanhas[0].metricas_D_menos_1.presente, true);
+assert.equal(d1OnlyManifest.campanhas[0].metricas_D_zero.presente, false);
+assert.equal(d1OnlyManifest.campanhas[0].metricas_D_zero.impressoes.estado, 'ausente', 'D0 ausente não é convertido em zero');
+assert.equal(d1OnlyManifest.campanhas[0].situacao_manifesto, 'pronto', 'a ausência do outro período não cria pendência por si só');
+const d0OnlyResult = businessContext.__buildManifest(null, d0Source);
+assert.equal(d0OnlyResult.manifest.validacao_manifesto.modo_entrada, 'D_zero_somente', 'D0 sozinho continua compatível');
+assert.equal(d0OnlyResult.critical.length, 0);
 const d1Projection = manifest => ({
   dates:manifest.separacao_temporal.D_menos_1.datas_detectadas,
   campaigns:manifest.campanhas.map(campaign=>{
@@ -119,42 +136,40 @@ assert.ok(attemptStart >= 0 && attemptEnd > attemptStart, 'orquestração da pr�
 const stateContext = vm.createContext({
   slots:{d1:null,d0:null}, currentManifest:null, currentResult:null, previewRole:'d1', currentFilename:'manifesto_mcc.json',
   waitingMessage:null, blockingMessage:null, buildCalls:0, appliedCalls:0,
-  showWaitingForD0:()=>{globalThis.waitingMessage='D−1 recebido e validado. Aguardando D0 para gerar a prévia.';},
   showInputBlock:message=>{globalThis.blockingMessage=message;}, resetResults(){},
   reportDatePairIssue:dateTools.reportDatePairIssue,
   buildManifest:(d1,d0)=>{
     globalThis.buildCalls++;
     return { payload:'{}', critical:[], confidence:'alta', manifest:{
-      validacao_manifesto:{modo_entrada:'D_menos_1_e_D_zero'},
-      separacao_temporal:{D_menos_1:{datas_detectadas:d1?.dates||[]},D_zero:{datas_detectadas:d0.dates}}
+      validacao_manifesto:{modo_entrada:d0?'D_menos_1_e_D_zero':'D_menos_1_somente'},
+      separacao_temporal:{D_menos_1:{datas_detectadas:d1?.dates||[]},D_zero:{datas_detectadas:d0?.dates||[]}}
     }};
   },
   renderResults(){}, validatePreparedNumbering(){},
   applyManifestToPanel:()=>{globalThis.appliedCalls++;}
 });
-stateContext.showWaitingForD0=()=>{stateContext.waitingMessage='D−1 recebido e validado. Aguardando D0 para gerar a prévia.';};
 stateContext.showInputBlock=message=>{stateContext.blockingMessage=message;};
 stateContext.buildManifest=(d1,d0)=>{
   stateContext.buildCalls++;
   return { payload:'{}', critical:[], confidence:'alta', manifest:{
-    validacao_manifesto:{modo_entrada:'D_menos_1_e_D_zero'},
-    separacao_temporal:{D_menos_1:{datas_detectadas:d1?.dates||[]},D_zero:{datas_detectadas:d0.dates}}
+    validacao_manifesto:{modo_entrada:d0?'D_menos_1_e_D_zero':'D_menos_1_somente'},
+    separacao_temporal:{D_menos_1:{datas_detectadas:d1?.dates||[]},D_zero:{datas_detectadas:d0?.dates||[]}}
   }};
 };
 stateContext.applyManifestToPanel=()=>{stateContext.appliedCalls++;};
 vm.runInContext(`${html.slice(attemptStart, attemptEnd)}\nglobalThis.__attemptBuild = attemptBuild;`, stateContext);
 stateContext.slots.d1={dates:['2026-09-23'],records:[{}]};
 stateContext.__attemptBuild();
-assert.match(stateContext.waitingMessage, /Aguardando D0/);
-assert.equal(stateContext.buildCalls, 0);
+assert.equal(stateContext.buildCalls, 1, 'D−1 sozinho gera uma prévia aplicável após validação');
+assert.equal(stateContext.currentResult.manifest.validacao_manifesto.modo_entrada, 'D_menos_1_somente');
 stateContext.slots.d0={dates:['2026-09-24'],records:[{}]};
 stateContext.__attemptBuild();
-assert.equal(stateContext.buildCalls, 1, 'D0 e D−1 consecutivos geram a prévia normal');
+assert.equal(stateContext.buildCalls, 2, 'D0 e D−1 consecutivos geram a prévia combinada normal');
 assert.equal(stateContext.appliedCalls, 0, 'a prévia não persiste automaticamente');
 stateContext.slots.d0={dates:['2026-09-25'],records:[{}]};
 stateContext.__attemptBuild();
 assert.match(stateContext.blockingMessage, /não são consecutivas/);
-assert.equal(stateContext.buildCalls, 1, 'D0 não consecutivo não gera prévia');
+assert.equal(stateContext.buildCalls, 2, 'D0 não consecutivo não gera prévia');
 
 const receiverStart = html.indexOf('window.__hubReceiveMccD1Grid = async capture =>');
 const receiverEnd = html.indexOf("q('#apply-manifest').addEventListener", receiverStart);
@@ -163,10 +178,9 @@ const receiver = html.slice(receiverStart, receiverEnd);
 assert.ok(receiver.includes('decodeMccD1GridCapture(capture)'));
 assert.ok(receiver.includes("parseSource(decoded, 'd1')"));
 assert.ok(receiver.includes("installParsedSource('d1', parsed)"));
-assert.ok(receiver.includes('waitingForD0:true'));
+assert.ok(receiver.includes('previewReady:true, waitingForD0:false'));
+assert.ok(!receiver.includes('waitingForD0:true'));
 assert.ok(!receiver.includes('applyManifestToPanel'), 'receptor D−1 não grava a base');
-assert.ok(html.includes('D−1 recebido e validado. Aguardando D0 para gerar a prévia.'));
-assert.ok(html.includes('detectPendingD1DateChanges(source)'), 'D−1 sozinho também verifica mudança de data do nome');
-assert.ok(html.includes('a correção só será aplicada após confirmação em Atualizar base'), 'a prévia D−1 não deve gravar a correção');
+assert.ok(html.includes('campaignDateChangeCandidates(original, manifest)') && html.includes('A MCC mudou apenas a data de'), 'mudanças de data continuam exigindo confirmação antes de gravar D−1 isolado');
 
-console.log('Preparador D−1: contrato, fuso, datas consecutivas, espera por D0, prévia sem autoaplicação e zero×ausência ok');
+console.log('Preparador D−1: contrato, fuso, captura isolada, compatibilidade D0/D−1 e zero×ausência ok');

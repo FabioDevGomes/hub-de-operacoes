@@ -1,4 +1,9 @@
 .pf-shell{display:grid;gap:14px;padding-bottom:28px;color:var(--text,#e8f0fa)}
+/* Mesmo padrão do Meu Tempo: superfícies sem contornos externos. */
+.pf-shell .pf-view-toggle,.pf-shell .pf-currency-card,.pf-shell .pf-reserve-balance,.pf-shell .pf-month-global-summary,.pf-shell .card.panel{border:0}
+.pf-shell .pf-currency-card,.pf-shell .pf-difference-card{box-shadow:0 3px 9px rgba(0,0,0,.16)}
+.pf-shell .pf-status{border:0}
+.pf-shell .pf-currency-badge,.pf-shell .pf-currency-head b{border:0}
 .pf-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}.pf-page-head-actions-only{justify-content:flex-end}
 .pf-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .pf-view-toggle{display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line,#24364e);border-radius:10px;background:#0a1627}

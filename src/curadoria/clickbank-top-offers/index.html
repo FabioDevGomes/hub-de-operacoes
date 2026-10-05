@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Top Offers CB · Curadoria</title>
+  <link rel="icon" href="/favicon.png">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261005-glimpse-blue-actions">
+  <link rel="stylesheet" href="./clickbank-top-offers.css?v=6">
+  <link rel="stylesheet" href="/sidebar-component.css?v=7">
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand"><div class="logo"><img src="/brand-logo.png" alt=""></div><div><strong>Hub de Operações</strong><span>Campanhas e curadoria</span></div></div>
+      <nav class="sidebar-nav hub-menu" data-hub-sidebar data-hub-sidebar-active="clickbank-top-offers" aria-label="Menu principal"></nav>
+      <div data-hub-sidebar-products></div>
+      <div class="local"><b>● Dados locais</b><br>Banco isolado neste navegador.</div>
+    </aside>
+    <main id="clickbankTopOffersRoot">
+      <header class="top">
+        <div><div class="eyebrow">Curadoria · ClickBank</div><h1>Top Offers CB</h1><div class="sub">Acompanhe as posições e métricas observadas nas capturas do Affiliate Marketplace.</div></div>
+        <div class="actions"><button class="btn" id="exportBackup" type="button">Baixar backup JSON</button><label class="btn file-button">Restaurar backup<input id="restoreBackup" type="file" accept="application/json,.json" hidden></label><button class="btn primary" id="openImport" type="button">Colar captura</button></div>
+      </header>
+      <section class="summary" aria-label="Resumo"><span class="chip">Capturas salvas <b id="captureCount">0</b></span><span class="chip">Ofertas na captura <b id="offerCount">0</b></span><span class="chip">Mudanças de posição <b id="movementCount">—</b></span></section>
+      <section class="surface">
+        <div class="capture-toolbar"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura"></select></div>
+        <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
+        <div class="filter-grid"><input class="control search" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor"></div>
+        <div class="tablewrap"><table><thead><tr>
+          <th><button class="sort-btn" data-sort="rank" type="button">Posição</button></th><th><button class="sort-btn" data-sort="offerName" type="button">Oferta</button></th><th><button class="sort-btn" data-sort="seller" type="button">Vendedor</button></th>
+          <th><button class="sort-btn" data-sort="trends" type="button">Google Trends</button></th><th><button class="sort-btn" data-sort="glimpse" type="button">Glimpse</button></th><th><button class="sort-btn" data-sort="images" type="button">Imagens</button></th>
+          <th><button class="sort-btn" data-sort="average" type="button">Avg $</button></th><th><button class="sort-btn" data-sort="initial" type="button">Initial $</button></th><th><button class="sort-btn" data-sort="future" type="button">Future $</button></th>
+          <th><button class="sort-btn" data-sort="epc" type="button">EPC</button></th><th><button class="sort-btn" data-sort="cvr" type="button">CVR</button></th><th><button class="sort-btn" data-sort="gravity" type="button">Gravity</button></th><th><button class="sort-btn" data-sort="movement" type="button">Variação</button></th><th>Decisão</th>
+        </tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Cole a primeira captura Top Offers da ClickBank para começar.</div></div>
+      </section>
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+
+  <section class="sheet product-sheet hidden" id="offerSheet" aria-label="Análise da oferta">
+    <div class="sheet-inner">
+      <header class="sheet-top"><div><div class="eyebrow">ClickBank · Oferta</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></header>
+      <div class="tabs" role="tablist" aria-label="Análises da oferta"><button class="btn active" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button><button class="btn" data-tab="history" type="button">Histórico</button></div>
+      <div class="sheet-message" id="sheetMessage" role="status" aria-live="polite"></div>
+      <section data-panel="trends">
+        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"></div><div id="trendCandidates"></div></article>
+        <article class="card trends-country-card"><h2>Países</h2><p>O Marketplace não informa países da oferta. Adicione manualmente os países que deseja analisar; eles não serão atribuídos à captura de origem.</p><div id="trendCountries" class="trends-country-actions"></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button></div><span id="manualCountryMessage" role="status" aria-live="polite"></span></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
+        <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><div id="trendMessage" class="sub" aria-live="polite"></div></section>
+        <article class="card sheet-history"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
+      </section>
+      <section class="hidden" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></section>
+      <section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país, observe as primeiras 20 imagens e registre a dominância visual do produto.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><section id="imageCountries" class="image-country-list"></section><div class="sheet-actions"><span id="imagesMessage" class="sheet-message"></span><button id="finishImages" class="btn image-search-button" type="button">Concluir e voltar</button></div><section class="card sheet-history"><h2>Histórico visual</h2><div id="imagesHistory"></div></section></section>
+      <section class="hidden" data-panel="history"><article class="card"><h2>Histórico de Trends</h2><div id="allTrendsHistory"></div></article><article class="card"><h2>Histórico visual</h2><div id="allImagesHistory"></div></article></section>
+    </div>
+  </section>
+
+  <dialog id="importDialog" class="import-dialog">
+    <header class="modalhead"><div><b>ClickBank — nova captura</b><div class="sub">A colagem é processada localmente. Nada é salvo antes de você confirmar.</div></div><button class="btn" data-close-dialog="importDialog" type="button">Fechar</button></header>
+    <div class="modalbody">
+      <label class="field" for="pasteArea">Cole o conteúdo da página Top Offers<textarea class="control paste" id="pasteArea" placeholder="Use Ctrl+A e Ctrl+C no Affiliate Marketplace; cole aqui."></textarea></label>
+      <div class="actions validate-actions"><button class="btn" id="validateImport" type="button">Validar colagem</button></div>
+      <section class="preview-box" aria-live="polite"><h2>Prévia da captura</h2><div id="previewMetrics" class="preview-metrics"></div><p id="previewStatus" class="preview-status">Valide a colagem para revisar as linhas antes de salvar.</p><div id="previewIssues" class="preview-issues"></div></section>
+    </div>
+    <footer class="modalfoot"><button class="btn" data-close-dialog="importDialog" type="button">Cancelar</button><button class="btn primary" id="confirmImport" type="button" disabled>Salvar captura</button></footer>
+  </dialog>
+    </main>
+  </div>
+  <script src="/sidebar-component.js"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=7"></script>
+</body>
+</html>

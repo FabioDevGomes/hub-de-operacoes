@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ofertas SmartAdv · Curadoria</title>
+  <meta name="description" content="Catálogo local de ofertas SmartAdv a partir de capturas coladas pelo usuário.">
+  <link rel="icon" href="/favicon.png">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261005-glimpse-blue-actions">
+  <link rel="stylesheet" href="/sidebar-component.css?v=6">
+  <link rel="stylesheet" href="./smartadv-offers.css?v=6">
+  <link rel="stylesheet" href="/theme-colors.css?v=1">
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand"><div class="logo"><img src="/brand-logo.png" alt=""></div><div><strong>Hub de Operações</strong><span>Campanhas e curadoria</span></div></div>
+      <nav class="sidebar-nav hub-menu" data-hub-sidebar data-hub-sidebar-active="smartadv-offers" aria-label="Menu principal"></nav>
+      <div data-hub-sidebar-products></div>
+      <div class="local-note"><b>● Dados locais</b><br>Esta curadoria usa armazenamento isolado neste navegador.</div>
+    </aside>
+    <main id="smartAdvOffersRoot">
+      <header class="page-head">
+        <div><div class="eyebrow">Curadoria · SmartAdv</div><h1>Ofertas SmartAdv</h1><p class="subtitle">Catálogo observado nas capturas manuais do portal; não representa resultados de campanha.</p></div>
+        <div class="actions">
+          <a class="btn" href="/curadoria/">Voltar à Curadoria</a>
+          <button class="btn" id="exportBackup" type="button">Baixar backup JSON</button>
+          <label class="btn file-button">Restaurar backup<input id="restoreBackup" type="file" accept="application/json,.json" hidden></label>
+          <button class="btn primary" id="openImport" type="button">Colar captura</button>
+        </div>
+      </header>
+
+      <section class="summary" aria-label="Resumo da captura">
+        <span class="chip">Capturas salvas <b id="captureCount">0</b></span>
+        <span class="chip">Ofertas no recorte <b id="offerCount">0</b></span>
+        <span class="chip">Primeira observação <b id="firstSeenCount">0</b></span>
+      </section>
+
+      <section class="surface" aria-label="Catálogo de ofertas SmartAdv">
+        <div class="capture-toolbar"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura salva"></select></div>
+        <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
+        <div class="filters">
+          <input class="control search" id="search" type="search" placeholder="Buscar ID, oferta ou vertical" aria-label="Buscar no catálogo">
+          <select class="control" id="verticalFilter" aria-label="Filtrar por vertical"><option value="">Todas as verticais</option></select>
+          <select class="control" id="geoFilter" aria-label="Filtrar por GEO"><option value="">Todos os GEOs</option></select>
+          <select class="control" id="channelFilter" aria-label="Filtrar por meio permitido"><option value="">Todos os meios</option></select>
+          <select class="control" id="brandFilter" aria-label="Filtrar por Brand Bidding"><option value="">Brand Bidding: todos</option><option value="yes">Permitido</option><option value="no">Não permitido</option><option value="unknown">Não informado</option></select>
+        </div>
+        <div class="tablewrap"><table>
+          <thead><tr><th scope="col">ID</th><th scope="col">Oferta</th><th scope="col">Google Trends</th><th scope="col">Glimpse</th><th scope="col">Google Imagens</th><th scope="col">Vertical</th><th scope="col">GEO explícito</th><th scope="col">Meios explícitos</th><th scope="col">Brand Bidding</th><th scope="col">Histórico local</th><th scope="col">Decisão</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table><div class="empty" id="empty">Cole uma captura SmartAdv para iniciar o catálogo.</div></div>
+        <div class="table-foot"><span id="visibleOfferCount">0</span> ofertas visíveis <span>· ausências no recorte não significam ofertas removidas</span></div>
+      </section>
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+      <dialog id="importDialog" class="import-dialog">
+        <header class="modal-head"><div><h2>SmartAdv — nova captura</h2><p>A colagem é interpretada localmente. Nada será salvo antes da confirmação.</p></div><button class="btn" data-close-import type="button">Fechar</button></header>
+        <div class="modal-body">
+          <label class="field" for="pasteArea">Cole a tabela de ofertas<textarea class="control paste" id="pasteArea" placeholder="Use Ctrl+A e Ctrl+C na página SmartAdv e cole aqui."></textarea></label>
+          <p class="hint">Reconhece tabela Markdown, TSV ou células em linhas (ID, Name, Vertical). Só os campos reconhecidos serão armazenados; contatos e conteúdo fora da tabela ficam de fora.</p>
+          <div class="actions validate-actions"><button class="btn" id="validateImport" type="button">Validar colagem</button></div>
+          <section class="preview-box" aria-live="polite"><h3>Prévia da captura</h3><div id="previewMetrics" class="preview-metrics"></div><p id="previewStatus" class="preview-status">Valide a colagem para conferir os registros.</p><div id="previewIssues" class="preview-issues"></div><div id="previewList" class="preview-list"></div></section>
+        </div>
+        <footer class="modal-foot"><button class="btn" data-close-import type="button">Cancelar</button><button class="btn primary" id="confirmImport" type="button" disabled>Salvar captura</button></footer>
+      </dialog>
+    </main>
+  </div>
+  <section class="sheet hidden" id="offerSheet" aria-label="Análises da oferta">
+    <div class="sheet-inner">
+      <header class="sheet-top"><div><div class="eyebrow">Curadoria · SmartAdv</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></header>
+      <nav class="tabs" aria-label="Análises da oferta"><button class="btn" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button></nav>
+      <section class="hidden" data-panel="trends">
+        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Candidata à palavra-chave"><button class="btn" id="addTrendCandidate" type="button">Adicionar</button></div><div id="trendCandidates"></div></article>
+        <article class="card trends-country-card"><h2>Países explícitos e informados manualmente</h2><p>Somente os países explícitos no nome são incluídos automaticamente. Para uma oferta internacional, informe os países que quer analisar.</p><div id="trendCountries" class="trends-country-actions"></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: BR)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button></div><small id="manualCountryMessage" aria-live="polite"></small></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
+        <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div></section>
+        <article class="card"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
+      </section>
+      <section class="hidden" data-panel="glimpse"><article class="card"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></article></section>
+      <section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país e registre o resultado visual. Ofertas sem países explícitos só serão avaliadas depois de você informar países na aba Google Trends.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><section id="imageCountries" class="image-country-list"></section><article class="card"><h2>Histórico visual</h2><div id="imagesHistory"></div></article></section>
+    </div>
+  </section>
+  <script src="/sidebar-component.js"></script>
+  <script type="module" src="./smartadv-offers-page.mjs?v=8"></script>
+</body>
+</html>

@@ -1,1 +1,12 @@
 .catalog-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.catalog-edit,.catalog-remove{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:700}.catalog-edit{background:#132b44;color:#a9d6ff}.catalog-edit:hover{background:#183754}.catalog-remove{background:#28171c;color:#ffb2ba;border-color:#67323a}.catalog-remove:hover{background:#3a1d24}.catalog-table td{vertical-align:middle}.catalog-table th:not(:first-child),.catalog-table td:not(:first-child){text-align:center}.catalog-table th:not(:first-child) .sort-btn{text-align:center}.catalog-table .tested-status.active{align-items:center;gap:6px;color:#73e0ae;border-color:rgba(78,210,154,.42);background:rgba(15,52,42,.72)}.catalog-table .tested-status.active::before{content:"";width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--green);box-shadow:0 0 7px rgba(78,210,154,.28)}.catalog-table .campaigns{white-space:normal;min-width:280px;color:var(--muted)}.row-actions{display:flex;gap:7px}.tested-columns-picker{position:relative}.tested-columns-picker>summary{list-style:none}.tested-columns-picker>summary::-webkit-details-marker{display:none}.tested-columns-menu{position:absolute;right:0;top:calc(100% + 7px);z-index:8;display:grid;gap:7px;min-width:210px;padding:12px;border:1px solid var(--line);border-radius:11px;background:#0b1728;box-shadow:var(--shadow)}.tested-columns-menu strong{font-size:.76rem}.tested-columns-menu label{display:flex;align-items:center;gap:8px;color:#b9c9df;font-size:.77rem;cursor:pointer}.tested-columns-menu input{accent-color:var(--cyan)}.hidden-column{display:none!important}
+.app:has(#testedProductsView:not(.hidden)) .topbar .actions .btn,
+.app:has(#testedProductsView:not(.hidden)) #statusbar .pill,
+#testedProductsView .card.panel,
+#testedProductsView .table-wrap,
+#testedProductsView .tag,
+#testedProductsView .status-tag,
+#testedProductsView .tested-status,
+#testedProductsView .catalog-actions .btn,
+#testedProductsView .catalog-edit,
+#testedProductsView .catalog-remove,
+#testedProductsView .tested-columns-menu{border:0}

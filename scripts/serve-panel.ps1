@@ -8,6 +8,10 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $siteDirectory = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist'))
 $engineRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'presell-engine'))
+$knowledgeExportScript = Join-Path $PSScriptRoot 'knowledge-export.ps1'
+if (-not (Test-Path -LiteralPath $knowledgeExportScript -PathType Leaf)) { throw 'O exportador de conhecimento não foi encontrado.' }
+. $knowledgeExportScript
+$personalSkillsRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex\skills'
 $productsRootConfig = Join-Path $projectRoot 'data-local\products-root.txt'
 if ([string]::IsNullOrWhiteSpace($ProductsRoot)) {
     if (Test-Path -LiteralPath $productsRootConfig -PathType Leaf) {
@@ -28,6 +32,7 @@ function Get-StatusReason {
     switch ($StatusCode) {
         200 { 'OK' }
         400 { 'Bad Request' }
+        403 { 'Forbidden' }
         404 { 'Not Found' }
         405 { 'Method Not Allowed' }
         413 { 'Payload Too Large' }
@@ -41,10 +46,12 @@ function Write-HttpResponse {
         [IO.Stream]$Stream,
         [int]$StatusCode,
         [string]$ContentType,
-        [byte[]]$Body
+        [byte[]]$Body,
+        [string]$ExtraHeaders = ''
     )
     $reason = Get-StatusReason $StatusCode
-    $header = "HTTP/1.1 $StatusCode $reason`r`nContent-Type: $ContentType`r`nContent-Length: $($Body.Length)`r`nCache-Control: no-store, no-cache, must-revalidate, max-age=0`r`nX-Content-Type-Options: nosniff`r`nConnection: close`r`n`r`n"
+    $extra = if ([string]::IsNullOrWhiteSpace($ExtraHeaders)) { '' } else { $ExtraHeaders.TrimEnd("`r", "`n") + "`r`n" }
+    $header = "HTTP/1.1 $StatusCode $reason`r`nContent-Type: $ContentType`r`nContent-Length: $($Body.Length)`r`nCache-Control: no-store, no-cache, must-revalidate, max-age=0`r`nX-Content-Type-Options: nosniff`r`n$extra" + "Connection: close`r`n`r`n"
     $headerBytes = [Text.Encoding]::ASCII.GetBytes($header)
     $Stream.Write($headerBytes, 0, $headerBytes.Length)
     if ($Body.Length -gt 0) { $Stream.Write($Body, 0, $Body.Length) }
@@ -105,7 +112,16 @@ function Read-HttpRequest {
         Method = $requestLine[0].ToUpperInvariant()
         Target = $requestLine[1]
         Body = [Text.Encoding]::UTF8.GetString($bodyBytes)
+        Headers = $headers
     }
+}
+
+function Test-KnowledgeExportRequest {
+    param([hashtable]$Headers)
+    $expectedHost = "127.0.0.1:$Port"
+    if ($Headers['Host'] -cne $expectedHost -or $Headers['X-Hub-Knowledge-Export'] -cne '1') { return $false }
+    $origin = [string]$Headers['Origin']
+    return [string]::IsNullOrWhiteSpace($origin) -or $origin -ceq "http://$expectedHost"
 }
 
 function Resolve-SafeDestination {
@@ -185,6 +201,29 @@ try {
             $path = [Uri]::UnescapeDataString(($request.Target -split '\?', 2)[0])
             if ($request.Method -eq 'GET' -and $path -eq '/api/presell/health') {
                 Write-JsonResponse $stream 200 @{ presellApi = 'v2'; runtime = 'powershell'; engine = 'embedded' }
+                continue
+            }
+            if ($path -in @('/api/knowledge/manifest', '/api/knowledge/export.zip')) {
+                if ($request.Method -ne 'GET') {
+                    Write-JsonResponse $stream 405 @{ error = 'Método não permitido.' }
+                    continue
+                }
+                if (-not (Test-KnowledgeExportRequest $request.Headers)) {
+                    Write-JsonResponse $stream 403 @{ error = 'Exportação local não autorizada para esta requisição.' }
+                    continue
+                }
+                if ($path -eq '/api/knowledge/manifest') {
+                    $manifest = Get-KnowledgeExportManifest -ProjectRoot $projectRoot -PersonalSkillsRoot $personalSkillsRoot
+                    Write-JsonResponse $stream 200 $manifest
+                    continue
+                }
+                try {
+                    $zipBytes = New-KnowledgeExportZip -ProjectRoot $projectRoot -PersonalSkillsRoot $personalSkillsRoot
+                    $filename = 'hub-conhecimento-' + [DateTime]::Now.ToString('yyyy-MM-dd') + '.zip'
+                    Write-HttpResponse $stream 200 'application/zip' $zipBytes ("Content-Disposition: attachment; filename=`"$filename`"`r`n")
+                } catch {
+                    Write-JsonResponse $stream 400 @{ error = 'Não foi possível gerar o pacote. Confira a disponibilidade das fontes e tente novamente.' }
+                }
                 continue
             }
             if ($request.Method -eq 'POST' -and $path -in @('/api/presell/validate','/api/presell/produce')) {

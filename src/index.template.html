@@ -77,6 +77,7 @@
   <link rel="stylesheet" href="cpa/cpa.css?v=1">
   <link rel="stylesheet" href="tested-products/tested-products.css?v=1">
   <link rel="stylesheet" href="overview/overview.css?v=2">
+  <link rel="stylesheet" href="overview/knowledge-export.css?v=1">
   <link rel="stylesheet" href="product-diary/product-diary.css?v=1">
   <style>
     .sale-dialog-head{align-items:center}.sale-dialog-heading{flex:1;min-width:0}.sale-dialog-tools{display:flex;align-items:center;gap:12px;flex:0 0 auto}.sale-source-tabs{display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#0a1627}.sale-source-tab{border:1px solid transparent;border-radius:7px;padding:7px 10px;background:transparent;color:var(--muted);font:inherit;font-size:.76rem;font-weight:700;white-space:nowrap}.sale-source-tab:hover{color:var(--text)}.sale-source-tab.active{border-color:rgba(79,167,255,.55);background:#18304d;color:#fff}.sale-guide-image.hidden{display:none}@media(max-width:680px){.sale-dialog-head{align-items:flex-start;flex-wrap:wrap}.sale-dialog-tools{width:100%;justify-content:space-between}.sale-source-tabs{max-width:calc(100% - 48px)}.sale-body{padding:15px}.sale-preview{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -100,6 +101,7 @@
           <label class="btn"><input id="baseInput" class="file-input" type="file" accept=".json,application/json">Carregar base JSON</label>
           <button id="downloadBase" class="btn" type="button" title="Baixa um backup privado com campanhas, diário, catálogo de Produtos Testados, Faturamento e Controle de gastos.">Baixar backup completo JSON</button>
           <button id="correctCampaignDate" class="btn hidden" type="button">Corrigir data de campanha</button>
+          <button id="downloadKnowledgePack" class="btn hidden" type="button" title="Prévia e download das instruções, documentação e fontes técnicas, sem registros operacionais.">Exportar conhecimento</button>
         </div>
       </header>
       <div id="statusbar" class="statusbar"></div>
@@ -160,6 +162,19 @@
       </div>
     </div>
   </div>
+  <div id="knowledgeExportModal" class="sale-modal hidden" role="dialog" aria-modal="true" aria-labelledby="knowledgeExportTitle" aria-describedby="knowledgeExportDescription">
+    <div class="sale-dialog knowledge-export-dialog">
+      <div class="sale-dialog-head"><div><h2 id="knowledgeExportTitle">Exportar conhecimento do Hub</h2><p>Prévia do pacote portátil antes do download.</p></div><button id="closeKnowledgeExport" class="sale-close" type="button" aria-label="Fechar">×</button></div>
+      <div class="sale-body knowledge-export-body">
+        <p id="knowledgeExportDescription" class="knowledge-export-description">O ZIP reúne as skills pessoais selecionadas, instruções do painel e documentação e fontes técnicas do banco.</p>
+        <p class="knowledge-export-privacy">Não inclui campanhas, vendas, finanças, bancos locais, IndexedDB ou backups. Para esses registros, use “Baixar backup completo JSON”.</p>
+        <p id="knowledgeExportStatus" class="knowledge-export-status" role="status" aria-live="polite">Carregando a lista do pacote…</p>
+        <div id="knowledgeExportStats" class="knowledge-export-stats"></div>
+        <ul id="knowledgeExportFileList" class="knowledge-export-files" aria-label="Arquivos incluídos no ZIP"></ul>
+        <div class="sale-footer knowledge-export-actions"><button id="cancelKnowledgeExport" class="btn" type="button">Cancelar</button><button id="confirmKnowledgeExport" class="btn primary" type="button" disabled>Baixar ZIP privado</button></div>
+      </div>
+    </div>
+  </div>
   <div id="macroImportModal" class="macro-import-modal hidden" role="dialog" aria-modal="true" aria-labelledby="macroImportTitle">
     <div class="macro-import-dialog">
       <div class="macro-import-head"><div><h2 id="macroImportTitle">Prévia do histórico macro</h2><p id="macroImportDescription"></p></div><button id="closeMacroImport" class="sale-close" type="button" aria-label="Fechar">×</button></div>
@@ -174,6 +189,7 @@
   <script src="navigation-controller.js?v=1"></script>
   <script src="overview-domain.js?v=6"></script>
   <script src="overview/view.js?v=5"></script>
+  <script src="overview/knowledge-export-view.js?v=1"></script>
   <script src="product-diary/domain.js?v=2"></script>
   <script src="product-diary/view.js?v=2"></script>
   <script src="sidebar-component.js"></script>
@@ -551,6 +567,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     function showBilling(){return navigation.open('billing')}
     function showPersonalFinance(){return navigation.open('personal-finance')}
     navigation.bind();
+    KnowledgeExportView.mount({button:$('#downloadKnowledgePack'),modal:$('#knowledgeExportModal')});
     render();restoreProductCatalog().then(restoreLocalBase).catch(()=>toast('Não foi possível recuperar os dados locais anteriores.',true));
   </script>
 </body>

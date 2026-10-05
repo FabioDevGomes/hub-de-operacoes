@@ -7,8 +7,8 @@
   <meta name="description" content="Catálogo local de ofertas SmartAdv a partir de capturas coladas pelo usuário.">
   <link rel="icon" href="/favicon.png">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261005-glimpse-blue-actions">
-  <link rel="stylesheet" href="/sidebar-component.css?v=6">
-  <link rel="stylesheet" href="./smartadv-offers.css?v=6">
+  <link rel="stylesheet" href="/sidebar-component.css?v=8">
+  <link rel="stylesheet" href="./smartadv-offers.css?v=8">
   <link rel="stylesheet" href="/theme-colors.css?v=1">
 </head>
 <body>
@@ -69,10 +69,11 @@
     <div class="sheet-inner">
       <header class="sheet-top"><div><div class="eyebrow">Curadoria · SmartAdv</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></header>
       <nav class="tabs" aria-label="Análises da oferta"><button class="btn" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button></nav>
+      <p id="sheetMessage" class="message sheet-message" role="status" aria-live="polite"></p>
       <section class="hidden" data-panel="trends">
         <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Candidata à palavra-chave"><button class="btn" id="addTrendCandidate" type="button">Adicionar</button></div><div id="trendCandidates"></div></article>
         <article class="card trends-country-card"><h2>Países explícitos e informados manualmente</h2><p>Somente os países explícitos no nome são incluídos automaticamente. Para uma oferta internacional, informe os países que quer analisar.</p><div id="trendCountries" class="trends-country-actions"></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: BR)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button></div><small id="manualCountryMessage" aria-live="polite"></small></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
-        <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div></section>
+        <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><p id="trendResultMessage" class="message" role="status" aria-live="polite"></p></section>
         <article class="card"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
       </section>
       <section class="hidden" data-panel="glimpse"><article class="card"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></article></section>
@@ -80,6 +81,6 @@
     </div>
   </section>
   <script src="/sidebar-component.js"></script>
-  <script type="module" src="./smartadv-offers-page.mjs?v=8"></script>
+  <script type="module" src="./smartadv-offers-page.mjs?v=10"></script>
 </body>
 </html>

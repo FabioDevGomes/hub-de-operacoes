@@ -7,6 +7,10 @@ const controller = await readFile(new URL('../src/curadoria/clickbank-top-offers
 const css = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers.css', import.meta.url), 'utf8');
 const sharedCss = await readFile(new URL('../src/curadoria/trends-sheet.css', import.meta.url), 'utf8');
 
+assert.match(css, /#clickbankTopOffersRoot #captureSelect,#clickbankTopOffersRoot #search\{border:0\}/, 'somente os controles de captura e busca indicados ficam sem borda');
+assert.match(css, /#clickbankTopOffersRoot #captureSelect:focus-visible,#clickbankTopOffersRoot #search:focus-visible\{outline:2px solid var\(--cb-blue\);outline-offset:2px\}/, 'os dois controles preservam foco de teclado visível');
+assert.match(page, /clickbank-top-offers\.css\?v=7/, 'a folha alterada invalida o cache');
+
 for (const id of ['clickbankTopOffersRoot','openImport','captureSelect','captureInfo','search','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','trendCountries','trendCandidate','trendResults','imageCountries','glimpseFrame']) {
   assert.ok(page.includes(`id="${id}"`), `elemento ${id} ausente da página`);
 }

@@ -9,9 +9,9 @@ const viewSource=await readFile(new URL('../src/cpa/view.js',import.meta.url),'u
 vm.runInContext(domainSource,ctx);vm.runInContext(viewSource,ctx);
 const domain=ctx.window.CpaDomain;
 function row(overrides={}){return{name:'<synthetic campaign>',product:'Synthetic',account:'Synthetic account',status:'ativa',check:{range:70,status:'ok',countries:['US'],platform:'GM',target:70,targetCurrency:'USD',calculated:70,difference:0},totals:{investment:100,conversions:2,commission:150,profit:50,roi:50,impressions:500,actualCpa:50},...overrides}}
-function harness(rows=[]){
+function harness(rows=[],now=()=>new Date('2026-10-05T15:00:00-03:00')){
   const h=createRoot(),state=domain.createState(),queries=[];
-  const controller=ctx.window.CpaView.mount({root:h.root,state,getRows:q=>{queries.push(q);return rows},getDates:()=>({dates:['2026-09-01','2026-09-30'],fallback:[]}),domain,format:{...format,parseDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value)?value:/^\d{2}\/\d{2}\/\d{4}$/.test(value)?value.split('/').reverse().join('-'):null,campaignName:name=>name}});
+  const controller=ctx.window.CpaView.mount({root:h.root,state,getRows:q=>{queries.push(q);return rows},now,domain,format:{...format,parseDate:value=>/^\d{4}-\d{2}-\d{2}$/.test(value)?value:/^\d{2}\/\d{2}\/\d{4}$/.test(value)?value.split('/').reverse().join('-'):null,campaignName:name=>name}});
   return {...h,state,controller,queries};
 }
 test('CPA defaults and filters preserve active/history scope and all dimensions',()=>{
@@ -38,8 +38,10 @@ test('CPA counts unique products per range without merging campaign records',()=
 });
 test('CPA view binds scope/date controls and consistently updates tables/charts',()=>{
   const h=harness([row()]);h.controller.render();
-  assert.equal(h.get('#cpaDateStart').value,'01/09/2026');
-  assert.equal(h.queries.at(-1).start,'2026-09-01');
+  assert.equal(h.get('#cpaDateStart').value,'05/08/2026');
+  assert.equal(h.get('#cpaDateEnd').value,'05/10/2026');
+  assert.equal(h.queries.at(-1).start,'2026-08-05');
+  assert.equal(h.queries.at(-1).end,'2026-10-05');
   assert.match(h.get('#cpaSummaryBody').innerHTML,/data-range="70"/);
   assert.match(h.get('#cpaDetailBody').innerHTML,/&lt;synthetic campaign&gt;/);
   assert.match(h.get('#cpaImpressionsChart').innerHTML,/500/);
@@ -51,6 +53,12 @@ test('CPA view binds scope/date controls and consistently updates tables/charts'
   assert.equal(h.get('#cpaDateStart').getAttribute('aria-invalid'),'true');
   assert.doesNotMatch(domainSource,/document|indexedDB|localStorage|fetch\(/);
   assert.doesNotMatch(viewSource,/indexedDB|localStorage|fetch\(/);
+});
+test('CPA initial period subtracts two calendar months and clamps invalid month days',()=>{
+  const h=harness([],()=>new Date('2026-04-30T15:00:00-03:00'));
+  h.controller.render();
+  assert.equal(h.get('#cpaDateStart').value,'28/02/2026');
+  assert.equal(h.get('#cpaDateEnd').value,'30/04/2026');
 });
 test('CPA range selection updates detail and falls back when filters remove the selected range',()=>{
   const rows=[row(),row({check:{...row().check,range:80},status:'pausada'})],h=harness(rows);

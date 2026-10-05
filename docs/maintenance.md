@@ -26,6 +26,10 @@ Escolha o menor módulo existente que atende ao pedido. Não introduza framework
 
 Os módulos atuais usam tanto scripts clássicos `.js` quanto ES modules `.mjs`. Siga a convenção da pasta alterada; não converta todos os módulos só para padronizar a extensão. Um arquivo de domínio legado pode conter regras anteriores; não duplique essas regras na view nem transforme uma correção pequena em refatoração de todo o domínio.
 
+## Padrão visual compartilhado
+
+- Os botões de ação no cabeçalho principal das telas usam `8px` de espaçamento horizontal. O valor compartilhado é `--hub-page-action-gap` em `src/sidebar-component.css` e cobre os cabeçalhos `.topbar`, `.top`, `.page-head` e `.hero` do Hub. O Glimpse independente já mantém 8px no grupo do cabeçalho. Não aplique essa regra automaticamente a grupos internos de filtros, formulários, abas, tabelas ou modais; eles mantêm o espaçamento próprio da função.
+
 ### Preserve o contrato da tela
 
 - Refatorar muda a organização do código, não o comportamento. Preserve botões, campos, IDs, rotas/aliases, exports públicos, chaves de armazenamento, filtros, cálculos, ausência/zero e registros existentes. Remoção ou alteração de regra exige pedido explícito.
@@ -76,7 +80,7 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | Controle de gastos: saldo disponível, planos em aberto e linha Nubank alinhada a Planejado/Realizado | `src/personal-finance/personal-finance-domain.mjs`, `personal-finance-storage.mjs`, `personal-finance-view.mjs`, `personal-finance.css` | `tests/personal-finance-domain.test.mjs`, `tests/build.test.mjs` |
 | Faturamento: status, competência e limpeza seletiva de carga antiga | `src/billing/billing-domain.mjs`, `billing-view.mjs`, `billing-status.css`, `billing-storage.mjs` | `tests/billing-domain.test.mjs`, `tests/billing-view.test.mjs`, `tests/billing-storage.test.mjs` |
 | CPA: filtros e resumo por faixa | `src/cpa/domain.js` | `tests/cpa-view.test.mjs` |
-| CPA: interface, eventos e estilos | `src/cpa/view.js`, `template.html`, `cpa.css` | `tests/cpa-view.test.mjs`, `tests/extracted-views-build.test.mjs` |
+| CPA: interface, eventos e estilos; padrão de hoje menos dois meses e filtros em uma linha em desktop | `src/cpa/view.js`, `template.html`, `cpa.css` | `tests/cpa-view.test.mjs`, `tests/extracted-views-build.test.mjs` |
 | Top Offers CB: parser/capturas, colunas Google Trends, Glimpse e Imagens, análises locais por oferta e backup completo | `src/curadoria/clickbank-top-offers/`, `src/curadoria/glimpse/glimpse-page.mjs` | `tests/clickbank-top-offers-domain.test.mjs`, `tests/clickbank-top-offers-storage.test.mjs`, `tests/clickbank-top-offers-ui.test.mjs`, `tests/glimpse-ui.test.mjs`, `tests/sidebar-component.test.mjs` |
 | Ofertas SmartAdv: captura inicial fornecida, parser de novas colagens, catálogo por ID, filtros, histórico de capturas e colunas Google Trends/Glimpse/Google Imagens | `src/curadoria/smartadv-offers/` | `tests/smartadv-offers-domain.test.mjs`, `tests/smartadv-offers-storage.test.mjs`, `tests/smartadv-offers-ui.test.mjs`, `tests/smartadv-offers-build.test.mjs`, `tests/glimpse-ui.test.mjs`, `tests/keyword-candidates-ui.test.mjs` |
 | Produtos Testados: agrupamento, vendas/lucro agregados e ordenação | `src/tested-products/domain.js` | `tests/tested-products-domain.test.mjs`, `tests/tested-products-view.test.mjs` |
@@ -96,9 +100,10 @@ Uma alteração apenas de documentação não exige reconstruir `dist/` ou abrir
 | Ficha: validação antes da criação e chamada da API | `src/copy-ficha/copy-ficha-workflow.mjs`, `src/presell/presell-service.mjs`, `presell-report.mjs` | `tests/ficha-presell-workflow.test.mjs` |
 | IndexedDB compartilhado: schema e abertura | `src/storage/hub-database.js`, `hub-database.mjs` | `tests/hub-database.test.mjs` e testes dos storages afetados |
 | Produção e proteção contra sobrescrita | `src/presell/`, `presell-engine/` | `tests/presell-template-identifiers.test.mjs`, `tests/standalone-runtime.test.mjs` |
-| Modelo e importação MCC: status operacional, confirmação de pausa, retenção do D0 omitido por filtro de ativas e cobertura por MCC | `src/database.js`, `src/overview-domain.js`, `src/overview/view.js`, extensão e Preparador MCC | `tests/mcc-campaign-status.test.mjs`, `tests/database.test.mjs`, `tests/mcc-d0-filter-retention.test.mjs`, `tests/mcc-grid-production.test.mjs`, `tests/overview-domain.test.mjs`, `tests/overview-view.test.mjs` |
+| Modelo e importação MCC: status operacional, confirmação de pausa, retenção do D0 em capturas parciais/desconhecidas por MCC exata e cobertura por MCC | `src/database.js`, `src/overview-domain.js`, `src/overview/view.js`, extensão e Preparador MCC | `tests/mcc-campaign-status.test.mjs`, `tests/database.test.mjs`, `tests/mcc-d0-filter-retention.test.mjs`, `tests/mcc-multiple-accounts.test.mjs`, `tests/mcc-grid-production.test.mjs`, `tests/overview-domain.test.mjs`, `tests/overview-view.test.mjs` |
 | Preparador MCC: cabeçalho compacto no padrão compartilhado do Hub (título responsivo `.93rem`–`1.41rem`, texto auxiliar `.92rem`), captura direta, resumos compactos e diferenças D0/D−1 | `src/preparador-MCC/index.html` | `tests/preparador-d0-delta.test.mjs`, `tests/preparador-d1-delta.test.mjs`, `tests/preparador-build.test.mjs`, `tests/preparador-d0.test.mjs`, `tests/preparador-d1.test.mjs`, `tests/mcc-grid-production.test.mjs` |
 | Extensão MCC: popup, rolagem automática e captura D0/D−1 | `extensions/mcc-d0-bridge/popup.html`, `popup.js`, `background.js`, `mcc-page-scroll.mjs` | `tests/mcc-extension-popup.test.mjs`, `tests/mcc-page-scroll.test.mjs`, `tests/mcc-grid-production.test.mjs` |
+| Extensão: botão Capturar produtos ClickBank, TSV local e ampliação reversível da página atual | `extensions/mcc-d0-bridge/clickbank-domain.mjs`, `clickbank-reader.mjs`, `clickbank-popup.mjs`, `background.js` | `tests/clickbank-extension.test.mjs`, regressões MCC e [contrato/uso da extensão](../extensions/mcc-d0-bridge/README.md#capturar-produtos-clickbank) |
 | Hot Offers MS: parser/comparação da coleta | `src/curadoria/hot-offers-ms/hot-offers-ms-domain.mjs` | `tests/hot-offers-ms-domain.test.mjs` |
 | Hot Offers MS: ficha, Trends, link da oferta, Glimpse alinhado, remoção persistente de candidatas negativas salvas e remoção imediata de candidatas positivas do Trends | `src/curadoria/hot-offers-ms/index.html`, `hot-offers-ms-view.mjs`, `hot-offers-ms-page.mjs`, `keyword-candidates-ui.mjs` | `tests/hot-offers-ms-ui.test.mjs`, `tests/hot-offers-ms-storage.test.mjs`, `tests/keyword-candidates-ui.test.mjs` |
 | Google Trends, Glimpse e Imagens nas listas de Curadoria: apresentação compartilhada, cores semânticas e estado neutro comum enquanto não pesquisado/verificado | `src/curadoria/trends-sheet.css` e views consumidoras | `tests/curation-analytics-badges.test.mjs`, testes das telas consumidoras |
@@ -218,7 +223,8 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 ### Análise de CPA — passo 5
 
 - `domain.js` contém estado visual inicial, filtros, resumo ponderado por faixa, seleção da faixa e contagem de produtos únicos. Não lê DOM ou banco.
-- `view.js` contém selects, datas, tabelas, gráficos e eventos. Não há mais wrapper que redefine `renderCpaReport`.
+- `view.js` contém selects, datas, tabelas, gráficos e eventos. O período inicial usa a data local de São Paulo até dois meses corridos antes (com ajuste para o último dia do mês); após inicializado, mantém a seleção do usuário. Não há mais wrapper que redefine `renderCpaReport`.
+- Em desktop, os sete filtros — incluindo o par de datas — ocupam uma linha; em telas estreitas, a grade se adapta em várias linhas.
 - O painel mantém os parsers compartilhados de título/CPA desejado e `cpaPeriodTotals()`/`cpaReportRows({mode,start,end})`, que leem as projeções/indexes existentes. O adaptador recebe o período e o escopo explicitamente, sem ler campos DOM.
 - `cpa.css` conserva os estilos da tela, inclusive as regras de rolagem e responsividade. A barra de rolagem compartilhada continua no painel, pois também atende Mapa por Conta.
 
@@ -233,6 +239,8 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.test.mjs`, depois build e suíte completa. Dados dos testes são sintéticos em memória. No navegador, confira as rotas `/?view=macro`, `/?view=cpa` e `/?view=tested`, navegação entre telas, meses/gráficos, filtros/período/seleção, ordenação e preferências, sem editar ou importar dados reais.
 
 ## Visão Geral e Diário — passo 7
+
+- O primeiro cartão da Visão Geral fica vazio e reservado, mantendo suas dimensões sem texto ou indicador. O quarto reúne Lucro do dia D0 acima e contagens Ativas/Pausadas abaixo do divisor compartilhado `overview-kpi-details`, como os indicadores D−1/D0. Os outros cartões permanecem e os filtros afetam apenas a tabela; os valores vêm do mesmo snapshot, sem novos cálculos ou gravações.
 
 - `overview/view.js` recebe `getSnapshot()`, formatadores, estado visual e callbacks. Contém tabela, KPIs D−1/D0, alertas, filtros e eventos locais. `overview-domain.js` conserva os cálculos anteriores e acrescenta ordenação sem mutação e visibilidade por situação. Não acessa DOM ou armazenamento.
 - `overviewRowsForMode()` no painel mantém a projeção e o cache financeiro existentes. `overviewSnapshot()` acrescenta somente metadados visuais: ID estável, pausa, política e métricas diárias. KPIs continuam somando todas as campanhas, inclusive pausadas; o filtro muda somente a tabela. Os cartões D−1 e D0 exibem os indicadores sem o círculo de informação/tooltip de cobertura. Vendas provisórias e limites de teste mantêm a precedência anterior. O tooltip distingue a pausa explícita (`Campanha pausada na data X`) da ausência sem confirmação (`Última aparição em X`).

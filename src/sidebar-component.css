@@ -1,5 +1,7 @@
 @import url("/theme-colors.css?v=1");
 
+:root { --hub-page-action-gap: 8px; }
+
 /* Fundo uniforme do Hub, inclusive páginas independentes com estilos locais. */
 body { background: #07101f !important; }
 
@@ -123,6 +125,12 @@ aside.hub-sidebar-aside {
 @media (prefers-reduced-motion: reduce) { .hub-menu-chevron { transition: none; } }
 
 /* Keep page-heading typography consistent across the shared Hub routes. */
+.main > header.topbar > .actions,
+.shell > main > header.topbar > .actions,
+.shell > main > header.top > .actions,
+.shell > main > header.page-head > .actions,
+.app-shell > main.shell > header.hero > .hero-actions { gap: var(--hub-page-action-gap); }
+
 .main > header.topbar .eyebrow,
 .shell > main > header.topbar .eyebrow,
 .shell > main > header.top .eyebrow,

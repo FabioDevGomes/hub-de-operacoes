@@ -37,6 +37,7 @@
 #totalsView .overview-kpi{--overview-accent:#8295ac;position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:3px;width:100%;max-width:250px;justify-self:center;min-width:0;min-height:94px;aspect-ratio:auto;padding:7px 10px 7px 12px;overflow:hidden;border:1px solid #30445f;border-radius:13px;background:linear-gradient(145deg,#17263a,#111d30);box-shadow:0 8px 22px rgba(0,0,0,.16);white-space:normal}
 #totalsView .overview-kpi::before{position:absolute;inset:13px auto 13px 0;width:3px;border-radius:0 4px 4px 0;background:var(--overview-accent);content:""}
 #totalsView .overview-kpi-active{--overview-accent:#7daeff;background:linear-gradient(145deg,#1a2c43,#142238)}
+#totalsView .overview-kpi-reserved{background:#17263a}
 #totalsView .overview-kpi-period.kpi-group-d1{--overview-accent:#4fa7ff;border-color:rgba(79,167,255,.45);background:linear-gradient(145deg,#152c45,#122237)}
 #totalsView .overview-kpi-period.kpi-group-d0{--overview-accent:#35d2d0;border-color:rgba(53,210,208,.42);background:linear-gradient(145deg,#153337,#12262e)}
 #totalsView .overview-kpi-profit{--overview-accent:#8ca1b7}
@@ -71,7 +72,7 @@
 #totalsView .overview-kpi-detail-value{color:#e3edf7;font-size:.69rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 #totalsView .overview-kpi-context{padding:3px 7px;border:1px solid #334b67;border-radius:999px;color:#9db0c7;font-size:.63rem;line-height:1}
 #totalsView .panel{border-color:#30445f;border-radius:15px;box-shadow:0 12px 30px rgba(0,0,0,.2)}
-#totalsView .panel-head{align-items:center;gap:18px;padding:17px 20px;background:linear-gradient(100deg,rgba(24,42,64,.85),rgba(17,30,49,.45))}
+#totalsView .panel-head{align-items:center;gap:18px;padding:10px 20px;background:linear-gradient(100deg,rgba(24,42,64,.85),rgba(17,30,49,.45))}
 #totalsView .panel-head h2{font-size:1.08rem;letter-spacing:-.015em}
 #totalsView .panel-head p{max-width:66ch;margin-top:5px;color:#a8bbd0;font-size:.78rem;line-height:1.45}
 #totalsView .panel-controls{gap:8px;flex-wrap:wrap}

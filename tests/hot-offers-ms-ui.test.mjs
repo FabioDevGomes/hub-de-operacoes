@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
-import {mediaScalersOfferUrl} from '../src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs';
+import {mediaScalersOfferIdLinkMarkup,mediaScalersOfferUrl} from '../src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs';
 
 const html = await readFile(new URL('../src/curadoria/hot-offers-ms/index.html',import.meta.url),'utf8');
 const css = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms.css',import.meta.url),'utf8');
@@ -153,6 +153,13 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(sharedCurationCss,/#offerSheet \.trends-search-row\{display:flex;gap:10px;align-items:end\}/,'a busca usa a disposição canônica da E-commerce GM sem dividir espaço com o link');
   assert.match(sharedCurationCss,/#offerSheet \.trends-result-actions\{grid-template-columns:repeat\(7,minmax\(0,1fr\)\);gap:6px\}/,'os resultados usam a mesma grade do E-commerce GM');
   assert.match(sharedCurationCss,/#offerSheet \.trends-country-action\{border:1px solid #40516b;background:#172337/,'os países mantêm o estilo compartilhado');
+});
+
+test('ID na tabela Hot Offers MS abre a oferta MediaScalers em nova aba', () => {
+  assert.equal(mediaScalersOfferIdLinkMarkup('2323'),'<a class="offer-id-link" href="https://admin.mediascalers.com/offers/2323" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta 2323 na MediaScalers">2323</a>');
+  assert.equal(mediaScalersOfferIdLinkMarkup('../2323'),'../2323','IDs não numéricos permanecem texto, sem link navegável');
+  assert.match(view,/key === 'id'\) return '<td>' \+ mediaScalersOfferIdLinkMarkup\(item\.offerId\)/,'a coluna ID usa o link validado da plataforma');
+  assert.match(sharedCurationCss,/\.offer-id-link\{color:#9fc9ff;text-decoration:none/,'o link do ID mantém a cor azul usada pela réplica SmartADV');
 });
 
 test('as colunas Google Trends, Glimpse e Imagens seguem a ordem do E-commerce GM após Produto', () => {

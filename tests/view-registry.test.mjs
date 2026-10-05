@@ -9,6 +9,7 @@ const views=context.window.PanelViews;
 
 assert.equal(views.resolveRoute('/').id,'totals');
 assert.equal(views.resolveRoute('/').title,'Visão geral');
+assert.equal(views.resolveRoute('/').subtitle,'');
 assert.equal(views.resolveRoute('/?view=tested').id,'tested');
 assert.equal(views.resolveRoute('?view=cpa').id,'cpa');
 assert.equal(views.resolveRoute('/?view=accounts').id,'accounts');

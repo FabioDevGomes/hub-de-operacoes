@@ -10,7 +10,7 @@ const popup = await readFile(new URL('extensions/mcc-d0-bridge/popup.html', root
 const popupScript = await readFile(new URL('extensions/mcc-d0-bridge/popup.js', root), 'utf8');
 const readerSource = await readFile(new URL('extensions/mcc-d0-bridge/mcc-text-reader.mjs', root), 'utf8');
 
-assert.deepEqual(manifest.permissions, ['scripting', 'activeTab'], 'captura textual não deve pedir permissão de clipboard');
+assert.deepEqual(manifest.permissions, ['scripting', 'activeTab', 'clipboardWrite'], 'clipboardWrite atende apenas à nova cópia ClickBank; o leitor MCC não usa clipboard');
 assert.ok(background.includes("message?.type === 'READ_ACTIVE_MCC_TEXT'") && background.includes('parseMccSelectableText(capture.text)'),
   'o parser legado permanece isolado, sem ser acionado pelo popup');
 assert.ok(!popup.includes('id="read-text"') && !popupScript.includes("type: 'READ_ACTIVE_MCC_TEXT'"),

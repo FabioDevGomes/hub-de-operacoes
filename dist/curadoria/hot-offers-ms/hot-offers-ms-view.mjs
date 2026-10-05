@@ -24,6 +24,13 @@ export function mediaScalersOfferUrl(offerId) {
   return /^\d+$/.test(id) ? PLATFORM_OFFER_URL + id : null;
 }
 
+export function mediaScalersOfferIdLinkMarkup(offerId) {
+  const id = String(offerId ?? '').trim(), url = mediaScalersOfferUrl(id);
+  return url
+    ? '<a class="offer-id-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ' + id + ' na MediaScalers">' + id + '</a>'
+    : escape(id);
+}
+
 function storedSet(key, allowed = null) {
   try {
     const values = JSON.parse(localStorage.getItem(key) || '[]');
@@ -116,7 +123,7 @@ export function mountHotOffersMsView({root, actions}) {
     return Domain.sortOffers(Domain.filterOffers(scoped,{...filters,visibility:'all'},decisions).filter(item => filters.visibility === 'all' || (filters.visibility === 'hidden') === hiddenOffers.has(item.offerKey)),sortKey,sortDirection,{decisions,trendsRank,imagesRank,glimpseRank,signalRank});
   }
   function cell(key,item) {
-    if (key === 'id') return '<td>' + escape(item.offerId) + '</td>';
+    if (key === 'id') return '<td>' + mediaScalersOfferIdLinkMarkup(item.offerId) + '</td>';
     if (key === 'product') return '<td><span class="product-name">' + escape(item.productName) + '</span></td>';
     if (key === 'category') return '<td>' + escape(item.category || '—') + '</td>';
     if (key === 'affiliation') return '<td>' + affiliation(item) + '</td>';

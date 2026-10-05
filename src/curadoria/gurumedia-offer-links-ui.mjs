@@ -16,6 +16,26 @@ function offerIds() {
   return [];
 }
 
+function linkTopTableOfferIds() {
+  if (view !== 'top') return;
+  const rows = document.querySelector('#rows');
+  if (!rows) return;
+  for (const row of rows.querySelectorAll('tr[data-offer]')) {
+    const cell = row.querySelector('td[data-col="id"]'), id = String(row.dataset.offer || '').trim(), url = guruMediaOfferUrl(id);
+    if (!cell || !url || cell.querySelector('[data-gurumedia-offer-link]')) continue;
+    const link = document.createElement('a');
+    link.className = 'offer-id-link';
+    link.dataset.gurumediaOfferLink = '';
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', `Abrir oferta ${id} na GuruMedia`);
+    link.textContent = id;
+    link.addEventListener('click', event => event.stopPropagation());
+    cell.replaceChildren(link);
+  }
+}
+
 function renderOfferLinks() {
   const actions = document.querySelector(view === 'top' ? '#topProductAgeActions' : '#managerProductAgeActions');
   const ageRow = actions?.closest('.trends-product-age');
@@ -40,4 +60,10 @@ function renderOfferLinks() {
 if (sheet && (view === 'top' || view === 'manager')) {
   renderOfferLinks();
   new MutationObserver(renderOfferLinks).observe(sheet, {childList:true,characterData:true,subtree:true});
+}
+
+const topOfferRows = view === 'top' ? document.querySelector('#rows') : null;
+if (topOfferRows) {
+  linkTopTableOfferIds();
+  new MutationObserver(linkTopTableOfferIds).observe(topOfferRows, {childList:true});
 }

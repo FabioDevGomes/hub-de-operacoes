@@ -29,7 +29,12 @@ export function mountSmartAdvOffersView({root, actions}) {
   let selectedCaptureId = '', annotatedOffers = [], activeOfferId = '', activeTab = 'trends';
   const importDialog = $('#importDialog', root), paste = $('#pasteArea', root), confirmButton = $('#confirmImport', root);
   const sheet = $('#offerSheet'), imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
-  function showMessage(message, {error = false} = {}) { const element=$('#message',root);element.textContent=message;element.classList.toggle('error',error); }
+  function showMessage(message, {error = false} = {}) {
+    for (const element of [$('#message',root),$('#sheetMessage'),$('#trendResultMessage')].filter(Boolean)) {
+      element.textContent=message;element.classList.toggle('error',error);
+    }
+    $('#sheetMessage').classList.toggle('hidden',activeTab==='trends');
+  }
 
   function recordFor(records, item, fallback) { return records.find(record => record.offerKey === keyFor(item)) || fallback; }
   function trendsFor(item) { return recordFor(trendRecords, item, {offerKey:keyFor(item),assessments:[],keywordCandidates:[],manualCountries:[]}); }
@@ -133,10 +138,22 @@ export function mountSmartAdvOffersView({root, actions}) {
       $$('[data-trends-product-age]', $('#productAgeActions')).forEach(button => { button.classList.toggle('selected', button.dataset.trendsProductAge === value); button.setAttribute('aria-pressed', String(button.dataset.trendsProductAge === value)); });
     });
     $('#productAgeActions').dataset.selectedAge = latest?.productAge || '';
-    TrendsUI.renderResultButtons($('#trendResults'), latest?.status || '', status => {
+    TrendsUI.renderResultButtons($('#trendResults'), latest?.status || '', async status => {
       const selectedCountries = $$('[data-country].selected', $('#trendCountries')).map(button => button.dataset.country).slice(0,5);
-      if (!selectedCountries.length) { showMessage('Selecione ao menos um país para registrar uma avaliação de Trends.', {error:true}); return; }
-      void actions.saveTrend(item, status, {term:$('#trendsTerm').value.trim() || item.productName,countries:selectedCountries,productAge:$('#productAgeActions').dataset.selectedAge || ''});
+      const buttons=$$('[data-trends-result]',$('#trendResults'));
+      buttons.forEach(button=>{button.disabled=true;});
+      showMessage('Salvando avaliação de Google Trends…');
+      try {
+        const saved=await actions.saveTrend(item, status, {term:$('#trendsTerm').value.trim() || item.productName,countries:selectedCountries,productAge:$('#productAgeActions').dataset.selectedAge || ''});
+        if(saved===false)return;
+        if(activeOfferId===String(item.offerId)&&!sheet.classList.contains('hidden')) {
+          $$('[data-trends-result]',$('#trendResults')).forEach(button=>{
+            const selected=button.dataset.trendsResult===status;
+            button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));
+          });
+        }
+      } catch { showMessage('Não foi possível salvar a avaliação de Google Trends. Tente novamente.',{error:true}); }
+      finally { buttons.forEach(button=>{button.disabled=false;}); }
     });
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates'), {candidates:record.keywordCandidates || [],variant:'positive',searchContext:'Google Trends',onSearch:term => actions.openTrends(term),onRemove:(_candidate,index) => actions.removeTrendCandidate(item,index)});
     $('#trendsHistory').innerHTML = assessments.slice().reverse().map(entry => `<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries || []).join(', '),entry.productAge || ''].filter(Boolean).join(' · '))}</span></div>`).join('') || '<p class="sub">Sem avaliações de Trends.</p>';
@@ -187,6 +204,7 @@ export function mountSmartAdvOffersView({root, actions}) {
   function renderOffer(item) { renderTrendPanel(item); renderImagePanel(item); $('#glimpseFrame').dataset.productKey=item.productKey; }
   function switchTab(tab) {
     activeTab=tab;
+    $('#sheetMessage').classList.toggle('hidden',tab==='trends');
     $$('.tabs [data-tab]',sheet).forEach(button => button.classList.toggle('active',button.dataset.tab === tab));
     $$('[data-panel]',sheet).forEach(panel => panel.classList.toggle('hidden',panel.dataset.panel !== tab));
     const item=offerById(activeOfferId);
@@ -194,6 +212,7 @@ export function mountSmartAdvOffersView({root, actions}) {
   }
   function openOffer(item, tab) {
     activeOfferId=String(item.offerId); activeTab=tab;
+    for(const selector of ['#sheetMessage','#trendResultMessage']){const element=$(selector);element.textContent='';element.classList.remove('error');}
     $('#sheetTitle').textContent=item.productName;
     $('#sheetMeta').textContent=`Offer ID ${item.offerId} · ${item.vertical} · ${item.geoTargets.join(', ') || 'GEO não explícito'}`;
     renderOffer(item); switchTab(tab); sheet.classList.remove('hidden'); window.scrollTo(0,0);

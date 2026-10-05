@@ -10,6 +10,12 @@ E-commerce GM (`src/curadoria/top-performance/`) é a referência de apresentaç
 - Preserve fonte e estados compartilhados das colunas, incluindo estado neutro, classificação real e marcadores de candidatas. Não sobrescreva cores por plataforma.
 - Avisos de erro/salvamento devem aparecer dentro da ficha aberta, não apenas atrás dela na listagem. Abertura e troca de aba não gravam avaliações.
 
+## Google Trends — seleção do resultado
+
+Na SmartAdv, selecionar países é opcional para salvar o resultado da análise. Sem seleção, guarde `countries: []`; países disponíveis não significam países selecionados e não são atribuídos automaticamente à avaliação. Quando selecionados, preserve os países explícitos e o limite de cinco. Esta exceção não altera a regra dos outros consumidores. Os estados de salvamento ficam junto aos botões de resultado, dentro da ficha. Durante a gravação, desabilite os botões; marque a opção com `selected` e `aria-pressed` somente após sucesso, preservando o resultado anterior em caso de falha. Reabrir a ficha restaura a última avaliação salva e o histórico, sem nova gravação. Mensagens das outras abas também devem ficar visíveis na ficha, não apenas atrás dela na listagem. A persistência permanece própria da SmartAdv.
+
+Regressão isolada: `tests/smartadv-trends-selection.test.mjs` cobre gravação sem país, seleção opcional de país, reabertura e falha de armazenamento.
+
 ## Glimpse
 
 Ao colar conteúdo, a análise compartilhada é persistida automaticamente como snapshot; mostre o resultado na própria tela e mantenha **Concluir** como retorno/alternativa para análises manuais ainda não salvas. A mesma regra atende Lista de Gerente, E-commerce GM, Hot Offers MS, Top Offers CB e SmartAdv sem alterar os bancos próprios de cada consumidor.

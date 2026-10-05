@@ -1,7 +1,7 @@
 import * as Domain from './smartadv-offers-domain.mjs?v=4';
 import * as Storage from './smartadv-offers-storage.mjs?v=3';
 import {createInitialCapture} from './smartadv-offers-initial-capture.mjs?v=3';
-import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=6';
+import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=8';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -70,10 +70,9 @@ async function saveDecision(item,status) {
 
 async function saveTrend(item,status,draft={}) {
   const context=offerContext(item),old=trendFor(item),assessment={assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries||[]).filter(value=>countryCodes(item).includes(value)))].slice(0,5),productAge:draft.productAge||null,searchTerm:String(draft.term||context.productName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString()};
-  if(!assessment.countries.length){view.showMessage('Selecione ao menos um país válido antes de salvar Trends.',{error:true});return}
   const stored={...old,...context,assessments:Trends.appendAssessment(old.assessments,assessment)};
-  try{await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();view.refreshOffer(item,'trends');recordAssessment('trends',item,assessment);view.showMessage('Avaliação de Google Trends salva.')}
-  catch(error){console.error(error);view.showMessage('Não foi possível salvar a avaliação de Google Trends.',{error:true})}
+  try{await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();view.refreshOffer(item,'trends');recordAssessment('trends',item,assessment);view.showMessage('Avaliação de Google Trends salva.');return true}
+  catch(error){console.error(error);view.showMessage('Não foi possível salvar a avaliação de Google Trends.',{error:true});return false}
 }
 async function addTrendCandidate(item,value) {
   const context=offerContext(item),term=String(value||'').trim();if(!term)return false;

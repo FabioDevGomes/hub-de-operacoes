@@ -11,7 +11,7 @@ const manifest = JSON.parse(await readFile(new URL('extensions/mcc-d0-bridge/man
 const source = await readFile(new URL('extensions/mcc-d0-bridge/mcc-grid-reader.mjs', root), 'utf8');
 const domainSource = await readFile(new URL('extensions/mcc-d0-bridge/mcc-grid-domain.mjs', root), 'utf8');
 
-assert.deepEqual(manifest.permissions, ['scripting', 'activeTab']);
+assert.deepEqual(manifest.permissions, ['scripting', 'activeTab', 'clipboardWrite']);
 assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*']);
 assert.equal(D0_FIELDS.length, 18);
 assert.equal(Object.keys(HEADER_ALIASES).length, 18);

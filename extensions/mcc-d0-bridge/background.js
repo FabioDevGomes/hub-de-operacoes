@@ -4,6 +4,8 @@ import { collectMccSelectableText } from './mcc-text-reader.mjs';
 import { scrollMccPageToBottom } from './mcc-page-scroll.mjs';
 import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD1Capture } from './mcc-grid-domain.mjs';
 import { parseMccSelectableText } from './mcc-text-domain.mjs';
+import { collectClickBankProducts } from './clickbank-reader.mjs';
+import { CLICKBANK_COLUMNS, isClickBankMarketplace } from './clickbank-domain.mjs';
 
 const PREPARADOR_URL = 'http://127.0.0.1:8765/preparador-MCC/';
 const PREPARADOR_MATCH = `${PREPARADOR_URL}*`;
@@ -127,7 +129,23 @@ async function readActiveMccText() {
   return parseMccSelectableText(capture.text);
 }
 
+async function captureActiveClickBank(mode) {
+  const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
+  if (!tab?.id || !isClickBankMarketplace(tab.url)) throw new Error('Abra o Marketplace do ClickBank na aba ativa. Nenhum produto foi lido.');
+  const [execution] = await chrome.scripting.executeScript({
+    target:{ tabId:tab.id }, func:collectClickBankProducts, args:[CLICKBANK_COLUMNS, mode]
+  });
+  if (!execution?.result) throw new Error('A tabela não respondeu à captura. Reabra o popup e tente novamente.');
+  return execution.result;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'CAPTURE_CLICKBANK_PRODUCTS' || message?.type === 'RESTORE_CLICKBANK_TABLE') {
+    captureActiveClickBank(message.type === 'RESTORE_CLICKBANK_TABLE' ? 'restore' : 'capture')
+      .then(result => sendResponse({ ok:result.ok, result }))
+      .catch(error => sendResponse({ ok:false, message:error?.message || 'Falha na captura ClickBank.' }));
+    return true;
+  }
   if (message?.type === 'SCROLL_ACTIVE_MCC_TO_BOTTOM') {
     scrollActiveMccPageToBottom()
       .then(result => sendResponse({ ok: true, result }))

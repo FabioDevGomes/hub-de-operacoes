@@ -54,6 +54,30 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
   }
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
 });
+test('overview omits consolidated caption but retains daily period context',()=>{
+  const s=setup([row('Campanha','ativa',0)]);s.controller.render();
+  assert.equal(s.get('#totalsCaption').textContent,'','a descrição do histórico não deve aparecer no cabeçalho consolidado');
+  s.get('#totalsD1').onclick();assert.match(s.get('#totalsCaption').textContent,/Retrato fechado de D−1 · 29\/09\/2026/);
+  s.get('#totalsD0').onclick();assert.match(s.get('#totalsCaption').textContent,/Total do dia por campanha/);
+});
+test('overview reserves an empty first card and combines daily profit with campaign counts below the shared divider',()=>{
+  const s=setup([row('Ativa','ativa',10,{d0Totals:{investment:10,commission:20}}),row('Pausada','pausada',5,{d0Totals:{investment:5,commission:0}})]);
+  const before=JSON.stringify(s.snapshot);
+  for(const mode of ['consolidated','d1','d0']){
+    s.state.totalsMode=mode;s.controller.render();
+    const kpis=s.get('#kpis').innerHTML;
+    assert.match(kpis,/^<section class="kpi overview-kpi overview-kpi-reserved" aria-hidden="true"><\/section>/,'primeiro quadro vazio mantém seu espaço');
+    assert.doesNotMatch(kpis,/class="kpi overview-kpi overview-kpi-active"/,'não duplica campanhas num cartão separado');
+    const profit=kpis.match(/<section class="kpi overview-kpi overview-kpi-profit[\s\S]*?<\/section>/)?.[0];
+    assert.match(profit,/Lucro do dia[\s\S]*\+BRL 5\.00[\s\S]*overview-kpi-details[\s\S]*Ativas[\s\S]*overview-kpi-detail-value">1[\s\S]*Pausadas[\s\S]*overview-kpi-detail-value">1/);
+    assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6);
+    s.state.campaignStatusFilter='paused';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis,'filtro da tabela não altera cartão combinado');
+  }
+  s.snapshot.activeCount=0;s.snapshot.pausedCount=0;s.controller.render();
+  assert.match(s.get('#kpis').innerHTML,/Ativas[\s\S]*overview-kpi-detail-value">0[\s\S]*Pausadas[\s\S]*overview-kpi-detail-value">0/,'zeros continuam explícitos');
+  s.snapshot.activeCount=1;s.snapshot.pausedCount=1;
+  assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
 test('overview keeps a permanent information icon and changes pending-sale wording by count',()=>{
   const s=setup([row('Campanha','ativa',0)]);
   s.controller.render();let kpis=s.get('#kpis').innerHTML;

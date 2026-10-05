@@ -12,7 +12,7 @@
     p { margin: 0 0 14px; color: #a9bbd5; }
     label { display: block; margin-bottom: 14px; font-weight: 600; }
     input { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; color: #dce8ff; font: inherit; }
-    button { width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: #21c79a; color: #061327; font: inherit; font-weight: 700; cursor: pointer; }
+    button { display: inline-flex; align-items: center; justify-content: center; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: #21c79a; color: #061327; font: inherit; font-weight: 700; cursor: pointer; }
     button.secondary { background: #18314e; color: #e8f0ff; border: 1px solid #294764; }
     button.scroll-page { display: block; width: auto; margin: 0 0 8px auto; padding: 5px 9px; border: 1px solid #233b55; background: transparent; color: #9eb1cc; font-size: 11px; font-weight: 500; }
     button.scroll-page:hover:not(:disabled) { border-color: #355573; background: #11243a; color: #c6d6ed; }
@@ -25,6 +25,9 @@
     .status.error li + li { margin-top: 6px; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
+    #restore-clickbank { margin-top: 8px; }
+    #clickbank-manual { margin-top: 12px; }
+    #clickbank-text { box-sizing: border-box; width: 100%; min-height: 140px; padding: 8px; border: 1px solid #294764; border-radius: 8px; background: #101e32; color: #e8f0ff; font: 12px/1.4 monospace; }
   </style>
 </head>
 <body>
@@ -37,6 +40,17 @@
     <button id="capture-d1" class="secondary" type="button">Capturar D−1 da MCC</button>
     <button id="capture-d0" type="button" style="margin-top:8px">Capturar D0 da MCC</button>
     <div id="capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  </section>
+  <section aria-labelledby="clickbank-title">
+    <h2 id="clickbank-title">Produtos ClickBank</h2>
+    <p class="note">Amplia a tabela e copia as nove colunas da página atual. Não navega entre páginas nem altera filtros. Os dados não são enviados ao Hub.</p>
+    <button id="capture-clickbank" type="button">Capturar produtos ClickBank</button>
+    <button id="restore-clickbank" class="secondary" type="button">Restaurar tamanho da tabela</button>
+    <div id="clickbank-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="clickbank-manual" hidden>
+      <label for="clickbank-text">Texto para cópia manual (confira o aviso de completude acima)</label>
+      <textarea id="clickbank-text" readonly spellcheck="false"></textarea>
+    </div>
   </section>
   <script type="module" src="popup.js"></script>
 </body>

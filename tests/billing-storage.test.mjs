@@ -258,6 +258,6 @@ assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===confir
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'billing'\)/, 'backup antigo sem faturamento preserva as stores financeiras');
-assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\]\}=\{\}\)/, 'edição do lançamento na base e no espelho financeiro compartilha uma transação local');
+assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\]\}=\{\}\)/, 'edição do lançamento na base e no espelho financeiro compartilha uma transação local');
 assert.match(template, /await persistLocalBase\(\{provisionalBillingSales:\[result\.sale\]\}\)/, 'venda manual D0 é espelhada em Faturamento no mesmo salvamento');
 console.log('billing storage and backup ok');

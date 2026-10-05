@@ -1,14 +1,19 @@
 import { showCaptureStatus, showCaptureError } from './capture-status-view.mjs';
+import { mountClickBankCapture } from './clickbank-popup.mjs';
 
 const captureButton = document.querySelector('#capture-d0');
 const captureD1Button = document.querySelector('#capture-d1');
 const scrollButton = document.querySelector('#scroll-to-bottom');
 const captureStatus = document.querySelector('#capture-status');
-const actionButtons = [scrollButton, captureD1Button, captureButton];
+const actionButtons = [scrollButton, captureD1Button, captureButton,
+  document.querySelector('#capture-clickbank'), document.querySelector('#restore-clickbank')];
 
 function setActionsDisabled(disabled) {
   for (const button of actionButtons) button.disabled = disabled;
 }
+
+mountClickBankCapture({ document, sendMessage:message => chrome.runtime.sendMessage(message),
+  clipboard:navigator.clipboard, setDisabled:setActionsDisabled });
 
 scrollButton.addEventListener('click', async () => {
   setActionsDisabled(true);

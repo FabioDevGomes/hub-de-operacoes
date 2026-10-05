@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.7', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.8', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura a grade da MCC/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
 assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
@@ -64,15 +64,16 @@ assert.equal(status.textContent, 'Validando…');
 
 // Exercita os dois cliques, sem Chrome real nem escrita no Preparador.
 const d0 = new Element('button', doc), d1 = new Element('button', doc), scroll = new Element('button', doc);
-const nodes = { '#capture-d0':d0, '#capture-d1':d1, '#scroll-to-bottom':scroll, '#capture-status':status };
+const nodes = { '#capture-d0':d0, '#capture-d1':d1, '#scroll-to-bottom':scroll, '#capture-status':status,
+  '#capture-clickbank':new Element('button',doc), '#restore-clickbank':new Element('button',doc) };
 let response = failure;
 const requests = [];
 const context = vm.createContext({
   document:{ querySelector:selector => nodes[selector] },
-  showCaptureStatus, showCaptureError,
+  showCaptureStatus, showCaptureError, mountClickBankCapture:()=>{}, navigator:{clipboard:{}},
   chrome:{ runtime:{ sendMessage:async request => { requests.push(request.type); return response; } } }
 });
-vm.runInContext(script.replace(/^import .*?;\s*/s, ''), context);
+vm.runInContext(script.replace(/^import .*?;\s*/gm, ''), context);
 let resolveScroll;
 response = new Promise(resolve => { resolveScroll = resolve; });
 const scrollPromise = scroll.click();
@@ -122,4 +123,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.7');
+console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.8');

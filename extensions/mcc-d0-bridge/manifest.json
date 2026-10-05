@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Hub MCC D0",
-  "version": "1.2.7",
-  "description": "Captura a grade da MCC para preparar prévias D0/D−1 no Hub local.",
+  "version": "1.2.8",
+  "description": "Captura a grade da MCC para preparar prévias D0/D−1 e copia produtos da página atual do ClickBank.",
   "icons": {
     "64": "icon.png"
   },
@@ -15,6 +15,6 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "activeTab", "clipboardWrite"],
   "host_permissions": ["http://127.0.0.1:8765/preparador-MCC/*"]
 }

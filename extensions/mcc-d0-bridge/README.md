@@ -16,7 +16,7 @@ Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
 ## Atualização da extensão
 
-Versão atual: `1.2.7`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão.
+Versão atual: `1.2.8`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão.
 
 Erros de nomes duplicados aparecem em um quadro vermelho com o título **Captura bloqueada: campanha duplicada**, a lista dos nomes envolvidos e a orientação para corrigir a duplicidade na MCC. Se todas as linhas foram capturadas e a única divergência é a repetição de nomes, não aparece o aviso genérico de captura incompleta. Outros bloqueios reais são mostrados separadamente; as validações e a exigência de confirmação para gravar a base permanecem.
 
@@ -51,12 +51,32 @@ Os quadros D0 e D−1 exibem o estado e o resumo da captura estruturada enviada 
 - `activeTab`: acesso temporário à aba ativa após ação explícita no popup.
 - A rolagem automática usa o mesmo acesso temporário para alterar somente a posição da área rolável da grade/página da MCC; não extrai conteúdo, não navega e não pede permissões extras.
 - Host `http://127.0.0.1:8765/preparador-MCC/*`: restrito à rota local do Preparador.
-- Não há permissão permanente para `ads.google.com`, histórico, clipboard ou todos os sites.
+- `clipboardWrite`: copiar o TSV dos produtos ClickBank após clique explícito; não lê o clipboard.
+- Não há permissão permanente para `ads.google.com`, `accounts.clickbank.com`, histórico, leitura do clipboard ou todos os sites.
 
 Na captura direta, o service worker envia somente os dados validados e chama `window.__hubReceiveMccD0Grid` ou `window.__hubReceiveMccD1Grid` em `world: 'MAIN'`. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub.
 
 Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Prefixos ambíguos continuam sem vínculo automático. D−1 precisa corresponder a ontem no fuso `America/Sao_Paulo`; quando D0 também estiver carregado, as datas devem ser consecutivas. D−1 ou D0, isoladamente, pode atualizar somente o período recebido depois que a prévia for validada e o usuário clicar em **Atualizar base**.
 
+## Capturar produtos ClickBank
+
+1. Abra o Marketplace em `https://accounts.clickbank.com/master/dashboard/affiliate-marketplace` e aguarde a tabela carregar. Parâmetros antes do `#` e a rota de resultados depois dele são aceitos.
+2. Abra o popup da extensão e clique em **Capturar produtos ClickBank**. Mantenha-o aberto até terminar (prazo máximo de 15 segundos).
+3. A extensão amplia a tabela, reúne as linhas da página atual e percorre internamente as duas direções quando há virtualização. Confere a quantidade pelo rodapé de paginação ou pelo total explícito de resultados combinado com `resultsPerPage`/`offset` na URL. Nunca usa 50/1251 como constantes de contagem.
+4. Somente quando a contagem e as nove colunas forem confirmadas, copia TSV com cabeçalho **Rank, Offer Name, Seller, Avg $, Initial $, Future $, EPC, CVR, Gravity**. Nomes/vendedores iniciados por símbolos de fórmula recebem apóstrofo; traços, moedas, percentuais e valores numéricos exibidos são preservados.
+5. Cole em Excel/Sheets. Se o clipboard falhar, use Ctrl+C na caixa selecionável do popup. Capturas parciais são avisadas com a contagem e ficam disponíveis apenas para cópia manual, sem anúncio de sucesso completo.
+6. **Restaurar tamanho da tabela** repõe os estilos originais dos elementos alterados. A posição das rolagens já é restaurada ao terminar a captura; o botão pode ser usado depois de fechar e reabrir o popup na mesma aba. Recarregar/navegar a página também descarta as alterações visuais locais.
+
+A captura não troca filtros, ordenação ou página, não consulta endpoints/React e não grava dados nem encaminha produtos ao Hub. Para um novo recorte, use a paginação normal do Marketplace e capture novamente. Fechar o popup antes de receber a resposta interrompe a etapa de cópia, não a leitura já iniciada; reabra-o e execute novamente.
+
+Responsabilidades: `clickbank-domain.mjs` valida URL/define colunas/formata TSV; `clickbank-reader.mjs` faz apenas DOM/expansão reversível/contagem; `background.js` verifica a aba ativa e injeta no mundo isolado; `clickbank-popup.mjs` controla status, clipboard e alternativa manual. Não acoplar esse fluxo ao Preparador MCC.
+
 ## Testes
+
+### Verificação ClickBank
+
+`node --test tests/clickbank-extension.test.mjs tests/mcc-extension-popup.test.mjs tests/mcc-extension-parity.test.mjs tests/mcc-grid-experiment.test.mjs tests/mcc-text-experiment.test.mjs tests/mcc-page-scroll.test.mjs` cobre virtualização em ambos os eixos, 50 linhas, última página menor, repetição sem duplicação, nove colunas fora de ordem, completude, TSV seguro, erros, bloqueio de concorrência, clipboard negado, restauração exata e preservação do roteamento MCC, em memória. A validação final na conta real deve confirmar os seletores/cabeçalhos do Marketplace e a cópia pelo Chrome após recarregar a extensão; os testes sintéticos não substituem essa conferência.
+
+### Verificação MCC
 
 Execute `node tests/mcc-extension-popup.test.mjs` e `node tests/mcc-page-scroll.test.mjs` para verificar opções, rolagem e versão. Para captura estrutural D0/D−1, prévia, data operacional, zero × ausência e bloqueios de completude execute `node tests/mcc-grid-production.test.mjs`, `node tests/preparador-d1.test.mjs` e `node tests/preparador-d0.test.mjs`. Os testes usam fixtures sintéticas e não escrevem na base real.

@@ -38,6 +38,12 @@ assert.ok(controller.includes('Storage.put(Storage.STORES.trends,stored)')&&cont
 assert.ok(controller.includes("origin:'smartadv-offers'")&&controller.includes('GlimpseStorage.getAllAnalyses()'));
 assert.doesNotMatch(controller, /offers:\s*\[\s*raw|clipboardText:\s*raw/i, 'o texto bruto não deve ser salvo nas capturas');
 assert.ok(css.includes('var(--bg') && css.includes('.filters{') && css.includes('@media(max-width:680px)'));
+const tabsRule = css.match(/#offerSheet \.tabs\{[^}]*\}/)?.[0] || '';
+const tabButtonRule = css.match(/#offerSheet \.tabs \.btn\{[^}]*\}/)?.[0] || '';
+assert.ok(tabsRule.includes('display:grid') && tabsRule.includes('grid-template-columns:repeat(3,minmax(0,1fr))') && tabsRule.includes('width:min(100%,312px)') && tabsRule.includes('border:0'), 'as três abas usam um grupo compacto, sem borda e com colunas iguais');
+assert.ok(tabButtonRule.includes('width:100%') && tabButtonRule.includes('min-height:34px') && tabButtonRule.includes('white-space:nowrap'), 'os botões das abas mantêm largura e altura uniformes');
+assert.ok(css.includes('#offerSheet .tabs .btn:focus-visible{outline:2px solid var(--smartadv-blue)'), 'o foco de teclado continua visível nas abas');
+assert.match(page, /smartadv-offers\.css\?v=8/);
 assert.ok(sidebar.includes("{ key: 'smartadv-offers', label: 'Ofertas SmartAdv', href: '/curadoria/smartadv-offers/' }"));
 assert.ok(curationHome.includes('href="/curadoria/smartadv-offers/"'), 'a entrada também aparece no início da Curadoria');
 

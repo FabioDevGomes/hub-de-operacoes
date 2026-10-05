@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="copy-ficha/copy-ficha-output.css?v=7">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-pending.css?v=2">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-autofill.css?v=1">
-  <link rel="stylesheet" href="control-macro/control-macro.css?v=3">
+  <link rel="stylesheet" href="control-macro/control-macro.css?v=5">
   <link rel="stylesheet" href="curadoria/curation-observability.css?v=1">
   <link rel="stylesheet" href="billing/billing.css?v=1">
   <link rel="stylesheet" href="billing/billing-status.css?v=2">
@@ -59,7 +59,7 @@
     .nav-group-body{overflow:hidden}.nav-group.collapsed>.nav-group-body{display:grid!important;height:0;opacity:0;transform:translateY(-4px);pointer-events:none}.nav-group:not(.collapsed)>.nav-group-body{opacity:1;transform:translateY(0)}.nav-group.products:not(.collapsed)>.nav-group-body{display:flex!important}
     @media(prefers-reduced-motion:reduce){.nav-chevron{transition:none!important}}
   </style>
-  <link rel="stylesheet" href="sidebar-component.css?v=6">
+  <link rel="stylesheet" href="sidebar-component.css?v=8">
   <link rel="stylesheet" href="/table-headers.css?v=1">
 
 
@@ -79,7 +79,7 @@
   <link rel="stylesheet" href="accounts/accounts.css?v=1">
   <link rel="stylesheet" href="cpa/cpa.css?v=2">
   <link rel="stylesheet" href="tested-products/tested-products.css?v=1">
-  <link rel="stylesheet" href="overview/overview.css?v=13">
+  <link rel="stylesheet" href="overview/overview.css?v=15">
   <link rel="stylesheet" href="overview/knowledge-export.css?v=1">
   <link rel="stylesheet" href="product-diary/product-diary.css?v=3">
   <style>
@@ -99,7 +99,7 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div><div class="eyebrow">Operação Google Ads</div><h1 id="pageTitle" class="title">Visão geral</h1><p id="pageSubtitle" class="subtitle">Acompanhamento das campanhas ativas</p></div>
+        <div><div class="eyebrow">Operação Google Ads</div><h1 id="pageTitle" class="title">Visão geral</h1><p id="pageSubtitle" class="subtitle"></p></div>
         <div class="actions">
           <button id="registerSale" class="btn hidden" type="button">Registrar venda</button>
           <label class="btn"><input id="baseInput" class="file-input" type="file" accept=".json,application/json">Carregar base JSON</label>
@@ -193,7 +193,7 @@
   <script src="navigation-controller.js?v=1"></script>
   <script src="overview-domain.js?v=7"></script>
   <script src="overview/sale-roi-domain.js?v=1"></script>
-  <script src="overview/view.js?v=7"></script>
+  <script src="overview/view.js?v=8"></script>
   <script src="overview/knowledge-export-view.js?v=1"></script>
   <script src="product-diary/domain.js?v=2"></script>
   <script src="product-diary/view.js?v=3"></script>
@@ -337,7 +337,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     function showTestedProducts(){return navigation.open('tested')}
     function showAccountReport(){return navigation.open('accounts')}
     const cpaUi=CpaDomain.createState();let cpaController=null;
-    function renderCpaReport(){cpaController??=CpaView.mount({root:$('#cpaReportView'),state:cpaUi,getRows:cpaReportRows,getDates:()=>({dates:derivedContext().dates,fallback:[manifestDates().d1,manifestDates().d0].filter(Boolean).sort()}),domain:CpaDomain,format:{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel,parseDate:parseBrazilianDate,campaignName:name=>campaignIdentity(name).name}});cpaController.render()}
+    function renderCpaReport(){cpaController??=CpaView.mount({root:$('#cpaReportView'),state:cpaUi,getRows:cpaReportRows,domain:CpaDomain,format:{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel,parseDate:parseBrazilianDate,campaignName:name=>campaignIdentity(name).name}});cpaController.render()}
     function showCpaReport(){return navigation.open('cpa')}
     function normalizeText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
     function countryFlag(code){return /^[A-Z]{2}$/.test(code)&&code!=='ZZ'?[...code].map(char=>String.fromCodePoint(127397+char.charCodeAt())).join(''):''}

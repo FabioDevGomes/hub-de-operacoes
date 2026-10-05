@@ -90,7 +90,7 @@
     const records=manifest?.campanhas||[],ids=records.map(sourceAccountId);
     return records.length&&ids.every(Boolean)?new Set(ids):null;
   }
-  function campaignInScope(campaign,manifest){const scope=manifestAccountScope(manifest);return !scope||scope.has(canonicalAccountId(campaign?.conta_id))}
+  function campaignInScope(campaign,manifest){const scope=manifestAccountScope(manifest),managerId=sourceManagerId(null,manifest),campaignManagerId=canonicalAccountId(campaign?.mcc_id),captureScope=manifest?.captura_D_zero?.escopo;if(managerId&&campaignManagerId!==managerId)return false;if(managerId&&!['all_campaigns','active_only'].includes(captureScope)&&!manifestNames(manifest).some(name=>String(name).trim().toLowerCase()===String(campaign?.nome_mcc||'').trim().toLowerCase()))return false;if(scope)return scope.has(canonicalAccountId(campaign?.conta_id));return managerId?campaignManagerId===managerId:true}
   function mergeD0Coverage(previous,incoming,retainedCount=0){
     const coverage={...(previous?.cobertura_D_zero_por_mcc||{})},id=String(incoming?.identificacao_mcc?.id||''),capture=incoming?.captura_D_zero,date=incoming?.separacao_temporal?.D_zero?.datas_detectadas?.[0];
     if(!id||!capture||!date)return coverage;
@@ -105,33 +105,29 @@
     }
   }
   function mergeAccountCaptures(base,previous,incoming){
-    const scope=manifestAccountScope(incoming);
-    if(!scope||!previous?.campanhas?.length){const result=clone(incoming);result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming);applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);return result}
+    const managerId=sourceManagerId(null,incoming),accountScope=manifestAccountScope(incoming);
+    if((!managerId&&!accountScope)||!previous?.campanhas?.length){const result=clone(incoming);result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming);applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);return result}
     const incomingNames=new Set(manifestNames(incoming).map(name=>name.toLowerCase())),byName=new Map(base.campanhas.map(c=>[String(c.nome_mcc||'').toLowerCase(),c]));
     const dates=manifest=>['D_zero','D_menos_1'].flatMap(role=>manifest?.separacao_temporal?.[role]?.datas_detectadas||[]);
-    const d0Date=incoming.separacao_temporal?.D_zero?.datas_detectadas?.[0],activeOnly=incoming.captura_D_zero?.escopo==='active_only';
-    const records=(incoming.campanhas||[]).map(item=>{const record={...clone(item),datas_coleta:dates(incoming)},prior=previous.campanhas.find(candidate=>String(candidate.nome_campanha_exato||'').trim().toLowerCase()===String(item.nome_campanha_exato||'').trim().toLowerCase()),priorDate=prior?.metricas_D_zero?.data?.valor||previous.separacao_temporal?.D_zero?.datas_detectadas?.[0];if(activeOnly&&d0Date&&priorDate===d0Date&&item.metricas_D_zero?.presente===false&&prior?.metricas_D_zero?.presente!==false&&(prior?.metricas_D_zero||prior?.custo_D_zero)){record.metricas_D_zero=clone(prior.metricas_D_zero);if(record.metricas_D_zero)record.metricas_D_zero.presente=false;record.metricas_D_zero.retida_no_dia=true;record.metricas_D_zero.captura_atual='ausente';if(prior.custo_D_zero){record.custo_D_zero=clone(prior.custo_D_zero);record.custo_D_zero.presente=false;record.custo_D_zero.retida_no_dia=true}record._d0RetidaNaCaptura=true}return record});
+    const d0Date=incoming.separacao_temporal?.D_zero?.datas_detectadas?.[0],partialD0=managerId?incoming.captura_D_zero?.escopo!=='all_campaigns':incoming.captura_D_zero?.escopo==='active_only';
+    const records=(incoming.campanhas||[]).map(item=>{const record={...clone(item),datas_coleta:dates(incoming)},prior=previous.campanhas.find(candidate=>(managerId?sourceManagerId(candidate,null)===managerId:sourceAccountId(candidate)!=null&&accountScope.has(sourceAccountId(candidate)))&&String(candidate.nome_campanha_exato||'').trim().toLowerCase()===String(item.nome_campanha_exato||'').trim().toLowerCase()),priorDate=prior?.metricas_D_zero?.data?.valor||previous.separacao_temporal?.D_zero?.datas_detectadas?.[0];if(partialD0&&d0Date&&priorDate===d0Date&&item.metricas_D_zero?.presente===false&&prior?.metricas_D_zero?.presente!==false&&(prior?.metricas_D_zero||prior?.custo_D_zero)){record.metricas_D_zero=clone(prior.metricas_D_zero);if(record.metricas_D_zero)record.metricas_D_zero.presente=false;record.metricas_D_zero.retida_no_dia=true;record.metricas_D_zero.captura_atual='ausente';if(prior.custo_D_zero){record.custo_D_zero=clone(prior.custo_D_zero);record.custo_D_zero.presente=false;record.custo_D_zero.retida_no_dia=true}record._d0RetidaNaCaptura=true}return record});
     for(const prior of previous.campanhas){
       const name=String(prior.nome_campanha_exato||'').trim(),key=name.toLowerCase();
+      if(managerId?sourceManagerId(prior,null)!==managerId:(()=>{const id=sourceAccountId(prior)||canonicalAccountId(byName.get(key)?.conta_id);return !id||!accountScope.has(id)})()){const preserved=clone(prior);preserved.datas_coleta=prior.datas_coleta||dates(previous);records.push(preserved);continue}
       if(incomingNames.has(key))continue;
       // Confirmed title changes retain one campaign, not a second missing record.
       if(base.campanhas.some(c=>incomingNames.has(String(c.nome_mcc||'').toLowerCase())&&[...(c.nome_mcc_anteriores||[]),...(c.cpa_titulos_anteriores||[])].some(alias=>String(alias).toLowerCase()===key)))continue;
       const id=sourceAccountId(prior)||canonicalAccountId(byName.get(key)?.conta_id),preserved=clone(prior);
-      if(!id||!scope.has(id)){
-        preserved.datas_coleta=prior.datas_coleta||dates(previous);
-        records.push(preserved);
-        continue;
-      }
       preserved.datas_coleta=dates(incoming);
       for(const[field,role]of[['metricas_D_zero','D_zero'],['metricas_D_menos_1','D_menos_1'],['custo_D_zero','D_zero']]){
         const date=incoming.separacao_temporal?.[role]?.datas_detectadas?.[0];
         const priorDate=prior.metricas_D_zero?.data?.valor||previous.separacao_temporal?.D_zero?.datas_detectadas?.[0];
-        if(role==='D_zero'&&activeOnly&&date&&priorDate===date&&prior.metricas_D_zero&&(prior.metricas_D_zero.presente!==false||prior.metricas_D_zero.retida_no_dia===true)){
+        if(role==='D_zero'&&partialD0&&date&&priorDate===date&&prior.metricas_D_zero&&(prior.metricas_D_zero.presente!==false||prior.metricas_D_zero.retida_no_dia===true)){
           const retained=clone(prior[field]);if(retained){retained.presente=false;retained.retida_no_dia=true;if(field==='metricas_D_zero')retained.captura_atual='ausente';preserved[field]=retained}else preserved[field]={presente:false};
           if(field==='metricas_D_zero')preserved._d0RetidaNaCaptura=true;
           continue;
         }
-        preserved[field]=date?{presente:false,data:{valor:date,estado:'confirmado'},conta_id:{valor:id,estado:'confirmado'}}:{presente:false};
+        preserved[field]=date?{presente:false,data:{valor:date,estado:'confirmado'},...(id?{conta_id:{valor:id,estado:'confirmado'}}:{})}:{presente:false};
       }
       records.push(preserved);
     }

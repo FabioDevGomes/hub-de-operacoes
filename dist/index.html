@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="copy-ficha/copy-ficha-output.css?v=7">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-pending.css?v=2">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-autofill.css?v=1">
-  <link rel="stylesheet" href="control-macro/control-macro.css?v=3">
+  <link rel="stylesheet" href="control-macro/control-macro.css?v=5">
   <link rel="stylesheet" href="curadoria/curation-observability.css?v=1">
   <link rel="stylesheet" href="billing/billing.css?v=1">
   <link rel="stylesheet" href="billing/billing-status.css?v=2">
@@ -59,7 +59,7 @@
     .nav-group-body{overflow:hidden}.nav-group.collapsed>.nav-group-body{display:grid!important;height:0;opacity:0;transform:translateY(-4px);pointer-events:none}.nav-group:not(.collapsed)>.nav-group-body{opacity:1;transform:translateY(0)}.nav-group.products:not(.collapsed)>.nav-group-body{display:flex!important}
     @media(prefers-reduced-motion:reduce){.nav-chevron{transition:none!important}}
   </style>
-  <link rel="stylesheet" href="sidebar-component.css?v=6">
+  <link rel="stylesheet" href="sidebar-component.css?v=8">
   <link rel="stylesheet" href="/table-headers.css?v=1">
 
 
@@ -79,7 +79,7 @@
   <link rel="stylesheet" href="accounts/accounts.css?v=1">
   <link rel="stylesheet" href="cpa/cpa.css?v=2">
   <link rel="stylesheet" href="tested-products/tested-products.css?v=1">
-  <link rel="stylesheet" href="overview/overview.css?v=13">
+  <link rel="stylesheet" href="overview/overview.css?v=15">
   <link rel="stylesheet" href="overview/knowledge-export.css?v=1">
   <link rel="stylesheet" href="product-diary/product-diary.css?v=3">
   <style>
@@ -99,7 +99,7 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div><div class="eyebrow">Operação Google Ads</div><h1 id="pageTitle" class="title">Visão geral</h1><p id="pageSubtitle" class="subtitle">Acompanhamento das campanhas ativas</p></div>
+        <div><div class="eyebrow">Operação Google Ads</div><h1 id="pageTitle" class="title">Visão geral</h1><p id="pageSubtitle" class="subtitle"></p></div>
         <div class="actions">
           <button id="registerSale" class="btn hidden" type="button">Registrar venda</button>
           <label class="btn"><input id="baseInput" class="file-input" type="file" accept=".json,application/json">Carregar base JSON</label>
@@ -356,32 +356,53 @@
     const records=manifest?.campanhas||[],ids=records.map(sourceAccountId);
     return records.length&&ids.every(Boolean)?new Set(ids):null;
   }
-  function campaignInScope(campaign,manifest){const scope=manifestAccountScope(manifest);return !scope||scope.has(canonicalAccountId(campaign?.conta_id))}
+  function campaignInScope(campaign,manifest){const scope=manifestAccountScope(manifest),managerId=sourceManagerId(null,manifest),campaignManagerId=canonicalAccountId(campaign?.mcc_id),captureScope=manifest?.captura_D_zero?.escopo;if(managerId&&campaignManagerId!==managerId)return false;if(managerId&&!['all_campaigns','active_only'].includes(captureScope)&&!manifestNames(manifest).some(name=>String(name).trim().toLowerCase()===String(campaign?.nome_mcc||'').trim().toLowerCase()))return false;if(scope)return scope.has(canonicalAccountId(campaign?.conta_id));return managerId?campaignManagerId===managerId:true}
+  function mergeD0Coverage(previous,incoming,retainedCount=0){
+    const coverage={...(previous?.cobertura_D_zero_por_mcc||{})},id=String(incoming?.identificacao_mcc?.id||''),capture=incoming?.captura_D_zero,date=incoming?.separacao_temporal?.D_zero?.datas_detectadas?.[0];
+    if(!id||!capture||!date)return coverage;
+    const prior=coverage[id],sameDate=prior?.data===date,scope=['all_campaigns','active_only'].includes(capture.escopo)?capture.escopo:'unknown',complete=scope==='all_campaigns'||(sameDate&&prior?.completa===true);
+    coverage[id]={data:date,escopo:scope,completa:complete,campanhas_capturadas:Number(capture.campanhas_capturadas)||0,campanhas_retidas:retainedCount,capturada_em:capture.capturada_em||incoming.gerado_em_utc||null};
+    return coverage;
+  }
+  function applyD0CoverageToCampaigns(campaigns,coverage,managerId){
+    const item=coverage?.[String(managerId||'')];if(!item)return;
+    for(const campaign of campaigns||[])if(!managerId||String(campaign.mcc_id||'')===String(managerId)){
+      campaign.captura_D_zero_escopo=item.escopo;campaign.captura_D_zero_completa=item.completa;campaign.captura_D_zero_data=item.data;
+    }
+  }
   function mergeAccountCaptures(base,previous,incoming){
-    const scope=manifestAccountScope(incoming);
-    if(!scope||!previous?.campanhas?.length)return clone(incoming);
+    const managerId=sourceManagerId(null,incoming),accountScope=manifestAccountScope(incoming);
+    if((!managerId&&!accountScope)||!previous?.campanhas?.length){const result=clone(incoming);result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming);applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);return result}
     const incomingNames=new Set(manifestNames(incoming).map(name=>name.toLowerCase())),byName=new Map(base.campanhas.map(c=>[String(c.nome_mcc||'').toLowerCase(),c]));
     const dates=manifest=>['D_zero','D_menos_1'].flatMap(role=>manifest?.separacao_temporal?.[role]?.datas_detectadas||[]);
-    const records=(incoming.campanhas||[]).map(item=>({...clone(item),datas_coleta:dates(incoming)}));
+    const d0Date=incoming.separacao_temporal?.D_zero?.datas_detectadas?.[0],partialD0=managerId?incoming.captura_D_zero?.escopo!=='all_campaigns':incoming.captura_D_zero?.escopo==='active_only';
+    const records=(incoming.campanhas||[]).map(item=>{const record={...clone(item),datas_coleta:dates(incoming)},prior=previous.campanhas.find(candidate=>(managerId?sourceManagerId(candidate,null)===managerId:sourceAccountId(candidate)!=null&&accountScope.has(sourceAccountId(candidate)))&&String(candidate.nome_campanha_exato||'').trim().toLowerCase()===String(item.nome_campanha_exato||'').trim().toLowerCase()),priorDate=prior?.metricas_D_zero?.data?.valor||previous.separacao_temporal?.D_zero?.datas_detectadas?.[0];if(partialD0&&d0Date&&priorDate===d0Date&&item.metricas_D_zero?.presente===false&&prior?.metricas_D_zero?.presente!==false&&(prior?.metricas_D_zero||prior?.custo_D_zero)){record.metricas_D_zero=clone(prior.metricas_D_zero);if(record.metricas_D_zero)record.metricas_D_zero.presente=false;record.metricas_D_zero.retida_no_dia=true;record.metricas_D_zero.captura_atual='ausente';if(prior.custo_D_zero){record.custo_D_zero=clone(prior.custo_D_zero);record.custo_D_zero.presente=false;record.custo_D_zero.retida_no_dia=true}record._d0RetidaNaCaptura=true}return record});
     for(const prior of previous.campanhas){
       const name=String(prior.nome_campanha_exato||'').trim(),key=name.toLowerCase();
+      if(managerId?sourceManagerId(prior,null)!==managerId:(()=>{const id=sourceAccountId(prior)||canonicalAccountId(byName.get(key)?.conta_id);return !id||!accountScope.has(id)})()){const preserved=clone(prior);preserved.datas_coleta=prior.datas_coleta||dates(previous);records.push(preserved);continue}
       if(incomingNames.has(key))continue;
       // Confirmed title changes retain one campaign, not a second missing record.
       if(base.campanhas.some(c=>incomingNames.has(String(c.nome_mcc||'').toLowerCase())&&[...(c.nome_mcc_anteriores||[]),...(c.cpa_titulos_anteriores||[])].some(alias=>String(alias).toLowerCase()===key)))continue;
       const id=sourceAccountId(prior)||canonicalAccountId(byName.get(key)?.conta_id),preserved=clone(prior);
-      if(!id||!scope.has(id)){
-        preserved.datas_coleta=prior.datas_coleta||dates(previous);
-        records.push(preserved);
-        continue;
-      }
       preserved.datas_coleta=dates(incoming);
       for(const[field,role]of[['metricas_D_zero','D_zero'],['metricas_D_menos_1','D_menos_1'],['custo_D_zero','D_zero']]){
         const date=incoming.separacao_temporal?.[role]?.datas_detectadas?.[0];
-        preserved[field]=date?{presente:false,data:{valor:date,estado:'confirmado'},conta_id:{valor:id,estado:'confirmado'}}:{presente:false};
+        const priorDate=prior.metricas_D_zero?.data?.valor||previous.separacao_temporal?.D_zero?.datas_detectadas?.[0];
+        if(role==='D_zero'&&partialD0&&date&&priorDate===date&&prior.metricas_D_zero&&(prior.metricas_D_zero.presente!==false||prior.metricas_D_zero.retida_no_dia===true)){
+          const retained=clone(prior[field]);if(retained){retained.presente=false;retained.retida_no_dia=true;if(field==='metricas_D_zero')retained.captura_atual='ausente';preserved[field]=retained}else preserved[field]={presente:false};
+          if(field==='metricas_D_zero')preserved._d0RetidaNaCaptura=true;
+          continue;
+        }
+        preserved[field]=date?{presente:false,data:{valor:date,estado:'confirmado'},...(id?{conta_id:{valor:id,estado:'confirmado'}}:{})}:{presente:false};
       }
       records.push(preserved);
     }
-    return {...clone(incoming),campanhas:records,escopo_contas:{ids:[...new Set(records.map(item=>sourceAccountId(item)||canonicalAccountId(byName.get(String(item.nome_campanha_exato||'').toLowerCase())?.conta_id)).filter(Boolean))],consolidado:true}};
+    const result={...clone(incoming),campanhas:records,escopo_contas:{ids:[...new Set(records.map(item=>sourceAccountId(item)||canonicalAccountId(byName.get(String(item.nome_campanha_exato||'').toLowerCase())?.conta_id)).filter(Boolean))],consolidado:true}};
+    const retainedCount=result.campanhas.filter(item=>item._d0RetidaNaCaptura).length;
+    for(const item of result.campanhas)delete item._d0RetidaNaCaptura;
+    result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming,retainedCount);
+    applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);
+    return result;
   }
   function confirmedDateAliasKeys(base){
     const currentNames=new Set(base.campanhas.map(item=>String(item.nome_mcc||'').trim().toLocaleLowerCase('pt-BR'))),aliases=new Set();
@@ -692,7 +713,7 @@
   <script>(function(){
   const DEFAULT_VIEW_ID='totals';
   const VIEWS=Object.freeze({
-    totals:Object.freeze({id:'totals',query:null,enabled:true,activeView:'totals',sectionId:'totalsView',navId:'totalsNav',title:'Visão geral',subtitle:'Acompanhamento das campanhas ativas'}),
+    totals:Object.freeze({id:'totals',query:null,enabled:true,activeView:'totals',sectionId:'totalsView',navId:'totalsNav',title:'Visão geral',subtitle:''}),
     macro:Object.freeze({id:'macro',query:'macro',enabled:true,activeView:'control-macro',sectionId:'controlMacroView',navId:'controlMacroNav',title:'Controle Macro',subtitle:'Resumo diário do desempenho da operação'}),
     billing:Object.freeze({id:'billing',query:'billing',enabled:true,activeView:'billing',sectionId:'billingView',navId:'billingNav',title:'Faturamento',subtitle:'Comissões detalhadas, pagamentos e reembolsos'}),
     tested:Object.freeze({id:'tested',query:'tested',enabled:true,activeView:'tested-products',sectionId:'testedProductsView',navId:'testedProductsNav',title:'Produtos testados',subtitle:'Lista consolidada de todo o histórico'}),
@@ -717,7 +738,7 @@
   <script src="navigation-controller.js?v=1"></script>
   <script src="overview-domain.js?v=7"></script>
   <script src="overview/sale-roi-domain.js?v=1"></script>
-  <script src="overview/view.js?v=7"></script>
+  <script src="overview/view.js?v=8"></script>
   <script src="overview/knowledge-export-view.js?v=1"></script>
   <script src="product-diary/domain.js?v=2"></script>
   <script src="product-diary/view.js?v=3"></script>
@@ -861,7 +882,7 @@ function renderStatus(){const context=derivedContext(),dates=manifestDates(),has
     function showTestedProducts(){return navigation.open('tested')}
     function showAccountReport(){return navigation.open('accounts')}
     const cpaUi=CpaDomain.createState();let cpaController=null;
-    function renderCpaReport(){cpaController??=CpaView.mount({root:$('#cpaReportView'),state:cpaUi,getRows:cpaReportRows,getDates:()=>({dates:derivedContext().dates,fallback:[manifestDates().d1,manifestDates().d0].filter(Boolean).sort()}),domain:CpaDomain,format:{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel,parseDate:parseBrazilianDate,campaignName:name=>campaignIdentity(name).name}});cpaController.render()}
+    function renderCpaReport(){cpaController??=CpaView.mount({root:$('#cpaReportView'),state:cpaUi,getRows:cpaReportRows,domain:CpaDomain,format:{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel,parseDate:parseBrazilianDate,campaignName:name=>campaignIdentity(name).name}});cpaController.render()}
     function showCpaReport(){return navigation.open('cpa')}
     function normalizeText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
     function countryFlag(code){return /^[A-Z]{2}$/.test(code)&&code!=='ZZ'?[...code].map(char=>String.fromCodePoint(127397+char.charCodeAt())).join(''):''}

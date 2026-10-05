@@ -1,7 +1,7 @@
 (function(){
   const DEFAULT_VIEW_ID='totals';
   const VIEWS=Object.freeze({
-    totals:Object.freeze({id:'totals',query:null,enabled:true,activeView:'totals',sectionId:'totalsView',navId:'totalsNav',title:'Visão geral',subtitle:'Acompanhamento das campanhas ativas'}),
+    totals:Object.freeze({id:'totals',query:null,enabled:true,activeView:'totals',sectionId:'totalsView',navId:'totalsNav',title:'Visão geral',subtitle:''}),
     macro:Object.freeze({id:'macro',query:'macro',enabled:true,activeView:'control-macro',sectionId:'controlMacroView',navId:'controlMacroNav',title:'Controle Macro',subtitle:'Resumo diário do desempenho da operação'}),
     billing:Object.freeze({id:'billing',query:'billing',enabled:true,activeView:'billing',sectionId:'billingView',navId:'billingNav',title:'Faturamento',subtitle:'Comissões detalhadas, pagamentos e reembolsos'}),
     tested:Object.freeze({id:'tested',query:'tested',enabled:true,activeView:'tested-products',sectionId:'testedProductsView',navId:'testedProductsNav',title:'Produtos testados',subtitle:'Lista consolidada de todo o histórico'}),

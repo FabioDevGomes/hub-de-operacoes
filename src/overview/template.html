@@ -20,3 +20,11 @@
             <div class="overview-roi-actions"><button id="minimumRoiCancel" class="btn" type="button">Cancelar</button><button id="minimumRoiSave" class="btn primary" type="submit">OK</button></div>
           </form>
         </dialog>
+        <dialog id="fractionalValueDialog" class="overview-roi-dialog overview-fractional-dialog" aria-labelledby="fractionalValueTitle">
+          <div class="overview-fractional-content">
+            <div class="overview-fractional-heading"><h2 id="fractionalValueTitle">Confirmar valores reais</h2><p>Informe a comissão real em reais e confirme cada item. Os totais e o Faturamento serão atualizados.</p></div>
+            <div class="overview-fractional-columns" aria-hidden="true"><span>Produto</span><span>Valor atual (MCC)</span><span>Novo valor (R$)</span><span></span></div>
+            <div id="fractionalValueList" class="overview-fractional-list" aria-live="polite"></div>
+            <div class="overview-roi-actions"><button id="fractionalValueCancel" class="btn" type="button">Fechar</button></div>
+          </div>
+        </dialog>

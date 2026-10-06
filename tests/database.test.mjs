@@ -361,6 +361,24 @@ assert.equal(fractionalAdjustment.commissionAdjustment,0,'o valor fracionário d
 const flowOnlyBase=db.create();flowOnlyBase.campanhas.push({id:'cmp_flow_only',nome_mcc:'Campanha fracionária',nome_exibicao:'Produto fracionário',status:'ativa'});
 const flowOnlyImport=db.importManifest(flowOnlyBase,fractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}));
 assert.equal(db.salesAdjustmentMap(flowOnlyImport.base).get('cmp_flow_only').fractionalValuePendingCount,1,'conversão fracionária sem detalhe manual também mantém o aviso');
+const flowOnlyPending=db.salesAdjustmentMap(flowOnlyImport.base).get('cmp_flow_only').fractionalValuePendingItems[0];
+assert.deepEqual({product:flowOnlyPending.productName,current:flowOnlyPending.currentValueBrl,period:flowOnlyPending.period},{product:'Produto fracionário',current:75,period:'d1'},'a lista de confirmação fornece produto, valor MCC observado e período');
+const flowOnlyDirectConfirmation=db.confirmFractionalConversionValue(flowOnlyImport.base,{confirmationKey:flowOnlyPending.confirmationKey,value_brl:240});
+assert.equal(flowOnlyDirectConfirmation.sale,null,'confirmar pelo quadro não inventa uma venda manual');
+assert.equal(flowOnlyDirectConfirmation.base.vendas_provisorias.length,0);
+assert.equal(db.salesAdjustmentMap(flowOnlyDirectConfirmation.base).get('cmp_flow_only').fractionalValuePendingCount,0);
+assert.equal(db.salesAdjustmentMap(flowOnlyDirectConfirmation.base).get('cmp_flow_only').commissionAdjustment,165,'o valor confirmado é aplicado aos totais mesmo sem venda manual vinculada');
+const flowOnlyAggregate=db.mccBillingSalesFromManifest(flowOnlyDirectConfirmation.base).find(item=>item.sale_date==='2026-10-05');
+assert.equal(flowOnlyAggregate.value_brl,240,'o agregado do Faturamento usa o valor real confirmado em BRL');
+assert.equal(flowOnlyAggregate.value_usd,null,'o valor digitado em BRL não preenche artificialmente USD');
+assert.equal(flowOnlyAggregate.payment_status,'pending','confirmar comissão não marca recebimento');
+assert.match(flowOnlyAggregate.notes,/Valor real da conversão fracionária confirmado manualmente/);
+const flowOnlyReimport=db.importManifest(flowOnlyDirectConfirmation.base,fractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}),{overwrite:true});
+assert.equal(db.salesAdjustmentMap(flowOnlyReimport.base).get('cmp_flow_only').fractionalValuePendingCount,0,'reimportar a mesma captura preserva a confirmação direta');
+assert.equal(flowOnlyReimport.mccBillingSales.find(item=>item.sale_date==='2026-10-05').value_brl,240);
+const changedFractionalManifest=structuredClone(fractionalManifest);changedFractionalManifest.campanhas[0].metricas_D_menos_1.valor_conversao.valor=80;
+const changedFractionalEvidence=db.importManifest(flowOnlyDirectConfirmation.base,changedFractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:80}}}),{overwrite:true});
+assert.equal(db.salesAdjustmentMap(changedFractionalEvidence.base).get('cmp_flow_only').fractionalValuePendingCount,1,'uma nova comissão MCC parcial exige confirmação atualizada');
 const flowOnlySale=db.addProvisionalSale(flowOnlyImport.base,{campanha_id:'cmp_flow_only',data:'2026-10-05',hora:'12:30',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:240,pais_codigo:'US',origem:'FlowTracking',chave_duplicidade:'flow-only-id',confirmar_valor_real:true});
 assert.equal(flowOnlySale.sale.mcc_valor_real_confirmado,true,'a primeira venda recebida do FlowTracking confirma o valor real da conversão fracionária');
 assert.equal(db.salesAdjustmentMap(flowOnlySale.base).get('cmp_flow_only').fractionalValuePendingCount,0);
@@ -370,6 +388,8 @@ fractionalAdjustment=db.salesAdjustmentMap(correctedFractional.base).get('cmp_fr
 assert.equal(correctedFractional.sale.mcc_valor_real_confirmado,true,'edição do valor no Faturamento confirma o valor real');
 assert.equal(fractionalAdjustment.fractionalValuePendingCount,0,'o aviso fracionário some após confirmação do valor');
 assert.equal(fractionalAdjustment.commissionAdjustment,165,'o valor confirmado substitui o valor parcial MCC de 75');
+const changedLinkedEvidence=db.importManifest(correctedFractional.base,changedFractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:80}}}),{overwrite:true});
+assert.equal(db.salesAdjustmentMap(changedLinkedEvidence.base).get('cmp_fractional').fractionalValuePendingCount,1,'a edição da venda não confirma por engano uma nova comissão MCC parcial');
 const flowTrackingRefresh=db.addProvisionalSale(correctedFractional.base,{campanha_id:'cmp_fractional',data:'2026-10-05',valor_brl:255,pais_codigo:'US',chave_duplicidade:'fractional-flow-id',confirmar_valor_real:true});
 assert.equal(flowTrackingRefresh.duplicate,true);
 assert.equal(flowTrackingRefresh.updated,true,'nova captura FlowTracking atualiza o lançamento já vinculado');
@@ -391,6 +411,12 @@ assert.equal(db.salesAdjustmentMap(fractionalD0Manual.base).get(fractionalD0.bas
 const fractionalD0Confirmed=db.updateProvisionalSale(fractionalD0Manual.base,{id:fractionalD0Manual.sale.id,campanha_id:fractionalD0.base.campanhas[0].id,data:'2026-10-05',hora:'',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:225,pais_codigo:'US'});
 assert.equal(db.salesAdjustmentMap(fractionalD0Confirmed.base).get(fractionalD0.base.campanhas[0].id).fractionalValuePendingCount,0,'o ajuste no Faturamento também libera o aviso vindo de D0');
 assert.equal(db.salesAdjustmentMap(fractionalD0Confirmed.base).get(fractionalD0.base.campanhas[0].id).commissionAdjustment,150,'o valor real substitui a comissão fracionária D0');
+const fractionalD0Pending=db.salesAdjustmentMap(fractionalD0.base).get(fractionalD0.base.campanhas[0].id).fractionalValuePendingItems[0];
+const fractionalD0Direct=db.confirmFractionalConversionValue(fractionalD0.base,{confirmationKey:fractionalD0Pending.confirmationKey,value_brl:225});
+assert.equal(db.salesAdjustmentMap(fractionalD0Direct.base).get(fractionalD0.base.campanhas[0].id).commissionAdjustment,150,'a confirmação direta também ajusta lucro e faturamento D0');
+const fractionalD0Aggregate=db.mccBillingSalesFromManifest(fractionalD0Direct.base).find(item=>item.sale_date==='2026-10-05');
+assert.equal(fractionalD0Aggregate.value_brl,225);
+assert.equal(fractionalD0Aggregate.confirmation_status,'provisional','valor real confirmado não transforma contagem D0 em fechamento D−1');
 
 const oldAccounts=db.create();
 oldAccounts.campanhas.push(

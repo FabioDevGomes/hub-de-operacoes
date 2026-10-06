@@ -51,7 +51,10 @@ export function mountCurationListFocus(scope,{blockingSelector='',highlightOnCap
     }
   },true);
   document.addEventListener('click',event=>{
-    if(event.target?.closest?.('#closeSheet, #managerFinishImages, #topFinishImages'))queueMicrotask(restore);
+    if(event.target?.closest?.('#closeSheet, #managerFinishImages, #topFinishImages, #finishImages'))queueMicrotask(restore);
+  },true);
+  document.addEventListener('close',event=>{
+    if(event.target?.id==='sharedDecisionDialog')queueMicrotask(restore);
   },true);
   window.addEventListener('pageshow',restore);
   const rows=document.querySelector('#rows');

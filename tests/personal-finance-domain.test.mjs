@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
+  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyActualTargetUpdates, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, millisecondsUntilNextLocalMidnight, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, normalizeMonth, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
 } from '../src/personal-finance/personal-finance-domain.mjs';
 
 assert.equal(DEFAULT_CONSOLIDATED_MONTH_COUNT, 8, 'o consolidado abre com oito meses por padrão');
@@ -74,6 +74,30 @@ assert.equal(breakfastPace.daysInMonth, 30, 'a projeção do Café da manhã usa
 assert.equal(breakfastPace.elapsedDays, 25, 'a projeção do Café da manhã conta os dias decorridos');
 assert.equal(breakfastPace.expectedToDate, 83.33, 'a meta do Café da manhã divide o plano mensal pelos dias e acumula até hoje');
 assert.equal(breakfastPace.status, 'near', 'Café da manhã aplica a mesma comparação de ritmo diário');
+const october6 = new Date(2026, 9, 6, 12);
+const october7 = new Date(2026, 9, 7, 12);
+const lunchBudget = { category_name:'Almoço e janta', currency:'BRL', planned_amount:1250, actual_amount:null };
+const breakfastBudget = { category_name:'Café da manhã', currency:'BRL', planned_amount:100, actual_amount:null };
+assert.equal(dailyBudgetPace(lunchBudget, '2026-10', october6).expectedToDate, 241.94, 'a meta de almoço e janta acompanha o dia 6 de outubro');
+assert.equal(dailyBudgetPace(lunchBudget, '2026-10', october7).expectedToDate, 282.26, 'a meta de almoço e janta avança automaticamente no dia 7');
+assert.equal(dailyBudgetPace(breakfastBudget, '2026-10', october6).expectedToDate, 19.35, 'a meta do café da manhã acompanha o dia 6 de outubro');
+assert.equal(dailyBudgetPace(breakfastBudget, '2026-10', october7).expectedToDate, 22.58, 'a meta do café da manhã avança automaticamente no dia 7');
+assert.equal(dailyBudgetPace({ ...lunchBudget, planned_amount:1500 }, '2026-10', october7).expectedToDate, 338.71, 'uma edição manual do valor planejado continua determinando a meta diária');
+const dailyTargetEntries = [
+  { ...lunchBudget, entry_id:'2026-10:meals', month_key:'2026-10' },
+  { ...breakfastBudget, entry_id:'2026-10:breakfast', month_key:'2026-10' },
+  { entry_id:'2026-10:rent', month_key:'2026-10', category_name:'Aluguel', currency:'BRL', planned_amount:1005, actual_amount:null },
+  { entry_id:'2026-10:meals-usd', month_key:'2026-10', category_name:'Almoço e janta', currency:'USD', planned_amount:1250, actual_amount:null },
+];
+const october6Targets = dailyActualTargetUpdates(dailyTargetEntries, '2026-10', october6);
+assert.deepEqual(october6Targets.map(entry => entry.actual_amount), [241.94, 19.35], 'no dia 6, Realizado recebe a meta acumulada de almoço/janta e café da manhã');
+assert.deepEqual(dailyActualTargetUpdates(dailyTargetEntries, '2026-10', october7).map(entry => entry.actual_amount), [282.26, 22.58], 'no dia seguinte, os valores de Realizado avançam para as novas metas');
+assert.equal(dailyActualTargetUpdates(dailyTargetEntries, '2026-09', october6).length, 0, 'o preenchimento automático não altera meses anteriores');
+assert.deepEqual(dailyTargetEntries.map(entry => entry.planned_amount), [1250, 100, 1005, 1250], 'a automação não modifica o planejamento mensal');
+assert.equal(normalizeMonth({ month_key:'2026-10', daily_actual_targets_applied_on:'2026-10-06' }).daily_actual_targets_applied_on, '2026-10-06', 'a data aplicada fica persistida no mês para preservar edições manuais no mesmo dia');
+assert.equal(normalizeMonth({ month_key:'2026-10', daily_actual_targets_applied_on:'2026-09-30' }).daily_actual_targets_applied_on, undefined, 'um marcador de automação de outro mês é ignorado');
+assert.equal(millisecondsUntilNextLocalMidnight(new Date(2026, 9, 6, 23, 59)), 60_000, 'o agendamento aponta para a próxima meia-noite local');
+assert.equal(millisecondsUntilNextLocalMidnight(new Date(2026, 9, 6, 0, 0)), 24 * 60 * 60 * 1000, 'a próxima virada de dia usa o calendário local');
 assert.equal(dailyBudgetPace({ category_name:'Café da manhã', currency:'BRL', planned_amount:null, actual_amount:10 }, '2026-09', today), null, 'sem planejamento mensal, o Café da manhã não recebe uma meta presumida');
 assert.equal(dailyBudgetPace({ category_name:'Café da manhã', currency:'USD', planned_amount:100, actual_amount:10 }, '2026-09', today), null, 'a projeção do Café da manhã mantém a separação de moedas');
 assert.equal(monthlyAmountRemaining(1250, 1041), 209, 'o restante mensal de almoço/janta usa o orçamento integral menos o gasto realizado');

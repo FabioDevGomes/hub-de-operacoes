@@ -1,12 +1,23 @@
         <div id="productSummary" class="product-summary"></div>
         <div id="productDiaryPanel" class="card panel">
           <div class="panel-head"><div><h2 id="productPanelTitle">Diário de campanha</h2><p id="productCaption"></p></div><span id="rowCount" class="tag"></span></div>
-          <div id="productTableWrap" class="table-wrap"><table class="product-table"><thead id="productHead"></thead><tbody id="productBody"></tbody></table></div>
+          <div id="productTableWrap" class="table-wrap"><table class="product-table hub-table-layout"><thead id="productHead"></thead><tbody id="productBody"></tbody></table></div>
           <div id="legacySummaryBody" class="legacy-summary-grid hidden"></div>
         </div>
         <div id="productFooterNote" class="footer-note">Campos ausentes permanecem vazios. Cliques da plataforma não são inferidos pelo manifesto.</div>
+        <dialog id="productObservationDialog" class="product-observation-dialog" aria-labelledby="productObservationTitle">
+          <form id="productObservationForm">
+            <h2 id="productObservationTitle">Editar observações</h2>
+            <p id="productObservationContext"></p>
+            <label for="productObservationText">Observação da linha</label>
+            <textarea id="productObservationText" rows="5" maxlength="10000"></textarea>
+            <p class="product-observation-hint">Somente o texto é alterado. Métricas e observações originais permanecem preservadas.</p>
+            <p id="productObservationError" class="product-observation-error" role="alert"></p>
+            <div class="product-observation-actions"><button id="productObservationCancel" type="button" class="btn">Cancelar</button><button id="productObservationSave" type="submit" class="btn primary">Salvar</button></div>
+          </form>
+        </dialog>
         <details id="productSaleHistory" class="card product-sale-history" open>
           <summary>ROI no momento das vendas</summary>
           <p>Fotografias do ROI acumulado ao registrar cada venda manual. As capturas seguintes não alteram esses valores.</p>
-          <div class="product-sales-wrap"><table aria-label="ROI no registro de todas as vendas da campanha"><thead><tr><th>Venda</th><th>Data / hora da venda</th><th>Valor lançado (R$)</th><th>Investimento acumulado</th><th>Receita acumulada</th><th>ROI no registro</th><th>Registrada em</th><th>Referência MCC / situação</th></tr></thead><tbody id="productSalesBody"></tbody></table></div>
+          <div class="product-sales-wrap"><table class="hub-table-layout" aria-label="ROI no registro de todas as vendas da campanha"><thead><tr><th>Venda</th><th>Data / hora da venda</th><th>Valor lançado (R$)</th><th>Investimento acumulado</th><th>Receita acumulada</th><th>ROI no registro</th><th>Registrada em</th><th>Referência MCC / situação</th></tr></thead><tbody id="productSalesBody"></tbody></table></div>
         </details>

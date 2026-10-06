@@ -33,7 +33,7 @@ assert.equal(productDiaryManualSaleCount(diaryRows[0], manualSalesByDate), 0, 'v
 assert.equal(productDiaryRowsWithManualSales(diaryRows, manualSalesByDate).length, 2, 'a mesma data manual não deve duplicar linha já existente');
 
 assert.match(panelSource, /product:\{[^\n]*bodyClass:'product-diary-mode'/, 'o modo do Diário deve ser ativado somente pela navegação para a tela');
-assert.match(diaryStyles, /body\.product-diary-mode\{overflow:hidden\}/, 'a página não deve ganhar rolagem vertical externa enquanto o Diário está aberto');
-assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*height:100dvh[^}]*overflow:hidden/, 'no desktop, o Diário deve caber no viewport sem rolagem vertical da página');
-assert.match(diaryStyles, /body\.product-diary-mode #productTableWrap\{[^}]*min-height:0;max-height:none;overflow:auto/, 'a área da tabela deve consumir o espaço restante e manter rolagem própria');
+assert.match(diaryStyles, /body\.product-diary-mode\{overflow-y:auto\}/, 'a página deve rolar para alcançar o quadro de ROI abaixo do Diário');
+assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*min-height:100dvh;overflow:visible/, 'no desktop, o conteúdo do Diário pode crescer além do viewport');
+assert.match(diaryStyles, /body\.product-diary-mode #productTableWrap\{[^}]*max-height:none;overflow-x:auto;overflow-y:hidden/, 'a tabela diária cresce para mostrar os dias, preservando apenas a rolagem horizontal');
 console.log('product diary sales highlight ok');

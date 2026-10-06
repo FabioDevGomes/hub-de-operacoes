@@ -204,8 +204,8 @@
       .capture-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=8">
-  <link rel="stylesheet" href="/table-headers.css?v=1">
+  <link rel="stylesheet" href="/sidebar-component.css?v=11">
+  <link rel="stylesheet" href="/table-headers.css?v=4">
 </head>
 <body>
   <div class="hub-app">
@@ -280,7 +280,6 @@
           <div class="d0-capture-tabs" id="d0-capture-tabs" role="tablist" aria-label="Capturas D0"></div>
           <p class="d0-history-save-status" id="d0-history-save-status" role="status" aria-live="polite" hidden></p>
           <div id="d0-capture-view" role="tabpanel" tabindex="0" aria-live="polite">
-            <p class="delta-caption" id="d0-changes-caption"></p>
             <div class="table-wrap"><table class="delta-table" aria-label="Diferenças da captura D0 selecionada">
               <thead><tr><th>Campanha / produto</th><th>Situação</th><th class="numeric">Impressões</th><th class="numeric">Cliques</th><th class="numeric">Custo</th></tr></thead>
               <tbody id="d0-changes-table"></tbody>
@@ -336,7 +335,7 @@
     </div>
   </div>
 
-  <script src="/sidebar-component.js"></script>
+  <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
   <script src="/database.js?v=4"></script>
   <script src="/storage/hub-database.js?v=1"></script>
   <script>
@@ -384,6 +383,7 @@
     const PANEL_BASE_KEY = 'atual';
     const PANEL_USD_BRL_RATE = 5.10;
     const D0_CAPTURE_HISTORY_KEY = 'painel-preparador-mcc-capturas-d0-v1';
+    const D0_PAUSED_CAMPAIGN_HISTORY_KEY = 'painel-preparador-mcc-pausas-d0-v1';
     const D0_CAPTURE_HISTORY_LIMIT = 7;
 
     const q = selector => document.querySelector(selector);
@@ -403,7 +403,7 @@
           state:['pending','calculated','unavailable'].includes(item.state) ? item.state : 'unavailable',
           comparableDate:Boolean(item.comparableDate),
           rows:(Array.isArray(item.rows) ? item.rows : []).slice(0, 5000).filter(row => row && typeof row.campaign === 'string')
-            .map(row => ({ campaign:row.campaign.slice(0, 500), currency:String(row.currency || '').slice(0, 8), impressions:numeric(row.impressions), clicks:numeric(row.clicks), cost:numeric(row.cost), status:row.status === 'Pausada' ? 'Pausada' : null, ...(row.newCampaign === true ? {newCampaign:true} : {}) }))
+            .map(row => ({ campaign:row.campaign.slice(0, 500), ...(canonicalAccountId(row.accountId) ? {accountId:canonicalAccountId(row.accountId)} : {}), currency:String(row.currency || '').slice(0, 8), impressions:numeric(row.impressions), clicks:numeric(row.clicks), cost:numeric(row.cost), status:row.status === 'Pausada' ? 'Pausada' : null, ...(row.newCampaign === true ? {newCampaign:true} : {}) }))
         }))
         .sort((left,right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
       const byManager = new Map();
@@ -432,6 +432,39 @@
       catch { return false; }
     }
 
+    function normalizeD0PausedCampaignHistory(value) {
+      if (!Array.isArray(value)) return [];
+      const normalized = new Map();
+      value.forEach(item => {
+        const managerAccountId = canonicalAccountId(item?.managerAccountId), accountId = canonicalAccountId(item?.accountId);
+        const campaign = String(item?.campaign || '').trim().slice(0, 500);
+        if (!managerAccountId || !campaign) return;
+        const entry = { managerAccountId, ...(accountId ? {accountId} : {}), campaign, ...(typeof item?.captureId === 'string' && item.captureId ? {captureId:item.captureId.slice(0, 120)} : {}) };
+        const key = `${managerAccountId}|${accountId || ''}|${campaign.toLocaleLowerCase('pt-BR')}`;
+        if (!normalized.has(key)) normalized.set(key, entry);
+      });
+      return [...normalized.values()];
+    }
+
+    function readD0PausedCampaignHistory(storage) {
+      try { return normalizeD0PausedCampaignHistory(JSON.parse(storage.getItem(D0_PAUSED_CAMPAIGN_HISTORY_KEY) || '[]')); }
+      catch { return []; }
+    }
+
+    function writeD0PausedCampaignHistory(storage, history) {
+      try { storage.setItem(D0_PAUSED_CAMPAIGN_HISTORY_KEY, JSON.stringify(normalizeD0PausedCampaignHistory(history))); return true; }
+      catch { return false; }
+    }
+
+    function d0PausedCampaignsFromCaptureHistory(history) {
+      return normalizeD0PausedCampaignHistory((Array.isArray(history) ? history : []).flatMap(entry => {
+        const managerAccountId = canonicalAccountId(entry?.managerAccountId);
+        if (!managerAccountId) return [];
+        return (Array.isArray(entry.rows) ? entry.rows : []).filter(row => row?.status === 'Pausada' && typeof row.campaign === 'string')
+          .map(row => ({ managerAccountId, accountId:row.accountId, campaign:row.campaign, captureId:entry.id }));
+      }));
+    }
+
     function removeD0CaptureHistoryEntry(history, id) {
       return normalizeD0CaptureHistory(history).filter(entry => entry.id !== id);
     }
@@ -446,6 +479,15 @@
     let d0CaptureHistory = [];
     try { d0CaptureHistory = readD0CaptureHistory(window.localStorage); } catch { /* mantém o Preparador disponível se o navegador bloquear o armazenamento local */ }
     let d0CaptureHistorySaveFailed = false;
+    let d0PausedCampaignHistory = [];
+    try { d0PausedCampaignHistory = readD0PausedCampaignHistory(window.localStorage); } catch { /* mantém o Preparador disponível se o navegador bloquear o armazenamento local */ }
+    let d0PausedCampaignHistorySaveFailed = false;
+    const migratedD0PausedCampaignHistory = normalizeD0PausedCampaignHistory([...d0PausedCampaignHistory,...d0PausedCampaignsFromCaptureHistory(d0CaptureHistory)]);
+    if (migratedD0PausedCampaignHistory.length !== d0PausedCampaignHistory.length) {
+      d0PausedCampaignHistory = migratedD0PausedCampaignHistory;
+      try { d0PausedCampaignHistorySaveFailed = !writeD0PausedCampaignHistory(window.localStorage,d0PausedCampaignHistory); }
+      catch { d0PausedCampaignHistorySaveFailed = true; }
+    }
     let d0CaptureDeleteSaveFailed = false;
     const interruptedD0Captures = d0CaptureHistory.some(entry => entry.state === 'pending');
     if (interruptedD0Captures) {
@@ -650,6 +692,13 @@
       if (error?.name === 'QuotaExceededError') return 'O navegador não tem espaço disponível para salvar a base.';
       if (error?.name === 'SecurityError' || typeof indexedDB === 'undefined') return 'O navegador bloqueou o armazenamento local. Abra o Preparador pelo Hub e tente novamente.';
       return String(error?.message || error || 'Erro não identificado.');
+    }
+
+    function formatPanelUpdateTime(updatedAt) {
+      const date = typeof updatedAt === 'string' && updatedAt.trim() ? new Date(updatedAt) : null;
+      return date && Number.isFinite(date.getTime())
+        ? new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).format(date)
+        : 'horário indisponível';
     }
 
     async function applyManifestToPanel(manifest) {
@@ -1193,7 +1242,7 @@
       });
     }
 
-    function buildD0DeltaRows(manifest, base, dateChanges=[], cpaChanges=[]) {
+    function buildD0DeltaRows(manifest, base, dateChanges=[], cpaChanges=[], identifiedPausedCampaigns=[], captureId=null) {
       const date = manifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
       const previousManifest = base?.manifesto_atual;
       const previousDate = previousManifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
@@ -1203,6 +1252,18 @@
       const aliases = new Map([...(dateChanges || []),...(cpaChanges || [])].map(item => [exactName(item.newName), exactName(item.oldName)]));
       const accountId = campaign => canonicalAccountId(campaign?.metricas_D_zero?.conta_id?.valor ?? campaign?.metricas_D_menos_1?.conta_id?.valor);
       const managerId = canonicalAccountId(manifest?.identificacao_mcc?.id || (manifest?.campanhas || []).find(item => item?.mcc_id)?.mcc_id);
+      const knownPauses = normalizeD0PausedCampaignHistory(identifiedPausedCampaigns);
+      const pausedCampaigns = [];
+      const knownPauseFor = campaign => {
+        if (!managerId) return null;
+        const currentName = exactName(campaign?.nome_campanha_exato), previousName = aliases.get(currentName) || currentName;
+        const customerAccountId = accountId(campaign);
+        return knownPauses.find(item => {
+          if (canonicalAccountId(item.managerAccountId) !== managerId || ![currentName,previousName].includes(exactName(item.campaign))) return false;
+          const previousAccountId = canonicalAccountId(item.accountId);
+          return !(customerAccountId && previousAccountId && customerAccountId !== previousAccountId);
+        }) || null;
+      };
       const previousManifestManagerId = canonicalAccountId(previousManifest?.identificacao_mcc?.id);
       const localCampaignFor = item => {
         const name = exactName(item?.nome_mcc ?? item?.nome_campanha_exato), id = accountId(item) || canonicalAccountId(item?.conta_id);
@@ -1233,6 +1294,7 @@
           || (!id ? previousMccCampaigns.find(item => exactName(item.nome_campanha_exato) === priorName) : null);
       };
       const isNewCampaign = campaign => {
+        if (knownPauseFor(campaign)) return false;
         const id = accountId(campaign);
         const name = exactName(campaign?.nome_campanha_exato), priorName = aliases.get(name) || name;
         return !knownCampaigns.some(item => {
@@ -1260,10 +1322,17 @@
         const stateField = campaign?.metricas_D_zero?.estado_campanha;
         const stateAvailable = stateField?.valor != null && !['ausente','invalido'].includes(stateField.estado);
         const normalizedState = stateAvailable ? String(stateField.valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
-        const status = ['pausada','pausado','paused'].includes(normalizedState) ? 'Pausada' : null;
-        return { campaign:campaign.nome_campanha_exato, currency, ...differences, status, ...(newCampaign ? {newCampaign:true} : {}) };
+        const explicitlyPaused = ['pausada','pausado','paused'].includes(normalizedState);
+        const campaignName = String(campaign?.nome_campanha_exato || '').trim();
+        const customerAccountId = accountId(campaign);
+        if (explicitlyPaused && managerId && campaignName) pausedCampaigns.push({managerAccountId:managerId,...(customerAccountId ? {accountId:customerAccountId} : {}),campaign:campaignName,...(captureId ? {captureId} : {})});
+        const currentName = exactName(campaignName), previousName = aliases.get(currentName) || currentName;
+        const alreadyReportedPause = explicitlyPaused && Boolean(knownPauseFor(campaign));
+        const sameFirstCapture = alreadyReportedPause && knownPauses.some(item => item.captureId === captureId && item.captureId && canonicalAccountId(item.managerAccountId) === managerId && [currentName,previousName].includes(exactName(item.campaign)) && (!customerAccountId || !canonicalAccountId(item.accountId) || customerAccountId === canonicalAccountId(item.accountId)));
+        const status = explicitlyPaused && (!alreadyReportedPause || sameFirstCapture) ? 'Pausada' : null;
+        return { campaign:campaignName, ...(customerAccountId ? {accountId:customerAccountId} : {}), currency, ...differences, status, ...(newCampaign ? {newCampaign:true} : {}) };
       }).filter(row => row.newCampaign || row.status === 'Pausada' || [row.impressions,row.clicks,row.cost].some(value => value != null && value !== 0)) : [];
-      return { date, comparableDate, rows };
+      return { date, comparableDate, rows, pausedCampaigns:normalizeD0PausedCampaignHistory(pausedCampaigns) };
     }
 
     function buildD0DeltaTotals(rows=[]) {
@@ -1355,28 +1424,18 @@
     }
 
     function renderD0CaptureEntry(entry) {
-      const body = q('#d0-changes-table'), empty = q('#d0-changes-empty'), caption = q('#d0-changes-caption');
+      const body = q('#d0-changes-table'), empty = q('#d0-changes-empty');
       body.replaceChildren();
-      const capturedAtLabel = formatD0CaptureFullTime(entry.capturedAt);
-      const managerLabel = entry.managerAccountName && entry.managerAccountId ? `${entry.managerAccountName} · ${entry.managerAccountId}` : null;
-      const comparisonScope = managerLabel ? `MCC ${managerLabel}` : 'esta captura';
-      const newCampaignCount = entry.rows.filter(row => row.newCampaign).length;
-      const newCampaignNote = newCampaignCount ? ` ${newCampaignCount} ${newCampaignCount === 1 ? 'campanha nova identificada' : 'campanhas novas identificadas'} no histórico local da MCC.` : '';
       if (entry.state === 'pending') {
-        caption.textContent = `Captura D0 recebida em ${capturedAtLabel} (horário de Brasília). Calculando as diferenças.`;
         empty.textContent = 'Comparando esta captura com a base local…'; empty.hidden = false;
       } else if (entry.state === 'unavailable') {
-        caption.textContent = `Captura D0 de ${capturedAtLabel} (horário de Brasília). A comparação não pôde ser calculada.`;
         empty.textContent = 'A captura foi registrada, mas as diferenças não estão disponíveis.'; empty.hidden = false;
       } else if (!entry.reportDate) {
-        caption.textContent = `Captura D0 de ${capturedAtLabel} (horário de Brasília). A data do relatório não foi identificada; não foi possível comparar as métricas.`;
         empty.textContent = 'A data desta captura não foi identificada.'; empty.hidden = false;
       } else if (entry.comparableDate) {
-        caption.textContent = `Captura D0 de ${capturedAtLabel} (horário de Brasília). Comparação com o D0 salvo na base local para ${comparisonScope} em ${panelDateLabel(entry.reportDate)}; diferenças quantitativas, campanhas novas e campanhas explicitamente pausadas.${newCampaignNote}${entry.rows.length ? ' Totais somam valores comparáveis; custos ficam separados por moeda; * indica campos não comparáveis.' : ''}`;
-        empty.textContent = 'Nenhuma diferença quantificável, campanha nova ou campanha explicitamente pausada nesta captura.'; empty.hidden = entry.rows.length > 0;
+        empty.textContent = 'Nenhuma diferença quantificável, campanha nova ou primeira pausa explícita nesta captura.'; empty.hidden = entry.rows.length > 0;
       } else {
-        caption.textContent = `Captura D0 de ${capturedAtLabel} (horário de Brasília). Não havia D0 comparável para ${comparisonScope} em ${panelDateLabel(entry.reportDate)}; as métricas atuais são a primeira referência local e campanhas ausentes do histórico da MCC são identificadas como novas.${newCampaignNote}${entry.rows.length ? ' Totais somam valores comparáveis; custos ficam separados por moeda; * indica campos não comparáveis.' : ''}`;
-        empty.textContent = 'Nenhuma diferença quantificável, campanha nova ou campanha explicitamente pausada nesta captura.'; empty.hidden = entry.rows.length > 0;
+        empty.textContent = 'Nenhuma diferença quantificável, campanha nova ou primeira pausa explícita nesta captura.'; empty.hidden = entry.rows.length > 0;
       }
       if (entry.state === 'calculated') entry.rows.forEach(row => {
         const situation = row.newCampaign ? (row.status ? `Nova · ${row.status}` : 'Nova campanha') : row.status || '—';
@@ -1411,8 +1470,13 @@
     function renderD0CaptureHistory() {
       const panel = q('#d0-changes-panel'), tabs = q('#d0-capture-tabs'), entries = normalizeD0CaptureHistory(d0CaptureHistory).reverse();
       tabs.replaceChildren();
-      q('#d0-history-save-status').textContent = d0CaptureDeleteSaveFailed ? 'Não foi possível apagar esta captura; o histórico salvo foi mantido.' : d0CaptureHistorySaveFailed ? 'Não foi possível salvar o histórico de capturas neste navegador; ele ficará disponível somente até esta tela ser fechada.' : '';
-      q('#d0-history-save-status').hidden = !d0CaptureHistorySaveFailed && !d0CaptureDeleteSaveFailed;
+      const saveWarnings = [
+        d0CaptureDeleteSaveFailed ? 'Não foi possível apagar esta captura; o histórico salvo foi mantido.' : '',
+        d0CaptureHistorySaveFailed ? 'Não foi possível salvar o histórico de capturas neste navegador; ele ficará disponível somente até esta tela ser fechada.' : '',
+        d0PausedCampaignHistorySaveFailed ? 'Não foi possível salvar pausas já identificadas; elas poderão ser listadas novamente após reabrir a tela.' : ''
+      ].filter(Boolean);
+      q('#d0-history-save-status').textContent = saveWarnings.join(' ');
+      q('#d0-history-save-status').hidden = saveWarnings.length === 0;
       if (!entries.length) { panel.hidden = true; updateD0ApplyAvailability(); return; }
       if (!entries.some(entry => entry.id === selectedD0CaptureId)) selectedD0CaptureId = entries[0].id;
       const groups = new Map();
@@ -1506,8 +1570,13 @@
 
     function renderD0DeltaPanel(manifest, base, dateChanges=[], captureEntry=slots.d0?.captureHistory) {
       const cpaChanges = window.CampaignDatabase?.campaignCpaChangeCandidates?.(base, manifest) || [];
-      const result = buildD0DeltaRows(manifest, base, dateChanges, cpaChanges);
-      const entry = { ...(captureEntry || newD0CaptureEntry(slots.d0)), reportDate:result.date, state:'calculated', comparableDate:result.comparableDate, rows:result.rows };
+      const activeCaptureEntry = captureEntry || newD0CaptureEntry(slots.d0);
+      const knownPauses = normalizeD0PausedCampaignHistory([...d0PausedCampaignHistory,...d0PausedCampaignsFromCaptureHistory(d0CaptureHistory)]);
+      const result = buildD0DeltaRows(manifest, base, dateChanges, cpaChanges, knownPauses, activeCaptureEntry.id || null);
+      d0PausedCampaignHistory = normalizeD0PausedCampaignHistory([...knownPauses,...result.pausedCampaigns]);
+      try { d0PausedCampaignHistorySaveFailed = !writeD0PausedCampaignHistory(window.localStorage,d0PausedCampaignHistory); }
+      catch { d0PausedCampaignHistorySaveFailed = true; }
+      const entry = { ...activeCaptureEntry, reportDate:result.date, state:'calculated', comparableDate:result.comparableDate, rows:result.rows };
       saveD0CaptureEntry(entry);
     }
 
@@ -1669,7 +1738,6 @@
       const currentCapture = slots.d0?.captureHistory;
       if (currentCapture) saveD0CaptureEntry({ ...currentCapture, state:'unavailable', comparableDate:false, rows:[] });
       else {
-        q('#d0-changes-caption').textContent = 'Não foi possível consultar a base local para comparar esta captura D0.';
         q('#d0-changes-table').replaceChildren();
         q('#d0-changes-empty').textContent = 'A prévia segue disponível, mas as diferenças não puderam ser calculadas.';
         q('#d0-changes-empty').hidden = false;
@@ -1787,10 +1855,10 @@
       feedback.className = 'apply-feedback progress'; feedback.textContent = 'Atualizando a base…'; feedback.hidden = false;
       button.disabled = true; button.textContent = 'Atualizando…';
       try {
-        await applyManifestToPanel(currentResult.manifest);
+        const applied = await applyManifestToPanel(currentResult.manifest);
         const count = currentResult.manifest.campanhas.length;
-        feedback.className = 'apply-feedback success'; feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s).`; feedback.hidden = false;
-        q('#announcer').textContent = 'Base do Painel de Campanhas atualizada com sucesso.';
+        feedback.className = 'apply-feedback success'; feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s) · ${formatPanelUpdateTime(applied.base.atualizado_em)} (Brasília).`; feedback.hidden = false;
+        q('#announcer').textContent = feedback.textContent;
         button.textContent = 'Atualizada ✓';
       } catch (error) {
         const reason = panelUpdateError(error);

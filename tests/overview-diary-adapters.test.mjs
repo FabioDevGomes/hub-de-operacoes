@@ -39,19 +39,21 @@ test('overview adapter retains temporal financial projection, manual adjustments
 test('diary adapter disambiguates same display names by stable ID, never writes or mutates history',async()=>{
   const context=vm.createContext({window:{}});vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);
   const campaigns=[{id:'id-a',nome_mcc:'MCC A',nome_exibicao:'Mesmo produto'},{id:'id-b',nome_mcc:'MCC B',nome_exibicao:'Mesmo produto'}],
-    diario=[{campanha_id:'id-a',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:10}}},
-      {campanha_id:'id-b',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:20}}}],
+    diario=[{campanha_id:'id-a',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:10},O:{value:999},F:{value:99}}},
+      {campanha_id:'id-b',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:20},O:{value:12.35},F:{value:2}}},
+      {campanha_id:'id-b',date:'2026-09-30',cells:{A:{value:'2026-09-30'},C:{value:0},O:{value:0},F:{value:0}}}],
     rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc})),
     database={campanhas:campaigns,diario},calls=[];
   vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
   Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
     CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)}},
-    sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
+    ProductDiaryDomain:context.window.ProductDiaryDomain,sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),
-    d0Totals:c=>({investment:c.nome_campanha_exato==='MCC B'?20:10})});
+    d0Totals:()=>{throw Error('diary totals must not use only D0')}});
   const before=JSON.stringify(database);vm.runInContext(diaryAdapter,context);
   const snapshot=context.productDiarySnapshot('Mesmo produto','workbook','id-b');
-  assert.equal(snapshot.rows.length,1);assert.equal(snapshot.rows[0].cells.C.value,20);assert.equal(snapshot.investment,20);
+  assert.equal(snapshot.rows.length,2);assert.equal(snapshot.rows[0].cells.C.value,20);assert.equal(snapshot.investment,12.35);
+  assert.equal(snapshot.clicks,20);assert.equal(snapshot.conversions,3);
   assert.deepEqual(calls,[['Mesmo produto','id-b']]);assert.equal(snapshot.manualSalesByDate.size,1);
   assert.equal(snapshot.manualSalesByDate.get('2026-09-30').pendingConversions,1);assert.equal(JSON.stringify(database),before);
 });

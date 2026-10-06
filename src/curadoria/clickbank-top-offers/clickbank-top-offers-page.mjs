@@ -1,6 +1,6 @@
 import * as Domain from './clickbank-top-offers-domain.mjs';
 import * as Storage from './clickbank-top-offers-storage.mjs?v=3';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=6';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=7';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -8,9 +8,11 @@ import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
+import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 
 const root = document.querySelector('#clickbankTopOffersRoot');
 let captures = [], offerMetadata = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
+mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
   addTrendCandidate,removeTrendCandidate,addManualCountry,saveImage,saveImageSearchTerm,

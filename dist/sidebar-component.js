@@ -5,6 +5,7 @@
     { id: 'operation', label: 'Operação', items: [
       { key: 'overview', label: 'Visão geral', view: 'totals', href: '/' },
       { key: 'preparer', label: 'Preparador MCC', href: '/preparador-MCC/?v=20260923-sidebar' },
+      { key: 'tested', label: 'Produtos testados', view: 'tested', href: '/?view=tested' },
     ] },
     { id: 'analysis', label: 'Análises', items: [
       { key: 'cpa', label: 'Análise por faixa de CPA', view: 'cpa', href: '/?view=cpa' },
@@ -43,11 +44,10 @@
     if (activePage) {
       const group = groups.find(item => item.items.some(link => link.key === activePage));
       if (group) return group.id;
-      if (activePage === 'tested' || activePage === 'journal') return 'products';
+      if (activePage === 'journal') return 'operation';
     }
     if (root.dataset.hubSidebarMode === 'app' && window.PanelViews) {
       const view = window.PanelViews.resolveRoute(location.href);
-      if (view.id === 'tested') return 'products';
       return groups.find(group => group.items.some(item => item.view === view.id))?.id || 'operation';
     }
     return '';
@@ -68,33 +68,9 @@
   function groupMarkup(group, mode, activeKey) {
     const bodyId = `hubMenu${group.id[0].toUpperCase()}${group.id.slice(1)}`;
     const links = group.items.map(item => itemMarkup(item, mode, activeKey)).join('');
-    const products = group.id === 'operation' ? productsMarkup(mode, activeKey) : '';
     return `<section class="hub-menu-group collapsed" data-sidebar-group="${group.id}">
       <button class="hub-menu-toggle" type="button" data-sidebar-toggle="${group.id}" aria-expanded="false" aria-controls="${bodyId}"><span>${escapeHtml(group.label)}</span><span class="hub-menu-chevron" aria-hidden="true">›</span></button>
-      <div class="hub-menu-body" id="${bodyId}">${links}${products}</div>
-    </section>`;
-  }
-
-  function productsMarkup(mode, activeKey) {
-    const bodyId = 'hubMenuProducts';
-    if (mode === 'app') {
-      return `<section id="campaignSidebarTools" class="hub-menu-group hub-menu-products collapsed" data-sidebar-group="products">
-        <button class="hub-menu-toggle" type="button" data-sidebar-toggle="products" aria-expanded="false" aria-controls="${bodyId}"><span>Produtos</span><span class="hub-menu-chevron" aria-hidden="true">›</span></button>
-        <div class="hub-menu-body" id="${bodyId}">
-          ${itemMarkup({ key: 'tested', label: 'Produtos testados', view: 'tested', href: '/?view=tested' }, mode, activeKey)}
-          <span class="hub-menu-subhead">Diário de campanha</span>
-          <div class="list-tabs"><button id="activeListTab" class="active" type="button">Ativas</button><button id="historyListTab" type="button">Histórico</button></div>
-          <input id="search" class="search" type="search" placeholder="Buscar campanha">
-          <div id="campaignList" class="campaign-list"></div>
-        </div>
-      </section>`;
-    }
-    return `<section class="hub-menu-group hub-menu-products collapsed" data-sidebar-group="products">
-      <button class="hub-menu-toggle" type="button" data-sidebar-toggle="products" aria-expanded="false" aria-controls="${bodyId}"><span>Produtos</span><span class="hub-menu-chevron" aria-hidden="true">›</span></button>
-      <div class="hub-menu-body" id="${bodyId}">
-        ${itemMarkup({ key: 'tested', label: 'Produtos testados', view: 'tested', href: '/?view=tested' }, mode, activeKey)}
-        ${itemMarkup({ key: 'journal', label: 'Diário de campanha', href: '/' }, mode, activeKey)}
-      </div>
+      <div class="hub-menu-body" id="${bodyId}">${links}</div>
     </section>`;
   }
 
@@ -127,10 +103,9 @@
   function setOpenGroup(name, persist = true) {
     const allGroups = [...document.querySelectorAll('[data-sidebar-group]')];
     const topGroups = allGroups.filter(group => !group.parentElement.closest('[data-sidebar-group]'));
-    const productGroups = allGroups.filter(group => group.dataset.sidebarGroup === 'products' && group.parentElement.closest('[data-sidebar-group="operation"]'));
+    // Keep old saved preferences and callers compatible without rendering a Products subgroup.
     const topName = name === 'products' ? 'operation' : name;
     for (const group of topGroups) setGroupExpanded(group, group.dataset.sidebarGroup === topName, persist);
-    for (const group of productGroups) setGroupExpanded(group, name === 'products', persist);
     if (persist) {
       try { name ? localStorage.setItem(STORAGE_KEY, name) : localStorage.removeItem(STORAGE_KEY); } catch {}
     }
@@ -207,10 +182,7 @@
       const toggle = event.target.closest('[data-sidebar-toggle]');
       if (!toggle) return;
       const group = toggle.closest('[data-sidebar-group]');
-      const isProductsSubgroup = group.dataset.sidebarGroup === 'products' && group.parentElement.closest('[data-sidebar-group="operation"]');
-      setOpenGroup(isProductsSubgroup
-        ? group.classList.contains('collapsed') ? 'products' : 'operation'
-        : group.classList.contains('collapsed') ? toggle.dataset.sidebarToggle : '');
+      setOpenGroup(group.classList.contains('collapsed') ? toggle.dataset.sidebarToggle : '');
     });
   }
 

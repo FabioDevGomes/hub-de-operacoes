@@ -58,18 +58,18 @@ export function mountClickBankTopOffersView({root, actions}) {
   function trendBadge(item) {
     const latest=trendLatest(item),label=Trends.resultLabel(latest?.status),candidateMarker=KeywordCandidatesUI.keywordCandidateMarkerHtml(trendsFor(item).keywordCandidates?.length||0,'positive');
     const context=[...(latest?.countries||[])].slice(0,5).join(', '),text=context?`${label} · ${context}`:label;
-    return `<button type="button" class="table-action trends-badge ${escape(latest?.status || '')}" data-action="trends" data-key="${escape(item.offerKey)}" title="Abrir Google Trends">${escape(text)}${candidateMarker}</button>`;
+    return `<button type="button" class="table-action trends-badge ${escape(latest?.status || '')}" data-action="trends" data-key="${escape(item.offerKey)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(text)}${candidateMarker}</button>`;
   }
   function glimpseBadge(item) {
     const analysis=glimpseFor(item);
-    return `<button type="button" class="table-action glimpse-badge ${analysis?'saved':''}" data-action="glimpse" data-key="${escape(item.offerKey)}" title="${escape(analysis?'Última análise '+dateTime(analysis.capturedAt):'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
+    return `<button type="button" class="table-action glimpse-badge ${analysis?'saved':''}" data-action="glimpse" data-key="${escape(item.offerKey)}" data-curation-focus="glimpse" title="${escape(analysis?'Última análise '+dateTime(analysis.capturedAt):'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
   }
   function imageBadge(item) {
     const progress=imageProgress(item),latest=[...progress.latest.values()].sort((a,b)=>String(b.capturedAt||'').localeCompare(String(a.capturedAt||'')))[0];
     const label=progress.total?`${progress.done} de ${progress.total}`:Images.resultLabel(latest?.status);
     const hasCandidates=[...progress.latest.values()].some(record=>(record.negativeKeywordCandidates||record.relatedProducts||[]).some(value=>String(value??'').trim()));
     const marker=KeywordCandidatesUI.keywordCandidateMarkerHtml(hasCandidates?1:0,'negative');
-    return `<button type="button" class="table-action image-badge ${escape(latest?.status || '')}" data-action="images" data-key="${escape(item.offerKey)}" title="Abrir Google Imagens">${escape(label)}${marker}</button>`;
+    return `<button type="button" class="table-action image-badge ${escape(latest?.status || '')}" data-action="images" data-key="${escape(item.offerKey)}" data-curation-focus="images" title="Abrir Google Imagens">${escape(label)}${marker}</button>`;
   }
 
   function renderTable(selected, previous) {
@@ -84,7 +84,7 @@ export function mountClickBankTopOffersView({root, actions}) {
       const left=get(a),right=get(b),compare=typeof left==='string'?left.localeCompare(right):left-right;
       return sortDirection==='asc'?compare:-compare;
     });
-    $('#rows',root).innerHTML=offers.map(item=>`<tr class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
+    $('#rows',root).innerHTML=offers.map(item=>`<tr data-offer="${escape(item.offerKey)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
       <td class="number">${escape(item.rank)}</td><td class="offer-name">${escape(item.offerName)}</td><td>${escape(item.seller)}</td>
       <td>${trendBadge(item)}</td><td>${glimpseBadge(item)}</td><td>${imageBadge(item)}</td>
       <td class="number">${escape(metricText(item.average))}</td><td class="number">${escape(metricText(item.initial))}</td>

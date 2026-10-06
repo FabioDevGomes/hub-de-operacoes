@@ -45,18 +45,15 @@ test('Macro month controls preserve selection when data is refreshed',()=>{
   h.get('#macroNextMonth').onclick();assert.equal(h.state.macroMonth,'2026-09');
   h.get('#macroCurrentMonth').onclick();assert.equal(h.state.macroMonth,domain.currentMonth());
 });
-test('Macro highlights only the month label and aligns its height with the navigation buttons',async()=>{
+test('Macro uses the compact shared navigator and keeps the current-month action outside it',async()=>{
   const css=await readFile(new URL('../src/control-macro/control-macro.css',import.meta.url),'utf8');
   const nav=css.match(/\.macro-month-nav\{([^}]+)\}/)?.[1];
-  const label=css.match(/\.macro-month-label\{([^}]+)\}/)?.[1];
   assert.match(template,/class="macro-month-nav" role="group" aria-label="Navegação por mês"/);
   assert.match(nav,/background:transparent/);
-  assert.match(nav,/align-items:stretch/);
+  assert.match(nav,/align-items:center/);
   assert.match(nav,/border:0/);
-  assert.doesNotMatch(nav,/padding:6px/);
-  assert.match(label,/background:color-mix\(in srgb,var\(--panel2\) 82%,var\(--blue\)\)/);
-  assert.match(label,/align-items:center;justify-content:center/);
-  assert.match(label,/min-height:38px/);
+  assert.match(template, /class="hub-month-navigation"[\s\S]*?id="macroMonthLabel" class="hub-month-label"[\s\S]*?<\/div>\s*<button id="macroCurrentMonth" class="btn hub-month-current"/);
+  assert.doesNotMatch(css,/\.macro-month-label\{/);
   assert.match(css,/@media\(max-width:700px\).*\.macro-month-nav\{[^}]*flex-wrap:wrap/s);
 });
 test('Macro empty state, zero and missing values remain distinct',()=>{

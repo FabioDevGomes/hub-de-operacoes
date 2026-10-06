@@ -16,8 +16,10 @@ for (const id of ['clickbankTopOffersRoot','openImport','captureSelect','capture
 }
 assert.ok(page.includes('data-hub-sidebar-active="clickbank-top-offers"'));
 assert.ok(page.includes('Curadoria · ClickBank') && page.includes('Top Offers CB'));
-assert.ok(page.includes('./clickbank-top-offers-page.mjs?v=7'));
-assert.ok(controller.includes('./clickbank-top-offers-view.mjs?v=6'));
+assert.ok(page.includes('./clickbank-top-offers-page.mjs?v=8'));
+assert.ok(controller.includes('./clickbank-top-offers-view.mjs?v=7'));
+assert.ok(controller.includes("mountCurationListFocus('clickbank-top-offers'")&&controller.includes("blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'")&&controller.includes('highlightOnCapture:false'),'a lista captura o controle acionado e só pisca ao retornar da ficha/modal');
+assert.ok(controller.includes('list-focus.mjs?v=2'),'o retorno usa a versão atualizada do helper compartilhado');
 assert.match(view, /const \$ = \(selector,\s*root\) => root\.querySelector\(selector\);/, 'a busca singular recebe o seletor antes da raiz, como fazem os consumidores da view');
 const rootStart = page.indexOf('<main id="clickbankTopOffersRoot">'), rootEnd = page.indexOf('</main>');
 assert.ok(rootStart < page.indexOf('id="offerSheet"') && page.indexOf('id="offerSheet"') < rootEnd, 'a ficha fica sob a raiz da view');
@@ -36,6 +38,8 @@ for (const label of ['Google Trends','Glimpse','Imagens']) assert.ok(page.includ
 for (const key of ['trends','glimpse','images']) assert.ok(view.includes(`data-action="${key}"`), `coluna/ação ${key} ausente`);
 assert.ok(page.includes('<th>Decisão</th>') && view.includes('DecisionUI.buttonHtml'), 'a tabela tem uma coluna de decisão');
 assert.ok(view.includes('DecisionUI.openDecisionPicker') && controller.includes('Storage.putDecision(stored)'), 'a decisão é escolhida e salva exclusivamente em Top Offers CB');
+assert.match(view, /<tr data-offer="\$\{escape\(item\.offerKey\)\}"/,'cada linha expõe sua identidade estável para restaurar rolagem e destaque');
+for(const [kind,badge] of [['trends','trendBadge'],['glimpse','glimpseBadge'],['images','imageBadge']]) assert.match(view,new RegExp(`function ${badge}[\\s\\S]*?data-curation-focus="${kind}"`),`${kind} registra o controle acionado para piscar no retorno`);
 assert.ok(controller.includes('Decisão salva somente em Top Offers CB'), 'a interface deixa claro o escopo da decisão');
 assert.ok(view.includes('renderResultButtons') && view.includes('renderProductAgeButtons') && view.includes('renderImageResultButtons'), 'reutiliza os componentes compartilhados de Trends e Imagens');
 assert.ok(view.includes('showRemoveForSaved:true'), 'candidatas negativas mantêm o X visível depois de reabrir a ficha');
@@ -48,6 +52,7 @@ console.log('clickbank top offers ui ok');
 
 assert.match(page, /data-panel="glimpse"><iframe id="glimpseFrame"/, 'Glimpse acompanha GM sem cartão externo redundante');
 assert.match(controller, /event.origin!==location.origin\|\|event.source!==frame.contentWindow/, 'resize/retorno do iframe têm origem e janela validadas');
+assert.match(sharedCss, /curation-focus-row-pulse/,'a linha usa a animação compartilhada em azul-claro');
 assert.match(controller, /hub-glimpse-resize[\s\S]*Math.max\(320,Math.ceil\(height\)\)/, 'altura incorpora conteúdo completo sem scroll interno');
 assert.match(page, /id="finishImages" class="btn image-search-button"/, 'concluir usa o CTA azul compartilhado, sem primary verde concorrente');
 assert.match(view, /\$\('#finishImages',root\)\.onclick=closeSheet/, 'concluir apenas fecha, sem salvar novamente');

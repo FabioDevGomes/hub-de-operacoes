@@ -18,14 +18,14 @@ export async function mount({root,getOperationalEvents=()=>[]}={}){
     </section>
     <section class="curobs-panel">
       <div class="curobs-filters">
-        <label>Produto exato<input data-filter="productName" type="search" placeholder="Nome do produto" autocomplete="off"></label>
-        <label>Origem<select data-filter="origin"><option value="">Todas</option><option value="guru-media-lista-gerente">Lista de Gerente</option><option value="guru-media-ecommerce-gm">E-commerce GM</option><option value="smartadv-offers">SmartAdv</option></select></label>
-        <label>Tipo<select data-filter="eventType"><option value="">Todos</option><option value="trends_saved">Trends salvo</option><option value="images_saved">Imagens salvo</option><option value="glimpse_completed">Glimpse concluído</option><option value="decision_changed">Decisão alterada</option><option value="snapshot_decisao_created">Snapshot de decisão</option></select></label>
-        <label>Decisão<select data-filter="decisionStatus"><option value="">Todas</option><option>Não definido</option><option>Subir campanha</option><option>Campanha no ar</option><option>Revisar</option><option>Ocultar</option></select></label>
-        <label>Correlação<select data-filter="correlationStatus"><option value="">Todos</option><option value="pending">Pendente</option><option value="confirmed">Confirmada</option></select></label>
+        <label>Produto exato<input class="search hub-search-filter hub-search-filter--fill" data-filter="productName" type="search" placeholder="Nome do produto" autocomplete="off"></label>
+        <label>Origem<select class="hub-table-filter" data-filter="origin"><option value="">Todas</option><option value="guru-media-lista-gerente">Lista de Gerente</option><option value="guru-media-ecommerce-gm">E-commerce GM</option><option value="smartadv-offers">SmartAdv</option></select></label>
+        <label>Tipo<select class="hub-table-filter" data-filter="eventType"><option value="">Todos</option><option value="trends_saved">Trends salvo</option><option value="images_saved">Imagens salvo</option><option value="glimpse_completed">Glimpse concluído</option><option value="decision_changed">Decisão alterada</option><option value="snapshot_decisao_created">Snapshot de decisão</option></select></label>
+        <label>Decisão<select class="hub-table-filter" data-filter="decisionStatus"><option value="">Todas</option><option>Não definido</option><option>Subir campanha</option><option>Campanha no ar</option><option>Revisar</option><option>Ocultar</option></select></label>
+        <label>Correlação<select class="hub-table-filter" data-filter="correlationStatus"><option value="">Todos</option><option value="pending">Pendente</option><option value="confirmed">Confirmada</option></select></label>
       </div>
       <div class="curobs-list-head"><span data-count>Carregando histórico…</span><span data-load-time></span></div>
-      <div class="curobs-table-wrap"><table class="curobs-table"><thead><tr><th>Data/hora</th><th>Produto</th><th>Origem · Offer ID</th><th>Registro</th><th>Trends</th><th>Imagens</th><th>Glimpse</th><th>Decisão</th><th>Correlação</th><th></th></tr></thead><tbody data-rows></tbody></table></div>
+      <div class="curobs-table-wrap"><table class="curobs-table hub-table-layout"><thead><tr><th>Data/hora</th><th>Produto</th><th>Origem · Offer ID</th><th>Registro</th><th>Trends</th><th>Imagens</th><th>Glimpse</th><th>Decisão</th><th>Correlação</th><th></th></tr></thead><tbody data-rows></tbody></table></div>
       <div class="curobs-empty" data-empty hidden></div>
       <div class="curobs-pager"><button class="curobs-button" data-prev type="button" disabled>← Anterior</button><span data-page-label>Página 1</span><button class="curobs-button" data-next type="button" disabled>Próxima →</button></div>
     </section>

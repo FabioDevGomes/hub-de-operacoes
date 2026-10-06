@@ -16,3 +16,7 @@ html body .history-pill{border:0}
 .tablewrap table{min-width:1620px}
 #offerSheet .message:empty{display:none}
 #offerSheet .message.error{color:var(--smartadv-red)}
+.capture-toolbar{flex-wrap:wrap}
+.capture-toolbar .hub-column-picker{margin-left:auto}
+.capture-toolbar:has(.hub-column-picker[open]){position:relative;z-index:30}
+.tablewrap table[data-column-selection="custom"]{min-width:0}

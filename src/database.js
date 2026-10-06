@@ -200,6 +200,17 @@
     if(!Number.isFinite(minimum)||minimum<=-100)throw new Error('O ROI mínimo deve ser um número maior que -100%.');
     campaign.roi_minimo_pct=minimum;base.atualizado_em=new Date().toISOString();return base;
   }
+  function setCampaignCommissionTestPercent(baseInput,campaignId,value){
+    const base=normalize(baseInput),campaign=base.campanhas.find(item=>item.id===campaignId);
+    if(!campaign)throw new Error('Campanha não encontrada para editar o limite de teste.');
+    if(typeof value!=='number'||!Number.isFinite(value)||value<=0)throw new Error('Informe um percentual da comissão maior que zero.');
+    campaign.limite_teste_comissao_pct=value;base.atualizado_em=new Date().toISOString();return base;
+  }
+  function setRemainingAlertThreshold(baseInput,value,yellowValue){
+    if(typeof value!=='number'||!Number.isFinite(value)||value<0)throw new Error('Informe um valor mínimo de alerta em reais, maior ou igual a zero.');
+    if(yellowValue!==undefined&&yellowValue!==null&&(typeof yellowValue!=='number'||!Number.isFinite(yellowValue)||yellowValue<0))throw new Error('Informe um valor mínimo amarelo em reais, maior ou igual a zero, ou deixe em branco.');
+    const base=normalize(baseInput);base.valor_restante_alerta_minimo=Math.round(value*100)/100;if(yellowValue!==undefined)base.valor_restante_alerta_amarelo_minimo=yellowValue===null?null:Math.round(yellowValue*100)/100;base.atualizado_em=new Date().toISOString();return base;
+  }
   function reconcileCampaignSnapshots(baseInput,snapshotsInput){
     const base=normalize(baseInput),previousStatus=new Map(base.campanhas.filter(x=>x.nome_mcc).map(x=>[x.nome_mcc.toLowerCase(),x.status])),capturedAt=new Date().toISOString();
     for(const source of snapshotsInput||[]){const date=String(source?.data||'').trim(),names=[...new Set((source?.campanhas||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));if(!date||!names.length)continue;const snapshot={...clone(source),data:date,capturada_em:source.capturada_em||capturedAt,campanhas:names},sameIndex=base.snapshots_campanhas.findIndex(x=>x.data===date);if(sameIndex>=0)base.snapshots_campanhas[sameIndex]=snapshot;else base.snapshots_campanhas.push(snapshot)}
@@ -453,5 +464,5 @@
     }
     return map;
   }
-  window.CampaignDatabase={SCHEMA,create,normalize,mergeEventLogs,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,salesAdjustmentMap};
+  window.CampaignDatabase={SCHEMA,create,normalize,mergeEventLogs,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,salesAdjustmentMap};
 })();

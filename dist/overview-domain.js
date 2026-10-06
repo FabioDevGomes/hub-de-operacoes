@@ -1,6 +1,35 @@
 (function(root){
   function numeric(value){if(value==null||value==='')return null;const number=Number(value);return Number.isFinite(number)?number:null}
   function money(value){return Math.round(value*100+Math.sign(value)*1e-8)/100}
+  function manifestMccCoverage(base,manifest,dates={}){
+    // Manager IDs are distinct from client accounts. Only exact period/date evidence counts.
+    const managerId=value=>{const digits=String(value??'').trim().replace(/-/g,'');return /^\d{10}$/.test(digits)?digits:null},known=new Set(),received={d1:new Set(),d0:new Set()},periodDates={d1:manifestDate(dates.d1),d0:manifestDate(dates.d0)};
+    const remember=value=>{const id=managerId(value);if(id)known.add(id);return id};
+    const mark=(value,period,date)=>{const id=remember(value);if(id&&periodDates[period]&&manifestDate(date)===periodDates[period])received[period].add(id)};
+    for(const manager of base?.mccs||[])remember(manager.id);
+    const campaignsById=new Map();for(const campaign of base?.campanhas||[]){remember(campaign.mcc_id);campaignsById.set(campaign.id,campaign)}
+    const temporal=manifest?.separacao_temporal||{},owner=remember(manifest?.identificacao_mcc?.id);
+    for(const [period,role,field] of [['d1','D_menos_1','metricas_D_menos_1'],['d0','D_zero','metricas_D_zero']]){
+      // Top-level dates belong to the incoming manager, not all retained managers.
+      for(const date of temporal[role]?.datas_detectadas||[])mark(owner,period,date);
+      for(const campaign of manifest?.campanhas||[]){
+        const id=remember(campaign.mcc_id)||(manifest?.escopo_contas?.consolidado?null:owner),metrics=campaign[field];
+        if(!metrics||metrics.presente===false)continue;
+        const date=manifestDate(metrics.data,temporal[role]?.datas_detectadas?.[0]);
+        if(Array.isArray(campaign.datas_coleta)&&!campaign.datas_coleta.some(value=>manifestDate(value)===date))continue;
+        if(metrics.presente===true||['impressoes','cliques_google','custo_total','conversoes'].some(key=>manifestField(metrics[key])!=null))mark(id,period,date);
+      }
+    }
+    for(const [id,capture] of Object.entries(manifest?.cobertura_D_zero_por_mcc||{}))mark(id,'d0',capture?.data);
+    // Stored D−1 uploads remain provable after a D0-only update of the same manager.
+    for(const row of base?.diario||[]){
+      if(!row.fontes?.includes('manifesto'))continue;
+      for(const period of ['d1','d0'])if(row.periodos?.includes(period)&&row.data===periodDates[period])mark(campaignsById.get(row.campanha_id)?.mcc_id,period,row.data);
+    }
+    const expectedCount=Math.max(2,known.size),result={};
+    for(const period of ['d1','d0'])result[period]={date:periodDates[period],receivedCount:received[period].size,expectedCount,complete:Boolean(periodDates[period]&&received[period].size===expectedCount)};
+    return result;
+  }
   function manifestCaptureInfo(manifest){
     const captures=[manifest?.captura_D_zero?.capturada_em,manifest?.captura_D_menos_1?.capturada_em].filter(value=>typeof value==='string'&&value.trim()&&Number.isFinite(Date.parse(value)));
     if(captures.length)return{timestamp:captures.reduce((latest,value)=>Date.parse(value)>Date.parse(latest)?value:latest),source:'capture'};
@@ -56,9 +85,9 @@
   }
   function profitForTotals(totals){if(!totals)return null;const investment=numeric(totals.investment),commission=numeric(totals.commission);if(investment==null||commission==null)return null;return money(commission-investment)}
   function totalsColumns(mode,totalLabel='total'){
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI na 1ª venda'],['saleRoiSecond','ROI na 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
   }
-  const columnWidths=Object.freeze({date:52,campaign:250,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:110,limit:130,remaining:106,status:82});
+  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,limit:140,remaining:102,status:82});
   function visibleColumns(columns,selected){
     return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
   }
@@ -95,7 +124,14 @@
     }
     return exact;
   }
-  function deriveTestBudget({commission,commissionCurrency,exchangeRate,conversions,sales,revenue,investment,minimumRoiOverride}={}){
+  function parseCommissionTestPercent(value){const percent=parseMinimumRoi(value);if(percent<=0)throw new Error('O percentual da comissão destinado ao teste deve ser maior que zero.');return percent}
+  function testLimitForCommission(commissionBrl,percent){const commission=numeric(commissionBrl);if(!(commission>0))throw new Error('Não há comissão válida para calcular o limite de teste.');return money(commission*parseCommissionTestPercent(percent)/100)}
+  function percentForCommissionLimit(commissionBrl,value){const commission=numeric(commissionBrl),limit=parseTestLimit(value);if(!(commission>0))throw new Error('Não há comissão válida para calcular o percentual.');const exact=limit/commission*100;for(let decimals=2;decimals<=10;decimals++){const factor=10**decimals,candidate=Math.round(exact*factor)/factor;if(candidate>0&&testLimitForCommission(commission,candidate)===money(limit))return candidate}return parseCommissionTestPercent(exact)}
+  function parseRemainingAlert(value){const text=String(value??'').trim();if(/^(?:0+(?:[.,]0+)?|R\$\s*0+(?:[.,]0+)?)$/.test(text))return 0;return money(parseTestLimit(value))}
+  function remainingAlertThreshold(value){const threshold=numeric(value);return threshold!=null&&threshold>=0?threshold:140}
+  function remainingWarningThreshold(value){const threshold=numeric(value);return threshold!=null&&threshold>=0?threshold:null}
+  function remainingAlertTone(value,redMinimum,yellowMinimum){const amount=numeric(value);if(amount==null)return'';if(amount<remainingAlertThreshold(redMinimum))return'negative';const warning=remainingWarningThreshold(yellowMinimum);return warning!=null&&amount<warning?'remaining-warning':''}
+  function deriveTestBudget({commission,commissionCurrency,exchangeRate,conversions,sales,revenue,investment,minimumRoiOverride,cpaPercent,commissionTestPercentOverride}={}){
     const payout=numeric(commission),rate=numeric(exchangeRate),conversionCount=numeric(conversions),manualSaleCount=numeric(sales),actualRevenue=numeric(revenue),spent=numeric(investment);
     if(conversionCount==null&&!(manualSaleCount>0))return null;
     const saleCount=Math.max(0,conversionCount??0,manualSaleCount??0);
@@ -110,6 +146,7 @@
     if(saleCount===0){
       if(payoutBrl==null||payoutBrl<=0)return null;
       limit=payoutBrl;
+      if(numeric(cpaPercent)>=90){const override=numeric(commissionTestPercentOverride),commissionTestPercent=override>0?override:50;limit=testLimitForCommission(payoutBrl,commissionTestPercent);return{limit,remaining:spent==null?null:money(limit-spent),minimumRoi,salesCount:saleCount,revenue:totalRevenue,cpaPercent:numeric(cpaPercent),commissionTestPercent,commissionBrl:payoutBrl}}
     }else{
       if(totalRevenue==null||totalRevenue<0)return null;
       limit=totalRevenue/(1+minimumRoi/100);
@@ -122,6 +159,9 @@
        rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?av.localeCompare(bv,'pt-BR',{numeric:true,sensitivity:'base'}):av-bv;return state.sortDir==='asc'?result:-result});
     return rows;
   }
-  function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&paused||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
-  root.OverviewDomain=Object.freeze({manifestCaptureInfo,sortRows,rowVisible,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns});
+  function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',historical=row.c._status==='historico',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&(paused||historical)||filter==='history'&&!paused&&!historical||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
+  // Navigation-only entries preserve the old History access without inventing MCC metrics.
+  function historyNavigationRows(entries=[],operationalRows=[]){return entries.filter(entry=>entry.source==='legacy'||!operationalRows.some(row=>entry.id?row.campaignId===entry.id:row.c?.nome_campanha_exato===entry.name)).map(entry=>({c:{nome_campanha_exato:entry.exactName||entry.name,_status:'historico'},identity:{name:entry.label||entry.name,dateLabel:'—',dateSort:null},campaignId:entry.id||null,diaryName:entry.name,diarySource:entry.source||'workbook',totals:null,d0Totals:{},zeroDays:null,roi:null,profit:null,historyEntry:true}))}
+  function searchRows(rows,query){const term=String(query??'').trim().toLocaleLowerCase('pt-BR');return (rows||[]).filter(row=>!term||`${row.c?.nome_campanha_exato||''} ${row.identity?.name||''}`.toLocaleLowerCase('pt-BR').includes(term))}
+  root.OverviewDomain=Object.freeze({manifestMccCoverage,manifestCaptureInfo,sortRows,searchRows,rowVisible,historyNavigationRows,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns});
 })(typeof window==='object'?window:globalThis);

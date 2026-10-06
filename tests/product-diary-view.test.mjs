@@ -13,7 +13,7 @@ function setup(initial){
     actions:{setTitle:(...args)=>titles.push(args)}});
   return {...dom,titles,requests,controller,setSnapshot:value=>snapshot=value};
 }
-const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesByDate:new Map(),summary:null,pauseConfirmedAt:null,investment:null});
+const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesByDate:new Map(),summary:null,pauseConfirmedAt:null,investment:null,clicks:null,conversions:null});
 test('native diary preserves columns, empty data, escaping and selection arguments',()=>{
   const s=setup(empty());s.controller.render('MCC exata','workbook','campaign-123');
   assert.deepEqual(s.requests,[['MCC exata','workbook','campaign-123']]);
@@ -25,15 +25,41 @@ test('native diary preserves columns, empty data, escaping and selection argumen
 test('manual-sale rows remain display-only, official zero separate, formats preserved',()=>{
   const rows=[{date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:4},F:{value:0},E:{value:0.25},O:{value:12.34},Q:{value:'<observação>'}}}];
   const adjustments=new Map([['2026-09-29',{pendingConversions:1}],['2026-09-30',{pendingConversions:2}]]),before=JSON.stringify(rows);
-  const s=setup({...empty(),rows,displayRows:rows,manualSalesByDate:adjustments,investment:0});
+  const s=setup({...empty(),rows,displayRows:rows,manualSalesByDate:adjustments,investment:0,clicks:4,conversions:3});
   s.controller.render('MCC exata');
   const html=s.get('#productBody').innerHTML;
   assert.equal((html.match(/class="has-sales"/g)||[]).length,2);assert.match(html,/<span>0<\/span><small[^>]*>\+1 manual · provisória/);
   assert.match(html,/25%/);assert.match(html,/12.34/);assert.match(html,/&lt;observação&gt;/);
-  assert.match(s.get('#productSummary').innerHTML,/<span>Conversões<\/span><strong>0<\/strong>/);
+  assert.match(s.get('#productSummary').innerHTML,/<span>Conversões · total<\/span><strong>3<\/strong>/);
   assert.match(s.get('#productSummary').innerHTML,/BRL 0.00/);assert.equal(s.get('#rowCount').textContent,'2 dias');
   assert.equal(JSON.stringify(rows),before);assert.equal(rows.length,1);assert.equal(rows[0].cells.F.value,0);
   s.controller.render('MCC exata');assert.equal(s.get('#productBody').innerHTML,html);
+});
+
+test('diary totals preserve absence, zero and numeric values without treating invalid cells as zero',()=>{
+  assert.equal(JSON.stringify(domain.productDiaryTotals([])),JSON.stringify({investment:null,clicks:null,conversions:null}));
+  const rows=[{cells:{O:{value:0},C:{value:'0'},F:{value:0}}},{cells:{O:{value:''},C:{value:' '},F:{value:'inválido'}}},{cells:{O:{value:Infinity},C:{value:false},F:{value:null}}}];
+  assert.equal(JSON.stringify(domain.productDiaryTotals(rows)),JSON.stringify({investment:0,clicks:0,conversions:0}));
+  assert.equal(JSON.stringify(domain.productDiaryTotals(rows.slice(1))),JSON.stringify({investment:null,clicks:null,conversions:null}));
+});
+
+test('diary cards show accumulated investment, Google clicks and conversions even when latest day is zero',()=>{
+  const rows=[{date:'2026-09-29',cells:{O:{value:34.22},C:{value:4},F:{value:1}}},{date:'2026-09-30',cells:{O:{value:'54.82'},C:{value:'5'},F:{value:1}}},{date:'2026-10-01',cells:{O:{value:0},C:{value:0},F:{value:0}}}];
+  const before=JSON.stringify(rows),totals=domain.productDiaryTotals(rows);
+  const s=setup({...empty(),rows,displayRows:rows,...totals});s.controller.render('Campanha histórica','workbook','id');
+  const html=s.get('#productSummary').innerHTML;
+  assert.match(html,/<span>Investimento total<\/span><strong>BRL 89.04<\/strong>/);
+  assert.match(html,/<span>Cliques Google · total<\/span><strong>9<\/strong>/);
+  assert.match(html,/<span>Conversões · total<\/span><strong>2<\/strong>/);
+  assert.doesNotMatch(html,/Investimento atual/);assert.equal(JSON.stringify(rows),before);
+});
+
+test('diary totals use inclusive pause cutoff and only unconfirmed manual-sale excess without modifying official cells',()=>{
+  const rows=[{date:'2026-09-29',cells:{O:{value:0.1},C:{value:3},F:{value:1}}},{date:'2026-09-30',cells:{O:{value:0.2},C:{value:2},F:{value:0}}},{date:'2026-10-02',cells:{O:{value:999},C:{value:999},F:{value:99}}}],
+    pending=new Map([['2026-09-29',{pendingConversions:0}],['2026-09-30',{pendingConversions:1}],['2026-10-01',{pendingConversions:2}],['2026-10-02',{pendingConversions:4}]]),before=JSON.stringify(rows);
+  assert.equal(JSON.stringify(domain.productDiaryTotals(rows,'2026-10-01',pending)),JSON.stringify({investment:0.3,clicks:5,conversions:4}));
+  assert.equal(JSON.stringify(rows),before);assert.equal(rows[1].cells.F.value,0);
+  assert.equal(domain.productDiaryTotals([],null,new Map([['2026-09-30',{pendingConversions:2}]])).conversions,2);
 });
 test('confirmed pause marks its diary date and hides later daily and provisional rows without mutating history',()=>{
   const rows=[

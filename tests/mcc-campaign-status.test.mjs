@@ -80,37 +80,13 @@ const visibleRows = viewContext.derivedContext().campaigns;
 assert.equal(visibleRows.filter(item => item._status === 'ativa').length, 1, 'a Visão Geral não pode marcar todas as linhas do manifesto como ativas');
 assert.equal(visibleRows.find(item => item.nome_campanha_exato === 'Oferta pausa').metricas_D_menos_1.conversoes.valor, 1, 'a linha pausada conserva as métricas oficiais');
 
-// Exercise the actual sidebar and overview renderers, not only derived status.
+// Exercise the Overview renderer, now the entry point to the campaign diary.
 const historicalBase=db.normalize(result.base);
 historicalBase.campanhas.push({id:'old_paused',nome_mcc:'Pausa antiga',nome_exibicao:'Pausa antiga',status:'pausada',pausada_em:'2026-09-10'});
 viewContext.state.database=historicalBase;
-viewContext.state.listMode='active';
 viewContext.state.campaignStatusFilter='active';
 viewContext.state.sortKey='current';
 viewContext.state.sortDir='desc';
-const classes=initial=>{
-  const values=new Set(initial);
-  return {contains:key=>values.has(key),add:key=>values.add(key),toggle(key,enabled){if(enabled)values.add(key);else values.delete(key);}};
-};
-const elements=new Map();
-viewContext.$=selector=>{
-  if(!elements.has(selector))elements.set(selector,{value:'',innerHTML:'',textContent:'',classList:classes([])});
-  return elements.get(selector);
-};
-let filterRows=[];
-viewContext.$$=selector=>selector==='#totalsBody tr'?filterRows:[];
-viewContext.campaignSheet=name=>name;
-viewContext.esc=String;
-viewContext.hiddenSheets=()=>[{id:'old_paused',name:'Pausa antiga',status:'pausada',source:'database'}];
-vm.runInContext(template.match(/function renderSidebar\([^\n]+/)[0],viewContext);
-viewContext.renderSidebar();
-assert.match(elements.get('#campaignList').innerHTML,/Oferta ativa/);
-assert.doesNotMatch(elements.get('#campaignList').innerHTML,/Oferta pausa|Oferta removida|Só ontem|Estado no status|Pausa antiga/,'Diário Ativas excludes paused, removed and D−1-only campaigns');
-elements.get('#search').value='pausa';viewContext.renderSidebar();
-assert.match(elements.get('#campaignList').innerHTML,/Nenhum item encontrado/,'search cannot reintroduce a paused campaign into Ativas');
-viewContext.state.listMode='history';viewContext.renderSidebar();
-assert.match(elements.get('#campaignList').innerHTML,/Pausa antiga/,'historical sidebar remains available');
-elements.get('#search').value='';
 const {createRoot,format}=await import('./helpers/view-dom.mjs');
 const overviewDom=createRoot(),overviewContext=vm.createContext({window:{}});
 vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),overviewContext);
@@ -133,7 +109,6 @@ for(const mode of ['consolidated','d1','d0']){
     viewContext.state.campaignStatusFilter=filter;overview.render();
     const rendered=[...overviewDom.get('#totalsBody').innerHTML.matchAll(/<tr class="([^"]*)" /g)];
     assert.equal(rendered.filter(row=>!row[1].split(' ').includes('hidden')).length,expected,`${mode}/${filter} filters the correct operational status`);
-    assert.equal(overviewDom.get('#totalsCount').textContent,'1 ativas · 5 pausadas','counter must count statuses, not the five raw manifest records');
     assert.match(overviewDom.get('#kpis').innerHTML,/<span class="kpi-label">Ativas<\/span><strong class="overview-kpi-detail-value">1<\/strong>/);
     assert.match(overviewDom.get('#kpis').innerHTML,/<span class="kpi-label">Pausadas<\/span><strong class="overview-kpi-detail-value">5<\/strong>/);
   }
@@ -146,8 +121,9 @@ const reactivatedBase=db.importManifest(historicalBase,manifest('2026-10-01',[
   {nome_campanha_exato:'Oferta pausa',metricas_D_zero:period('2026-10-01','Ativada')},
   {nome_campanha_exato:'Oferta ativa',metricas_D_zero:period('2026-10-01','Enabled')},
 ]),rowFactory).base;
-viewContext.state.database=reactivatedBase;viewContext.state.manifest=reactivatedBase.manifesto_atual;viewContext.state.listMode='active';
+viewContext.state.database=reactivatedBase;viewContext.state.manifest=reactivatedBase.manifesto_atual;
 assert.equal(viewContext.activeCampaignRows().length,2,'fresh import invalidates the derived cache and includes a reactivation');
-viewContext.renderSidebar();assert.match(elements.get('#campaignList').innerHTML,/Oferta pausa/);
+viewContext.state.campaignStatusFilter='active';overview.render();
+assert.match(overviewDom.get('#totalsBody').innerHTML,/data-campaign="Oferta pausa"/);
 assert.equal(historicalBase.campanhas.find(item=>item.nome_mcc==='Oferta pausa').status,'pausada','UI regression does not mutate stored input');
 console.log('MCC all campaigns: status D0, paused financial history, manual reconciliation and idempotency ok');

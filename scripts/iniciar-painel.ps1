@@ -9,18 +9,27 @@ $port = 8765
 $serverUrl = 'http://127.0.0.1:8765/'
 $healthUrl = $serverUrl + 'api/presell/health'
 
+function Open-PanelPage {
+    try {
+        Start-Process $serverUrl
+    } catch {
+        Write-Warning "O servidor está ativo, mas não foi possível abrir o navegador automaticamente. Acesse $serverUrl"
+    }
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $siteDirectory 'index.html'))) {
     throw 'O painel não foi encontrado na pasta dist.'
 }
 
+$health = $null
 try {
     $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1
-    if ($health.presellApi -eq 'v2' -and $health.runtime -eq 'powershell') {
-        Start-Process $serverUrl
-        exit 0
-    }
 } catch {
     # O servidor independente ainda não está ativo na origem persistente.
+}
+if ($health -and $health.presellApi -eq 'v2' -and $health.runtime -eq 'powershell') {
+    Open-PanelPage
+    exit 0
 }
 
 try {
@@ -43,7 +52,7 @@ for ($attempt = 0; $attempt -lt 30; $attempt++) {
     try {
         $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1
         if ($health.presellApi -eq 'v2') {
-            Start-Process $serverUrl
+            Open-PanelPage
             exit 0
         }
     } catch {

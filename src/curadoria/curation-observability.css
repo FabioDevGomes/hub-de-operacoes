@@ -24,8 +24,8 @@
 .curobs-panel{overflow:hidden}
 .curobs-filters{display:grid;grid-template-columns:minmax(180px,1.5fr) repeat(4,minmax(135px,1fr));gap:8px;padding:12px;border-bottom:1px solid var(--line)}
 .curobs-filters label,.curobs-candidate-area label{display:grid;gap:4px;color:#9db0c7;font-size:.64rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;min-width:0}
-.curobs-filters input,.curobs-filters select,.curobs-candidate-area select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#071426;color:var(--text);padding:8px 9px;font:inherit;font-size:.75rem;letter-spacing:normal;text-transform:none;outline:none}
-.curobs-filters input:focus,.curobs-filters select:focus,.curobs-candidate-area select:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(79,167,255,.12)}
+.curobs-filters input:not(.hub-search-filter),.curobs-filters select,.curobs-candidate-area select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#071426;color:var(--text);padding:8px 9px;font:inherit;font-size:.75rem;letter-spacing:normal;text-transform:none;outline:none}
+.curobs-filters input:not(.hub-search-filter):focus,.curobs-filters select:focus,.curobs-candidate-area select:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(79,167,255,.12)}
 .curobs-list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;color:#b8c9dc;font-size:.7rem}
 .curobs-table-wrap{overflow-x:auto;overflow-y:visible}
 .curobs-table{width:100%;min-width:1050px;border-collapse:separate;border-spacing:0;white-space:normal;font-size:.72rem}

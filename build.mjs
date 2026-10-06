@@ -35,7 +35,13 @@ await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-
 await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navigation-controller.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/theme-colors.css"), resolve(root, "dist/theme-colors.css"));
+await cp(resolve(root, "src/control-surfaces.css"), resolve(root, "dist/control-surfaces.css"));
+await cp(resolve(root, "src/month-navigation.css"), resolve(root, "dist/month-navigation.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
+await cp(resolve(root, "src/table-layout.css"), resolve(root, "dist/table-layout.css"));
+await cp(resolve(root, "src/table-columns.css"), resolve(root, "dist/table-columns.css"));
+await cp(resolve(root, "src/table-columns.mjs"), resolve(root, "dist/table-columns.mjs"));
+await cp(resolve(root, "src/table-edit-actions.css"), resolve(root, "dist/table-edit-actions.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });

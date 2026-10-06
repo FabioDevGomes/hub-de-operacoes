@@ -51,8 +51,8 @@ assert.match(css, /\.billing-custom-period input\{box-sizing:border-box;width:12
   'campos de data devem ser compactos para o formato dd/mm/aaaa');
 assert.match(css, /@media\(max-width:700px\)\{\.billing-custom-period\{width:100%;flex-wrap:wrap\}/,
   'o filtro de data pode quebrar linha em telas estreitas');
-assert.match(css, /\.billing-month-navigation\{display:flex;align-items:center/,
-  'os controles do navegador mensal devem permanecer agrupados horizontalmente');
+assert.match(view, /class="billing-month-navigation hub-month-navigation"/,
+  'os controles do navegador mensal devem reutilizar a apresentação compartilhada');
 assert.match(view, /billing-detail-panel[\s\S]*?billing-monthly-chart-panel[\s\S]*?id="billingModal"/,
   'o gráfico mensal deve ser o último painel da tela, abaixo da tabela de vendas');
 assert.match(view, /function renderMonthlyChart\(root\)[\s\S]*?monthlyFinancialSeries[\s\S]*?function buildMonthlyChartSvg/,

@@ -1,6 +1,6 @@
 .totals-table td{padding:7px 13px}.totals-table .num,.totals-table .sort-btn.num{text-align:center}.totals-table .test-budget-detail{display:block;margin-top:2px;color:#88a5c2;font-size:.62rem;line-height:1.2}#totalsView .table-wrap{max-height:calc(100vh - 275px)}
 /* overview-policy-limitation-style */
-.totals-table .status-tag.policy-limited{border-color:#713943;background:#2b181d;color:#ff9aa5;white-space:normal;max-width:240px}.totals-table tbody tr.policy-limited-row td{background:rgba(255,111,125,.055);color:#c9aeb3}.totals-table tbody tr.policy-limited-row td.name{color:#ffb6bd}.totals-table tbody tr.policy-limited-row:hover td{background:rgba(255,111,125,.1)}
+.totals-table .status-tag.policy-limited{border-color:#713943;background:#2b181d;color:#ff9aa5;white-space:normal;max-width:240px}.totals-table tbody tr.policy-limited-row td{background:var(--hub-table-row-bg);color:#c9aeb3}.totals-table tbody tr.policy-limited-row td.name{color:#ffb6bd}.totals-table tbody tr.policy-limited-row:hover td{background:var(--hub-table-row-hover-bg)}
 /* overview-table-compact-style: preserve the intentionally restrained campaign/status weights */
 .totals-table td{padding:5.355px 13px}.totals-table td.name{font-weight:400}.totals-table td:last-child .status-tag{font-weight:400}
 #totalsView .overview-kpi-profit .kpi-value{font-weight:400}
@@ -9,7 +9,7 @@
 /* overview-date-column-compact-style */
 .totals-table th:first-child,.totals-table td:first-child{width:50px;min-width:50px;max-width:50px;padding-left:5px;padding-right:5px}.totals-table th:first-child .sort-btn{padding-left:0;padding-right:0}.totals-table th:first-child .sort-arrow{min-width:0;margin-left:0}
 /* minimum-roi-link-style */
-.totals-table .test-budget-roi-link{font-weight:400;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;cursor:pointer}.totals-table .test-budget-roi-link:hover{text-decoration-style:solid;color:#b6d4f2}.totals-table .test-budget-roi-link:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
+.totals-table .test-budget-roi-link{font-weight:400;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;cursor:pointer;color:#88a5c2}.totals-table .test-budget-roi-link:hover{text-decoration-style:solid;color:#b6d4f2}.totals-table .test-budget-roi-link:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
 /* overview-totals-row-height-style */
 .totals-table td{padding-top:4.5px;padding-bottom:4.5px}
 .overview-roi-dialog{width:min(440px,calc(100vw - 32px));max-width:none;padding:0;border:1px solid #34475f;border-radius:14px;background:#111c2d;color:#eef5ff;box-shadow:0 24px 70px rgba(0,0,0,.48)}.overview-roi-dialog::backdrop{background:rgba(3,9,17,.72);backdrop-filter:blur(2px)}.overview-roi-form{display:grid;gap:9px;padding:20px}.overview-roi-form h2{margin:0;font-size:1rem}.overview-roi-form>div:first-child p{margin:5px 0 8px;color:#9db0c7;font-size:.76rem;line-height:1.45}.overview-roi-form label{color:#a9bfd9;font-size:.76rem}.overview-roi-input{width:100%;min-width:0;padding:9px 10px;border:1px solid #34475f;border-radius:8px;background:#0a1627;color:#eef5ff;font:inherit;font-size:.88rem;outline:none}.overview-roi-input:focus{border-color:#4fa7ff;box-shadow:0 0 0 3px rgba(79,167,255,.14)}.overview-roi-input:disabled{opacity:.62;cursor:not-allowed}.overview-roi-help,.overview-roi-error{margin:2px 0 0;font-size:.72rem;line-height:1.45}.overview-roi-help{color:#8298b2}.overview-roi-error{min-height:1.05em;color:#ff9aa5}.overview-roi-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
@@ -38,12 +38,13 @@
 .app:has(#totalsView:not(.hidden)) .statusbar{gap:7px;margin-bottom:16px}
 .app:has(#totalsView:not(.hidden)) .pill{background:#111e31;border-color:#293d57;padding:6px 9px}
 .app:has(#totalsView:not(.hidden)) #statusbar .pill{border-color:transparent}
-#totalsView .kpis.has-overview-cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch;gap:14px;overflow:visible;margin:0 0 18px}
+#totalsView .kpis.has-overview-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(235px,1fr);align-items:stretch;gap:14px;overflow:visible;margin:0 0 18px}
 #totalsView .overview-kpi{--overview-accent:#8295ac;position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:3px;width:100%;max-width:250px;justify-self:center;min-width:0;min-height:94px;aspect-ratio:auto;padding:7px 10px 7px 12px;overflow:hidden;border:1px solid #30445f;border-radius:13px;background:linear-gradient(145deg,#17263a,#111d30);box-shadow:0 8px 22px rgba(0,0,0,.16);white-space:normal}
 #totalsView .overview-kpi::before{position:absolute;inset:13px auto 13px 0;width:3px;border-radius:0 4px 4px 0;background:var(--overview-accent);content:""}
 #totalsView .overview-kpi-active{--overview-accent:#7daeff;background:linear-gradient(145deg,#1a2c43,#142238)}
 #totalsView .overview-kpi-reserved{background:#17263a}
 #totalsView .overview-kpi-period.kpi-group-d1{--overview-accent:#4fa7ff;border-color:rgba(79,167,255,.45);background:linear-gradient(145deg,#152c45,#122237)}
+#totalsView .overview-kpi-profit.kpi-group-d1{--overview-accent:#4fa7ff;border-color:rgba(79,167,255,.45);background:linear-gradient(145deg,#152c45,#122237)}
 #totalsView .overview-kpi-period.kpi-group-d0{--overview-accent:#35d2d0;border-color:rgba(53,210,208,.42);background:linear-gradient(145deg,#153337,#12262e)}
 #totalsView .overview-kpi-profit{--overview-accent:#8ca1b7}
 #totalsView .overview-kpi-manifest{--overview-accent:#4fa7ff;background:linear-gradient(145deg,#172a40,#111d30)}
@@ -56,8 +57,11 @@
 #totalsView .overview-kpi-period .overview-kpi-main{flex-direction:row;align-items:baseline;justify-content:space-between;gap:6px}
 #totalsView .overview-kpi-main-label{color:#90a5bc;font-size:.64rem;line-height:1.1}
 #totalsView .overview-kpi-meta-main{flex-direction:row;align-items:baseline;justify-content:center;gap:6px}
-#totalsView .overview-kpi-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:4px;border-top:1px solid rgba(174,189,206,.18)}
-#totalsView .overview-kpi-dates>span{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-width:0;color:#91a6bd;font-size:.6rem;line-height:1.15}
+#totalsView .overview-kpi-dates{display:flex;align-items:center;justify-content:center;gap:5px;padding-top:4px;border-top:1px solid rgba(174,189,206,.18)}
+#totalsView .overview-kpi-dates .overview-manifest-period{display:flex;align-items:center;gap:3px;min-width:0;color:#91a6bd;font-size:.6rem;line-height:1.15;white-space:nowrap}
+#totalsView .overview-manifest-dot{flex:0 0 5px;width:5px;height:5px;border-radius:50%;background:var(--green)}
+#totalsView .overview-manifest-dot.warn{background:var(--amber)}
+#totalsView .overview-manifest-separator{flex:0 0 auto;color:#91a6bd;font-size:.75rem;line-height:1}
 #totalsView .overview-kpi-dates strong{overflow:hidden;color:#e3edf7;font-size:.65rem;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
 #totalsView .overview-kpi-pending-title{display:flex;align-items:center;gap:5px;min-width:0}
 #totalsView .overview-kpi-pending-title .dot{flex:0 0 7px}
@@ -65,30 +69,31 @@
 #totalsView .overview-kpi-pending-dot.warn{background:var(--amber)}
 #totalsView .overview-info-icon{display:inline-flex;flex:0 0 14px;align-items:center;justify-content:center;width:14px;height:14px;color:#9fcaff}
 #totalsView .overview-info-icon svg{display:block;width:14px;height:14px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.35}
-#totalsView .overview-kpi-base-meta{display:grid;gap:2px;min-width:0;padding-top:4px;border-top:1px solid rgba(174,189,206,.18);color:#91a6bd;font-size:.61rem;line-height:1.15}
-#totalsView .overview-kpi-base-meta span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#totalsView .overview-kpi-base-meta{display:flex;align-items:baseline;justify-content:center;flex-wrap:nowrap;gap:6px;min-width:0;padding-top:4px;border-top:1px solid rgba(174,189,206,.18);color:#91a6bd;font-size:.61rem;line-height:1.15;white-space:nowrap}
+#totalsView .overview-kpi-base-meta span{flex:0 0 auto;white-space:nowrap}
 #totalsView .overview-kpi .kpi-value{display:block;max-width:100%;overflow:hidden;color:#f2f7fd;font-size:1.24rem;font-weight:780;letter-spacing:-.035em;line-height:1.05;text-overflow:ellipsis;white-space:nowrap}
 #totalsView .overview-kpi .kpi-value.positive{color:var(--green)}
 #totalsView .overview-kpi .kpi-value.negative{color:var(--red)}
 #totalsView .overview-kpi .kpi-foot{margin:0;color:#8da2ba;font-size:.69rem;line-height:1.25}
-#totalsView .overview-kpi-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding-top:4px;border-top:1px solid rgba(174,189,206,.18)}
-#totalsView .overview-kpi-detail{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-width:0}
+#totalsView .overview-kpi-details{display:flex;align-items:baseline;justify-content:center;gap:10px;padding-top:4px;border-top:1px solid rgba(174,189,206,.18)}
+#totalsView .overview-kpi-detail{display:flex;align-items:baseline;justify-content:flex-start;gap:4px;min-width:0}
 #totalsView .overview-kpi-detail .kpi-label{overflow:hidden;color:#91a6bd;font-size:.6rem;font-weight:500;text-overflow:ellipsis;white-space:nowrap}
 #totalsView .overview-kpi-detail-value{color:#e3edf7;font-size:.69rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 #totalsView .overview-kpi-context{padding:3px 7px;border:1px solid #334b67;border-radius:999px;color:#9db0c7;font-size:.63rem;line-height:1}
 #totalsView .panel{border-color:#30445f;border-radius:15px;box-shadow:0 12px 30px rgba(0,0,0,.2)}
-#totalsView .panel-head{align-items:center;gap:18px;padding:10px 20px;background:linear-gradient(100deg,rgba(24,42,64,.85),rgba(17,30,49,.45))}
+#totalsView .panel-head{align-items:center;gap:18px;padding:10px 20px;background:#101D32;border-bottom:0}
 #totalsView .panel-head h2{font-size:1.08rem;letter-spacing:-.015em}
 #totalsView .panel-head p{max-width:66ch;margin-top:5px;color:#a8bbd0;font-size:.78rem;line-height:1.45}
 #totalsView .panel-controls{gap:8px;flex-wrap:wrap}
-#totalsView .panel-controls>.search{min-width:190px;padding:8px 10px;border-color:#354c68;background:#0d1a2b;font-size:.76rem}
-#totalsView .panel-controls .view-toggle{gap:3px;padding:3px;border-color:#354b66;background:#0c192a}
+#totalsView .panel-controls>#campaignStatusFilter{min-width:190px;padding:8px 10px;font-size:.76rem}
+#totalsView .panel-controls .view-toggle{background:var(--hub-input-bg)}
+#totalsView .panel-controls .view-toggle{gap:3px;padding:3px;border-color:#354b66}
 #totalsView .panel-controls .view-toggle button{padding:7px 10px;color:#a7bad0;font-size:.73rem;font-weight:650}
 #totalsView .panel-controls .view-toggle button.active{background:#1c3a5b;color:#f3f8ff}
 #totalsView .panel-controls .tag{padding:5px 8px;border-color:#36516f;background:#142840;color:#b8d5f4;font-weight:550}
-#totalsView .panel-controls>.search,#totalsView .panel-controls .view-toggle,#totalsView .panel-controls .tag{border-color:transparent}
-#totalsView .table-wrap{max-height:calc(100vh - 365px);margin:0 14px 14px;overflow:auto;border:1px solid #314761;border-radius:11px;background:#0c1828;overscroll-behavior:contain;scrollbar-color:#52657d #101e31;scrollbar-width:thin}
-#totalsView .totals-table{width:100%;min-width:1480px;table-layout:fixed;font-size:.78rem;white-space:nowrap}
+#totalsView .panel-controls .view-toggle,#totalsView .panel-controls .tag{border-color:transparent}
+#totalsView .table-wrap{max-height:calc(100vh - 290px);margin:0 14px 14px;overflow:auto;border:1px solid #314761;border-radius:11px;background:var(--hub-table-row-bg);overscroll-behavior:contain;scrollbar-color:#52657d #101e31;scrollbar-width:thin}
+#totalsView .totals-table{width:100%;min-width:1480px;table-layout:fixed;font-size:.78rem;white-space:nowrap;background:var(--hub-table-row-bg)}
 #totalsView .totals-table th{height:44px;background:#1b2b40;color:#b9c9dc;text-transform:none;letter-spacing:0;font-size:.69rem}
 #totalsView .totals-table th .sort-btn{min-height:44px;padding:9px 10px;font-size:inherit;font-weight:650;line-height:1.25;text-transform:none;letter-spacing:0}
 #totalsView .totals-table th[data-column="zeroDays"] .sort-btn{position:relative;min-height:50px;padding:5px 4px;white-space:normal;line-height:1.12;text-align:center}
@@ -102,19 +107,17 @@
 #totalsView .totals-table th:first-child .sort-btn{padding-inline:6px}
 #totalsView .totals-table td{padding:8px 10px;border-bottom:1px solid #2a3c54;color:#e0e9f3;line-height:1.35;font-variant-numeric:tabular-nums}
 #totalsView .totals-table td.name{max-width:none;overflow:hidden;color:#f3f7fc;font-weight:550;text-overflow:ellipsis;white-space:normal;overflow-wrap:anywhere}
+#totalsView .totals-table td[data-column="campaign"]{white-space:nowrap;overflow-wrap:normal}
 #totalsView .totals-table td.num,#totalsView .totals-table th .sort-btn.num{text-align:center}
-#totalsView .totals-table tbody tr:not(.paused-row):not(.rejected-row):not(.numbering-warning-row):not(.policy-limited-row):nth-child(even) td{background:rgba(134,158,185,.055)}
-#totalsView .totals-table tbody tr:not(.paused-row):not(.rejected-row):not(.numbering-warning-row):not(.policy-limited-row):hover td{background:rgba(79,167,255,.11)}
-#totalsView .totals-table tbody tr.paused-row td,#totalsView .totals-table tbody tr.rejected-row td,#totalsView .totals-table tbody tr.numbering-warning-row td,#totalsView .totals-table tbody tr.policy-limited-row td{background:rgba(255,111,125,.07);color:#d3b8bd}
+#totalsView .totals-table tbody tr.paused-row td,#totalsView .totals-table tbody tr.rejected-row td,#totalsView .totals-table tbody tr.numbering-warning-row td,#totalsView .totals-table tbody tr.policy-limited-row td{color:#d3b8bd}
 #totalsView .totals-table tbody tr.paused-row td.name,#totalsView .totals-table tbody tr.rejected-row td.name,#totalsView .totals-table tbody tr.numbering-warning-row td.name,#totalsView .totals-table tbody tr.policy-limited-row td.name{color:#ffc0c6}
-#totalsView .totals-table tbody tr.paused-row:hover td,#totalsView .totals-table tbody tr.rejected-row:hover td,#totalsView .totals-table tbody tr.numbering-warning-row:hover td,#totalsView .totals-table tbody tr.policy-limited-row:hover td{background:rgba(255,111,125,.13)}
 #totalsView .totals-table .status-tag{border-radius:7px;font-weight:550}
 #totalsView .totals-table .test-budget-detail{font-size:.65rem}
 #totalsView .table-wrap::-webkit-scrollbar{width:9px;height:9px}
 #totalsView .table-wrap::-webkit-scrollbar-thumb{border:2px solid #101e31;border-radius:999px;background:#52657d}
 @media(max-width:1360px){#totalsView .kpis.has-overview-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.app:has(#totalsView:not(.hidden))>.main{padding-inline:20px}}
 @media(max-width:980px){.app:has(#totalsView:not(.hidden)){grid-template-columns:1fr}.app:has(#totalsView:not(.hidden))>.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}.app:has(#totalsView:not(.hidden)) .campaign-list{max-height:180px}.app:has(#totalsView:not(.hidden))>.main{height:auto;overflow:visible;padding:22px 18px}.app:has(#totalsView:not(.hidden)) .topbar{align-items:flex-start;flex-direction:column}.app:has(#totalsView:not(.hidden)) .actions{max-width:100%;justify-content:flex-start}.app:has(#totalsView:not(.hidden)) .table-wrap{max-height:none}}
-@media(max-width:700px){.app:has(#totalsView:not(.hidden))>.main{padding:18px 12px}.app:has(#totalsView:not(.hidden)) .actions{width:100%}#totalsView .kpis.has-overview-cards{grid-template-columns:minmax(0,1fr)}#totalsView .overview-kpi{min-height:94px;aspect-ratio:auto}#totalsView .panel-head{align-items:flex-start;flex-direction:column}#totalsView .panel-controls{width:100%;justify-content:flex-start}#totalsView .panel-controls>.search{min-width:min(190px,100%)}#totalsView .panel-controls .view-toggle{max-width:100%}#totalsView .panel-controls .view-toggle button{padding-inline:8px}}
+@media(max-width:700px){.app:has(#totalsView:not(.hidden))>.main{padding:18px 12px}.app:has(#totalsView:not(.hidden)) .actions{width:100%}#totalsView .kpis.has-overview-cards{grid-template-columns:minmax(0,1fr)}#totalsView .overview-kpi{min-height:94px;aspect-ratio:auto}#totalsView .panel-head{align-items:flex-start;flex-direction:column}#totalsView .panel-controls{width:100%;justify-content:flex-start}#totalsView .panel-controls>#campaignStatusFilter{min-width:min(190px,100%)}#totalsView .panel-controls .view-toggle{max-width:100%}#totalsView .panel-controls .view-toggle button{padding-inline:8px}}
 /* Contornos externos removidos na revisão visual; divisórias internas da tabela permanecem. */
 #totalsView .overview-kpi,#totalsView .panel,#totalsView .table-wrap{border:0}
 #totalsView .overview-kpi-context{border:0}
@@ -123,7 +126,7 @@
 /* Textos neutros da Visão geral acompanham a tipografia do menu lateral. */
 .app:has(#totalsView:not(.hidden))>.main{--text:#c3cede;font-family:'Segoe UI',Arial,sans-serif;color:var(--text)}
 .app:has(#totalsView:not(.hidden)) .topbar .btn:not(.primary){color:#c3cede;font-family:inherit}
-#totalsView .totals-table tbody tr:not(.policy-limited-row) td:not(.positive):not(.negative),
+#totalsView .totals-table tbody tr:not(.policy-limited-row) td:not(.positive):not(.negative):not(.remaining-warning),
 #totalsView .overview-kpi .kpi-value:not(.positive):not(.negative),
 #totalsView .overview-kpi-detail .kpi-value,
 #totalsView .view-toggle button,
@@ -140,18 +143,38 @@
 #totalsView{--overview-alert-red:#ff6f7d}
 #totalsView .totals-table td.negative{color:var(--overview-alert-red);font-weight:550}
 #totalsView .overview-kpi .kpi-value.negative{color:var(--overview-alert-red)}
+/* O lucro preserva a cor semântica mesmo em linhas pausadas, reprovadas ou limitadas. */
+#totalsView .totals-table tbody td[data-column="profit"].positive{color:var(--green)}
+#totalsView .totals-table tbody td[data-column="profit"].negative{color:var(--overview-alert-red)}
 /* Preferências são apenas apresentação; larguras seguem a identidade da coluna. */
-#totalsView .overview-column-picker{position:relative}
-#totalsView .overview-column-picker>summary{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:7px 10px;border:0;background:#0c192a;font-size:.73rem;font-weight:400;list-style:none;cursor:pointer}
-#totalsView .overview-column-picker>summary::-webkit-details-marker{display:none}
-#totalsView .overview-column-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(320px,calc(100vw - 40px));padding:16px;border:0;border-radius:12px;background:#1b2b40;box-shadow:0 12px 32px rgba(0,0,0,.45)}
-#totalsView .overview-column-menu p{margin:7px 0;color:var(--muted);font-size:.72rem;line-height:1.4}
-#totalsView #overviewColumnOptions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 12px;margin:12px 0}
-#totalsView #overviewColumnOptions label{display:flex;align-items:center;gap:7px;font-size:.73rem;cursor:pointer}
-#totalsView #overviewColumnOptions input{margin:0;accent-color:var(--blue)}
-#totalsView .overview-column-menu .btn{display:inline-flex;align-items:center;justify-content:center;font-size:.73rem}
+/* Divisória de arraste exclusiva da Visão Geral; não altera as colunas de outras telas. */
+#totalsView .totals-table th[data-column]{position:sticky;box-sizing:border-box;min-width:0;max-width:none}
+#totalsView .totals-table td:first-child{width:auto;min-width:0;max-width:none}
+#totalsView .overview-column-resizer{position:absolute;right:0;top:0;bottom:0;width:9px;z-index:3;cursor:col-resize;touch-action:none;user-select:none}
+#totalsView .overview-column-resizer::after{content:'';position:absolute;right:0;top:7px;bottom:7px;width:2px;background:var(--cyan);opacity:0;transition:opacity .12s ease}
+#totalsView th:hover>.overview-column-resizer::after,#totalsView .overview-column-resizer:focus-visible::after,#totalsView .overview-column-resizer.is-resizing::after{opacity:1}
+#totalsView .overview-column-resizer:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+#totalsView .totals-table th[data-column="remaining"] .overview-remaining-edit{right:12px}
+#totalsView.overview-resizing,#totalsView.overview-resizing *{cursor:col-resize!important;user-select:none!important}
+#totalsView #overviewWidthsMessage:empty{display:none}
+#totalsView #overviewWidthsMessage{margin:6px 14px;color:var(--amber);font-size:.73rem}
 #totalsView .panel{overflow:visible}
-#totalsView .overview-column-menu{box-sizing:border-box;overflow:auto;overscroll-behavior:contain}
 #totalsView .panel-head{border-radius:15px 15px 0 0}
+#totalsView .totals-table thead th{background:#14243a}
+#totalsView .totals-table thead th:first-child,#totalsView .totals-table thead th:first-child .sort-btn{border-top-left-radius:10px}
+#totalsView .totals-table thead th:last-child,#totalsView .totals-table thead th:last-child .sort-btn{border-top-right-radius:10px}
 #totalsView .totals-table th .sort-btn{position:relative;min-height:50px;padding-block:6px;white-space:normal;line-height:1.2}
 #totalsView .totals-table th .sort-arrow{position:absolute;top:50%;right:3px;min-width:0;margin:0;transform:translateY(-50%)}
+#totalsView .totals-table .test-budget-commission-link{white-space:normal;line-height:1.35;overflow-wrap:break-word}
+/* Position/typography shared with diary row editors in table-edit-actions.css. */
+#totalsView{--overview-remaining-yellow:#ffe08a}
+#totalsView .totals-table tbody tr td.remaining-warning{color:var(--overview-remaining-yellow)}
+/* O alerta do saldo prevalece sobre a cor da linha, inclusive em Todas/Pausadas. */
+#totalsView .totals-table tbody tr td[data-column="remaining"].negative{color:var(--overview-alert-red)}
+#remainingAlertDialog{width:min(580px,calc(100vw - 32px))}
+#remainingAlertDialog .overview-alert-field{display:grid;grid-template-columns:18px minmax(90px,150px) minmax(0,1fr);gap:10px;align-items:center}
+#remainingAlertDialog .overview-alert-swatch{width:16px;height:16px;border-radius:3px}
+#remainingAlertDialog .overview-alert-swatch-red{background:var(--red)}
+#remainingAlertDialog .overview-alert-swatch-yellow{background:var(--overview-remaining-yellow)}
+#remainingAlertDialog .overview-alert-field small{color:var(--muted);font-size:.72rem;line-height:1.4}
+@media(max-width:480px){#remainingAlertDialog .overview-alert-field{grid-template-columns:18px minmax(0,1fr)}#remainingAlertDialog .overview-alert-field small{grid-column:2}}

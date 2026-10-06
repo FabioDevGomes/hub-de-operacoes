@@ -7,6 +7,22 @@
     function productDiaryManualSaleCount(row,manualSalesByDate){return Math.max(0,Math.floor(Number(manualSalesByDate.get(productDiaryRowDate(row))?.pendingConversions)||0))}
     function productDiaryRowsWithManualSales(rows,manualSalesByDate){const result=[...(rows||[])],seen=new Set(result.map(productDiaryRowDate).filter(Boolean));for(const[date,sale]of manualSalesByDate){const count=Math.max(0,Math.floor(Number(sale?.pendingConversions)||0));if(!count||seen.has(date))continue;const[year,month,day]=date.split('-');result.push({date,cells:{A:{value:date,text:`${day}/${month}/${year}`},Q:{value:`Venda manual provisória (${count}); aguardando confirmação MCC D−1`}}});seen.add(date)}return result.sort((a,b)=>productDiaryRowDate(a).localeCompare(productDiaryRowDate(b)))}
     function productDiaryRowsThroughDate(rows,cutoff){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(cutoff||'')))return[...(rows||[])];return(rows||[]).filter(row=>{const date=productDiaryRowDate(row);return!date||date<=cutoff})}
+    function productDiaryTotals(rows,cutoff,manualSalesByDate=new Map()){
+      const totals={investment:null,clicks:null,conversions:null};
+      const bounded=productDiaryRowsThroughDate(productDiaryRowsWithManualSales(rows,manualSalesByDate),cutoff);
+      for(const row of bounded){
+        for(const [key,column]of [['investment','O'],['clicks','C'],['conversions','F']]){
+          const raw=row?.cells?.[column]?.value;
+          if((typeof raw!=='number'&&typeof raw!=='string')||String(raw).trim()==='')continue;
+          const value=Number(raw);if(!Number.isFinite(value))continue;
+          totals[key]=(totals[key]??0)+value;
+        }
+        const pending=productDiaryManualSaleCount(row,manualSalesByDate);
+        if(pending)totals.conversions=(totals.conversions??0)+pending;
+      }
+      if(totals.investment!==null)totals.investment=Math.round((totals.investment+Number.EPSILON)*100)/100;
+      return totals;
+    }
     const productColumns=[['A','Data'],['B','Impr.'],['C','Cliques Google'],['D','Cliques plataforma'],['E','Avanço presell'],['F','Conv.'],['G','CTR'],['H','Checkout'],['I','Custo médio US$'],['J','Custo médio R$'],['K','% 1ª posição'],['L','% parte sup.'],['M','Orçam. diário'],['N','Estratégia'],['O','Investimento'],['P','Comissão'],['Q','Observações']];
-  global.ProductDiaryDomain=Object.freeze({excelDate,sheetDailyRows,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productColumns});
+  global.ProductDiaryDomain=Object.freeze({excelDate,sheetDailyRows,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productDiaryTotals,productColumns});
 })(typeof window==='object'?window:globalThis);

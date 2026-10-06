@@ -1,9 +1,10 @@
-import * as Domain from './personal-finance-domain.mjs?v=28';
-import * as Storage from './personal-finance-storage.mjs?v=20';
+import * as Domain from './personal-finance-domain.mjs?v=30';
+import * as Storage from './personal-finance-storage.mjs?v=21';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
 const localMonth = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const localDayKey = date => `${localMonth(date)}-${String(date.getDate()).padStart(2, '0')}`;
 const isNubankCardCategory = Domain.isNubankCardCategory;
 const plannedAmountForEntry = entry => isNubankCardCategory(entry) ? Domain.cardDebtAmount(entry) : entry?.planned_amount ?? (Domain.isLunchDinnerCategory(entry) ? Domain.LUNCH_DINNER_MONTHLY_BUDGET : null);
 const actualAmountForEntry = entry => isNubankCardCategory(entry) ? Domain.cardPaymentAmount(entry) : entry?.actual_amount;
@@ -102,6 +103,8 @@ function expenseSourceToBundle(source) {
 export async function mount({ root, toast = () => {}, now = new Date() }) {
   if (!root) throw new Error('Raiz do Controle de gastos não encontrada.');
   const state = { monthKey: localMonth(now), viewMode: 'consolidated', periodMonthCount:Domain.DEFAULT_CONSOLIDATED_MONTH_COUNT, month: null, periodMonths: [], currentMonthSnapshot:null, monthlyOpenDebts:null, entries: [], debts: [], funds: [], reserveSummary:null, globalExpenseTotals:null, latestExpenseMonthKey:null, groups: [], categories: [], busy: false, refreshPending:false, importOpen: false, importText: '', importBundle: null, importPreview: '' };
+  let renderedDailyPaceDay = localDayKey(new Date());
+  let dailyPaceRefreshTimer = null;
 
   async function initializeLunchDinnerBudget(periodMonths, categories) {
     const now = new Date();
@@ -142,8 +145,19 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         state.viewMode === 'consolidated' ? Storage.latestExpenseMonthWithValues() : Promise.resolve(null),
       ]);
       const lunchBudgetInitialized = await initializeLunchDinnerBudget(periodMonths, categories);
+      const currentMonthData = currentMonthSnapshot || periodMonths[monthKeys.indexOf(currentMonthKey)] || null;
+      const todayDate = new Date(), todayKey = localDayKey(todayDate);
+      if (currentMonthData?.month && currentMonthData.month.daily_actual_targets_applied_on !== todayKey) {
+        const targetEntries = Domain.dailyActualTargetUpdates(currentMonthData.entries, currentMonthKey, todayDate);
+        const targetResult = await Storage.applyDailyActualTargets({ monthKey:currentMonthKey, dayKey:todayKey, entries:targetEntries });
+        currentMonthData.month = targetResult.month;
+        if (targetResult.applied && targetResult.entries.length) {
+          const updatedById = new Map(targetResult.entries.map(entry => [entry.entry_id, entry]));
+          currentMonthData.entries = currentMonthData.entries.map(entry => updatedById.get(entry.entry_id) || entry);
+        }
+      }
       state.periodMonths = periodMonths;
-      state.currentMonthSnapshot = currentMonthSnapshot || periodMonths[monthKeys.indexOf(currentMonthKey)] || null;
+      state.currentMonthSnapshot = currentMonthData;
       state.month = state.viewMode === 'month' ? periodMonths[0]?.month || null : null;
       state.entries = periodMonths.flatMap(period => period.entries);
       state.debts = state.viewMode === 'month' ? periodMonths[0]?.debts || [] : [];
@@ -469,6 +483,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     return state.modal ? `<div class="pf-modal-backdrop" data-action="close-modal"><section class="pf-modal" role="dialog" aria-modal="true" aria-labelledby="pfModalTitle"><div class="pf-modal-head"><h2 id="pfModalTitle">${esc(state.modal.title)}</h2><button class="pf-icon-button" type="button" aria-label="Fechar" data-action="close-modal">×</button></div><form data-form="${esc(state.modal.type)}" data-id="${esc(state.modal.id || '')}">${state.modal.body}<div class="pf-actions pf-modal-actions"><button class="btn" type="button" data-action="close-modal">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></section></div>` : '';
   }
   function render() {
+    renderedDailyPaceDay = localDayKey(new Date());
     const isMonth = state.viewMode === 'month';
     const isQuarter = state.viewMode === 'quarter';
     const isConsolidated = state.viewMode === 'consolidated';
@@ -497,7 +512,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const periodShiftLabel = isQuarter ? 'Trimestre' : isConsolidated ? 'Mês inicial' : 'Mês';
     const monthCountLimit = consolidatedMonthLimit();
     const monthCountControl = isConsolidated ? `<label class="pf-period-length" title="O consolidado exibe no mínimo 8 meses; o limite acompanha os meses cadastrados.">Meses <input type="number" min="${Domain.MIN_CONSOLIDATED_MONTH_COUNT}" max="${monthCountLimit}" step="1" inputmode="numeric" data-action="set-period-length" aria-label="Quantidade de meses no consolidado" value="${state.periodMonthCount}"></label>` : '';
-    const monthNavigation = `<div class="pf-month-nav" role="group" aria-label="Navegação por ${periodNavigationLabel}"><button class="btn" type="button" data-action="period-shift" data-delta="-1" aria-label="${periodShiftLabel} anterior">‹</button><strong>${esc(periodLabel)}</strong><button class="btn" type="button" data-action="period-shift" data-delta="1" aria-label="Próximo ${periodShiftLabel.toLowerCase()}">›</button><button class="btn" type="button" data-action="current-period">${currentPeriodLabel}</button></div>`;
+    const monthNavigation = `<div class="pf-month-nav" role="group" aria-label="Navegação por ${periodNavigationLabel}"><div class="hub-month-navigation${isPeriodView ? ' hub-month-navigation--period' : ''}"><button class="btn hub-month-arrow" type="button" data-action="period-shift" data-delta="-1" aria-label="${periodShiftLabel} anterior">‹</button><span class="hub-month-label" aria-live="polite">${esc(periodLabel)}</span><button class="btn hub-month-arrow" type="button" data-action="period-shift" data-delta="1" aria-label="Próximo ${periodShiftLabel.toLowerCase()}">›</button></div><button class="btn hub-month-current" type="button" data-action="current-period">${currentPeriodLabel}</button></div>`;
     const panelActions = `<div class="pf-main-controls">${monthCountControl}${monthNavigation}${monthlyActions}</div>`;
     root.innerHTML = `<section class="pf-shell"><header class="pf-page-head pf-page-head-actions-only"><div class="pf-header-actions">${viewToggle}<button class="btn" type="button" data-action="toggle-import">${state.importOpen ? 'Fechar importação' : 'Importar despesas'}</button></div></header>${importPanel()}<section class="pf-kpis" aria-label="Resumo por moeda e diferença">${isPeriodView ? renderPeriodKpis(period, { compareReserve:isConsolidated }) : renderKpis(summary)}${renderReserveDifferenceCard()}</section><section class="card panel pf-main-panel"><div class="panel-head"><div><h2>${isPeriodView ? `Despesas por ${esc(period.label)}` : 'Planejado × realizado'}</h2>${helpText ? `<p>${helpText}</p>` : ''}</div>${panelActions}</div>${isMonth ? `<div class="pf-create-month ${state.createMonthOpen ? '' : 'hidden'}"><label for="pfPlanSource">Plano para ${esc(monthName(state.monthKey))}</label><select id="pfPlanSource" class="search"><option value="previous">Copiar somente o planejado do mês anterior</option><option value="defaults">Usar os valores padrão das categorias</option></select><span>Realizados ficam em branco. Dívidas em aberto, disponibilidade e reservas são trazidas como ponto de partida mensal, sem alterar o mês anterior.</span><button class="btn primary" type="button" data-action="create-month">Criar mês</button><button class="btn" type="button" data-action="toggle-create-month">Cancelar</button></div>` : ''}${mainTable}</section>${isPeriodView ? '' : managementMarkup()}${modalMarkup()}<p class="pf-footnote">Dados armazenados localmente neste navegador. Valores de BRL e USD são calculados em separado; a moeda do lançamento mensal preserva a fonte.</p></section>`;
     root.innerHTML = root.innerHTML.replace('Realizados ficam em branco. Dívidas em aberto, disponibilidade e reservas são trazidas como ponto de partida mensal, sem alterar o mês anterior.', 'Realizados ficam em branco. Dívidas em aberto e saldos disponíveis são trazidos; a reserva global permanece igual à soma dos aportes, e os gastos são acompanhados nas despesas.');
@@ -505,6 +520,42 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const periodLengthField = root.querySelector('.pf-period-length');
     if (periodLengthField) periodLengthField.insertAdjacentHTML('afterend', `<span class="pf-period-adjust"><button class="pf-period-adjust-button" type="button" data-action="adjust-period-length" data-delta="1" aria-label="Aumentar em um mês" title="Adicionar um mês" ${state.periodMonthCount >= monthCountLimit ? 'disabled' : ''}>↑</button><button class="pf-period-adjust-button" type="button" data-action="adjust-period-length" data-delta="-1" aria-label="Diminuir em um mês" title="Remover um mês" ${state.periodMonthCount <= Domain.MIN_CONSOLIDATED_MONTH_COUNT ? 'disabled' : ''}>↓</button></span>`);
   }
+
+  async function refreshDailyPaceForToday() {
+    const today = localDayKey(new Date());
+    if (today === renderedDailyPaceDay) return true;
+    if (document.visibilityState === 'hidden' || state.busy || state.modal || root.querySelector('input:focus,select:focus,textarea:focus')) return false;
+    try {
+      await loadMonth();
+      return true;
+    } catch (error) {
+      toast(error.message || 'Não foi possível atualizar as metas diárias.', true);
+      return false;
+    }
+  }
+  function scheduleDailyPaceRefresh(delay = null) {
+    if (dailyPaceRefreshTimer != null) clearTimeout(dailyPaceRefreshTimer);
+    const now = new Date();
+    const nextCheck = delay ?? Domain.millisecondsUntilNextLocalMidnight(now) + 50;
+    dailyPaceRefreshTimer = setTimeout(async () => {
+      dailyPaceRefreshTimer = null;
+      if (document.visibilityState !== 'hidden' && !(await refreshDailyPaceForToday())) {
+        scheduleDailyPaceRefresh(30_000);
+        return;
+      }
+      scheduleDailyPaceRefresh();
+    }, Math.max(1, nextCheck));
+  }
+  async function handleDailyPaceResume() {
+    if (document.visibilityState === 'hidden') return;
+    if (!(await refreshDailyPaceForToday())) {
+      scheduleDailyPaceRefresh(30_000);
+      return;
+    }
+    scheduleDailyPaceRefresh();
+  }
+  document.addEventListener('visibilitychange', handleDailyPaceResume);
+  window.addEventListener('focus', handleDailyPaceResume);
 
   function openModal(type, id = '') {
     if (type === 'category' && !id && !state.groups.some(group => group.active)) { toast('Cadastre um grupo ativo antes de criar categorias.', true); return; }
@@ -714,9 +765,10 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
   });
 
   await loadMonth({ createCurrent: true });
+  scheduleDailyPaceRefresh();
   async function refresh() {
     if (state.viewMode === 'consolidated') startConsolidatedAtCurrentMonth();
     await loadMonth();
   }
-  return { unmount() { unsubscribeFinanceUpdates(); if (externalRefreshTimer != null) clearTimeout(externalRefreshTimer); root.replaceChildren(); }, refresh, get state() { return state; } };
+  return { unmount() { unsubscribeFinanceUpdates(); if (externalRefreshTimer != null) clearTimeout(externalRefreshTimer); if (dailyPaceRefreshTimer != null) clearTimeout(dailyPaceRefreshTimer); document.removeEventListener('visibilitychange', handleDailyPaceResume); window.removeEventListener('focus', handleDailyPaceResume); root.replaceChildren(); }, refresh, get state() { return state; } };
 }

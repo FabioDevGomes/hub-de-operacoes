@@ -193,8 +193,10 @@ assert.equal(restored.event_log.length, 1, 'Event Log operacional continua prese
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 const diaryView = await readFile(new URL('../src/product-diary/view.js', import.meta.url), 'utf8');
+const overviewView = await readFile(new URL('../src/overview/view.js', import.meta.url), 'utf8');
 assert.ok(template.includes('label:`${c.nome_exibicao||c.nome_mcc} · resumo Totais`'), 'resumos legados ficam acessíveis no Histórico inclusive quando vinculados a campanhas nativas');
-assert.ok(template.includes("showProduct(b.dataset.name,b.dataset.source,b.dataset.id||null)"), 'a tela de resumo localiza a campanha pelo ID estável');
+assert.ok(overviewView.includes("actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null)"), 'a Visão Geral abre o resumo pelo ID estável');
+assert.ok(template.includes("campaignId?item.id===campaignId"), 'a tela de resumo localiza a campanha pelo ID estável');
 assert.ok(template.includes("source==='legacy'?[]"), 'resumo legado não fabrica registros diários');
 assert.ok(diaryView.includes("$('#productPanelTitle').textContent='Resumo histórico legado'"), 'campanha legada abre resumo dentro do Diário existente');
 assert.ok(diaryView.includes('<span>Lucro derivado</span>'), 'investimento e lucro são destacados no resumo de campanha');

@@ -21,7 +21,7 @@ assert.ok(html.includes('trends-sheet.css?v=20261006-curation-header-color'),'Li
 const sharedStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
 assert.ok(sharedStyles.includes('nav[data-hub-sidebar-active="manager"]')&&sharedStyles.includes('#rows td *{font-weight:400!important}'),'valores das colunas da Lista de Gerente não estão em peso normal');
 assert.ok(sharedStyles.includes('#rows tr.decision-row-launch>td{background:rgba(171,130,35,.2)}')&&sharedStyles.includes('#rows tr.decision-row-live>td{background:rgba(16,74,54,.25)}'),'a Lista de Gerente herda a mesma cor de linha por decisão da E-commerce GM');
-assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=1'")&&html.includes("mountCurationListFocus('manager'"),'Lista de Gerente não instala a preservação compartilhada de posição e linha');
+assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=2'")&&html.includes("mountCurationListFocus('manager'"),'Lista de Gerente não instala a preservação compartilhada de posição e linha');
 assert.ok(html.includes('list-focus.mjs'),'helper de foco e rolagem não foi incluído no build');
 assert.ok(html.includes('listFocus.restore()'),'Lista de Gerente não tenta restaurar o foco após atualizar a listagem');
 const focusStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');

@@ -118,7 +118,10 @@ test('knowledge export UI is wired only to the local allowlisted endpoints and s
   assert.match(view, /X-Hub-Knowledge-Export/);
   assert.doesNotMatch(view, /indexedDB|localStorage|campaigns\.json/i);
   assert.match(css, /\.knowledge-export-files\{[^}]*overflow:auto/);
-  assert.match(css, /translateY\(-5px\)/);
+  assert.doesNotMatch(css, /translateY\(-5px\)/, 'a posição dos botões agora pertence ao CSS global');
+  const headerCss = await readFile(fileURLToPath(new URL('../src/curadoria/curation-header-actions.css', import.meta.url)), 'utf8');
+  assert.match(headerCss, /--hub-page-action-top:16px/);
+  assert.match(headerCss, /padding-top:var\(--hub-page-action-top\)!important/);
   assert.match(css, /align-items:center/);
   assert.match(css, /#totalsView \.overview-kpi-period[^}]*font-size/);
 });

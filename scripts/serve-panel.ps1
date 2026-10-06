@@ -11,7 +11,14 @@ $engineRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'presell-engine'))
 $knowledgeExportScript = Join-Path $PSScriptRoot 'knowledge-export.ps1'
 if (-not (Test-Path -LiteralPath $knowledgeExportScript -PathType Leaf)) { throw 'O exportador de conhecimento não foi encontrado.' }
 . $knowledgeExportScript
-$personalSkillsRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex\skills'
+$personalSkillsProfile = [Environment]::GetFolderPath('UserProfile')
+if ([string]::IsNullOrWhiteSpace($personalSkillsProfile)) {
+    $personalSkillsProfile = [Environment]::GetEnvironmentVariable('USERPROFILE')
+}
+if ([string]::IsNullOrWhiteSpace($personalSkillsProfile)) {
+    throw 'O caminho do perfil do usuário não está disponível para a exportação de conhecimento.'
+}
+$personalSkillsRoot = Join-Path $personalSkillsProfile '.codex\skills'
 $productsRootConfig = Join-Path $projectRoot 'data-local\products-root.txt'
 if ([string]::IsNullOrWhiteSpace($ProductsRoot)) {
     if (Test-Path -LiteralPath $productsRootConfig -PathType Leaf) {

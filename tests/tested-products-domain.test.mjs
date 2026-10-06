@@ -43,6 +43,7 @@ const sandbox = {
   derivedContext: () => context,
   state: { database: { campanhas: campaigns }, productCatalog: {} },
   currentCampaignRows: () => [],
+  activeCampaignRows: () => [],
   testedProductName: campaign => campaign.nome_exibicao,
   campaignSheet: name => name,
   campaignIdentity: () => ({ dateSort: null }),

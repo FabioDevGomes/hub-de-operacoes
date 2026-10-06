@@ -6,7 +6,7 @@ import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
-import {mountCurationListFocus} from '../list-focus.mjs';
+import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
 
 const root = document.querySelector('#hotOffersMsRoot');
@@ -30,7 +30,7 @@ const view = mountHotOffersMsView({root,actions:{
   addManualCountry,
   openGlimpse,
 }});
-const listFocus = mountCurationListFocus('hot-offers-ms',{blockingSelector:'#offerSheet:not(.hidden)'});
+const listFocus = mountCurationListFocus('hot-offers-ms',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'});
 mountGlimpseHeaderAction({frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
 
 function show() { view.render({offers,collections,snapshots,decisions,trends,images,glimpse}); }

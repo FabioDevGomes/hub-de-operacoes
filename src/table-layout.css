@@ -1,0 +1,17 @@
+/* Preferências compartilhadas para tabelas de dados neutras do Hub.
+   Tabelas com estado próprio podem sobrescrever o fundo localmente. */
+:root {
+  --hub-table-row-bg: #101E33;
+  --hub-table-row-hover-bg: rgba(79, 167, 255, .12);
+}
+
+.hub-table-layout tbody td,
+.tablewrap > table tbody td {
+  background-color: var(--hub-table-row-bg);
+  transition: background-color .12s ease;
+}
+
+.hub-table-layout tbody tr:not(.selected):not([data-detail-row]):hover > td,
+.tablewrap > table tbody tr:not(.selected):not([data-detail-row]):hover > td {
+  background-color: var(--hub-table-row-hover-bg);
+}

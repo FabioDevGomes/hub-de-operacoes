@@ -51,7 +51,7 @@ test('a view encaminha filtros e ações sem acessar persistência', () => {
   assert.doesNotMatch(view,/data-image-candidate-add|data-image-candidate-save|data-image-candidate-cancel/,'Adicionar, Salvar candidatas e Cancelar devem ser removidos do campo');
   assert.match(page,/candidateOnly=false/,'a persistência identifica alterações de candidatas sem confundi-las com uma nova avaliação visual');
   assert.doesNotMatch(view,/indexedDB|openHotOffersMsDB|\.put\(/,'a view não deve abrir nem gravar no banco');
-  assert.match(page,/mountCurationListFocus\('hot-offers-ms'/,'o retorno da ficha deve preservar foco/rolagem');
+  assert.ok(page.includes("mountCurationListFocus('hot-offers-ms',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'})"),'o retorno da ficha e da decisão deve preservar foco/rolagem até ambos fecharem');
 });
 
 test('Enter salva a candidata positiva e atualiza a lista na hora, como na E-commerce GM', () => {
@@ -78,9 +78,17 @@ test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM',
   assert.match(html,/\.filter-grid \.btn\{[^}]*font-size:\.74rem;white-space:nowrap/,'os botões devem manter a mesma tipografia e não quebrar linha');
 });
 
+test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
+  assert.match(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{border:0;box-shadow:0 4px 9px rgba\(0,0,0,\.55\)/,'os dois controles apontados devem ficar sem borda com sombra preta normal');
+  assert.match(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{[^}]*background:#172337/,'os dois controles usam o mesmo fundo neutro do selo Não definido');
+  assert.match(sharedCurationCss,/\.decision-badge\{[^}]*background:#172337/,'o fundo aplicado aos controles deve corresponder ao selo neutro compartilhado');
+  assert.match(html,/\.filter-grid>#clearFilters:is\(:hover,:focus-visible\),\.filter-grid>\.column-picker>summary\.btn:is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)/,'a sombra deve reforçar no hover/foco sem brilho claro');
+  assert.match(html,/\.filter-grid>#clearFilters:focus-visible,\.filter-grid>\.column-picker>summary\.btn:focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/,'o foco de teclado continua claramente visível');
+});
+
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
   assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-header-color/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
-  assert.match(html,/hot-offers-ms-page\.mjs\?v=15/,'a página invalida o cache após atualizar o fluxo de Glimpse');
+  assert.match(html,/hot-offers-ms-page\.mjs\?v=16/,'a página invalida o cache após atualizar o retorno da decisão');
   assert.match(html,/hot-offers-ms\.css\?v=20261005-glimpse-compact/,'o CSS local invalida o cache para o redimensionamento do Glimpse');
   assert.match(page,/hot-offers-ms-view\.mjs\?v=20261005-analytics-badges/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');

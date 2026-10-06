@@ -1,0 +1,50 @@
+/* Preenchimento até o rodapé das listas de Curadoria.
+   Compartilha só geometria: filtros, métricas e fichas mantêm seus contratos. */
+.hub-curation-viewport {
+  --hub-curation-bottom-gap: 8px;
+}
+
+@media (min-width: 981px) and (min-height: 600px) {
+  .shell > main.hub-curation-viewport {
+    box-sizing: border-box;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* O shell define padding completo; somente o respiro inferior prevalece. */
+    padding-bottom: var(--hub-curation-bottom-gap) !important;
+  }
+  .shell > main.hub-curation-viewport > :not(.surface) {
+    flex-shrink: 0;
+  }
+  .shell > main.hub-curation-viewport > .surface {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    margin-bottom: 0;
+  }
+  .shell > main.hub-curation-viewport > .surface > :not(.tablewrap) {
+    flex: 0 0 auto;
+  }
+  .shell > main.hub-curation-viewport > .surface > .tablewrap {
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+  }
+  /* Não reservar uma faixa vazia para mensagens que ainda não existem.
+     Feedback real continua visível no fluxo e recebe espaço antes do rodapé. */
+  .shell > main.hub-curation-viewport > .message:empty {
+    min-height: 0;
+    margin-block: 0;
+  }
+}
+
+/* Em telas estreitas ou muito baixas, a página conserva o fluxo natural. */
+@media (max-width: 980px), (max-height: 599px) {
+  .shell > main.hub-curation-viewport > .surface > .tablewrap {
+    max-height: none;
+  }
+}

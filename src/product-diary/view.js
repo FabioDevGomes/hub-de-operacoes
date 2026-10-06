@@ -3,6 +3,36 @@
     const $=selector=>root.querySelector(selector);
     const {esc,num:fmtNum,money:fmtMoney,pct:fmtPct}=format;
     const {productColumns,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,excelDate}=domain;
+    let selection=null,editing=null;
+    const dialog=$('#productObservationDialog'),input=$('#productObservationText'),saveButton=$('#productObservationSave'),cancelButton=$('#productObservationCancel'),errorBox=$('#productObservationError');
+    function closeEditor(){if(editing?.saving)return;dialog.close();editing=null}
+    cancelButton.onclick=closeEditor;
+    dialog.oncancel=event=>{if(editing?.saving)event.preventDefault();else editing=null};
+    $('#productBody').onclick=event=>{
+      const link=event.target.closest?.('[data-edit-observation]');
+      if(!link||!selection||typeof actions.saveObservation!=='function')return;
+      event.preventDefault();event.stopPropagation();
+      const snapshot=getSnapshot(...selection),date=link.dataset.editObservation,campaignId=snapshot.storedCampaignId;
+      if(!campaignId)return;
+      const row=snapshot.displayRows.find(item=>productDiaryRowDate(item)===date);
+      const previous=global.ProductDiaryObservations.observationFor({observacoes_diario:snapshot.observations||[]},campaignId,date);
+      editing={campaignId,date,expectedRevision:previous?.revisao||0,selection:[...selection],saving:false};
+      input.value=previous?previous.texto:String(row?.cells?.Q?.text??row?.cells?.Q?.value??'');
+      errorBox.textContent='';input.disabled=false;saveButton.disabled=false;cancelButton.disabled=false;
+      $('#productObservationContext').textContent=snapshot.sheetName+' · '+saleDate(date);
+      dialog.showModal();input.focus();
+    };
+    $('#productObservationForm').onsubmit=async event=>{
+      event.preventDefault();
+      if(!editing||editing.saving)return;
+      const current=editing;current.saving=true;
+      input.disabled=true;saveButton.disabled=true;cancelButton.disabled=true;errorBox.textContent='';
+      try{
+        await actions.saveObservation({campaignId:current.campaignId,date:current.date,text:input.value,expectedRevision:current.expectedRevision});
+        current.saving=false;closeEditor();renderProduct(...current.selection);
+      }catch(error){errorBox.textContent=error.message||'Não foi possível salvar. Tente novamente.'}
+      finally{current.saving=false;input.disabled=false;saveButton.disabled=false;cancelButton.disabled=false}
+    };
     function formatExcelDate(serial){const d=excelDate(serial);return new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(d)}
     function formatProductCell(col,cell){if(!cell||cell.value==null||cell.value==='')return'—';if(col==='A')return typeof cell.value==='number'?formatExcelDate(cell.value):esc(cell.text??cell.value);if(['E','G','K','L'].includes(col)){const v=Number(cell.value);return Number.isFinite(v)?fmtPct(Math.abs(v)<=1?v*100:v):''}if(['I','J','O','P'].includes(col)&&typeof cell.value==='number')return fmtNum(cell.value,2);return esc(cell.text??cell.value)}
     function formatProductDiaryCell(col,row,manualSalesByDate,pauseConfirmedAt){const value=formatProductCell(col,row.cells[col]),count=productDiaryManualSaleCount(row,manualSalesByDate),pauseNote=col==='Q'&&pauseConfirmedAt&&productDiaryRowDate(row)===pauseConfirmedAt?`<small class="product-pause-note">Campanha pausada na data ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}</small>`:'';if(col==='F')return count?`<span>${value}</span><small class="product-manual-sale-note">+${count} manual · provisória</small>`:value;if(col!=='Q')return value;const notes=[];if(value!=='—')notes.push(`<span>${value}</span>`);if(count)notes.push(`<small class="product-manual-sale-note">Venda manual provisória (${count}); aguarda MCC D−1</small>`);if(pauseNote)notes.push(pauseNote);return notes.join('')||'—'}
@@ -18,11 +48,13 @@
       }).join(''):'<tr><td colspan="8" class="empty">Nenhuma venda manual registrada nesta campanha.</td></tr>';
     }
     function renderProduct(name,source='manifest',campaignId=null){
-      const {sheetName,rows,displayRows,manualSalesByDate,summary,investment,pauseConfirmedAt,saleHistory=[]}=getSnapshot(name,source,campaignId);
+      const nextSelection=[name,source,campaignId];
+      if(selection&&selection.some((value,index)=>value!==nextSelection[index]))closeEditor();
+      selection=nextSelection;
+      const {sheetName,rows,displayRows,manualSalesByDate,summary,investment,clicks,conversions,pauseConfirmedAt,saleHistory=[],storedCampaignId=null,observations=[]}=getSnapshot(name,source,campaignId);
       $('#productSaleHistory').classList.toggle('hidden',!!summary);
       renderSales(summary?[]:saleHistory);
       const boundedRows=pauseConfirmedAt?productDiaryRowsThroughDate(displayRows,pauseConfirmedAt):displayRows,provisionalSaleDates=new Set(manualSalesByDate.keys()),diaryRows=productDiaryRowsThroughDate(productDiaryRowsWithManualSales(boundedRows,manualSalesByDate),pauseConfirmedAt);
-      const latest=boundedRows.at(-1)?.cells||{};
       if(summary){
         const metrics=summary.metrics||{},shown=(value,formatter)=>value&&(value.state==='observed'||value.state==='derived')?formatter(value.value):'Não registrado',account=summary.account_legacy||'Não registrada',endDate=summary.end_date?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeZone:'UTC'}).format(new Date(`${summary.end_date}T00:00:00Z`)):'Não informada';
         actions.setTitle(sheetName,'Histórico legado consolidado');
@@ -48,9 +80,14 @@
         $('#productTableWrap').classList.remove('hidden');
         $('#legacySummaryBody').classList.add('hidden');
         $('#legacySummaryBody').innerHTML='';
-        $('#productSummary').innerHTML=`<div class="card product-name"><div class="eyebrow">${source==='workbook'?'Histórico':'Campanha ativa'}</div><h2>${esc(sheetName)}</h2><p>${rows.length?'Histórico da base local':'Sem linhas diárias disponíveis'}</p></div><div class="card metric-mini"><span>Investimento atual</span><strong>${investment==null?'—':fmtMoney(investment)}</strong></div><div class="card metric-mini"><span>Cliques Google</span><strong>${fmtNum(latest.C?.value)}</strong></div><div class="card metric-mini"><span>Conversões</span><strong>${fmtNum(latest.F?.value)}</strong></div>`;
+        $('#productSummary').innerHTML=`<div class="card product-name"><div class="eyebrow">${source==='workbook'?'Histórico':'Campanha ativa'}</div><h2>${esc(sheetName)}</h2><p>${rows.length?'Histórico da base local':'Sem linhas diárias disponíveis'}</p></div><div class="card metric-mini"><span>Investimento total</span><strong>${investment==null?'—':fmtMoney(investment)}</strong></div><div class="card metric-mini"><span>Cliques Google · total</span><strong>${fmtNum(clicks)}</strong></div><div class="card metric-mini"><span>Conversões · total</span><strong>${fmtNum(conversions)}</strong></div>`;
         $('#productHead').innerHTML='<tr>'+productColumns.map(x=>`<th>${x[1]}</th>`).join('')+'</tr>';
-        $('#productBody').innerHTML=diaryRows.length?diaryRows.map(r=>`<tr${productDiaryHasSales(r,provisionalSaleDates)?' class="has-sales"':''}>${productColumns.map(([col])=>`<td class="${col==='Q'?'':'num'}">${formatProductDiaryCell(col,r,manualSalesByDate,pauseConfirmedAt)}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="17" class="empty">Nenhum registro diário encontrado nesta aba.</td></tr>';
+        $('#productBody').innerHTML=diaryRows.length?diaryRows.map(r=>{
+          const date=productDiaryRowDate(r),manual=global.ProductDiaryObservations?.observationFor({observacoes_diario:observations},storedCampaignId,date);
+          const shown=manual?{...r,cells:{...r.cells,Q:{value:manual.texto}}}:r;
+          const edit=storedCampaignId&&date&&typeof actions.saveObservation==='function'?`<a href="#" class="hub-corner-edit" data-edit-observation="${esc(date)}" aria-label="Editar observações de ${esc(saleDate(date))}" aria-haspopup="dialog" aria-controls="productObservationDialog">Editar</a>`:'';
+          return `<tr${productDiaryHasSales(r,provisionalSaleDates)?' class="has-sales"':''}>${productColumns.map(([col])=>`<td class="${col==='Q'?'hub-edit-host product-observation-cell':'num'}">${col==='Q'?'<div class="product-observation-text">':''}${formatProductDiaryCell(col,shown,manualSalesByDate,pauseConfirmedAt)}${col==='Q'?'</div>'+edit:''}</td>`).join('')}</tr>`;
+        }).join(''):'<tr><td colspan="17" class="empty">Nenhum registro diário encontrado nesta aba.</td></tr>';
         $('#productCaption').textContent=pauseConfirmedAt?`Histórico da base local encerrado na pausa confirmada em ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}.`:rows.length?'Histórico da base local; vendas manuais provisórias aparecem separadas e aguardam confirmação do MCC D−1':source==='workbook'?'Aba histórica sem linhas diárias reconhecidas':'D−1 e D zero disponíveis no manifesto atual';
         $('#rowCount').textContent=`${diaryRows.length} ${diaryRows.length===1?'dia':'dias'}`;
         $('#productFooterNote').textContent='Campos ausentes permanecem vazios. Cliques da plataforma não são inferidos pelo manifesto.';

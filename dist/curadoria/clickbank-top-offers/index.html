@@ -7,8 +7,8 @@
   <link rel="icon" href="/favicon.png">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-header-color">
   <link rel="stylesheet" href="./clickbank-top-offers.css?v=7">
-  <link rel="stylesheet" href="/sidebar-component.css?v=8">
-</head>
+  <link rel="stylesheet" href="/sidebar-component.css?v=11">
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=1"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=1"></head>
 <body>
   <div class="shell">
     <aside>
@@ -17,7 +17,7 @@
       <div data-hub-sidebar-products></div>
       <div class="local"><b>● Dados locais</b><br>Banco isolado neste navegador.</div>
     </aside>
-    <main id="clickbankTopOffersRoot">
+    <main id="clickbankTopOffersRoot" class="hub-curation-viewport">
       <header class="top">
         <div><div class="eyebrow">Curadoria · ClickBank</div><h1>Top Offers CB</h1><div class="sub">Acompanhe as posições e métricas observadas nas capturas do Affiliate Marketplace.</div></div>
         <div class="actions"><button class="btn" id="exportBackup" type="button">Baixar backup JSON</button><label class="btn file-button">Restaurar backup<input id="restoreBackup" type="file" accept="application/json,.json" hidden></label><button class="btn primary" id="openImport" type="button">Colar captura</button></div>
@@ -26,7 +26,7 @@
       <section class="surface">
         <div class="capture-toolbar"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura"></select></div>
         <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
-        <div class="filter-grid"><input class="control search" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor"></div>
+        <div class="filter-grid hub-curation-table-filters"><input class="control search hub-search-filter" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor"></div>
         <div class="tablewrap"><table><thead><tr>
           <th><button class="sort-btn" data-sort="rank" type="button">Posição</button></th><th><button class="sort-btn" data-sort="offerName" type="button">Oferta</button></th><th><button class="sort-btn" data-sort="seller" type="button">Vendedor</button></th>
           <th><button class="sort-btn" data-sort="trends" type="button">Google Trends</button></th><th><button class="sort-btn" data-sort="glimpse" type="button">Glimpse</button></th><th><button class="sort-btn" data-sort="images" type="button">Imagens</button></th>
@@ -64,7 +64,7 @@
   </dialog>
     </main>
   </div>
-  <script src="/sidebar-component.js"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=7"></script>
+  <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=8"></script>
 </body>
 </html>

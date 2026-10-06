@@ -1,12 +1,13 @@
         <div id="kpis" class="kpis"></div>
         <div class="card panel">
-          <div class="panel-head"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><div class="panel-controls"><select id="campaignStatusFilter" class="search" style="width:auto" aria-label="Filtrar campanhas por situação"><option value="all">Todas</option><option value="active">Ativas</option><option value="paused">Pausadas</option><option value="paused7">Pausadas nos últimos 7 dias</option></select><div class="view-toggle" role="group" aria-label="Período da visão geral"><button id="totalsConsolidated" class="active" type="button">Consolidado</button><button id="totalsD1" type="button">D−1</button><button id="totalsD0" type="button">D zero</button></div>
-            <details id="overviewColumnPicker" class="overview-column-picker">
+          <div class="panel-head"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><div class="panel-controls"><input id="search" class="search hub-search-filter" type="search" placeholder="Buscar campanha" aria-label="Buscar campanha"><select id="campaignStatusFilter" class="search hub-table-filter" style="width:auto" aria-label="Filtrar campanhas por situação"><option value="all">Todas</option><option value="active">Ativas</option><option value="paused">Pausadas</option><option value="history">Histórico</option><option value="paused7">Pausadas nos últimos 7 dias</option></select><div class="view-toggle" role="group" aria-label="Período da visão geral"><button id="totalsConsolidated" class="active" type="button">Consolidado</button><button id="totalsD1" type="button">D−1</button><button id="totalsD0" type="button">D zero</button></div>
+            <details id="overviewColumnPicker" class="overview-column-picker hub-column-picker">
               <summary class="btn">Colunas</summary>
-              <div class="overview-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions"></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
+              <div class="overview-column-menu hub-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions" data-column-options></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
             </details>
-            <span id="totalsCount" class="tag"></span></div></div>
-          <div class="table-wrap"><table class="totals-table"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody></table></div>
+          </div></div>
+          <p id="overviewWidthsMessage" role="status"></p>
+          <div class="table-wrap"><table class="totals-table hub-table-layout"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody></table></div>
         </div>
         <dialog id="minimumRoiDialog" class="overview-roi-dialog" aria-labelledby="minimumRoiTitle">
           <form id="minimumRoiForm" class="overview-roi-form">
@@ -18,6 +19,30 @@
             <p id="minimumRoiHelp" class="overview-roi-help">O cálculo usa a receita total considerada para esta campanha. São aceitos percentuais negativos acima de −100%.</p>
             <p id="minimumRoiError" class="overview-roi-error" role="alert" aria-live="polite"></p>
             <div class="overview-roi-actions"><button id="minimumRoiCancel" class="btn" type="button">Cancelar</button><button id="minimumRoiSave" class="btn primary" type="submit">OK</button></div>
+          </form>
+        </dialog>
+        <dialog id="commissionTestDialog" class="overview-roi-dialog" aria-labelledby="commissionTestTitle">
+          <form id="commissionTestForm" class="overview-roi-form">
+            <div><h2 id="commissionTestTitle">Ajustar limite inicial de teste</h2><p>Altere o valor ou o percentual da comissão; o outro campo será recalculado. O CPA vem do nome da campanha e não é alterado aqui.</p></div>
+            <label for="commissionTestLimit">Valor máximo do limite de teste (R$)</label>
+            <input id="commissionTestLimit" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="commissionTestHelp commissionTestError">
+            <label for="commissionTestPercent">Percentual da comissão destinado ao teste (%)</label>
+            <input id="commissionTestPercent" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="commissionTestHelp commissionTestError">
+            <p id="commissionTestHelp" class="overview-roi-help">Válido antes da primeira venda. Após uma venda, volta a valer a regra de ROI mínimo.</p>
+            <p id="commissionTestError" class="overview-roi-error" role="alert" aria-live="polite"></p>
+            <div class="overview-roi-actions"><button id="commissionTestCancel" class="btn" type="button">Cancelar</button><button class="btn primary" type="submit">OK</button></div>
+          </form>
+        </dialog>
+        <dialog id="remainingAlertDialog" class="overview-roi-dialog" aria-labelledby="remainingAlertTitle">
+          <form id="remainingAlertForm" class="overview-roi-form">
+            <div><h2 id="remainingAlertTitle">Alerta de valor restante</h2><p>Esta configuração vale para todas as campanhas e períodos da Visão Geral.</p></div>
+            <label for="remainingAlertMinimum">Sinalizar em vermelho quando abaixo de (R$)</label>
+            <div class="overview-alert-field"><span class="overview-alert-swatch overview-alert-swatch-red" aria-hidden="true"></span><input id="remainingAlertMinimum" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="remainingAlertRedPriority remainingAlertError"><small id="remainingAlertRedPriority">Prioridade 1 · sobrepõe o amarelo.</small></div>
+            <label for="remainingAlertYellowMinimum">Sinalizar em amarelo claro quando abaixo de (R$)</label>
+            <div class="overview-alert-field"><span class="overview-alert-swatch overview-alert-swatch-yellow" aria-hidden="true"></span><input id="remainingAlertYellowMinimum" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Opcional" aria-describedby="remainingAlertYellowPriority remainingAlertHelp remainingAlertError"><small id="remainingAlertYellowPriority">Prioridade 2 · somente fora do vermelho.</small></div>
+            <p id="remainingAlertHelp" class="overview-roi-help">Deixe o amarelo em branco para desativá-lo. Exemplo: amarelo abaixo de R$ 200; vermelho abaixo de R$ 100. O vermelho sempre prevalece.</p>
+            <p id="remainingAlertError" class="overview-roi-error" role="alert" aria-live="polite"></p>
+            <div class="overview-roi-actions"><button id="remainingAlertCancel" class="btn" type="button">Cancelar</button><button class="btn primary" type="submit">OK</button></div>
           </form>
         </dialog>
         <dialog id="fractionalValueDialog" class="overview-roi-dialog overview-fractional-dialog" aria-labelledby="fractionalValueTitle">

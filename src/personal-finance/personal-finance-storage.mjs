@@ -1,4 +1,4 @@
-import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=26';
+import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=27';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
@@ -216,6 +216,41 @@ export async function saveEntry(entry) {
   try {
     await writeOne(db, STORES.entries, normalized);
     return normalized;
+  } finally { db.close(); }
+}
+
+export async function applyDailyActualTargets({ monthKey, dayKey, entries = [] }) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(monthKey || '')) || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(dayKey || '')) || !dayKey.startsWith(`${monthKey}-`) || new Date(`${dayKey}T00:00:00Z`).toISOString().slice(0, 10) !== dayKey) {
+    throw new Error('Data inválida para atualizar as metas diárias.');
+  }
+  const normalizedEntries = entries.map(entry => {
+    const normalized = normalizeEntry(entry);
+    if (normalized.month_key !== monthKey) throw new Error('O lançamento não pertence ao mês da meta diária.');
+    return normalized;
+  });
+  const db = await openPersonalFinanceDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORES.months, STORES.entries], 'readwrite');
+      let failure = null, result = null;
+      const monthRequest = tx.objectStore(STORES.months).get(monthKey);
+      monthRequest.onsuccess = () => {
+        if (!monthRequest.result) { failure = new Error('O mês atual ainda não foi criado.'); tx.abort(); return; }
+        const month = normalizeMonth(monthRequest.result);
+        if (month.daily_actual_targets_applied_on === dayKey) {
+          result = { applied:false, month, entries:[] };
+          return;
+        }
+        const updatedMonth = normalizeMonth({ ...month, daily_actual_targets_applied_on:dayKey });
+        tx.objectStore(STORES.months).put(updatedMonth);
+        for (const entry of normalizedEntries) tx.objectStore(STORES.entries).put(entry);
+        result = { applied:true, month:updatedMonth, entries:normalizedEntries };
+      };
+      monthRequest.onerror = () => tx.abort();
+      tx.oncomplete = () => { if (result?.applied) publishPersonalFinanceUpdate(); resolve(result); };
+      tx.onerror = () => reject(failure || tx.error || new Error('Não foi possível atualizar as metas diárias.'));
+      tx.onabort = () => reject(failure || tx.error || new Error('A atualização das metas diárias foi cancelada.'));
+    });
   } finally { db.close(); }
 }
 

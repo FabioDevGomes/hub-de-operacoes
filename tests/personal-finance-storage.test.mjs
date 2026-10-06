@@ -35,7 +35,7 @@ const bundle = {
   schema:'personal_finance_v1', version:1,
   groups:[{ group_id:'g1', name:'Casa', sort_order:0, active:true }],
   categories:[{ category_id:'c1', name:'Aluguel', group_id:'g1', currency:'BRL', default_plan:100, sort_order:0, active:true }],
-  months:[{ month_key:'2026-09', plan_source:'defaults' }],
+  months:[{ month_key:'2026-09', plan_source:'defaults', daily_actual_targets_applied_on:'2026-09-06' }],
   entries:[{ entry_id:'2026-09:c1', month_key:'2026-09', category_id:'c1', category_name:'Aluguel', group_id:'g1', group_name:'Casa', currency:'BRL', planned_amount:100, actual_amount:null }],
   debts:[], funds:[],
 };
@@ -44,6 +44,7 @@ const counts = writeBundleToTransaction(transaction, bundle);
 assert.equal(counts.groups, 1);
 assert.equal(db.stores.get(STORES.groups).rows.has('obsolete'), false, 'restauração substitui somente quando há bundle validado');
 assert.equal(db.stores.get(STORES.entries).rows.get('2026-09:c1').actual_amount, null, 'valor realizado em branco permanece em branco no backup');
+assert.equal(db.stores.get(STORES.months).rows.get('2026-09').daily_actual_targets_applied_on, '2026-09-06', 'a restauração mantém o marcador que protege edições manuais durante o dia');
 
 const expenseImport = {
   schema:'personal_finance_v1', version:1, groups:[{ group_id:'g-expenses', name:'Despesas', sort_order:0, active:true }],
@@ -71,6 +72,9 @@ assert.equal(db.stores.get(STORES.categories).rows.get('c-internet').name, 'Inte
 const source = await readFile(new URL('../src/personal-finance/personal-finance-storage.mjs', import.meta.url), 'utf8');
 const readMonthBlock = source.match(/export async function readMonth\([\s\S]*?\n\}/)?.[0] || '';
 assert.match(readMonthBlock, /\.index\('month_key'\)\.getAll\(only\(monthKey\)\)/, 'leituras mensais filtram por índice em vez de carregar o histórico completo');
+const dailyTargetsBlock = source.match(/export async function applyDailyActualTargets\([\s\S]*?\n\}/)?.[0] || '';
+assert.match(dailyTargetsBlock, /db\.transaction\(\[STORES\.months, STORES\.entries\], 'readwrite'\)/, 'metas do dia e lançamentos são gravados na mesma transação');
+assert.match(dailyTargetsBlock, /daily_actual_targets_applied_on === dayKey/, 'a gravação idempotente impede que uma atualização no mesmo dia sobrescreva a edição manual');
 const reserveReadBlock = source.match(/export async function readReserveLedger\([\s\S]*?\n\}/)?.[0] || '';
 assert.match(reserveReadBlock, /fundsIndex\.getAll\(IDBKeyRange\.upperBound\(throughMonthKey\)\)/, 'o histórico da reserva consulta snapshots até o mês solicitado');
 assert.match(reserveReadBlock, /fund\.type === 'reserve' \|\| fund\.type === 'available'/, 'a consulta global também carrega os saldos disponíveis usados no cálculo Nubank');

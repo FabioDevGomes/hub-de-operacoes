@@ -5,8 +5,14 @@ const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8')+
 assert.equal((html.match(/id="downloadCatalog"/g)||[]).length,0,'exportação independente do catálogo não deve mais ser apresentada');
 assert.ok(html.includes('Baixar backup completo JSON'),'o botão único de backup completo está ausente');
 assert.ok(html.includes('payload.catalogo_produtos=ProductCatalog.normalize(state.productCatalog)'),'backup completo não inclui os ajustes do catálogo');
-assert.ok(html.includes('tested-products/view.js?v=4'),'módulo de Produtos Testados não invalida o cache da nova apresentação de lucro');
+assert.ok(html.includes('tested-products/view.js?v=8')&&html.includes('tested-products/domain.js?v=8'),'módulos de Produtos Testados não invalidam o cache das correções');
+assert.ok(html.includes('tested-products/tested-products.css?v=5')&&html.includes('.catalog-edit,.catalog-remove{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:500}')&&html.includes('.catalog-table tbody td{padding-block:5px}'),'ações devem usar peso normal e as linhas devem ficar cerca de 20% mais compactas');
+assert.ok(html.includes('id="testedEditDialog"')&&html.includes('id="testedEditForm"')&&html.includes('Restaurar todos os calculados'),'formulário do sistema e restauração de valores ausentes');
+assert.ok(html.includes('ProductCatalog.setTestedAdjustments')&&html.includes('await persistProductCatalog(next)'),'edição manual não está restrita ao catálogo');
+assert.ok(html.includes('ajustes_testados')&&html.includes('Ajuste manual nesta lista'),'ajustes manuais precisam de persistência e indicação visível');
 assert.ok(html.includes('id="testedActiveProductsCount"'),'indicador de produtos com campanhas ativas ausente');
+assert.ok(html.includes('id="testedSearch" class="search hub-search-filter" type="search" placeholder="Buscar produto ou campanha"'),'busca compartilhada de produto/campanha ausente em Produtos Testados');
+assert.ok(!html.includes('O backup completo JSON no topo reúne campanhas'),'texto explicativo sinalizado ainda aparece em Produtos Testados');
 assert.ok(html.includes('products.filter(product=>product.active).length'),'indicador não conta produtos ativos consolidados');
 assert.ok(html.includes('id="testedColumnsPicker"')&&html.includes('id="testedColumnsMenu"'),'seletor de colunas de Produtos Testados ausente');
 assert.ok(html.includes("TESTED_COLUMNS_PREF='painel-produtos-testados-colunas-v1'"),'preferência de colunas não possui chave persistente');

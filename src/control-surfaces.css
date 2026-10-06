@@ -1,0 +1,87 @@
+/* Superfícies reutilizáveis. Não alterar dimensões, valores ou cores semânticas. */
+:root {
+  --hub-input-bg: #081321;
+  --hub-input-hover-bg: #0a1829;
+  --hub-button-bg: #101e32;
+  --hub-control-focus: #5ab1ff;
+  --hub-control-error: #ff7584;
+}
+
+/* Opt-in para novas telas; .control é o contrato equivalente da Curadoria.
+   Textareas de colagem, upload, checkboxes e demais controles nativos ficam fora. */
+:is(input,select).hub-input-surface,
+input.hub-search-filter,
+select.hub-table-filter,
+body:has(.hub-menu:is([data-hub-sidebar-active="radar"],[data-hub-sidebar-active="manager"],[data-hub-sidebar-active="ecommerce"],[data-hub-sidebar-active="hot-offers-ms"],[data-hub-sidebar-active="smartadv-offers"],[data-hub-sidebar-active="clickbank-top-offers"])) :is(input,select).control:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]) {
+  background: var(--hub-input-bg);
+  /* Transparent, rather than zero-width, retains existing control dimensions. */
+  border-color: transparent;
+}
+
+:is(input,select).hub-input-surface:hover:not(:disabled):not([readonly]),
+input.hub-search-filter:hover:not(:disabled):not([readonly]),
+select.hub-table-filter:hover:not(:disabled),
+body:has(.hub-menu:is([data-hub-sidebar-active="radar"],[data-hub-sidebar-active="manager"],[data-hub-sidebar-active="ecommerce"],[data-hub-sidebar-active="hot-offers-ms"],[data-hub-sidebar-active="smartadv-offers"],[data-hub-sidebar-active="clickbank-top-offers"])) :is(input,select).control:hover:not(:disabled):not([readonly]) {
+  background: var(--hub-input-hover-bg);
+}
+
+:is(input,select).hub-input-surface:focus-visible,
+input.hub-search-filter:focus-visible,
+select.hub-table-filter:focus-visible,
+body:has(.hub-menu:is([data-hub-sidebar-active="radar"],[data-hub-sidebar-active="manager"],[data-hub-sidebar-active="ecommerce"],[data-hub-sidebar-active="hot-offers-ms"],[data-hub-sidebar-active="smartadv-offers"],[data-hub-sidebar-active="clickbank-top-offers"])) :is(input,select).control:focus-visible {
+  outline: 2px solid var(--hub-control-focus);
+  outline-offset: 2px;
+}
+
+input.hub-search-filter:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+select.hub-table-filter:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* A remoção decorativa nunca oculta validação explícita ou inválida nativa. */
+:is(input,select).hub-input-surface:is([aria-invalid="true"],.invalid,.error,:invalid),
+input.hub-search-filter:is([aria-invalid="true"],.invalid,.error,:invalid),
+select.hub-table-filter:is([aria-invalid="true"],.invalid,.error,:invalid),
+body:has(.hub-menu:is([data-hub-sidebar-active="radar"],[data-hub-sidebar-active="manager"],[data-hub-sidebar-active="ecommerce"],[data-hub-sidebar-active="hot-offers-ms"],[data-hub-sidebar-active="smartadv-offers"],[data-hub-sidebar-active="clickbank-top-offers"])) :is(input,select).control:is([aria-invalid="true"],.invalid,.error,:invalid) {
+  border-color: var(--hub-control-error);
+  outline: 2px solid var(--hub-control-error);
+  outline-offset: 2px;
+}
+
+:is(input,select).hub-input-surface:disabled,
+input.hub-search-filter:disabled,
+select.hub-table-filter:disabled,
+body:has(.hub-menu:is([data-hub-sidebar-active="radar"],[data-hub-sidebar-active="manager"],[data-hub-sidebar-active="ecommerce"],[data-hub-sidebar-active="hot-offers-ms"],[data-hub-sidebar-active="smartadv-offers"],[data-hub-sidebar-active="clickbank-top-offers"])) :is(input,select).control:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Busca reutilizável de listas: dimensões comuns, com expansão em telas estreitas. */
+input.hub-search-filter {
+  width: 240px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: .76rem;
+}
+
+/* Filtros de tabela: a mesma superfície arredondada da Visão Geral, sem impor largura ou altura. */
+select.hub-table-filter { border-radius: 9px; }
+
+/* Search boxes inside multi-filter table toolbars fill their grid/flex slot. */
+input.hub-search-filter.hub-search-filter--fill {
+  width: 100%;
+  max-width: none;
+}
+
+@media (max-width: 700px) {
+  input.hub-search-filter { width: 100%; }
+}
+
+/* Apenas botões neutros opt-in; primários/selecionados/semânticos ficam locais. */
+.hub-button-surface { background: var(--hub-button-bg); }

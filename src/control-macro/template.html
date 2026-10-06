@@ -1,16 +1,18 @@
 <div class="macro-toolbar">
           <div class="macro-month-nav" role="group" aria-label="Navegação por mês">
-            <button id="macroPreviousMonth" class="btn macro-month-arrow" type="button" aria-label="Mês anterior" title="Mês anterior">‹</button>
-            <strong id="macroMonthLabel" class="macro-month-label" aria-live="polite"></strong>
-            <button id="macroNextMonth" class="btn macro-month-arrow" type="button" aria-label="Mês posterior" title="Mês posterior">›</button>
-            <button id="macroCurrentMonth" class="btn" type="button">Mês atual</button>
+            <div class="hub-month-navigation">
+              <button id="macroPreviousMonth" class="btn macro-month-arrow hub-month-arrow" type="button" aria-label="Mês anterior" title="Mês anterior">‹</button>
+              <span id="macroMonthLabel" class="hub-month-label" aria-live="polite"></span>
+              <button id="macroNextMonth" class="btn macro-month-arrow hub-month-arrow" type="button" aria-label="Próximo mês" title="Próximo mês">›</button>
+            </div>
+            <button id="macroCurrentMonth" class="btn hub-month-current" type="button">Mês atual</button>
           </div>
           <label class="btn"><input id="macroHistoryInput" class="file-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">Importar histórico Excel</label>
         </div>
         <div id="macroKpis" class="macro-kpis" aria-live="polite"></div>
         <div class="card panel">
           <div class="panel-head"><div><h2>Resumo diário da operação</h2><p id="macroCaption">A planilha prevalece por campo; a MCC complementa cliques e vendas ausentes a partir de 13/09.</p></div><span id="macroRowCount" class="tag"></span></div>
-          <div class="macro-table-wrap"><table class="macro-table"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th></tr></thead><tbody id="macroDailyBody"></tbody></table></div>
+          <div class="macro-table-wrap"><table class="macro-table hub-table-layout"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th></tr></thead><tbody id="macroDailyBody"></tbody></table></div>
         </div>
         <div class="card panel macro-trend-panel">
           <div class="macro-trend-head"><div><h2>Evolução da operação</h2><p id="macroTrendCaption"></p></div><div class="macro-trend-controls">

@@ -30,10 +30,12 @@ function fixture(t) {
     }});
     return el;
   }
-  const document={createElement:()=>element()};
+  const document={createElement:()=>element(),addEventListener(){},removeEventListener(){}};
   const nodes=new Map(),node=selector=>{if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);};
   const sheet=node('#offerSheet');sheet.classList.add('hidden');
   sheet.querySelector=node;
+  node('#smartAdvColumnPicker').querySelector=node;
+  node('.tablewrap table').rows=[];
   const tabs=['trends','glimpse','images'].map(tab=>element({tab}));
   const panels=['trends','glimpse','images'].map(panel=>element({panel}));
   sheet.querySelectorAll=selector=>selector==='.tabs [data-tab]'?tabs:selector==='[data-panel]'?panels:[];

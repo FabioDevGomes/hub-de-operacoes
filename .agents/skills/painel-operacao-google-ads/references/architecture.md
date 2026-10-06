@@ -18,6 +18,11 @@ O guia [Padrão visual reutilizável](visual-style.md) define a referência apro
 
 - `src/index.template.html`: painel principal, integração das views e interfaces.
 - `src/view-registry.js`: IDs estáveis, query, título/subtítulo, IDs de seção/menu e habilitação das telas.
+- `src/table-layout.css`: fundo uniforme e hover das linhas de tabelas; carregado pela SPA e páginas de Curadoria e copiado pelo build para `dist/table-layout.css`.
+- `src/table-columns.css` e `.mjs`: aparência global do seletor Colunas (Visão Geral/SmartAdv) e componente reutilizável de visibilidade por chave. SmartAdv monta com preferências locais próprias e reaplica após renderizar; o componente não acessa bancos operacionais. Visão Geral conserva sua lógica/IDs e compartilha a folha visual.
+- `src/curadoria/curation-list-layout.css`: geometria compartilhada das seis listas independentes de Curadoria; `main.hub-curation-viewport` distribui a altura restante para a tabela em desktop e mantém 8px de respiro inferior. Layout responsivo permanece no fluxo da página; não altera fichas, eventos ou dados. Publicado pelo build da pasta Curadoria.
+- `src/control-surfaces.css`: superfícies globais reutilizáveis para controles, buscas de listas (`.hub-search-filter`) e filtros de tabelas (`.hub-table-filter`); importada por `theme-colors.css` e copiada pelo build para `dist/control-surfaces.css`.
+- `src/month-navigation.css`: padrão global dos navegadores de mês/dia, com setas, valor central e ação para retornar ao período atual; o rótulo varia conforme a granularidade (por exemplo, “Hoje” ou “Mês atual”). Copiado pelo build e compartilhado entre Controle Macro, Faturamento, Controle de gastos e Meu Tempo.
 - `src/database.js`: modelo normalizado, importadores MCC/Excel, consolidação e regras de domínio de campanhas.
 - `src/storage/hub-database.js` e `.mjs`: nome/versão do IndexedDB, stores/índices aditivos e abertura da conexão, compartilhados pelo painel, Preparador e módulos financeiros. Transações de negócio continuam em seus consumidores.
 - `src/preparador-MCC/index.html`: fonte canônica do Preparador; o build publica somente essa página em `dist/preparador-MCC/index.html`, sem copiar arquivos históricos.
@@ -59,6 +64,8 @@ O piloto de separação do Mapa por Conta está documentado em `docs/maintenance
 O ROI histórico no lançamento de uma venda é distinto do ROI mínimo de teste. A projeção pura fica em `src/overview/sale-roi-domain.js`; o adaptador `saveProvisionalSale` guarda a fotografia junto da venda antes de `persistLocalBase`. `overviewSnapshot` e `productDiarySnapshot` fornecem o histórico de vendas por ID estável às views. A tabela mostra primeira/segunda venda manual; o Diário tem um quadro separado com todas as fotografias, inclusive vendas conciliadas. As views não recalculam nem persistem esses ROIs. Ver [contrato de dados](data-model.md#roi-no-momento-do-registro-de-venda-manual).
 
 O seletor **Colunas** pertence a `src/overview/view.js`; definições, larguras por chave e filtragem ficam em `OverviewDomain`. A seleção de colunas é preferência local de apresentação e preserva a coluna Campanha, os três períodos, filtros e navegação. Estilos usam `data-column`, não a posição visível, para manter alinhamento/larguras depois de ocultar colunas.
+
+O redimensionamento manual da Visão Geral fica também na view e no CSS local: separador de cabeçalho com Pointer Events/captura e setas de teclado, pixels por chave em `localStorage` (`hub:overview:column-widths:v1`). Salva somente no fim do gesto; limites/fallback protegem preferências inválidas ou storage bloqueado. Não há reset de larguras nem efeitos nos bancos; o reset de Colunas continua exclusivo da visibilidade. Ver contrato e regressão em `docs/maintenance.md` > Visão Geral e Diário.
 
 `OverviewDomain.deriveTestBudget()` calcula o limite usando a receita confirmada da campanha (ou comissão por venda multiplicada pelas vendas, quando necessário). O link do texto de ROI mínimo abre um diálogo que sincroniza **Valor máximo do limite de teste** e **ROI mínimo do limite de teste** com essa mesma receita. Digitar o ROI recalcula o limite; digitar o limite recalcula o ROI. `OK` persiste somente `campanhas[].roi_minimo_pct` na base atual; não há store/schema adicional. Valores negativos são válidos desde que maiores que −100%, mantendo limite finito e não negativo. A tabela continua exibindo os mesmos rótulos de valor, ROI mínimo e quantidade de vendas.
 
@@ -106,19 +113,23 @@ Nas fichas Google Imagens da Lista de Gerente e E-commerce GM, selecionar `Mista
 
 ## Grupos do menu lateral
 
-O menu lateral das telas principais e dos módulos independentes usa o componente comum `src/sidebar-component.js` e seus estilos `src/sidebar-component.css`. O build publica esses arquivos na raiz de `dist/`. Cada tela mantém somente um mount com `data-hub-sidebar` e um mount `data-hub-sidebar-products`, configurando o modo SPA ou a chave ativa da página; rótulos, grupos, links, acordeão, estado aberto compartilhado e animação ficam centralizados. Na SPA, IDs de navegação vêm de `src/view-registry.js`; os controles/lista dinâmica de campanhas do Diário continuam no mount de Produtos e preservam seus IDs existentes. Glimpse é exceção intencional: é uma janela transitória focada e permanece sem menu.
+O menu lateral das telas principais e dos módulos independentes usa o componente comum `src/sidebar-component.js` e seus estilos `src/sidebar-component.css`. O build publica esses arquivos na raiz de `dist/`. Cada tela mantém somente um mount com `data-hub-sidebar` e um mount `data-hub-sidebar-products`, configurando o modo SPA ou a chave ativa da página; rótulos, grupos, links, acordeão, estado aberto compartilhado e animação ficam centralizados. Na SPA, IDs de navegação vêm de `src/view-registry.js`; o mount de Produtos oferece somente Produtos Testados. A seleção de campanha para o Diário pertence à tabela da Visão Geral, incluindo seu filtro Histórico. Glimpse é exceção intencional: é uma janela transitória focada e permanece sem menu.
 
 Ao criar/alterar uma entrada, edite a configuração em `src/sidebar-component.js` (e registre views da SPA em `src/view-registry.js`), sem copiar rótulos, destinos ou lógica do acordeão para cada HTML. Para validar, rode `tests/sidebar-component.test.mjs`, `tests/sidebar-layout.test.mjs`, `tests/build.test.mjs` e a suíte completa; confira visualmente a Visão Geral, Preparador MCC, Lista de Gerente, E-commerce GM, Radar e Asset Studio, incluindo estado ativo e expansão do grupo.
 
-- Operação: Visão geral e Preparador MCC.
+- Operação: Visão geral, Preparador MCC e Produtos Testados, como item direto após Preparador MCC.
 - Análises: CPA, Mapa por Conta, Observabilidade Decisória e Observabilidade da Curadoria.
 - Financeiro: Controle Macro e Faturamento.
 - Curadoria: Radar SpyHero, Lista de Gerente, E-commerce GM e Hot Offers MS.
 - Criação de ofertas: Asset Studio e Ficha e Presell, nessa ordem.
 - Pessoal: Meu Tempo e Controle de gastos pessoais.
-- Produtos: Produtos Testados e acesso ao Diário de campanha; a lista de campanhas permanece no painel principal.
+- Não há seção expansível Produtos: Produtos Testados usa o mesmo nível dos outros itens de Operação, preservando `testedProductsNav` e `/?view=tested`. O Diário de campanha é acessado por duplo clique na tabela da Visão Geral; o filtro Histórico preserva os acessos às campanhas pausadas, abas antigas e resumos Totais. Chamadas antigas `setOpenGroup('products')` continuam abrindo Operação.
 
 ### Produtos e campanhas no diário
+
+O editor por linha fica em `src/product-diary/view.js` e usa o CSS global `src/table-edit-actions.css` (também adotado pelo Editar da Visão Geral). `observation-domain.js` valida e projeta as anotações por ID estável/data; `observation-storage.js` grava apenas a alteração aditiva na base mais recente em uma transação. O adaptador fornece snapshots/callbacks, sem duplicar os listeners. Notas manuais não reescrevem Q, status, métricas nem linhas virtuais. Ver [contrato de edição](../../../../docs/maintenance.md#edição-de-observações-do-diário-de-campanha).
+
+O acesso pela Visão Geral preserva nome completo, fonte e ID estável. `OverviewDomain.historyNavigationRows()` apresenta os acessos históricos antes exclusivos do menu, sem duplicar diários operacionais nem criar métricas MCC. Resumos Totais mantêm o acesso `legacy` separado, inclusive quando associados a campanhas nativas. Seus atalhos não alteram KPIs nem contagens operacionais; métricas permanecem no resumo aberto. O contrato e os testes ficam em [Manutenção — acesso ao Diário](../../../../docs/maintenance.md#ajustes-de-teste-e-alerta-da-visão-geral).
 
 O Diário de campanha é campanha-cêntrico: cada seleção mostra somente as linhas diárias e métricas daquela campanha. Um mesmo produto pode reunir várias campanhas relacionadas; mantenha-as como campanhas distintas, com identidades e históricos próprios. Produtos Testados é a visão agregada por produto e lista as campanhas relacionadas, enquanto o Diário de campanha abre cada uma individualmente. Não some nem funda diários de campanhas automaticamente. No desktop, o painel do Diário usa o espaço restante do primeiro viewport e mantém a rolagem vertical na área da tabela; em larguras responsivas, permanece no fluxo normal da página.
 
@@ -150,7 +161,7 @@ O Diário também mostra o quadro “Histórico de lançamentos do dia” para a
 
 Na aba Configurar, a edição de itens e atividades usa um diálogo nativo integrado à página, em vez de caixas `prompt`/`confirm` do navegador. O formulário edita nome, categoria, tipo, ordem, produtividade, exibição nas análises, tipo de gráfico e agregação; a regra fixa de 10% do Kakashi é informativa e permanece controlada pelo domínio. Salvar continua chamando `Storage.saveItem`, preserva IDs e snapshots dos lançamentos antigos e altera a configuração apenas após confirmação explícita no formulário.
 
-Na comparação do Histórico, consumo de refrigerante (`item-refrigerante` com valor “Sim”) destaca em vermelho somente a célula da atividade/data, com a mesma tonalidade suave da bebida alcoólica. O cabeçalho da data continua sendo destacado exclusivamente por bebida alcoólica.
+Na comparação do Histórico, bebida alcoólica, refrigerante (`item-refrigerante`) e Verde 16:20 (`item-verde-horario`) recebem destaque vermelho suave somente na célula da atividade/data quando o valor é “Sim”. O cabeçalho da data continua sendo destacado exclusivamente por bebida alcoólica.
 
 ## Build e servidor
 

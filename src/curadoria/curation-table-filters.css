@@ -1,0 +1,42 @@
+/* Tamanho compacto da E-commerce GM, compartilhado pelas listas de Curadoria.
+   Opt-in na faixa de filtros: não dimensiona fichas, colagens ou paginação.
+   Larguras e quebras continuam sob responsabilidade do layout de cada lista. */
+.hub-curation-table-filters :is(input, select).control {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding: 7px;
+  font-size: .74rem;
+  line-height: 1.2;
+}
+
+/* Mesmo padrão de sombra das ações compartilhadas do Hub.
+   Classe reutilizável em botões e no summary do seletor de colunas. */
+.hub-curation-table-filters :is(button, summary).hub-table-toolbar-action {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 7px 8px;
+  border: 0;
+  font-size: .74rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 9px rgba(0, 0, 0, .55);
+  transition: box-shadow .15s ease;
+}
+.hub-curation-table-filters :is(button, summary).hub-table-toolbar-action:not(:disabled,[aria-disabled="true"]):is(:hover,:focus-visible) {
+  box-shadow: 0 5px 12px rgba(0, 0, 0, .65);
+}
+.hub-curation-table-filters :is(button, summary).hub-table-toolbar-action:focus-visible {
+  outline: 2px solid var(--hub-control-focus, #5ab1ff);
+  outline-offset: 2px;
+}
+.hub-curation-table-filters :is(button, summary).hub-table-toolbar-action:is(:disabled,[aria-disabled="true"]) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-curation-table-filters :is(button, summary).hub-table-toolbar-action {
+    transition: none;
+  }
+}

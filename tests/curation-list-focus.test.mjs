@@ -7,8 +7,9 @@ const row={dataset:{product:'normalized-product'},offsetWidth:800,classList:{add
 control.closest=selector=>selector==='[data-product],[data-offer]'?row:null;
 let scrollPosition=[0,0],listScrollPosition=[0,0];
 const listScroll={dataset:{},scrollLeft:154,scrollTop:386};
+const decisionDialog={id:'sharedDecisionDialog',open:false};
 globalThis.sessionStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)};
-globalThis.document={addEventListener:(name,handler,capture)=>listeners.push({name,handler,capture}),querySelector:selector=>selector==='.tablewrap'||selector==='[data-curation-list-scroll]'?listScroll:null,querySelectorAll:()=>[row]};
+globalThis.document={addEventListener:(name,handler,capture)=>listeners.push({name,handler,capture}),querySelector:selector=>selector==='.tablewrap'||selector==='[data-curation-list-scroll]'?listScroll:selector.includes('#sharedDecisionDialog[open]')&&decisionDialog.open?decisionDialog:null,querySelectorAll:()=>[row]};
 globalThis.window={scrollX:31,scrollY:742,scrollTo:(x,y)=>{scrollPosition=[x,y]},addEventListener:(name,handler)=>listeners.push({name,handler})};
 
 const focus=mountCurationListFocus('manager',{blockingSelector:'#productSheet:not(.hidden)'});
@@ -43,4 +44,27 @@ assert.equal(controlClasses.has('curation-focus-pulse'),false,'E-commerce GM nã
 assert.equal(ecommerceFocus.restore(),true,'E-commerce GM restaura e anima somente ao voltar à listagem');
 assert.ok(rowClasses.has('curation-focus-pulse'),'a linha é animada depois do retorno à lista');
 assert.ok(controlClasses.has('curation-focus-pulse'),'o controle de imagens/trends é animado depois do retorno à lista');
+
+rowClasses.clear();controlClasses.clear();control.dataset.curationFocus='decision';
+const decisionFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false});
+listeners.filter(item=>item.name==='click'&&item.capture===true).at(-2).handler({target:{closest:()=>control}});
+decisionDialog.open=true;
+assert.equal(decisionFocus.restore(),false,'o retorno aguarda o fechamento do seletor de decisão');
+assert.equal(stored.has('curadoria-list-focus:v1:clickbank-top-offers'),true,'a decisão mantém o foco pendente enquanto o seletor está aberto');
+decisionDialog.open=false;
+listeners.filter(item=>item.name==='close'&&item.capture===true).at(-1).handler({target:decisionDialog});
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.ok(rowClasses.has('curation-focus-pulse'),'a linha pisca após fechar a decisão');
+assert.ok(controlClasses.has('curation-focus-pulse'),'o badge de decisão pisca após fechar o seletor');
+assert.equal(stored.has('curadoria-list-focus:v1:clickbank-top-offers'),false,'a restauração consome o foco depois do fechamento da decisão');
+
+rowClasses.clear();controlClasses.clear();control.dataset.curationFocus='images';
+const imagesFocus=mountCurationListFocus('clickbank-images',{blockingSelector:'#offerSheet:not(.hidden)',highlightOnCapture:false});
+listeners.filter(item=>item.name==='click'&&item.capture===true).at(-2).handler({target:{closest:()=>control}});
+const finishImagesButton={closest:selector=>selector.includes('#finishImages')?{}:null};
+listeners.filter(item=>item.name==='click'&&item.capture===true).at(-1).handler({target:finishImagesButton});
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.ok(rowClasses.has('curation-focus-pulse'),'Concluir e voltar restaura o destaque da linha');
+assert.ok(controlClasses.has('curation-focus-pulse'),'Concluir e voltar restaura o destaque do botão Imagens');
+assert.equal(stored.has('curadoria-list-focus:v1:clickbank-images'),false,'Concluir e voltar consome o foco da linha');
 console.log('curation list focus ok');

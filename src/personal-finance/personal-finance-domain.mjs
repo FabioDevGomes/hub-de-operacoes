@@ -9,8 +9,13 @@ export const MIN_CONSOLIDATED_MONTH_COUNT = 8;
 export const DEFAULT_CONSOLIDATED_MONTH_COUNT = 8;
 
 const isoMonth = value => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ''));
+const isoDay = value => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(value || ''));
 const localMonthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const localDateKey = date => `${localMonthKey(date)}-${String(date.getDate()).padStart(2, '0')}`;
+export function millisecondsUntilNextLocalMidnight(now = new Date()) {
+  const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return Math.max(1, nextDay.getTime() - now.getTime());
+}
 const requiredText = (value, label) => {
   const text = String(value ?? '').trim();
   if (!text) throw new Error(`${label} é obrigatório.`);
@@ -115,12 +120,15 @@ export function normalizeFund(fund) {
 export function normalizeMonth(month) {
   const month_key = String(month?.month_key || '');
   if (!isoMonth(month_key)) throw new Error('Mês inválido.');
-  return {
+  const normalized = {
     month_key,
     created_at: String(month?.created_at || new Date().toISOString()),
     plan_source: month?.plan_source === 'previous' ? 'previous' : 'defaults',
     notes: String(month?.notes ?? '').trim(),
   };
+  const appliedDay = String(month?.daily_actual_targets_applied_on || '');
+  if (isoDay(appliedDay) && appliedDay.startsWith(`${month_key}-`)) normalized.daily_actual_targets_applied_on = appliedDay;
+  return normalized;
 }
 
 export function quarterPeriod(monthKey) {
@@ -375,6 +383,16 @@ export function dailyBudgetPace(entry, monthKey, now = new Date()) {
     remaining,
     status,
   };
+}
+
+export function dailyActualTargetUpdates(entries = [], monthKey, now = new Date()) {
+  if (!isoMonth(monthKey) || monthKey !== localMonthKey(now)) return [];
+  return entries.flatMap(entry => {
+    if (entry?.month_key !== monthKey || entry?.currency !== 'BRL' || (!isLunchDinnerCategory(entry) && !isBreakfastCategory(entry))) return [];
+    const pace = dailyBudgetPace(entry, monthKey, now);
+    if (!pace || entry.actual_amount === pace.expectedToDate) return [];
+    return [{ ...entry, actual_amount:pace.expectedToDate }];
+  });
 }
 
 export function summarizePeriodEntries(entries = [], monthKeys = []) {

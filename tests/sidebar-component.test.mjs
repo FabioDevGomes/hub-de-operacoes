@@ -40,19 +40,19 @@ for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
   'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
   'E-commerce GM', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
-  'Produtos testados', 'Diário de campanha',
+  'Produtos testados',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
-assert.ok(source.includes("group.id === 'operation' ? productsMarkup(mode, activeKey) : ''"), 'submenu Produtos não é inserido dentro do grupo Operação');
+assert.doesNotMatch(source, /function productsMarkup|data-sidebar-toggle="products"|data-sidebar-group="products"/, 'Produtos testados deve ser um item direto, sem seção expansível Produtos');
 const operationStart = source.indexOf("{ id: 'operation'");
 const analysisStart = source.indexOf("{ id: 'analysis'");
 const operationItems = source.slice(operationStart, analysisStart);
+assert.ok(operationItems.includes("key: 'tested'") && operationItems.indexOf("key: 'tested'") > operationItems.indexOf("key: 'preparer'"), 'Produtos testados deve ficar diretamente após Preparador MCC em Operação');
 const financeStart = source.indexOf("{ id: 'finance'");
 const curationStart = source.indexOf("{ id: 'curation'");
 const financeItems = source.slice(financeStart, curationStart);
 assert.ok(!operationItems.includes("key: 'macro'"), 'Controle Macro não deve permanecer no grupo Operação');
 assert.ok(financeItems.includes("key: 'macro'") && financeItems.includes("key: 'billing'"), 'Controle Macro e Faturamento devem compartilhar o grupo Financeiro');
 assert.ok(source.includes("const topName = name === 'products' ? 'operation' : name"), 'abrir Produtos não mantém Operação expandida como grupo pai');
-assert.ok(source.includes('const isProductsSubgroup = group.dataset.sidebarGroup === \'products\''), 'Produtos perdeu o comportamento expansível dentro de Operação');
 const creationStart = source.indexOf("{ id: 'creation'");
 const creationEnd = source.indexOf("{ id: 'personal'", creationStart);
 const creationItems = source.slice(creationStart, creationEnd);
@@ -67,7 +67,7 @@ const views=registryContext.window.PanelViews;
 assert.equal(views.definition('presell').navId,views.definition('copy').navId,'o alias de Pre-Sell deve ativar o mesmo item da tela unificada');
 assert.equal(views.resolveRoute('/?view=presell').id,'copy','links antigos devem abrir Ficha e Presell, sem um segundo menu');
 assert.ok(source.includes('definition?.navId'), 'a navegação SPA deve reutilizar os IDs do registro de telas');
-assert.ok(source.includes('campaignList') && source.includes('activeListTab') && source.includes('historyListTab'), 'controles dinâmicos do Diário não foram preservados');
+assert.doesNotMatch(source, /Diário de campanha|id="campaignList"|id="activeListTab"|id="historyListTab"/, 'o acesso ao Diário agora pertence à Visão Geral, não ao menu lateral');
 assert.ok(source.includes('body.animate(') && source.includes('prefers-reduced-motion: reduce') && source.includes('body.inert = !expanded'), 'animação, acessibilidade e movimento reduzido do acordeão devem continuar');
 assert.ok(source.includes('productHost?.remove()'), 'host antigo de Produtos permanece visível fora de Operação');
 assert.ok(source.includes('localStorage.setItem(STORAGE_KEY, name)'), 'preferência do grupo aberto não é compartilhada entre telas');
@@ -75,11 +75,11 @@ assert.ok(source.includes("const COLLAPSED_STORAGE_KEY = 'painel-sidebar-recolhi
 assert.ok(source.includes('data-hub-sidebar-collapse-toggle') && source.includes('Expandir menu lateral') && source.includes('Recolher menu lateral'), 'controle acessível de recolhimento/expansão do menu ausente');
 assert.ok(source.includes("layout?.classList.toggle('hub-sidebar-collapsed', collapsed)"), 'estado recolhido não é aplicado ao layout compartilhado');
 assert.ok(css.includes('.hub-sidebar-layout.hub-sidebar-collapsed { grid-template-columns: 42px minmax(0, 1fr) !important; }') && css.includes('> :not(.hub-sidebar-collapse-toggle)'), 'modo recolhido não reduz a navegação a uma faixa estreita com controle visível');
-assert.ok(css.includes('.hub-menu-group.collapsed') && css.includes('.hub-menu-products #campaignList') && css.includes('max-height: clamp('), 'grupos compactos e lista rolável com altura limitada devem manter o espaçamento da seção Operação estável');
-assert.match(css, /\.hub-menu-products \.list-tabs\s*\{[^}]*padding:\s*0[^}]*border:\s*0/s, 'abas Ativas/Histórico devem ser compactas e sem moldura externa');
-assert.match(css, /\.hub-menu-products #search\s*\{[^}]*min-height:\s*31px/s, 'campo de busca do Diário de campanha deve permanecer compacto');
-assert.match(css, /\.hub-menu-products #campaignList \.campaign-btn\s*\{[^}]*min-height:\s*28px/s, 'itens da lista do Diário de campanha devem usar altura compacta');
-assert.match(css, /\.hub-menu-products \.sidebar-empty\s*\{[^}]*padding:\s*7px 8px/s, 'estado vazio do Diário de campanha também deve respeitar o espaçamento compacto');
+assert.ok(css.includes('.hub-menu-group.collapsed'), 'grupos expansíveis do menu devem permanecer');
+const overviewTemplate=await readFile(new URL('../src/overview/template.html',import.meta.url),'utf8');
+assert.doesNotMatch(source, /<input id="search"/, 'a busca foi movida do menu para a Visão Geral');
+assert.match(overviewTemplate, /class="panel-controls"><input id="search"[^>]*aria-label="Buscar campanha"[^>]*><select id="campaignStatusFilter"/, 'busca acessível deve ficar antes do filtro de situação no cabeçalho');
+assert.match(overviewTemplate, /<option value="history">Histórico<\/option>/, 'registros históricos devem permanecer acessíveis no filtro da Visão Geral');
 assert.doesNotMatch(css, /data-sidebar-group="operation"\)?:not\(\.collapsed\)[^{]*\{[^}]*flex:\s*1\s+1\s+auto/s, 'a seção Operação não deve crescer para ocupar o espaço vazio do menu');
 
 const glimpse = await readFile(new URL('../dist/curadoria/glimpse/index.html', import.meta.url), 'utf8');

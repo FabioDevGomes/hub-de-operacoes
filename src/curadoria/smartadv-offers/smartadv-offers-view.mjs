@@ -7,6 +7,7 @@ import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
+import {mountColumnPicker} from '../../table-columns.mjs?v=1';
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -24,11 +25,15 @@ const captureLabel = capture => capture.sourceLabel || (
 const brandLabel = value => value === 'yes' ? 'Sim' : value === 'no' ? 'Não' : 'Não informado';
 const keyFor = item => `smartadv:${item.offerId}`;
 
-export function mountSmartAdvOffersView({root, actions}) {
+export function mountSmartAdvOffersView({root, actions, preferences}) {
   let captures = [], trendRecords = [], imageRecords = [], decisionRecords = [], glimpseAnalyses = [];
   let selectedCaptureId = '', annotatedOffers = [], activeOfferId = '', activeTab = 'trends';
   const importDialog = $('#importDialog', root), paste = $('#pasteArea', root), confirmButton = $('#confirmImport', root);
   const sheet = $('#offerSheet'), imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
+  if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
+  const columns = mountColumnPicker({picker:$('#smartAdvColumnPicker', root),table:$('.tablewrap table', root),
+    columns:[['id','ID'],['offer','Oferta'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Google Imagens'],['vertical','Vertical'],['geo','GEO explícito'],['channels','Meios explícitos'],['brand','Brand Bidding'],['history','Histórico local'],['decision','Decisão']],
+    required:['offer'],preferences,preferenceKey:'hub:smartadv-offers:visible-columns:v1'});
   function showMessage(message, {error = false} = {}) {
     for (const element of [$('#message',root),$('#sheetMessage'),$('#trendResultMessage')].filter(Boolean)) {
       element.textContent=message;element.classList.toggle('error',error);
@@ -89,6 +94,7 @@ export function mountSmartAdvOffersView({root, actions}) {
       <td>${escape(brandLabel(item.brandBidding))}</td><td><span class="history-pill ${item.historyState}">${escape(historyLabel(item.historyState))}</span></td>
       <td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(keyFor(item)))}</td>
     </tr>`).join('');
+    columns.apply();
     $('#empty', root).classList.toggle('hidden', offers.length > 0);
     $('#empty', root).textContent = annotatedOffers.length ? 'Nenhuma oferta corresponde aos filtros.' : 'Cole uma captura SmartAdv para iniciar o catálogo.';
     $('#visibleOfferCount', root).textContent = String(offers.length);

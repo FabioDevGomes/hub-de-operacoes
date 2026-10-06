@@ -54,8 +54,10 @@ assert.ok(html.includes('.hub-main { min-width: 0; min-height: 100vh; overflow: 
 assert.ok(html.includes('data-hub-sidebar-active="preparer"')&&html.includes('data-hub-sidebar-products'),'Preparador não monta o menu lateral compartilhado');
 assert.ok(html.includes('/sidebar-component.js')&&html.includes('/sidebar-component.css'),'componentes compartilhados do menu ausentes no Preparador');
 assert.ok(html.includes("style-src 'unsafe-inline' 'self'"),'CSP do Preparador bloqueia os estilos locais do menu compartilhado');
-assert.ok(sidebar.includes("id: 'operation'")&&sidebar.includes("id: 'analysis'")&&sidebar.includes('data-sidebar-group="products"'),'grupos do Preparador não estão no registro central do menu');
-assert.ok(sidebar.includes('Preparador MCC')&&sidebar.includes('Controle Macro')&&sidebar.includes('Produtos testados')&&sidebar.includes('Diário de campanha'),'itens do Preparador estão ausentes da configuração compartilhada');
+assert.ok(sidebar.includes("id: 'operation'")&&sidebar.includes("id: 'analysis'")&&sidebar.includes("key: 'tested'"),'grupos e acesso direto a Produtos testados devem permanecer no registro central do menu');
+assert.ok(!sidebar.includes('data-sidebar-group="products"'),'Produtos testados não deve exigir a expansão de Produtos');
+assert.ok(sidebar.includes('Preparador MCC')&&sidebar.includes('Controle Macro')&&sidebar.includes('Produtos testados'),'itens do Preparador estão ausentes da configuração compartilhada');
+assert.ok(!sidebar.includes('Diário de campanha'),'o Diário deve ser acessado pela Visão Geral, não pelo menu lateral compartilhado');
 assert.ok(sidebar.includes('setOpenGroup')&&sidebar.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado expansível do menu não é compartilhado com as demais telas');
 assert.ok(sidebar.includes('body.animate(')&&sidebar.includes('body.inert = !expanded')&&sidebar.includes('prefers-reduced-motion: reduce'),'menu compartilhado não anima a abertura/retração com acessibilidade');
 assert.ok(html.includes('validatePreparedNumbering(result)'),'validação de numeração não ocorre ao carregar o CSV');

@@ -17,7 +17,7 @@ const appRootEnd = page.indexOf('</main>', appRootStart);
 const importDialogStart = page.indexOf('<dialog id="importDialog"');
 assert.ok(importDialogStart > appRootStart && importDialogStart < appRootEnd, 'o diálogo de importação deve ficar dentro da raiz da interface');
 assert.ok(page.includes('data-hub-sidebar-active="smartadv-offers"'));
-assert.ok(page.includes('../trends-sheet.css?v=20261006-curation-header-actions'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
+assert.ok(page.includes('../trends-sheet.css?v=20261006-curation-header-color'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
 assert.ok(page.includes('Curadoria · SmartAdv') && page.includes('Ofertas SmartAdv'));
 assert.match(page, /\.\/smartadv-offers-page\.mjs\?v=\d+/);
 assert.match(view, /const \$ = \(selector, scope = document\) => scope\.querySelector\(selector\)/, 'a view resolve controles dentro da raiz recebida');

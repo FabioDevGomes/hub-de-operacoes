@@ -19,7 +19,7 @@ assert.match(sharedCss, /html body :is\(\.glimpse-badge,\.table-action\[data-act
   'a informação da coluna Glimpse não mantém borda nem fundo de botão');
 
 for (const [name, page] of [['E-commerce GM', ecommerce], ['Hot Offers MS', hotPage], ['SmartAdv', smartPage], ['Top Offers CB', clickbankPage]]) {
-  assert.match(page, /trends-sheet\.css\?v=20261006-curation-header-actions/, `${name} invalida o cache do estilo compartilhado atualizado`);
+  assert.match(page, /trends-sheet\.css\?v=20261006-curation-header-color/, `${name} invalida o cache do estilo compartilhado atualizado`);
 }
 
 for (const [name, view] of [['Hot Offers MS', hotView], ['SmartAdv', smartView], ['Top Offers CB', clickbankView]]) {

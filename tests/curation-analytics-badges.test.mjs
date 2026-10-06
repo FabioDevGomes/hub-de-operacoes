@@ -78,6 +78,6 @@ test('os três estados ainda não pesquisados usam o mesmo fundo neutro sem apag
 });
 test('todos os consumidores carregam a mesma folha atualizada', async () => {
   for (const path of ['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html']) {
-    assert.match(await readFile(new URL(path,root),'utf8'),/trends-sheet\.css\?v=20261006-curation-header-actions/);
+    assert.match(await readFile(new URL(path,root),'utf8'),/trends-sheet\.css\?v=20261006-curation-header-color/);
   }
 });

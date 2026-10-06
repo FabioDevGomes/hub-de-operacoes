@@ -12,17 +12,20 @@ const consumers = [
 ];
 const sharedCss = await read('src/curadoria/curation-header-actions.css');
 const trendsCss = await read('src/curadoria/trends-sheet.css');
-assert.ok(trendsCss.includes('@import url("./curation-header-actions.css?v=1")'), 'as seis telas que compartilham Trends importam o padrão de cabeçalho');
+assert.ok(trendsCss.includes('@import url("./curation-header-actions.css?v=2")'), 'as seis telas que compartilham Trends importam o padrão de cabeçalho');
 
 for (const [screen, path] of consumers) {
   const page = await read(path);
-  assert.ok(page.includes('trends-sheet.css?v=20261006-curation-header-actions'), `${screen} invalida o cache da folha compartilhada`);
+  assert.ok(page.includes('trends-sheet.css?v=20261006-curation-header-color'), `${screen} invalida o cache da folha compartilhada`);
 }
 
 const glimpsePage = await read('src/curadoria/glimpse/index.html');
-assert.ok(glimpsePage.includes('/curadoria/curation-header-actions.css?v=1'), 'Glimpse independente carrega o mesmo padrão');
+assert.ok(glimpsePage.includes('/curadoria/curation-header-actions.css?v=2'), 'Glimpse independente carrega o mesmo padrão');
 assert.match(sharedCss, /header:is\(\.topbar,\.top,\.page-head,\.hero\)>:is\(\.actions,\.hero-actions\)>:is\(\.btn,\.button\)/, 'a regra fica restrita às ações do cabeçalho principal');
 assert.match(sharedCss, /min-height:36px;padding:8px 11px;border:0;font-size:\.78rem;font-weight:400;box-shadow:0 4px 9px rgba\(0,0,0,\.55\)/, 'o padrão combina dimensão compacta, peso regular, sem borda e sombra preta');
+assert.ok(sharedCss.includes('--curation-header-action-accent:#38bdf8;--curation-header-action-accent-text:#052037'), 'o azul SpyHero é a cor compartilhada para ações coloridas nos cabeçalhos');
+assert.match(sharedCss, /:is\(\.primary,\.finish-button,\.orange\)\{background:var\(--curation-header-action-accent\);color:var\(--curation-header-action-accent-text\)\}/, 'botões primários coloridos adotam o azul, sem alterar os botões neutros');
+assert.match(sharedCss, /:is\(\.primary,\.finish-button,\.orange\):is\(:hover,:focus-visible,:active\)\{background:var\(--curation-header-action-accent\);color:var\(--curation-header-action-accent-text\)\}/, 'o azul permanece consistente nos estados interativos');
 assert.match(sharedCss, /:is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/, 'a sombra aumenta no hover e foco');
 assert.match(sharedCss, /:focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/, 'o foco de teclado continua visível');
 

@@ -79,7 +79,7 @@ test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM',
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
-  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-header-actions/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-header-color/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=15/,'a página invalida o cache após atualizar o fluxo de Glimpse');
   assert.match(html,/hot-offers-ms\.css\?v=20261005-glimpse-compact/,'o CSS local invalida o cache para o redimensionamento do Glimpse');
   assert.match(page,/hot-offers-ms-view\.mjs\?v=20261005-analytics-badges/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
@@ -140,7 +140,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
   assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
   assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
-  assert.match(html,/trends-sheet\.css\?v=20261006-curation-header-actions/,'a ficha carrega a folha compartilhada com sombra de decisão');
+  assert.match(html,/trends-sheet\.css\?v=20261006-curation-header-color/,'a ficha carrega a folha compartilhada com sombra de decisão');
   assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
   assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
   assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');

@@ -1,3 +1,6 @@
+:root{--curation-header-action-accent:#38bdf8;--curation-header-action-accent-text:#052037}
 header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button){min-height:36px;padding:8px 11px;border:0;font-size:.78rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55);transition:box-shadow .15s ease,filter .15s ease,transform .15s ease}
+header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(.primary,.finish-button,.orange){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
+header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(.primary,.finish-button,.orange):is(:hover,:focus-visible,:active){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
 header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(:hover,:focus-visible){box-shadow:0 5px 12px rgba(0,0,0,.65)}
 header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):focus-visible{outline:2px solid rgba(101,169,255,.45);outline-offset:2px}

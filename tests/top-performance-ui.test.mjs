@@ -66,7 +66,7 @@ assert.ok(html.includes("sortKey='payout';sortDirection='desc';render()"),'Limpa
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'E-commerce GM não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecision'),'decisão da E-commerce GM não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20261006-curation-header-actions'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
+assert.ok(html.includes('trends-sheet.css?v=20261006-curation-header-color'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
 assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=1'")&&html.includes("mountCurationListFocus('top-performance'"),'E-commerce GM não instala a preservação compartilhada de posição e linha');
 assert.ok(html.includes("highlightOnCapture:false")&&html.includes("function closeOffer({restoreFocus=true}={}){$('#offerSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),'E-commerce GM deve animar apenas após fechar a ficha e retornar à lista');
 assert.match(html,/async function saveTrend\(status\)\{[\s\S]*?closeOffer\(\{restoreFocus:false\}\);await refresh\(\);listFocus\.restore\(\);toast\(/,'salvar Trends precisa restaurar a linha depois que refresh recriar as linhas da lista');

@@ -17,7 +17,7 @@ assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Pagamento não
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'Lista de Gerente não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-manager-decision')&&html.includes('openManagerDecision'),'decisão manual não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20261005-glimpse-blue-actions'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
+assert.ok(html.includes('trends-sheet.css?v=20261006-curation-header-actions'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
 const sharedStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
 assert.ok(sharedStyles.includes('nav[data-hub-sidebar-active="manager"]')&&sharedStyles.includes('#rows td *{font-weight:400!important}'),'valores das colunas da Lista de Gerente não estão em peso normal');
 assert.ok(sharedStyles.includes('#rows tr.decision-row-launch>td{background:rgba(171,130,35,.2)}')&&sharedStyles.includes('#rows tr.decision-row-live>td{background:rgba(16,74,54,.25)}'),'a Lista de Gerente herda a mesma cor de linha por decisão da E-commerce GM');

@@ -33,7 +33,7 @@ test('controles mantêm alinhamento, alvos legíveis e resultado pode quebrar te
 test('seis hosts carregam a folha versionada, import tipográfico e publicação idêntica', async () => {
   for (const path of ['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html']) {
     const page = await readFile(new URL(`src/curadoria/${path}`,root),'utf8');
-    assert.match(page,/trends-sheet\.css\?v=20261005-glimpse-blue-actions/);
+    assert.match(page,/trends-sheet\.css\?v=20261006-curation-header-actions/);
     assert.ok(page.includes(path==='index.html'?'id="trendsSheetPanel"':path==='gerentes/index.html'?'id="managerTrendsPanel"':'data-panel="trends"'));
   }
   assert.match(await readFile(new URL('src/curadoria/trends-sheet.css',root),'utf8'),/@import url\("\.\/trends-typography\.css\?v=1"\)/);

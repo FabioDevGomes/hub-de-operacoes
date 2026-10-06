@@ -28,6 +28,7 @@ Os módulos atuais usam tanto scripts clássicos `.js` quanto ES modules `.mjs`.
 
 ## Padrão visual compartilhado
 
+- Ações nos cabeçalhos da Curadoria: src/curadoria/curation-header-actions.css é o padrão compartilhado dos botões do canto superior direito nas seis telas que importam trends-sheet.css e no Glimpse independente. Aplica altura mínima de 36px, padding 8px 11px, fonte .78rem com peso 400, sem borda, sombra preta 0 4px 9px rgba(0,0,0,.55) e sombra 0 5px 12px rgba(0,0,0,.65) em hover/foco; o foco mantém outline azul. Preserve as cores de cada tipo de ação. O seletor só alcança ações do cabeçalho principal (.topbar, .top, .page-head, .hero), nunca filtros, abas, tabelas ou diálogos. Ao alterar, atualize o cache dos consumidores e confira tests/curation-header-actions.test.mjs, build e suíte completa.
 - Os botões de ação no cabeçalho principal das telas usam `8px` de espaçamento horizontal. O valor compartilhado é `--hub-page-action-gap` em `src/sidebar-component.css` e cobre os cabeçalhos `.topbar`, `.top`, `.page-head` e `.hero` do Hub. O Glimpse independente já mantém 8px no grupo do cabeçalho. Não aplique essa regra automaticamente a grupos internos de filtros, formulários, abas, tabelas ou modais; eles mantêm o espaçamento próprio da função.
 
 ### Preserve o contrato da tela

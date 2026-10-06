@@ -5,6 +5,7 @@ const page = await readFile(new URL('../src/curadoria/smartadv-offers/index.html
 const view = await readFile(new URL('../src/curadoria/smartadv-offers/smartadv-offers-view.mjs', import.meta.url), 'utf8');
 const controller = await readFile(new URL('../src/curadoria/smartadv-offers/smartadv-offers-page.mjs', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/curadoria/smartadv-offers/smartadv-offers.css', import.meta.url), 'utf8');
+const headerActionsCss = await readFile(new URL('../src/curadoria/curation-header-actions.css', import.meta.url), 'utf8');
 const sidebar = await readFile(new URL('../src/sidebar-component.js', import.meta.url), 'utf8');
 const curationHome = await readFile(new URL('../src/curadoria/index.html', import.meta.url), 'utf8');
 
@@ -16,6 +17,7 @@ const appRootEnd = page.indexOf('</main>', appRootStart);
 const importDialogStart = page.indexOf('<dialog id="importDialog"');
 assert.ok(importDialogStart > appRootStart && importDialogStart < appRootEnd, 'o diálogo de importação deve ficar dentro da raiz da interface');
 assert.ok(page.includes('data-hub-sidebar-active="smartadv-offers"'));
+assert.ok(page.includes('../trends-sheet.css?v=20261006-curation-header-actions'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
 assert.ok(page.includes('Curadoria · SmartAdv') && page.includes('Ofertas SmartAdv'));
 assert.match(page, /\.\/smartadv-offers-page\.mjs\?v=\d+/);
 assert.match(view, /const \$ = \(selector, scope = document\) => scope\.querySelector\(selector\)/, 'a view resolve controles dentro da raiz recebida');
@@ -44,11 +46,12 @@ assert.ok(tabsRule.includes('display:grid') && tabsRule.includes('grid-template-
 assert.ok(tabButtonRule.includes('width:100%') && tabButtonRule.includes('min-height:34px') && tabButtonRule.includes('white-space:nowrap'), 'os botões das abas mantêm largura e altura uniformes');
 assert.ok(css.includes('#offerSheet .tabs .btn:focus-visible{outline:2px solid var(--smartadv-blue)'), 'o foco de teclado continua visível nas abas');
 assert.match(page, /smartadv-offers\.css\?v=9/);
-const headerActions = css.match(/\.page-head \.actions \.btn\{[^}]*\}/)?.[0] || '';
+const headerActions = headerActionsCss.match(/header:is\(\.topbar,\.top,\.page-head,\.hero\)>:is\(\.actions,\.hero-actions\)>:is\(\.btn,\.button\)\{[^}]*\}/)?.[0] || '';
 assert.ok(headerActions.includes('min-height:36px') && headerActions.includes('padding:8px 11px') && headerActions.includes('font-size:.78rem') && headerActions.includes('font-weight:400'), 'ações superiores mantêm o tamanho compacto e o peso regular da referência');
 assert.ok(headerActions.includes('border:0') && headerActions.includes('box-shadow:0 4px 9px rgba(0,0,0,.55)'), 'ações superiores ficam sem borda e usam a sombra preta padrão');
-assert.match(css,/\.page-head \.actions \.btn:is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/,'a sombra preta aumenta em hover e foco');
-assert.match(css,/\.page-head \.actions \.btn:focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/,'o foco de teclado permanece visível nos botões do cabeçalho');
+assert.match(headerActionsCss,/header:is\(\.topbar,\.top,\.page-head,\.hero\)>:is\(\.actions,\.hero-actions\)>:is\(\.btn,\.button\):is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/,'a sombra preta aumenta em hover e foco');
+assert.match(headerActionsCss,/header:is\(\.topbar,\.top,\.page-head,\.hero\)>:is\(\.actions,\.hero-actions\)>:is\(\.btn,\.button\):focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/,'o foco de teclado permanece visível nos botões do cabeçalho');
+assert.doesNotMatch(css,/\.page-head \.actions \.btn\{/,'SmartAdv reutiliza o CSS compartilhado em vez de manter uma cópia local');
 assert.ok(sidebar.includes("{ key: 'smartadv-offers', label: 'Ofertas SmartAdv', href: '/curadoria/smartadv-offers/' }"));
 assert.ok(curationHome.includes('href="/curadoria/smartadv-offers/"'), 'a entrada também aparece no início da Curadoria');
 

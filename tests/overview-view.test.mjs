@@ -17,7 +17,7 @@ function setup(rows,preferences){
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,referenceDate:'2026-09-30',
-    manifestCampaignCount:54,baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
+    manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args])}});
@@ -43,7 +43,7 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     assert.match(kpis,/Indicadores D0/);assert.match(kpis,/Indicadores D−1/);
     assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.doesNotMatch(kpis,/class="kpi-info"|kpi-info-icon|Cliques 1\/2/);
     assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6,'os seis cartões devem manter a mesma composição');
-    assert.match(kpis,/Manifesto MCC[\s\S]*54[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D zero[\s\S]*30\/09\/2026/);
+    assert.match(kpis,/Manifesto MCC[\s\S]*kpi-value">10:25<\/strong>[\s\S]*Última captura[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D zero[\s\S]*30\/09\/2026/);
     assert.match(kpis,/Venda provisória[\s\S]*overview-info-icon/);
     assert.match(kpis,/pendente de confirmação[\s\S]*Base: 4427 registros[\s\S]*05\/10\/2026, 14:57/);
     assert.match(kpis,/overview-kpi-main-label">Investimento/);assert.match(kpis,/overview-kpi-detail-value">10/);

@@ -75,6 +75,8 @@ Faturamento permanece um domínio de vendas/comissões, não um demonstrativo de
 
 ## Diário A–Q
 
+O cartão Manifesto MCC na Visão Geral recebe `manifestCaptureInfo` do manifesto atual persistido, separado de `base.atualizado_em` e da hora de salvamento local. Horários de captura disponíveis em `captura_D_zero`/`captura_D_menos_1` têm prioridade; sem eles, `gerado_em_utc` é exibido com o rótulo Manifesto gerado. Sem timestamp válido, permanece indisponível. Apresentação em Brasília, sem gravação ou busca em capturas antigas de outra MCC.
+
 O módulo é apresentado na interface como **Diário de campanha**: uma seleção abre o diário de uma campanha específica, não um diário consolidado de produto. O vínculo de produto é uma relação um-para-muitos na visão de Produtos Testados: a mesma família/identidade de produto pode listar várias campanhas relacionadas, e seus registros diários permanecem separados pela chave de campanha. Preserve nomes MCC completos e `campanha_id`; não funde métricas de campanhas só porque pertencem ao mesmo produto.
 
 Se uma campanha ativa mudar somente o percentual CPA no título MCC, `CampaignDatabase.campaignCpaChangeCandidates` só preserva o ID existente quando a estratégia estiver marcada como CPA nos manifestos antigo e atual, o título for idêntico exceto por esse percentual, o título antigo estiver no manifesto anterior e não aparecer na captura atual, e a conta completa coincidir entre os dois manifestos e a campanha. A importação mantém as linhas anteriores, associa a nova data ao mesmo ID e grava o novo rótulo CPA na coluna N. Mudanças ambíguas ou em outros trechos do nome continuam como identidades separadas; a mudança de CPA não deve fabricar métricas para datas sem captura.

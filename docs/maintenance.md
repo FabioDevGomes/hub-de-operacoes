@@ -240,6 +240,8 @@ Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.
 
 ## Visão Geral e Diário — passo 7
 
+- O cartão **Manifesto MCC** destaca o horário da última captura do manifesto persistido, em Brasília (`America/Sao_Paulo`), mantendo as datas D−1/D0. `OverviewDomain.manifestCaptureInfo()` usa os horários válidos de `captura_D_zero`/`captura_D_menos_1`; sem horário de captura, apresenta `gerado_em_utc` identificado como **Manifesto gerado**. Sem evidência válida mostra indisponível, nunca o relógio atual nem a atualização genérica da base. Filtros, buscas e períodos não alteram o indicador; a view não grava dados. Regressões: `tests/overview-manifest-capture.test.mjs` e `tests/overview-view.test.mjs`.
+
 - O primeiro cartão da Visão Geral fica vazio e reservado, mantendo suas dimensões sem texto ou indicador. O quarto reúne Lucro do dia D0 acima e contagens Ativas/Pausadas abaixo do divisor compartilhado `overview-kpi-details`, como os indicadores D−1/D0. Os outros cartões permanecem e os filtros afetam apenas a tabela; os valores vêm do mesmo snapshot, sem novos cálculos ou gravações.
 
 - `overview/view.js` recebe `getSnapshot()`, formatadores, estado visual e callbacks. Contém tabela, KPIs D−1/D0, alertas, filtros e eventos locais. `overview-domain.js` conserva os cálculos anteriores e acrescenta ordenação sem mutação e visibilidade por situação. Não acessa DOM ou armazenamento.

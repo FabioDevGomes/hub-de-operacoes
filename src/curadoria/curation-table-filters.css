@@ -12,6 +12,10 @@
 
 /* Mesmo padrão de sombra das ações compartilhadas do Hub.
    Classe reutilizável em botões e no summary do seletor de colunas. */
+.hub-curation-table-filters :is(button, summary).hub-toolbar-action-dark {
+  background: #0c192a;
+}
+
 .hub-curation-table-filters :is(button, summary).hub-table-toolbar-action {
   box-sizing: border-box;
   min-height: 32px;

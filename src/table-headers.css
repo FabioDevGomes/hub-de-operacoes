@@ -35,3 +35,30 @@ html body table tbody td :is(button, input[type="button"], input[type="submit"],
   outline: 2px solid rgba(101, 169, 255, .45) !important;
   outline-offset: 2px !important;
 }
+
+/* Opt-in pattern for actions grouped at a table's upper edge/corner. */
+html body .hub-table-toolbar-actions .btn {
+  box-sizing: border-box !important;
+  min-height: 28px !important;
+  padding: 5px 8px !important;
+  font-family: inherit !important;
+  font-size: .73rem !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  border: 0 !important;
+  box-shadow: 0 4px 9px rgba(0, 0, 0, .55) !important;
+  transition: box-shadow .15s ease !important;
+}
+
+html body .hub-table-toolbar-actions .btn:is(:hover, :focus-visible) {
+  box-shadow: 0 5px 12px rgba(0, 0, 0, .65) !important;
+}
+
+html body .hub-table-toolbar-actions .btn:focus-visible {
+  outline: 2px solid rgba(101, 169, 255, .45) !important;
+  outline-offset: 2px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .hub-table-toolbar-actions .btn { transition: none !important; }
+}

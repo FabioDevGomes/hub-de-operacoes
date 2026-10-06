@@ -20,7 +20,7 @@ test('six curation lists opt into the same compact stylesheet in source and buil
     assert.equal(await read(`dist/curadoria/${path}`), html, path);
     assert.ok(html.includes(`class="${container} hub-curation-table-filters"`), path);
     assert.equal((html.match(/hub-curation-table-filters/g) || []).length, 1, path);
-    assert.ok(html.includes('href="/curadoria/curation-table-filters.css?v=1"'), path);
+    assert.ok(html.includes('href="/curadoria/curation-table-filters.css?v=2"'), path);
   }
 });
 

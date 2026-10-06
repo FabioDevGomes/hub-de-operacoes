@@ -79,10 +79,16 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(styles,/#offerSheet:has\(\[data-panel="glimpse"\]:not\(\.hidden\)\)\{position:absolute;[^}]*overflow:visible\}/,'a ficha Glimpse passa ao fluxo do documento e não mantém rolagem interna');
   assert.match(styles,/body:has\(#offerSheet:not\(\.hidden\) \[data-panel="glimpse"\]:not\(\.hidden\)\)\{overflow:auto!important\}/,'a rolagem da ficha Glimpse fica na janela externa');
   assert.match(peopleAlsoSearchStyles,/\.people-also-search\{border-color:rgba\(90,177,255,\.72\)/,'o painel recebe contraste visual para destacar a informação capturada');
-  assert.match(glimpsePage,/async function finishAnalysis\(\)\{if\(draft&&!await saveAnalysis\(draft\)\)return;await goBack\(\)\}/,'Concluir salva um rascunho manual antes de retornar');
+  assert.match(glimpsePage,/function reportEmbeddedSave\(saved\)/,'o Glimpse confirma ao host o resultado efetivo do salvamento');
+  assert.match(glimpsePage,/keepOpenAfterSave=embedded&&origin===\'clickbank-top-offers\'/,'Top Offers CB mantém a ficha aberta para exibir a confirmação ao lado de Salvar');
+  assert.match(glimpsePage,/if\(draft&&!await saveAnalysis\(draft\)\)\{if\(keepOpenAfterSave\)reportEmbeddedSave\(false\);return\}/,'falha no armazenamento não retorna nem confirma o salvamento no Top Offers CB');
+  assert.match(glimpsePage,/if\(keepOpenAfterSave\)\{reportEmbeddedSave\(true\);return\}/,'sucesso no Top Offers CB confirma sem fechar a ficha');
   assert.match(glimpsePage,/event\.source!==window\.parent\|\|event\.data\?\.type!==\'hub-glimpse-finish\'/,'o iframe aceita Concluir somente de sua janela pai e da mesma origem');
   assert.match(headerControls,/child\.postMessage\(\{type:\'hub-glimpse-finish\'\},location\.origin\)/,'o cabeçalho envia Concluir ao iframe Glimpse');
-  assert.match(headerControls,/finishButton\.hidden\s*=\s*!active/,'Concluir só aparece enquanto o painel Glimpse está ativo');
+  assert.match(headerControls,/finishButton\.hidden\s*=\s*!active/,'a ação só aparece enquanto o painel Glimpse está ativo');
+  assert.match(headerControls,/event\.source !== frame\.contentWindow/,'a confirmação de sucesso só é aceita do iframe correspondente');
+  assert.match(headerControls,/savedMessage\.textContent = \'Salvo\'/,'a confirmação mostra o rótulo curto Salvo');
+  assert.match(clickbankController,/finishLabel:\'Salvar\',showSavedFeedback:true/,'Top Offers CB configura o botão Salvar e sua confirmação verde');
   assert.match(styles,/\.glimpse-host-finish\{[^}]*background:linear-gradient\(135deg,#278de9,#38b9c5\)!important;color:#03101c!important/,'Concluir mantém o mesmo azul nos cabeçalhos das telas consumidoras');
   assert.match(headerControls,/backButton\.classList\.add\(\'glimpse-host-back\'\)/,'o helper remove apenas o contorno externo do botão de retorno');
   assert.match(styles,/\.glimpse-host-back\{border:0!important;background:transparent!important\}/,'retorno sem borda preserva foco com outline separado');

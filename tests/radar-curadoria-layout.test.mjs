@@ -9,7 +9,7 @@ const [source, built, layout] = await Promise.all([
 ]);
 assert.equal(built, source, 'o build publica a fonte canônica');
 assert.match(source, /<main class="hub-curation-viewport">/);
-assert.ok(source.includes('/curadoria/curation-list-layout.css?v=1'));
+assert.ok(source.includes('/curadoria/curation-list-layout.css?v=2'));
 assert.doesNotMatch(source, /main:has\(#rows\) \.tablewrap\{max-height:calc\(100vh - 290px\)/,
   'a compensação antiga não pode encobrir o layout compartilhado');
 assert.match(layout, /--hub-curation-bottom-gap:\s*8px/);

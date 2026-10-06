@@ -25,6 +25,10 @@
     .status.error li + li { margin-top: 6px; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
+    .vsl-speeds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .vsl-speeds button { padding: 10px 0; }
+    .vsl-speeds button[aria-pressed="true"] { background: #38bdf8; color: #061327; border-color: transparent; }
+    button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
     #restore-clickbank { margin-top: 8px; }
     #clickbank-manual { margin-top: 12px; }
     #clickbank-text { box-sizing: border-box; width: 100%; min-height: 140px; padding: 8px; border: 1px solid #294764; border-radius: 8px; background: #101e32; color: #e8f0ff; font: 12px/1.4 monospace; }
@@ -35,18 +39,30 @@
   <p>A captura direta prepara os dados para revisão no Preparador; a base só é atualizada após sua confirmação.</p>
   <section aria-labelledby="capture-title" style="margin-top:0;padding-top:0;border-top:0">
     <h2 id="capture-title">Captura direta · D0 e D−1</h2>
-    <p class="note">Na MCC, selecione um único dia, use o botão discreto abaixo para rolar até o final e aguarde a grade carregar antes de capturar. Para D−1, a data deve ser ontem no fuso America/Sao_Paulo. A extensão só prepara a prévia; não atualiza a base.</p>
     <button id="scroll-to-bottom" class="secondary scroll-page" type="button">Rolar MCC até o final</button>
     <button id="capture-d1" class="secondary" type="button">Capturar D−1 da MCC</button>
     <button id="capture-d0" type="button" style="margin-top:8px">Capturar D0 da MCC</button>
     <div id="capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
   </section>
+  <section aria-labelledby="vsl-title">
+    <h2 id="vsl-title">Velocidade da VSL</h2>
+    <div class="vsl-speeds" role="group" aria-label="Velocidade da VSL">
+      <button id="vsl-speed-1" type="button" class="secondary" aria-pressed="false">1×</button>
+      <button id="vsl-speed-10" type="button" class="secondary" aria-pressed="false">10×</button>
+      <button id="vsl-speed-20" type="button" class="secondary" aria-pressed="false">20×</button>
+      <button id="vsl-speed-30" type="button" class="secondary" aria-pressed="false">30×</button>
+    </div>
+    <div id="vsl-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <p class="note" style="margin-bottom:0">Vídeo principal HTML5 ou VTurb. O áudio em 10× depende do navegador. Não baixa a VSL nem altera a base do Hub.</p>
+  </section>
   <section aria-labelledby="clickbank-title">
     <h2 id="clickbank-title">Produtos ClickBank</h2>
-    <p class="note">Amplia a tabela e copia as nove colunas da página atual. Não navega entre páginas nem altera filtros. Os dados não são enviados ao Hub.</p>
     <button id="capture-clickbank" type="button">Capturar produtos ClickBank</button>
     <button id="restore-clickbank" class="secondary" type="button">Restaurar tamanho da tabela</button>
     <div id="clickbank-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <p class="note" style="margin:12px 0 7px">No checkout DTC, capture “Países Comuns” para a oferta correspondente. Mantenha Top Offers CB aberto no Hub; a ficha da oferta não precisa estar aberta.</p>
+    <button id="capture-dtc-countries" class="secondary" type="button">Capturar países comuns da DTC</button>
+    <div id="dtc-countries-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="clickbank-manual" hidden>
       <label for="clickbank-text">Texto para cópia manual (confira o aviso de completude acima)</label>
       <textarea id="clickbank-text" readonly spellcheck="false"></textarea>

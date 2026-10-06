@@ -52,7 +52,12 @@ function validOfferRecord(storeName, record) {
     typeof record.seller !== 'string' || record.seller.length > 250) return false;
   if (storeName === STORES.offerMetadata) {
     return Array.isArray(record.manualCountries) && record.manualCountries.length <= 250 &&
-      record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code));
+      record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
+      (record.dtcCountryCapture == null || (record.dtcCountryCapture.source === 'clickbank-dtc-checkout' &&
+        typeof record.dtcCountryCapture.productName === 'string' && record.dtcCountryCapture.productName.trim().length > 0 &&
+        record.dtcCountryCapture.productName.length <= 200 && typeof record.dtcCountryCapture.capturedAt === 'string' &&
+        Number.isFinite(Date.parse(record.dtcCountryCapture.capturedAt)) && Array.isArray(record.dtcCountryCapture.countries) &&
+        record.dtcCountryCapture.countries.length <= 250 && record.dtcCountryCapture.countries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code))));
   }
   if (storeName === STORES.trends) {
     return Array.isArray(record.assessments) && record.assessments.length <= 10000 &&
@@ -139,13 +144,14 @@ function optionalCount(value) {
 function isCapture(capture) {
   if (!(capture && typeof capture.captureId === 'string' && capture.captureId.length > 0 && capture.captureId.length <= 160 &&
     typeof capture.capturedAt === 'string' && Number.isFinite(Date.parse(capture.capturedAt)) &&
-    capture.sourceFormat === 'clickbank-top-offers-v1' && typeof capture.listName === 'string' && capture.listName.length <= 160 &&
+    ['clickbank-top-offers-v1','clickbank-top-offers-v2'].includes(capture.sourceFormat) && typeof capture.listName === 'string' && capture.listName.length <= 160 &&
     capture.page && ['start','end','total','pageSize'].every(field => optionalCount(capture.page[field])) && typeof capture.page.completeUniverse === 'boolean' &&
     Array.isArray(capture.offers) && capture.offers.length <= 10000 && capture.offers.every(offer =>
       offer && Number.isSafeInteger(offer.rank) && offer.rank > 0 &&
       typeof offer.offerKey === 'string' && offer.offerKey.length > 0 && offer.offerKey.length <= 1400 &&
       offer.identitySource === 'seller+normalized-title' && typeof offer.offerName === 'string' && offer.offerName.length <= 1000 &&
       typeof offer.seller === 'string' && offer.seller.length <= 250 &&
+      (offer.offerId == null || (typeof offer.offerId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(offer.offerId))) &&
       ['average', 'initial', 'future', 'epc', 'cvr', 'gravity'].every(field => metricIsValid(offer[field]))))) return false;
   return new Set(capture.offers.map(offer => offer.rank)).size === capture.offers.length &&
     new Set(capture.offers.map(offer => offer.offerKey)).size === capture.offers.length;

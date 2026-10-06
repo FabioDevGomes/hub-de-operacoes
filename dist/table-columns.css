@@ -13,4 +13,8 @@
 .hub-column-menu [data-column-options] input:disabled+span{opacity:.75}
 .hub-column-menu .btn{display:inline-flex;align-items:center;justify-content:center;font-size:.73rem}
 table [data-column][hidden]{display:none!important}
+/* Curadoria: o menu não é recortado pelo painel e a tabela oculta se compacta. */
+.hub-curation-viewport .hub-column-picker{margin-left:auto}
+.hub-curation-viewport .surface:has(.hub-column-picker[open]){overflow:visible}
+.hub-curation-viewport table.hub-curation-column-table[data-column-selection="custom"]{min-width:0}
 @media(prefers-reduced-motion:reduce){.hub-column-picker.hub-column-picker>summary{transition:none}}

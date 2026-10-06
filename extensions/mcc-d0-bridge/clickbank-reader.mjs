@@ -3,6 +3,15 @@
 export async function collectClickBankProducts(columns, mode = 'capture', options = {}) {
   const clean = value => String(value ?? '').replace(/[\t\r\n]+/g, ' ').trim();
   const normalize = value => clean(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const offerIdFromHref = href => {
+    const raw = String(href ?? '').trim();
+    const hash = raw.indexOf('#');
+    const route = hash >= 0 ? raw.slice(hash + 1) : raw;
+    const query = route.indexOf('?');
+    if (query < 0 || route.slice(0, query).replace(/\/+$/, '') !== '/offer-details') return '';
+    const offerId = new URLSearchParams(route.slice(query + 1)).get('offer')?.trim() || '';
+    return /^[A-Za-z0-9_-]{1,64}$/.test(offerId) ? offerId : '';
+  };
   const stateKey = '__hubClickBankProductsCapture';
   const state = globalThis[stateKey] ||= { busy:false, originals:new Map(), scroller:null };
   const url = new URL(location.href);
@@ -58,14 +67,15 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
       const number = text => Number(text.replace(/[,.]/g, ''));
       if (range) {
         const first = number(range[1]), last = number(range[2]), total = number(range[3]);
-        return { count:total === 0 ? 0 : last - first + 1, signature:pagination };
+        return { count:total === 0 ? 0 : last - first + 1, signature:pagination, start:first, end:last, total };
       }
       const params = new URLSearchParams(url.hash.split('?')[1] || url.search.slice(1));
       const limit = Number(params.get('resultsPerPage')), offset = Number(params.get('offset'));
       const totalMatch = clean(document.body?.innerText).match(/([\d,.]+)\s+results\b/i);
       if (params.has('resultsPerPage') && params.has('offset') && totalMatch && limit > 0 && offset >= 0) {
         const total = number(totalMatch[1]);
-        return { count:Math.min(limit, Math.max(0, total - offset)), signature:`${limit}:${offset}:${total}` };
+        return { count:Math.min(limit, Math.max(0, total - offset)), signature:`${limit}:${offset}:${total}`,
+          start:offset + 1, end:Math.min(offset + limit,total), total, pageSize:limit };
       }
       throw new Error('Não foi possível confirmar a quantidade esperada nesta página. Nenhum sucesso completo será anunciado.');
     };
@@ -105,6 +115,7 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
           if (!key) continue;
           const link = key === 'name' && cell.querySelector('a[id="title-offer-details"]');
           values[key] = clean(link ? link.textContent : cell.textContent);
+          if (key === 'name') values.offerId = offerIdFromHref(link?.getAttribute?.('href') ?? link?.href);
         }
         const id = element.getAttribute('data-id') || element.getAttribute('aria-rowindex')
           || (values.seller && values.name ? `${values.seller}\u0000${values.name}` : null);
@@ -143,8 +154,9 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
     }
     const products = [...rows.values()].sort((a,b) => a.order - b.order).map(row => row.values);
     return { ok:complete, rows:products, capturedCount:rows.size, expectedCount, expanded:true,
+      capturedAt:new Date().toISOString(), page:{start:initialCount.start,end:initialCount.end,total:initialCount.total,pageSize:initialCount.pageSize ?? null},
       message:complete ? `${rows.size} produtos capturados da página atual.`
-        : `Captura incompleta: ${rows.size} de ${expectedCount} produtos; verifique também as nove colunas. O texto parcial não foi copiado automaticamente.` };
+        : `Captura incompleta: ${rows.size} de ${expectedCount} produtos; verifique também as nove colunas de dados. O texto parcial não foi copiado automaticamente.` };
   } catch (error) {
     return { ok:false, rows:[...rows.values()].sort((a,b) => a.order - b.order).map(row => row.values),
       capturedCount:rows.size, expectedCount, expanded:state.originals.size > 0,

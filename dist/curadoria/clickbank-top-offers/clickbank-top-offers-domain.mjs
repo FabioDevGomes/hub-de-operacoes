@@ -1,5 +1,7 @@
 const HEADER = ['rank', 'offer name', 'seller', 'avg', 'initial', 'future', 'epc', 'cvr', 'gravity'];
 const DASH = /^(?:-|–|—|−)$/;
+const LEGACY_SOURCE_FORMAT = 'clickbank-top-offers-v1';
+const OFFER_ID_SOURCE_FORMAT = 'clickbank-top-offers-v2';
 
 export function normalize(value = '') {
   return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -36,9 +38,15 @@ function buildOffer(cells, index, issues) {
   const rank = rankValue(cells[0]);
   const offerName = clean(cells[1]);
   const seller = clean(cells[2]);
+  const rawOfferId = clean(cells[9]);
+  let offerId = null;
   if (rank === null) issues.push({severity: 'error', row: index, reason: 'Posição inválida.'});
   if (!offerName) issues.push({severity: 'error', row: index, reason: 'Nome da oferta ausente.'});
   if (!seller) issues.push({severity: 'error', row: index, reason: 'Vendedor ausente.'});
+  if (rawOfferId && !DASH.test(rawOfferId)) {
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(rawOfferId)) offerId = rawOfferId;
+    else issues.push({severity: 'warning', row: index, field: 'offerId', reason: 'Código da oferta inválido; o link não foi criado.'});
+  }
   const metrics = {
     average: parseMetric(cells[3], {currency: true}),
     initial: parseMetric(cells[4], {currency: true}),
@@ -56,23 +64,24 @@ function buildOffer(cells, index, issues) {
     offerKey: offerKey(seller, offerName),
     identitySource: 'seller+normalized-title',
     rank,
+    offerId,
     offerName,
     seller,
     ...metrics,
   };
 }
 
-function parseTabularRows(lines, headerIndex) {
+function parseTabularRows(lines, headerIndex, hasOfferId = false) {
   const rows = [];
   for (const line of lines.slice(headerIndex + 1)) {
     const cells = line.split('\t').map(clean);
     if (!rankValue(cells[0]) || cells.length < 9) continue;
-    rows.push(cells.slice(0, 9));
+    rows.push([...cells.slice(0, 9), ...(hasOfferId ? [cells[9] || ''] : [])]);
   }
   return rows;
 }
 
-function parseCellLines(lines, headerIndex, headerLength) {
+function parseCellLines(lines, headerIndex, headerLength, hasOfferId = false) {
   const rows = [];
   let current = null;
   for (const line of lines.slice(headerIndex + headerLength)) {
@@ -84,7 +93,7 @@ function parseCellLines(lines, headerIndex, headerLength) {
       break;
     }
     const candidateRank = rankValue(value);
-    if (candidateRank !== null && (!current || current.cells.length >= 8)) {
+    if (candidateRank !== null && (!current || current.cells.length >= (hasOfferId ? 9 : 8))) {
       if (current) rows.push([String(current.rank), ...current.cells.slice(0, 9)]);
       current = {rank: candidateRank, cells: []};
       continue;
@@ -100,14 +109,19 @@ function headerLocation(lines) {
     const cells = line.split('\t').map(headerValue);
     return HEADER.every((name, index) => cells[index] === headerValue(name));
   });
-  if (tabular >= 0) return {index: tabular, length: 1, mode: 'tabular'};
+  if (tabular >= 0) {
+    const cells = lines[tabular].split('\t').map(headerValue);
+    return {index: tabular, length: 1, mode: 'tabular', hasOfferId: cells[HEADER.length] === headerValue('Offer ID')};
+  }
   const content = lines.map((line, lineIndex) => ({value: headerValue(line), lineIndex})).filter(item => item.value);
   for (let index = 0; index <= content.length - HEADER.length; index++) {
     if (HEADER.every((name, offset) => content[index + offset].value === headerValue(name))) {
       const lastHeader = content[index + HEADER.length - 1];
-      const actions = content[index + HEADER.length]?.value === 'actions' ? content[index + HEADER.length] : null;
-      const endLineIndex = actions?.lineIndex ?? lastHeader.lineIndex;
-      return {index: content[index].lineIndex, length: endLineIndex - content[index].lineIndex + 1, mode: 'cells'};
+      const offerIdHeader = content[index + HEADER.length]?.value === headerValue('Offer ID') ? content[index + HEADER.length] : null;
+      const actions = content[index + HEADER.length + (offerIdHeader ? 1 : 0)]?.value === 'actions'
+        ? content[index + HEADER.length + (offerIdHeader ? 1 : 0)] : null;
+      const endLineIndex = actions?.lineIndex ?? offerIdHeader?.lineIndex ?? lastHeader.lineIndex;
+      return {index: content[index].lineIndex, length: endLineIndex - content[index].lineIndex + 1, mode: 'cells', hasOfferId: Boolean(offerIdHeader)};
     }
   }
   return null;
@@ -143,7 +157,9 @@ export function parseTopOffersClipboard(raw = '') {
   if (!header) {
     return {offers: [], parsedCount: 0, page: pageMetadata(text, []), issues: [{severity: 'error', reason: 'Cabeçalho da tabela Rank / Offer Name / Seller não encontrado.'}], valid: false, sourceFormat: 'clickbank-top-offers-v1'};
   }
-  const cellsByRow = header.mode === 'tabular' ? parseTabularRows(lines, header.index) : parseCellLines(lines, header.index, header.length);
+  const cellsByRow = header.mode === 'tabular'
+    ? parseTabularRows(lines, header.index, header.hasOfferId)
+    : parseCellLines(lines, header.index, header.length, header.hasOfferId);
   const offers = [];
   const seenRanks = new Set();
   const seenKeys = new Set();
@@ -174,10 +190,16 @@ export function parseTopOffersClipboard(raw = '') {
     parsedCount: offers.length,
     page,
     listName: /\bTop Offers\b/i.test(text) ? 'Top Offers' : 'Marketplace ClickBank',
-    sourceFormat: 'clickbank-top-offers-v1',
+    sourceFormat: header.hasOfferId ? OFFER_ID_SOURCE_FORMAT : LEGACY_SOURCE_FORMAT,
     issues,
     valid: offers.length > 0 && !issues.some(issue => issue.severity === 'error'),
   };
+}
+
+export function clickBankOfferDetailsUrl(offerId) {
+  const code = clean(offerId);
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(code)) return null;
+  return `https://accounts.clickbank.com/master/dashboard/affiliate-marketplace#/offer-details?offer=${encodeURIComponent(code)}&clickUrl=undefined`;
 }
 
 export function compareCapturedOffers(current = [], previous = []) {

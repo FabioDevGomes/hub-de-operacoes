@@ -1,5 +1,9 @@
 # Padrão visual reutilizável
 
+## Última coleta — catálogos de Curadoria
+
+Use a coluna final da SmartAdv como referência em todas as seis listas. Reutilize `curadoria/last-collection.mjs` e `last-collection.css`: texto regular de `.8rem`, uma linha, números tabulares, alinhamento à esquerda/centro vertical e largura mínima de 156px; sem badge nem formato de botão. Cabeçalho “Última coleta”, depois das demais colunas. Preserve seletores/ordenações e timestamps individuais da origem. Datas sem horário não ganham hora artificial; ausências ficam “—”. O contrato e o mapa de fontes estão em [Manutenção — Última coleta](../../../../docs/maintenance.md#coluna-última-coleta-nas-listas-de-curadoria).
+
 Este guia registra a direção visual aprovada para a evolução gradual do Hub. A Visão Geral é o primeiro piloto e passa a ser a referência para implementações novas. Reutilize a linguagem visual, não force o mesmo arranjo de conteúdo em domínios diferentes. Se o piloto for ajustado após revisão, atualize este guia antes de propagar o ajuste.
 
 ## Direção visual
@@ -36,9 +40,11 @@ Use `src/month-navigation.css` para controles de navegação temporal, independe
 
 ## Regras de implementação
 
+- Radar SpyHero e Top Offers CB também adotam o seletor global `table-columns.css`/`table-columns.mjs`, como SmartAdv. `src/curadoria/curation-columns.mjs` define somente colunas/chaves de preferência dessas duas listas; Produto/Oferta é obrigatório, as demais opções são persistidas isoladamente em localStorage e reaplicadas após renderização. Lista de Gerente, E-commerce GM e Hot Offers MS preservam seus seletores existentes. Não inclua essa preferência nos backups de ofertas nem grave IndexedDB ao ocultar/reexibir. Verifique `tests/curation-columns.test.mjs`.
+
 - O botão **Colunas** tem padrão global em `src/table-columns.css`: use `.hub-column-picker`, `.hub-column-menu` e `[data-column-options]`, com a aparência aprovada da Visão Geral (sem borda, sombra preta, foco azul e opções compactas). SmartAdv reutiliza `src/table-columns.mjs` para ocultar/reexibir, restaurar e salvar preferências por tela; Oferta permanece visível. Preserve cores semânticas e dados; novas telas adotam o componente mediante pedido, sem copiar CSS local. Ver contrato em `docs/maintenance.md` > Padrão visual compartilhado.
 
-- Para links discretos Editar no canto de uma célula/cabeçalho, reutilize o CSS global `src/table-edit-actions.css`, classes `.hub-edit-host`/`.hub-corner-edit`. Visão Geral e Diário compartilham fonte, sublinhado pontilhado, cor e posicionamento superior direito; não são botões elevados. Reserve espaço local para texto/separadores sem duplicar a aparência. Ver [contrato](../../../../docs/maintenance.md#padrão-visual-compartilhado).
+- Para ações discretas em tabelas, reutilize `src/table-edit-actions.css`: `.hub-edit-host`/`.hub-corner-edit` posicionam Editar no canto superior direito (Visão Geral/Diário) e **Ocultar/Reexibir** no mesmo canto da célula Produto da E-commerce GM e da Lista de Gerente GM; `.hub-discreet-action` fica disponível para ações em linha quando esse posicionamento for solicitado. As duas variantes compartilham fonte .65rem regular, cor #88a5c2, sublinhado pontilhado, hover e foco visível, sem fundo/borda/sombra mesmo sob o estilo global de botões em células. A especificidade deve superar `table-headers.css`, inclusive em hover/foco. Reserve espaço para o nome não sobrepor o link de canto; não copie a aparência ou a geometria em CSS local. Preserve a semântica de botão e os eventos/chaves existentes; não amplie para outros controles sem pedido. Ver [contrato](../../../../docs/maintenance.md#padrão-visual-compartilhado).
 
 Para as fichas completas de Google Trends, Glimpse e Google Imagens, siga o [guia consolidado da Curadoria](../../../../docs/curation-analysis-pattern.md). A referência concreta é E-commerce GM; Top Offers CB reutiliza shell/abas e componentes, apresenta Glimpse sem cartão extra e Imagens com progresso, concluir/retornar e histórico. Países ClickBank continuam exclusivamente manuais e os bancos permanecem separados.
 

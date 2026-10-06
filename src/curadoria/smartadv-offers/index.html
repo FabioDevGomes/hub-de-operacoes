@@ -8,10 +8,10 @@
   <link rel="icon" href="/favicon.png">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-header-color">
   <link rel="stylesheet" href="/sidebar-component.css?v=11">
-  <link rel="stylesheet" href="./smartadv-offers.css?v=10">
-  <link rel="stylesheet" href="/table-columns.css?v=1">
+  <link rel="stylesheet" href="./smartadv-offers.css?v=11">
+  <link rel="stylesheet" href="/table-columns.css?v=2">
   <link rel="stylesheet" href="/theme-colors.css?v=5">
-<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=1"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=1"></head>
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"></head>
 <body>
   <div class="shell">
     <aside>
@@ -49,11 +49,10 @@
           <input class="control search hub-search-filter hub-search-filter--fill" id="search" type="search" placeholder="Buscar ID, oferta ou vertical" aria-label="Buscar no catálogo">
           <select class="control hub-table-filter" id="verticalFilter" aria-label="Filtrar por vertical"><option value="">Todas as verticais</option></select>
           <select class="control hub-table-filter" id="geoFilter" aria-label="Filtrar por GEO"><option value="">Todos os GEOs</option></select>
-          <select class="control hub-table-filter" id="channelFilter" aria-label="Filtrar por meio permitido"><option value="">Todos os meios</option></select>
           <select class="control hub-table-filter" id="brandFilter" aria-label="Filtrar por Brand Bidding"><option value="">Brand Bidding: todos</option><option value="yes">Permitido</option><option value="no">Não permitido</option><option value="unknown">Não informado</option></select>
         </div>
         <div class="tablewrap"><table>
-          <thead><tr><th scope="col">ID</th><th scope="col">Oferta</th><th scope="col">Google Trends</th><th scope="col">Glimpse</th><th scope="col">Google Imagens</th><th scope="col">Vertical</th><th scope="col">GEO explícito</th><th scope="col">Meios explícitos</th><th scope="col">Brand Bidding</th><th scope="col">Histórico local</th><th scope="col">Decisão</th></tr></thead>
+          <thead><tr><th scope="col">ID</th><th scope="col">Oferta</th><th scope="col">Google Trends</th><th scope="col">Glimpse</th><th scope="col">Google Imagens</th><th scope="col">Vertical</th><th scope="col">GEO explícito</th><th scope="col">Meios explícitos</th><th scope="col">Brand Bidding</th><th scope="col">Histórico local</th><th scope="col">Decisão</th><th scope="col" class="hub-last-collection">Última coleta</th></tr></thead>
           <tbody id="rows"></tbody>
         </table><div class="empty" id="empty">Cole uma captura SmartAdv para iniciar o catálogo.</div></div>
         <div class="table-foot"><span id="visibleOfferCount">0</span> ofertas visíveis <span>· ausências no recorte não significam ofertas removidas</span></div>
@@ -87,6 +86,6 @@
     </div>
   </section>
   <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
-  <script type="module" src="./smartadv-offers-page.mjs?v=12"></script>
+  <script type="module" src="./smartadv-offers-page.mjs?v=14"></script>
 </body>
 </html>

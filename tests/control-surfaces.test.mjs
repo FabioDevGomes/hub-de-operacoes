@@ -34,7 +34,7 @@ const tableSelects = [
   ['src/curadoria/gerentes/index.html', 'dist/curadoria/gerentes/index.html', ['dateFilter','movementFilter','visibilityFilter','countryFilter','imagesFilter','rulesFilter']],
   ['src/curadoria/top-performance/index.html', 'dist/curadoria/top-performance/index.html', ['badgeFilter','countryFilter','featureFilter','languageFilter','decisionFilter','movementFilter','presenceFilter','visibilityFilter']],
   ['src/curadoria/hot-offers-ms/index.html', 'dist/curadoria/hot-offers-ms/index.html', ['scopeFilter','categoryFilter','affiliationFilter','decisionFilter','movementFilter','presenceFilter','visibilityFilter']],
-  ['src/curadoria/smartadv-offers/index.html', 'dist/curadoria/smartadv-offers/index.html', ['verticalFilter','geoFilter','channelFilter','brandFilter']],
+  ['src/curadoria/smartadv-offers/index.html', 'dist/curadoria/smartadv-offers/index.html', ['verticalFilter','geoFilter','brandFilter']],
 ];
 
 test('shared control surfaces are published and loaded through the existing theme chain', async () => {
@@ -77,7 +77,7 @@ test('table dropdown filters use the shared Visão Geral surface in source and b
       count++;
     }
   }
-  assert.equal(count, 56, 'a varredura dos filtros de tabela cobre as 56 listas/controles identificados');
+  assert.equal(count, 55, 'a varredura cobre os 55 filtros de tabela restantes após remover o filtro de meios da SmartAdv');
   const [css, overviewStyles] = await Promise.all([read('src/control-surfaces.css'), read('src/overview/overview.css')]);
   assert.match(css, /select\.hub-table-filter/);
   assert.match(css, /select\.hub-table-filter\s*\{\s*border-radius:\s*9px/);

@@ -1,0 +1,14 @@
+/* SmartAdv reference: final column, regular text, one line, no badge or button. */
+html body table :is(th, td).hub-last-collection {
+  box-sizing: border-box;
+  width: 156px;
+  min-width: 156px;
+  white-space: nowrap;
+  text-align: left;
+  vertical-align: middle;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+html body table td.hub-last-collection {
+  font-size: .8rem;
+}

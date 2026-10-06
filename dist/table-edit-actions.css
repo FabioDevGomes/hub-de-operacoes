@@ -1,12 +1,17 @@
-/* Opt-in: discreet edit links at the upper-right of a table cell/header.
-   Shared by Overview and Campaign Diary; not normal raised table buttons. */
+/* Opt-in discreet table actions: corner editors or inline secondary actions.
+   Shared appearance; placement is independent of the action's behavior. */
 .hub-edit-host{position:relative}
 html body table .hub-corner-edit{
   position:absolute;top:var(--hub-corner-edit-top,1px);right:var(--hub-corner-edit-right,2px);
-  z-index:1;display:block;width:max-content;min-height:0;margin:0;padding:0;
-  border:0;border-radius:2px;background:transparent;box-shadow:none;
-  color:var(--hub-corner-edit-color,#88a5c2);font:inherit;font-size:.65rem;line-height:1.2;font-weight:400;
+  z-index:1;display:block;width:max-content;margin:0;
+}
+/* More specific than table-headers.css's raised tbody buttons, including states. */
+html body table :is(thead,tbody) :is(th,td) :is(a,button):is(.hub-corner-edit,.hub-discreet-action){
+  min-height:0!important;padding:0!important;border:0!important;border-radius:2px;
+  background:transparent!important;box-shadow:none!important;
+  color:var(--hub-corner-edit-color,#88a5c2);font:inherit;font-size:.65rem!important;line-height:1.2!important;font-weight:400!important;
   letter-spacing:normal;text-transform:none;text-decoration:underline dotted;text-underline-offset:2px;cursor:pointer;
 }
-html body table .hub-corner-edit:hover{color:#b6d4f2;text-decoration-style:solid}
-html body table .hub-corner-edit:focus-visible{outline:2px solid var(--cyan,#38bdf8);outline-offset:2px}
+html body table .hub-discreet-action{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;white-space:nowrap}
+html body table :is(thead,tbody) :is(th,td) :is(a,button):is(.hub-corner-edit,.hub-discreet-action):hover{color:#b6d4f2;text-decoration-style:solid;box-shadow:none!important}
+html body table :is(thead,tbody) :is(th,td) :is(a,button):is(.hub-corner-edit,.hub-discreet-action):focus-visible{outline:2px solid var(--cyan,#38bdf8)!important;outline-offset:2px;box-shadow:none!important}

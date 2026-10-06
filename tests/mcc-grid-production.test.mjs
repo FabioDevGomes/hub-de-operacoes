@@ -434,7 +434,7 @@ assert.ok(background.includes('deliverD1GridToPreparador'));
 assert.ok(background.includes("chrome.tabs.create({ url: PREPARADOR_URL, active: false })"), 'mantém o popup aberto para mostrar erros enquanto o Preparador recebe a captura');
 assert.ok(background.indexOf("if (!execution?.result?.ok)") < background.indexOf("chrome.tabs.update(tab.id, { active: true })"), 'só foca o Preparador depois do aceite da captura');
 assert.deepEqual(manifest.permissions, ['scripting','activeTab','clipboardWrite']);
-assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*']);
+assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*','http://127.0.0.1:8765/curadoria/clickbank-top-offers/*']);
 const receiverStart = html.indexOf('window.__hubReceiveMccD0Grid = async capture =>');
 const receiverEnd = html.indexOf("q('#apply-manifest').addEventListener", receiverStart);
 assert.ok(receiverStart >= 0 && receiverEnd > receiverStart);

@@ -2,8 +2,11 @@ import assert from'node:assert/strict';
 import{readFile}from'node:fs/promises';
 import vm from'node:vm';
 
-const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8');
+const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8'),tableStyles=await readFile(new URL('../dist/curadoria/top-performance/table-standard.css',import.meta.url),'utf8');
 assert.ok(html.includes('E-commerce GM'));
+assert.ok(html.includes('class="surface offer-table-surface"><header class="offer-table-caption"><h2>Ofertas</h2></header>'),'a tabela principal precisa de cabeçalho próprio acima dos filtros');
+assert.ok(html.includes('<table class="hub-table-layout">'),'a lista de ofertas deve optar explicitamente pelo padrão compartilhado de linhas da tabela');
+assert.ok(html.includes('table-standard.css?v=1')&&tableStyles.includes('.offer-table-surface {\n  border: 0;')&&tableStyles.includes('.offer-table-caption h2'),'o painel da tabela precisa usar bordas externas removidas e cabeçalho local padronizado');
 assert.ok(html.includes('./top-performance-storage.mjs'));
 assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
 assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));

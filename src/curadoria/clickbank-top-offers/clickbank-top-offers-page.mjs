@@ -1,24 +1,26 @@
-import * as Domain from './clickbank-top-offers-domain.mjs';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=3';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=7';
+import * as Domain from './clickbank-top-offers-domain.mjs?v=2';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=4';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=14';
+import {mountExtensionCapture} from './extension-capture.mjs?v=2';
+import {mergeDtcCountries} from './dtc-country-capture.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
-import {mountCurationListFocus} from '../list-focus.mjs?v=2';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
+import {mountCurationListFocus} from '../list-focus.mjs?v=3';
 
 const root = document.querySelector('#clickbankTopOffersRoot');
 let captures = [], offerMetadata = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
-mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false});
+const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
   addTrendCandidate,removeTrendCandidate,addManualCountry,saveImage,saveImageSearchTerm,
-  openImages,openImagesExcluding,openGlimpse,
+  openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
 }});
-mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet')});
+mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),finishLabel:'Salvar',showSavedFeedback:true});
 
 function latestMatching(listName) {
   return [...captures].filter(item => item.listName === listName).sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)))[0] || null;
@@ -64,11 +66,11 @@ function observabilityContext(item) {
   return {origin:'clickbank-top-offers',subjectId:`clickbank-top-offers:${item.offerKey}`,productKey:Glimpse.normalize(item.offerName),productName:item.offerName,offerRefs:[{origin:'clickbank-top-offers',offerKey:item.offerKey,seller:item.seller}]};
 }
 
-function validateImport(raw) {
+function validateImport(raw,extensionCapture=null) {
   const parsed = Domain.parseTopOffersClipboard(raw);
   const previous = latestMatching(parsed.listName || 'Top Offers');
   const compared = Domain.compareCapturedOffers(parsed.offers, previous?.offers || []);
-  pending = {raw:String(raw),parsed,previous,compared};
+  pending = {raw:String(raw),parsed,previous,compared,extensionCapture};
   view.showImportPreview({parsed,compared});
 }
 
@@ -85,7 +87,7 @@ async function confirmImport(raw) {
   try {
     const capture = {
       captureId:`clickbank-${crypto.randomUUID()}`,
-      capturedAt:new Date().toISOString(),
+      capturedAt:pending.extensionCapture?.capturedAt || new Date().toISOString(),
       sourceFormat:parsed.sourceFormat,
       listName:parsed.listName,
       declaredTotal:parsed.page.total,
@@ -142,6 +144,21 @@ async function addManualCountry(offerKey,value) {
   if(old.manualCountries.includes(code)){view.showMessage(`${code} já foi adicionado.`);return false;}
   const stored={...old,...baseRecord(item),manualCountries:[...old.manualCountries,code]};
   await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);offerMetadata=replaceRecord(offerMetadata,stored);show();view.showMessage(`${code} adicionado manualmente; não faz parte dos dados da ClickBank.`);return true;
+}
+async function saveDtcCountries(item,capture) {
+  if(saving)return {ok:false,message:'O Hub está ocupado com outra gravação. Tente novamente.'};
+  saving=true;
+  try {
+    const old=metadataFor(item),merged=mergeDtcCountries(old,baseRecord(item),capture);
+    if(!merged.ok)return merged;
+    await Storage.putOfferRecord(Storage.STORES.offerMetadata,merged.record);
+    offerMetadata=replaceRecord(offerMetadata,merged.record);show();
+    view.showMessage(`Lista capturada da DTC e salva para ${item.offerName}: ${capture.countries.length} país(es), ${merged.addedCount} novo(s).`);
+    return {ok:true,saved:true,offerName:item.offerName,addedCount:merged.addedCount,countryCount:capture.countries.length};
+  } catch(error) {
+    console.error('Não foi possível salvar a lista de países da DTC.',error);
+    return {ok:false,message:'Não foi possível salvar a lista de países da DTC. Os países existentes foram preservados.'};
+  } finally {saving=false;}
 }
 async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=false}={}) {
   const item=currentOffer(offerKey);if(!item)return false;
@@ -206,4 +223,10 @@ async function restoreBackup(file) {
   } catch(error) { console.warn('Backup Top Offers CB rejeitado.',error);view.showMessage(error instanceof SyntaxError?'O arquivo selecionado não contém JSON válido.':(error?.message||'Não foi possível restaurar o backup.'),{error:true}); }
 }
 
-refresh().catch(error=>{console.error('Não foi possível abrir o banco local Top Offers CB.',error);view.showMessage('Não foi possível abrir o armazenamento local desta tela.',{error:true});});
+const initialLoad = refresh();
+initialLoad.catch(error=>{console.error('Não foi possível abrir o banco local Top Offers CB.',error);view.showMessage('Não foi possível abrir o armazenamento local desta tela.',{error:true});});
+mountExtensionCapture({target:window,ready:initialLoad,getBusy:()=>saving,getDraft:()=>root.querySelector('#pasteArea').value,
+  preparePreview:(raw,metadata)=>{view.prepareImport(raw);validateImport(raw,metadata);},
+  getOffers:()=>captures.flatMap(capture=>capture.offers||[]),
+  saveDtcCountries,
+});

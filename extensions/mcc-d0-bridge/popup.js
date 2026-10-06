@@ -1,12 +1,16 @@
 import { showCaptureStatus, showCaptureError } from './capture-status-view.mjs';
 import { mountClickBankCapture } from './clickbank-popup.mjs';
+import { mountClickBankDtcCountries } from './clickbank-dtc-popup.mjs';
+import { mountVslSpeed } from './vsl-popup.mjs';
 
 const captureButton = document.querySelector('#capture-d0');
 const captureD1Button = document.querySelector('#capture-d1');
 const scrollButton = document.querySelector('#scroll-to-bottom');
 const captureStatus = document.querySelector('#capture-status');
 const actionButtons = [scrollButton, captureD1Button, captureButton,
-  document.querySelector('#capture-clickbank'), document.querySelector('#restore-clickbank')];
+  document.querySelector('#capture-clickbank'), document.querySelector('#restore-clickbank'),
+  document.querySelector('#capture-dtc-countries'),
+  ...[1,10,20,30].map(rate => document.querySelector(`#vsl-speed-${rate}`))];
 
 function setActionsDisabled(disabled) {
   for (const button of actionButtons) button.disabled = disabled;
@@ -14,6 +18,8 @@ function setActionsDisabled(disabled) {
 
 mountClickBankCapture({ document, sendMessage:message => chrome.runtime.sendMessage(message),
   clipboard:navigator.clipboard, setDisabled:setActionsDisabled });
+mountClickBankDtcCountries({document,sendMessage:message=>chrome.runtime.sendMessage(message),setDisabled:setActionsDisabled});
+mountVslSpeed({ document, sendMessage:message => chrome.runtime.sendMessage(message), setDisabled:setActionsDisabled });
 
 scrollButton.addEventListener('click', async () => {
   setActionsDisabled(true);

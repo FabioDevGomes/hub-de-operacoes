@@ -20,3 +20,4 @@ html body .history-pill{border:0}
 .capture-toolbar .hub-column-picker{margin-left:auto}
 .capture-toolbar:has(.hub-column-picker[open]){position:relative;z-index:30}
 .tablewrap table[data-column-selection="custom"]{min-width:0}
+@media(min-width:1051px){.filters{grid-template-columns:minmax(200px,1.5fr) repeat(3,minmax(135px,1fr))}}

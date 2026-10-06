@@ -29,7 +29,7 @@ function readFocus(key){
   }catch{return null}
 }
 
-export function mountCurationListFocus(scope,{blockingSelector='',highlightOnCapture=true}={}){
+export function mountCurationListFocus(scope,{blockingSelector='',highlightOnCapture=true,restoreOnWindowReturn=true,suppressPulseOnPageHide=false}={}){
   const key=`${STORAGE_PREFIX}${scope}`;
   const listScroll=document.querySelector('.tablewrap');
   if(listScroll)listScroll.dataset.curationListScroll='';
@@ -56,7 +56,17 @@ export function mountCurationListFocus(scope,{blockingSelector='',highlightOnCap
   document.addEventListener('close',event=>{
     if(event.target?.id==='sharedDecisionDialog')queueMicrotask(restore);
   },true);
+  if(suppressPulseOnPageHide)window.addEventListener('pagehide',()=>{
+    const state=readFocus(key);
+    if(state)try{sessionStorage.setItem(key,JSON.stringify({...state,pulseOnRestore:false}))}catch{}
+  });
   window.addEventListener('pageshow',restore);
+  if(restoreOnWindowReturn){
+    window.addEventListener('focus',restore);
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState!=='hidden')restore();
+    });
+  }
   const rows=document.querySelector('#rows');
   if(rows&&typeof MutationObserver==='function')new MutationObserver(()=>queueMicrotask(restore)).observe(rows,{childList:true});
   return{restore};
@@ -71,10 +81,10 @@ export function restoreCurationListFocus(scope,{blockingSelector=''}={}){
   window.scrollTo(state.scrollX||0,state.scrollY||0);
   const listScroll=document.querySelector('[data-curation-list-scroll]');
   if(listScroll&&state.listScroll){listScroll.scrollLeft=state.listScroll.left||0;listScroll.scrollTop=state.listScroll.top||0}
-  pulse(row);
+  const shouldPulse=state.pulseOnRestore!==false;
+  if(shouldPulse)pulse(row);
   const control=[...row.querySelectorAll(FOCUSABLE_SELECTOR)].find(element=>controlKind(element)===state.control);
-  if(control)control.dataset.curationFocus=state.control;
-  pulse(control);
+  if(control){control.dataset.curationFocus=state.control;if(shouldPulse)pulse(control)}
   try{sessionStorage.removeItem(key)}catch{}
   return true;
 }

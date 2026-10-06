@@ -1,5 +1,6 @@
-import * as Domain from './smartadv-offers-domain.mjs?v=4';
-import {captureOfferHistory, historyLabel} from './smartadv-offers-domain.mjs?v=4';
+import * as Domain from './smartadv-offers-domain.mjs?v=5';
+import {captureOfferHistory, historyLabel} from './smartadv-offers-domain.mjs?v=5';
+import {lastCollectionCell} from '../last-collection.mjs';
 import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
@@ -27,13 +28,20 @@ const keyFor = item => `smartadv:${item.offerId}`;
 
 export function mountSmartAdvOffersView({root, actions, preferences}) {
   let captures = [], trendRecords = [], imageRecords = [], decisionRecords = [], glimpseAnalyses = [];
-  let selectedCaptureId = '', annotatedOffers = [], activeOfferId = '', activeTab = 'trends';
+  let selectedCaptureId = '', annotatedOffers = [], latestCaptureByOffer = new Map(), activeOfferId = '', activeTab = 'trends';
   const importDialog = $('#importDialog', root), paste = $('#pasteArea', root), confirmButton = $('#confirmImport', root);
   const sheet = $('#offerSheet'), imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
+  const columnPreferenceKey = 'hub:smartadv-offers:visible-columns:v2';
+  try {
+    if (preferences?.getItem(columnPreferenceKey) == null) {
+      const previousColumns = JSON.parse(preferences?.getItem('hub:smartadv-offers:visible-columns:v1') || 'null');
+      if (Array.isArray(previousColumns)) preferences.setItem(columnPreferenceKey, JSON.stringify([...new Set([...previousColumns, 'lastSeen'])]));
+    }
+  } catch {}
   const columns = mountColumnPicker({picker:$('#smartAdvColumnPicker', root),table:$('.tablewrap table', root),
-    columns:[['id','ID'],['offer','Oferta'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Google Imagens'],['vertical','Vertical'],['geo','GEO explícito'],['channels','Meios explícitos'],['brand','Brand Bidding'],['history','Histórico local'],['decision','Decisão']],
-    required:['offer'],preferences,preferenceKey:'hub:smartadv-offers:visible-columns:v1'});
+    columns:[['id','ID'],['offer','Oferta'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Google Imagens'],['vertical','Vertical'],['geo','GEO explícito'],['channels','Meios explícitos'],['brand','Brand Bidding'],['history','Histórico local'],['decision','Decisão'],['lastSeen','Última coleta']],
+    required:['offer'],preferences,preferenceKey:columnPreferenceKey});
   function showMessage(message, {error = false} = {}) {
     for (const element of [$('#message',root),$('#sheetMessage'),$('#trendResultMessage')].filter(Boolean)) {
       element.textContent=message;element.classList.toggle('error',error);
@@ -79,12 +87,11 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   function renderTable() {
     const query = $('#search', root).value.trim().toLocaleLowerCase();
     const vertical = $('#verticalFilter', root).value, geo = $('#geoFilter', root).value;
-    const channel = $('#channelFilter', root).value, brand = $('#brandFilter', root).value;
+    const brand = $('#brandFilter', root).value;
     const offers = annotatedOffers.map(enrich).filter(item => {
       const haystack = `${item.offerId} ${item.offerName} ${item.vertical} ${item.geoTargets.join(' ')} ${item.allowedChannels.join(' ')}`.toLocaleLowerCase();
       return (!query || haystack.includes(query)) && (!vertical || item.vertical === vertical) &&
-        (!geo || item.geoTargets.includes(geo)) && (!channel || item.allowedChannels.includes(channel)) &&
-        (!brand || item.brandBidding === brand);
+        (!geo || item.geoTargets.includes(geo)) && (!brand || item.brandBidding === brand);
     });
     $('#rows', root).innerHTML = offers.map(item => `<tr data-offer="${escape(item.offerId)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
       <td class="number"><a href="${escape(item.offerUrl)}" target="_blank" rel="noopener noreferrer">${escape(item.offerId)}</a></td>
@@ -93,6 +100,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
       <td>${escape(item.vertical)}</td><td>${escape(item.geoTargets.join(', ') || '—')}</td><td>${escape(item.allowedChannels.join(', ') || '—')}</td>
       <td>${escape(brandLabel(item.brandBidding))}</td><td><span class="history-pill ${item.historyState}">${escape(historyLabel(item.historyState))}</span></td>
       <td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(keyFor(item)))}</td>
+      ${lastCollectionCell(latestCaptureByOffer.get(String(item.offerId)))}
     </tr>`).join('');
     columns.apply();
     $('#empty', root).classList.toggle('hidden', offers.length > 0);
@@ -103,6 +111,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   function render(nextState = {}) {
     if (Array.isArray(nextState)) nextState = {captures:nextState};
     captures = [...(nextState.captures || captures)].sort((a, b) => String(b.capturedAt).localeCompare(String(a.capturedAt)));
+    latestCaptureByOffer = Domain.latestCaptureIndex(captures);
     trendRecords = nextState.trends || trendRecords;
     imageRecords = nextState.images || imageRecords;
     decisionRecords = nextState.decisions || decisionRecords;
@@ -117,17 +126,15 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     const older = selected ? captures.slice(selectedIndex + 1) : [];
     annotatedOffers = selected ? captureOfferHistory(selected, older) : [];
     $('#captureInfo', root).textContent = selected
-      ? `${captureLabel(selected)} · ${selected.offers.length} ofertas observadas. A fonte não informa se a lista está completa; ausências não são tratadas como ofertas removidas.`
+      ? `${captureLabel(selected)} · ${selected.offers.length} ofertas observadas.`
       : 'Nenhuma captura salva.';
     $('#captureCount', root).textContent = String(captures.length);
     $('#offerCount', root).textContent = String(selected?.offers.length || 0);
     $('#firstSeenCount', root).textContent = String(annotatedOffers.filter(item => item.historyState === 'first-seen').length);
     const allVerticals = [...new Set(annotatedOffers.map(item => item.vertical))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const allGeos = [...new Set(annotatedOffers.flatMap(item => item.geoTargets))].sort();
-    const allChannels = [...new Set(annotatedOffers.flatMap(item => item.allowedChannels))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     fillFilter('verticalFilter', allVerticals, 'Todas as verticais');
     fillFilter('geoFilter', allGeos, 'Todos os GEOs');
-    fillFilter('channelFilter', allChannels, 'Todos os meios');
     renderTable();
     const active = offerById(activeOfferId);
     if (active && !sheet.classList.contains('hidden')) renderOffer(active);
@@ -241,7 +248,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   confirmButton.onclick=()=>actions.confirmImport(paste.value);
   paste.oninput=()=>{confirmButton.disabled=true;$('#previewStatus',root).textContent='A colagem mudou; valide novamente antes de salvar.'};
   $('#captureSelect',root).onchange=event=>{selectedCaptureId=event.target.value;render()};
-  ['search','verticalFilter','geoFilter','channelFilter','brandFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
+  ['search','verticalFilter','geoFilter','brandFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
   $('#exportBackup',root).onclick=()=>actions.exportBackup();
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value=''};
   $('#rows',root).addEventListener('click',event=>{

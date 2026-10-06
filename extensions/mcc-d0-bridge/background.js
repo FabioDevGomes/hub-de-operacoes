@@ -6,11 +6,15 @@ import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD1Capture }
 import { parseMccSelectableText } from './mcc-text-domain.mjs';
 import { collectClickBankProducts } from './clickbank-reader.mjs';
 import { CLICKBANK_COLUMNS, isClickBankMarketplace } from './clickbank-domain.mjs';
+import { isVslRate, isVslPage } from './vsl-domain.mjs';
+import { controlVslSpeed } from './vsl-controller.mjs';
+import { collectClickBankDtcCommonCountries, isClickBankDtcCheckout } from './clickbank-dtc-reader.mjs';
+import { createClickBankTransfer, deliverClickBankPreview, isClickBankReceiverReady, deliverDtcCommonCountries, isDtcCountryReceiverReady } from './clickbank-forward.mjs';
 
 const PREPARADOR_URL = 'http://127.0.0.1:8765/preparador-MCC/';
 const PREPARADOR_MATCH = `${PREPARADOR_URL}*`;
 
-function waitUntilLoaded(tabId, timeoutMs = 20000) {
+function waitUntilLoaded(tabId, timeoutMs = 20000, label = 'Preparador MCC') {
   return new Promise((resolve, reject) => {
     let finished = false;
     const finish = (callback, value) => {
@@ -23,10 +27,10 @@ function waitUntilLoaded(tabId, timeoutMs = 20000) {
     const onUpdated = (updatedId, changeInfo) => {
       if (updatedId === tabId && changeInfo.status === 'complete') finish(resolve);
     };
-    const timer = setTimeout(() => finish(reject, new Error('O Preparador MCC demorou demais para carregar.')), timeoutMs);
+    const timer = setTimeout(() => finish(reject, new Error(`O ${label} demorou demais para carregar.`)), timeoutMs);
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.get(tabId, tab => {
-      if (chrome.runtime.lastError) finish(reject, new Error('Não consegui abrir o Preparador MCC local. Inicie o Hub e tente novamente.'));
+      if (chrome.runtime.lastError) finish(reject, new Error(`Não consegui abrir o ${label} local. Inicie o Hub e tente novamente.`));
       else if (tab?.status === 'complete') finish(resolve);
     });
   });
@@ -139,7 +143,103 @@ async function captureActiveClickBank(mode) {
   return execution.result;
 }
 
+async function activeVslSpeed(rate, action) {
+  if (action === 'set' && !isVslRate(rate)) throw new Error('Velocidade inválida. Use 1×, 10×, 20× ou 30×.');
+  const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
+  if (!tab?.id || !isVslPage(tab.url)) throw new Error('Abra a página da VSL na aba ativa do Chrome.');
+  const [execution] = await chrome.scripting.executeScript({
+    target:{ tabId:tab.id }, world:'MAIN', func:controlVslSpeed, args:[rate ?? null, action]
+  });
+  if (!execution?.result) throw new Error('O player não respondeu. Reabra a extensão e tente novamente.');
+  return execution.result;
+}
+
+async function captureAndForwardClickBank() {
+  const result = await captureActiveClickBank('capture');
+  try {
+  const payload = createClickBankTransfer(result);
+  const url = 'http://127.0.0.1:8765/curadoria/clickbank-top-offers/';
+  const existing = await chrome.tabs.query({currentWindow:true,url:`${url}*`});
+  let tab = null;
+  for (const candidate of existing) {
+    if (!candidate?.id) continue;
+    try {
+      if (new URL(candidate.url).pathname !== '/curadoria/clickbank-top-offers/') continue;
+      const [probe] = await chrome.scripting.executeScript({
+        target:{tabId:candidate.id},world:'MAIN',func:isClickBankReceiverReady
+      });
+      if (probe?.result === true) { tab = candidate; break; }
+    } catch {
+      // Aba antiga, ainda carregando ou sem receptor: preserve-a e abra uma atualizada.
+    }
+  }
+  if (!tab) tab = await chrome.tabs.create({url,active:false});
+  if (!tab?.id) throw new Error('Não foi possível abrir Top Offers CB. Inicie o Hub e tente novamente.');
+  await waitUntilLoaded(tab.id,20000,'Top Offers CB');
+  const [execution] = await chrome.scripting.executeScript({
+    target:{tabId:tab.id},world:'MAIN',func:deliverClickBankPreview,args:[payload]
+  });
+  if (!execution?.result?.ok) throw new Error(execution?.result?.message || 'O Hub não recebeu a captura. Recarregue Top Offers CB e tente novamente.');
+  await chrome.tabs.update(tab.id,{active:true});
+  return {...result,...execution.result};
+  } catch(error) {
+    throw Object.assign(error,{captureResult:{...result,ok:false,message:error.message}});
+  }
+}
+
+async function captureAndSaveDtcCommonCountries() {
+  const [sourceTab] = await chrome.tabs.query({active:true,currentWindow:true});
+  if (!sourceTab?.id || !isClickBankDtcCheckout(sourceTab.url)) {
+    throw new Error('Abra o checkout da DTC em orders.clickbank.net na aba ativa. Nenhum dado foi lido.');
+  }
+  const [sourceExecution] = await chrome.scripting.executeScript({
+    target:{tabId:sourceTab.id},func:collectClickBankDtcCommonCountries
+  });
+  const capture = sourceExecution?.result;
+  if (!capture?.ok) throw new Error(capture?.message || 'Não consegui ler os países comuns do checkout. Nada foi salvo.');
+  const payload = {schema:'clickbank-dtc-country-capture-v1',source:'clickbank_dtc_checkout',
+    productName:capture.productName,countries:capture.countries,capturedAt:capture.capturedAt};
+
+  const url = 'http://127.0.0.1:8765/curadoria/clickbank-top-offers/';
+  const existing = await chrome.tabs.query({url:`${url}*`});
+  let target = null;
+  for (const candidate of existing) {
+    if (!candidate?.id) continue;
+    try {
+      if (new URL(candidate.url).pathname !== '/curadoria/clickbank-top-offers/') continue;
+      const [probe] = await chrome.scripting.executeScript({
+        target:{tabId:candidate.id},world:'MAIN',func:isDtcCountryReceiverReady
+      });
+      if (probe?.result === true) { target = candidate; break; }
+    } catch { /* Preserve tabs that are stale or still loading. */ }
+  }
+  if (!target) throw new Error('Deixe a lista Top Offers CB aberta no Hub e tente novamente. Não é necessário abrir a ficha da oferta; nada foi salvo.');
+  const [delivery] = await chrome.scripting.executeScript({
+    target:{tabId:target.id},world:'MAIN',func:deliverDtcCommonCountries,args:[payload]
+  });
+  if (!delivery?.result?.ok) throw new Error(delivery?.result?.message || 'O Hub não aplicou a lista. Nenhum dado foi salvo.');
+  return delivery.result;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'CAPTURE_DTC_COMMON_COUNTRIES') {
+    captureAndSaveDtcCommonCountries()
+      .then(result=>sendResponse({ok:true,result}))
+      .catch(error=>sendResponse({ok:false,message:error?.message || 'Falha ao capturar países da DTC.'}));
+    return true;
+  }
+  if (message?.type === 'CAPTURE_AND_FORWARD_CLICKBANK') {
+    captureAndForwardClickBank()
+      .then(result=>sendResponse({ok:true,result}))
+      .catch(error=>sendResponse({ok:false,result:error.captureResult,message:error?.message || 'Falha ao preencher Top Offers CB.'}));
+    return true;
+  }
+  if (message?.type === 'SET_ACTIVE_VSL_SPEED' || message?.type === 'READ_ACTIVE_VSL_SPEED') {
+    activeVslSpeed(message.rate, message.type === 'READ_ACTIVE_VSL_SPEED' ? 'read' : 'set')
+      .then(result => sendResponse({ ok:result.ok, result }))
+      .catch(error => sendResponse({ ok:false, message:error?.message || 'Falha ao controlar a VSL.' }));
+    return true;
+  }
   if (message?.type === 'CAPTURE_CLICKBANK_PRODUCTS' || message?.type === 'RESTORE_CLICKBANK_TABLE') {
     captureActiveClickBank(message.type === 'RESTORE_CLICKBANK_TABLE' ? 'restore' : 'capture')
       .then(result => sendResponse({ ok:result.ok, result }))

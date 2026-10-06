@@ -72,7 +72,6 @@
 .pf-shell .pf-view-toggle button{padding:5.95px 8.5px;font-size:.6205rem}
 .pf-shell .pf-period-adjust-button{width:32.3px;height:32.3px;font-size:1.1475rem}
 .pf-shell button.btn,.pf-shell button.pf-icon-button,.pf-shell button.pf-period-adjust-button,.pf-shell button.pf-budget-info,.pf-shell .pf-view-toggle button{font-weight:400}
-.pf-shell .pf-mark-paid{padding:1.7px 4.25px;font-size:.527rem}
 .pf-management-stack>.pf-subpanel:first-child>.panel-head{padding:11px 13.6px}
 .pf-management-stack>.pf-subpanel:first-child>.panel-head>.pf-actions>.btn{padding:6px 9px;font-size:.68rem;line-height:1.2}
 .pf-management-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
@@ -99,7 +98,6 @@
 .pf-nubank-current-values{flex-wrap:nowrap;gap:6px}.pf-nubank-current-values>span{flex:0 0 auto}.pf-nubank-current-values>.pf-current-value-separator{color:#7289a4;font-size:.66rem}
 .pf-currency-card.pf-money-usd .pf-kpi-grid>div:not(:last-child) strong,.pf-reserve-projection.pf-money-usd strong,.pf-month-total-currency.pf-money-usd b,.pf-quarter-month b.pf-money-usd,.pf-quarter-total b.pf-money-usd{color:#82d6aa}.pf-amount-input.pf-money-usd{color:#82d6aa}
 .pf-quarter-table.pf-consolidated-table{min-width:0}
-.pf-mark-paid{padding:2px 5px;font-size:.62rem;line-height:1.2;white-space:nowrap;border-color:rgba(84,205,145,.4);background:rgba(21,82,59,.24);color:#91dfb3}.pf-mark-paid:not(:disabled):hover{border-color:rgba(84,225,155,.72);background:rgba(21,101,69,.4);color:#c3f4d3}.pf-mark-paid.is-paid:disabled{opacity:.76;color:#7ed5a4;border-color:rgba(84,205,145,.34)}
 .pf-month-global-summary{padding:7px 11px;border:1px solid rgba(56,92,128,.52);border-radius:12px;background:rgba(13,25,43,.72)}.pf-month-global-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.pf-month-global-metric{min-width:0;padding:0 8px;border-left:1px solid rgba(68,91,120,.38)}.pf-month-global-metric:first-child{padding-left:0;border-left:0}.pf-month-global-metric>small{display:block;min-height:1.5em;color:#91a4bc;font-size:.63rem;line-height:1.2}.pf-month-global-values{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap;margin-top:2px}.pf-month-global-values>span{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}.pf-month-global-values>span>b{color:#9db0c7;font-size:.59rem;font-weight:600}.pf-month-global-values>span>strong{font-size:.73rem;font-variant-numeric:tabular-nums}.pf-month-global-values>span.pf-money-usd>strong{color:#82d6aa}.pf-month-global-values>span.is-positive>strong{color:#42d7a0}.pf-month-global-values>span.is-negative>strong{color:#ff7788}.pf-month-global-summary>p{margin:5px 0 0;color:#7189a4;font-size:.59rem;line-height:1.3}
 @media(max-width:680px){.pf-month-global-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.pf-month-global-metric{padding:0 6px}.pf-month-global-metric:first-child{padding-left:0}.pf-month-global-metric:last-child{grid-column:1/-1;border-left:0;padding-left:0}}
 .pf-month-global-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.pf-reserve-projection{grid-template-columns:repeat(3,minmax(0,1fr))}

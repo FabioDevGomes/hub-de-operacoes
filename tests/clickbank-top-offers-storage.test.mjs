@@ -13,6 +13,10 @@ assert.match(source, /createObjectStore\(STORES\.captures,\s*\{keyPath:\s*'captu
 assert.match(source, /for \(const name of \[STORES\.offerMetadata, STORES\.trends, STORES\.images\]\)/, 'a migração adiciona stores de análise sem recriar capturas');
 assert.match(source, /createObjectStore\(STORES\.decisions,\s*\{keyPath:\s*'offerKey'\}\)/, 'a migração cria decisões por oferta sem recriar capturas');
 assert.match(source, /createObjectStore\(name,\s*\{keyPath:\s*'offerKey'\}\)/);
+assert.match(source, /\['clickbank-top-offers-v1','clickbank-top-offers-v2'\]/, 'o armazenamento aceita capturas antigas sem ID e novas com ID sem migração de schema');
+assert.match(source, /offer\.offerId == null \|\|/, 'Offer ID é opcional, preservando capturas históricas');
+assert.match(source, /record\.dtcCountryCapture\.source === 'clickbank-dtc-checkout'/, 'a origem DTC/hora e países capturados têm validação opcional, sem migração da store');
+assert.ok(source.includes("record.dtcCountryCapture.countries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code))"), 'códigos DTC são validados como ISO de duas letras');
 assert.match(source, /tx\.objectStore\(STORES\.captures\)\.add\(capture\)/, 'capturas são acrescentadas sem substituir a coleção anterior');
 assert.match(source, /export async function exportBackup\(\)/);
 assert.match(source, /offerMetadata: await getAll\(STORES\.offerMetadata\)/, 'o backup completo inclui países manuais');

@@ -9,7 +9,7 @@ const headerActionsCss = await readFile(new URL('../src/curadoria/curation-heade
 const sidebar = await readFile(new URL('../src/sidebar-component.js', import.meta.url), 'utf8');
 const curationHome = await readFile(new URL('../src/curadoria/index.html', import.meta.url), 'utf8');
 
-for (const id of ['smartAdvOffersRoot','openImport','captureSelect','captureInfo','search','verticalFilter','geoFilter','channelFilter','brandFilter','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','sheetTitle','trendsTerm','trendCountries','trendCandidate','trendResults','imagesTerm','imageCountries','glimpseFrame','addManualCountry']) {
+for (const id of ['smartAdvOffersRoot','openImport','captureSelect','captureInfo','search','verticalFilter','geoFilter','brandFilter','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','sheetTitle','trendsTerm','trendCountries','trendCandidate','trendResults','imagesTerm','imageCountries','glimpseFrame','addManualCountry']) {
   assert.ok(page.includes(`id="${id}"`), `elemento ${id} ausente da página`);
 }
 const appRootStart = page.indexOf('<main id="smartAdvOffersRoot">');
@@ -19,14 +19,21 @@ assert.ok(importDialogStart > appRootStart && importDialogStart < appRootEnd, 'o
 assert.ok(page.includes('data-hub-sidebar-active="smartadv-offers"'));
 assert.ok(page.includes('../trends-sheet.css?v=20261006-curation-header-color'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
 assert.ok(page.includes('Curadoria · SmartAdv') && page.includes('Ofertas SmartAdv'));
+assert.doesNotMatch(page, /id="channelFilter"|Todos os meios/, 'o filtro de meios foi removido da interface');
+assert.ok(page.includes('<th scope="col">Meios explícitos</th>'), 'a coluna de meios permanece na tabela');
+assert.doesNotMatch(view, /channelFilter|allChannels|item\.allowedChannels\.includes\(channel\)/, 'a filtragem por meio foi removida sem retirar os dados da tabela');
+assert.ok(view.includes('item.allowedChannels.join'), 'os meios explícitos continuam visíveis e pesquisáveis por texto');
 assert.match(page, /\.\/smartadv-offers-page\.mjs\?v=\d+/);
 assert.match(view, /const \$ = \(selector, scope = document\) => scope\.querySelector\(selector\)/, 'a view resolve controles dentro da raiz recebida');
 assert.ok(view.includes('replace(/[&<>"\']/g'), 'texto colado deve ser escapado antes de ir para HTML');
 assert.ok(view.includes('captureOfferHistory') && view.includes('historyLabel'));
-assert.ok(view.includes('ausências não são tratadas como ofertas removidas'));
+assert.ok(!view.includes('A fonte não informa se a lista está completa; ausências não são tratadas como ofertas removidas.'), 'o resumo da captura omite o aviso solicitado');
 assert.ok(view.includes('class="offer-name" title="${escape(item.productName)}">${escape(item.productName)}</td>'), 'a tabela mostra o nome do produto sem os metadados do título original');
 for (const [label,tab] of [['Google Trends','trends'],['Glimpse','glimpse'],['Google Imagens','images']]) assert.ok(page.includes(`<th scope="col">${label}</th>`)&&page.includes(`data-tab="${tab}"`),`${label} tem coluna e painel de análise`);
 assert.ok(page.includes('<th scope="col">Decisão</th>') && view.includes('DecisionUI.buttonHtml'), 'a tabela SmartAdv tem uma coluna de decisão');
+assert.ok(page.includes('<th scope="col" class="hub-last-collection">Última coleta</th>') && page.indexOf('<th scope="col" class="hub-last-collection">Última coleta</th>') > page.indexOf('<th scope="col">Decisão</th>'), 'Última Coleta é a coluna final da tabela');
+assert.ok(view.includes("['lastSeen','Última coleta']") && view.includes('Domain.latestCaptureIndex(captures)') && view.includes('lastCollectionCell(latestCaptureByOffer.get(String(item.offerId))'), 'a data/hora mais recente é exibida e a coluna participa do seletor de colunas');
+assert.ok(view.includes('hub:smartadv-offers:visible-columns:v2') && view.includes("'lastSeen'])"), 'preferências de coluna anteriores preservam a escolha existente e exibem a nova coluna por padrão');
 assert.ok(view.includes('DecisionUI.openDecisionPicker') && controller.includes('Storage.putDecision(stored)'), 'a decisão é salva exclusivamente em Ofertas SmartAdv');
 assert.ok(controller.includes('Decisão salva somente em Ofertas SmartAdv'), 'a interface deixa claro o escopo da decisão');
 assert.ok(view.includes('KeywordCandidatesUI.renderKeywordCandidates')&&view.includes('showRemoveForSaved:true'),'candidatas negativas salvas podem ser removidas pelo X');
@@ -47,7 +54,7 @@ const tabButtonRule = css.match(/#offerSheet \.tabs \.btn\{[^}]*\}/)?.[0] || '';
 assert.ok(tabsRule.includes('display:grid') && tabsRule.includes('grid-template-columns:repeat(3,minmax(0,1fr))') && tabsRule.includes('width:min(100%,312px)') && tabsRule.includes('border:0'), 'as três abas usam um grupo compacto, sem borda e com colunas iguais');
 assert.ok(tabButtonRule.includes('width:100%') && tabButtonRule.includes('min-height:34px') && tabButtonRule.includes('white-space:nowrap'), 'os botões das abas mantêm largura e altura uniformes');
 assert.ok(css.includes('#offerSheet .tabs .btn:focus-visible{outline:2px solid var(--smartadv-blue)'), 'o foco de teclado continua visível nas abas');
-assert.match(page, /smartadv-offers\.css\?v=10/);
+assert.match(page, /smartadv-offers\.css\?v=11/);
 const headerActions = headerActionsCss.match(/header:is\(\.topbar,\.top,\.page-head,\.hero\)>:is\(\.actions,\.hero-actions\)>:is\(\.btn,\.button\)\{[^}]*\}/)?.[0] || '';
 assert.ok(headerActions.includes('min-height:36px') && headerActions.includes('padding:8px 11px') && headerActions.includes('font-size:.78rem') && headerActions.includes('font-weight:400'), 'ações superiores mantêm o tamanho compacto e o peso regular da referência');
 assert.ok(headerActions.includes('border:0') && headerActions.includes('box-shadow:0 4px 9px rgba(0,0,0,.55)'), 'ações superiores ficam sem borda e usam a sombra preta padrão');

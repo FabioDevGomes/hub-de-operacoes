@@ -1,4 +1,6 @@
-import {compareCapturedOffers, movementLabel} from './clickbank-top-offers-domain.mjs';
+import {clickBankOfferDetailsUrl, compareCapturedOffers, movementLabel} from './clickbank-top-offers-domain.mjs?v=2';
+import {lastCollectionCell, latestCollectionIndex, collectionTime} from '../last-collection.mjs';
+import {mountCurationColumns} from '../curation-columns.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
@@ -7,11 +9,6 @@ import * as Glimpse from '../glimpse-domain.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 
-const COLUMNS = Object.freeze([
-  ['rank', 'Posição'], ['offerName', 'Oferta'], ['seller', 'Vendedor'], ['trends', 'Google Trends'],
-  ['glimpse', 'Glimpse'], ['images', 'Imagens'], ['average', 'Avg $'], ['initial', 'Initial $'],
-  ['future', 'Future $'], ['epc', 'EPC'], ['cvr', 'CVR'], ['gravity', 'Gravity'], ['movement', 'Variação'], ['decision', 'Decisão'],
-]);
 const $ = (selector, root) => root.querySelector(selector);
 const $$ = (root, selector) => [...root.querySelectorAll(selector)];
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -20,10 +17,12 @@ const dateTime = value => {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-BR', {dateStyle:'short', timeStyle:'short'}).format(date);
 };
 
-export function mountClickBankTopOffersView({root, actions}) {
+export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
+  let latestCaptureByOffer = new Map();
   let selectedCaptureId = '', sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '';
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
+  const columns = mountCurationColumns({root, screen:'clickbank', preferences});
 
   function selectedCapture() { return state.captures.find(item => item.captureId === selectedCaptureId) || state.captures[0] || null; }
   function previousCapture(selected) {
@@ -79,18 +78,22 @@ export function mountClickBankTopOffersView({root, actions}) {
     offers.sort((a,b)=>{
       const get=(item)=>sortKey==='movement'?item.rankDelta??Number.NEGATIVE_INFINITY:
         sortKey==='rank'?item.rank:
+        sortKey==='lastSeen'?collectionTime(latestCaptureByOffer.get(item.offerKey))??Number.NEGATIVE_INFINITY:
         sortKey==='offerName'||sortKey==='seller'?item[sortKey].toLocaleLowerCase():
         sortKey==='trends'?trendRank(item):sortKey==='glimpse'?glimpseRank(item):sortKey==='images'?imageRank(item):item[sortKey]?.value??Number.NEGATIVE_INFINITY;
       const left=get(a),right=get(b),compare=typeof left==='string'?left.localeCompare(right):left-right;
       return sortDirection==='asc'?compare:-compare;
     });
     $('#rows',root).innerHTML=offers.map(item=>`<tr data-offer="${escape(item.offerKey)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
-      <td class="number">${escape(item.rank)}</td><td class="offer-name">${escape(item.offerName)}</td><td>${escape(item.seller)}</td>
+      <td class="number">${item.offerId
+        ? `<a class="clickbank-rank-link" href="${escape(clickBankOfferDetailsUrl(item.offerId))}" target="_blank" rel="noopener noreferrer" title="Abrir detalhes da ClickBank para ${escape(item.offerName)}">#${escape(item.rank)}</a>`
+        : `#${escape(item.rank)}`}</td><td class="offer-name">${escape(item.offerName)}</td><td>${escape(item.seller)}</td>
       <td>${trendBadge(item)}</td><td>${glimpseBadge(item)}</td><td>${imageBadge(item)}</td>
       <td class="number">${escape(metricText(item.average))}</td><td class="number">${escape(metricText(item.initial))}</td>
       <td class="number">${escape(metricText(item.future))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
-      <td class="number ${movementClass(item)}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td></tr>`).join('');
+      <td class="number ${movementClass(item)}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
+    columns.apply();
     $('#empty',root).classList.toggle('hidden',offers.length>0);
     $('#empty',root).textContent=selected?'Nenhuma oferta corresponde à busca.':'Cole a primeira captura Top Offers da ClickBank para começar.';
     $$ (root,'[data-sort]').forEach(button=>{
@@ -101,9 +104,15 @@ export function mountClickBankTopOffersView({root, actions}) {
   }
 
   function renderTrends(item) {
-    const record=trendsFor(item),latest=Trends.latestAssessment(record.assessments),countries=metadataFor(item).manualCountries||[],selected=new Set(latest?.countries||[]);
+    const record=trendsFor(item),latest=Trends.latestAssessment(record.assessments),metadata=metadataFor(item),countries=metadata.manualCountries||[],selected=new Set(latest?.countries||[]);
+    const dtcCapture=metadata.dtcCountryCapture,dtcCountries=new Set(dtcCapture?.countries||[]),dtcSource=$('#dtcCountrySource',root);
+    dtcSource.textContent=dtcCapture?`Lista capturada da DTC · ${dateTime(dtcCapture.capturedAt)}.`:'';
+    dtcSource.classList.toggle('hidden',!dtcCapture);
+    const offerLink=$('#openClickBankOffer',root),offerUnavailable=$('#clickBankOfferUnavailable',root),offerUrl=clickBankOfferDetailsUrl(item.offerId);
+    if(offerUrl){offerLink.href=offerUrl;offerLink.setAttribute('aria-label',`Abrir detalhes ClickBank para ${item.offerName}`);offerLink.classList.remove('hidden');offerUnavailable.classList.add('hidden');}
+    else{offerLink.removeAttribute?.('href');offerLink.classList.add('hidden');offerUnavailable.classList.remove('hidden');}
     $('#trendsTerm',root).value=latest?.searchTerm||item.offerName;
-    $('#trendCountries',root).innerHTML=countries.length?countries.map(code=>`<button type="button" class="trends-country-action ${selected.has(code)?'selected':''}" data-country="${escape(code)}" aria-pressed="${selected.has(code)}">${escape(code)} · manual</button>`).join(''):'<span class="sub">Nenhum país adicionado ainda.</span>';
+    $('#trendCountries',root).innerHTML=countries.length?countries.map(code=>`<button type="button" class="trends-country-action ${selected.has(code)?'selected':''}" data-country="${escape(code)}" aria-pressed="${selected.has(code)}">${escape(code)} · ${dtcCountries.has(code)?'DTC':'manual'}</button>`).join(''):'<span class="sub">Nenhum país adicionado ainda.</span>';
     pendingProductAge=latest?.productAge||pendingProductAge;
     TrendsUI.renderProductAgeButtons($('#productAgeActions',root),pendingProductAge,value=>{
       pendingProductAge=value;
@@ -164,17 +173,18 @@ export function mountClickBankTopOffersView({root, actions}) {
     sheet.scrollTop=0;
     $('#sheetMessage',root).textContent='';
   }
-  function closeSheet() { sheet.classList.add('hidden');activeOfferKey=''; }
+  function closeSheet() { sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }
   function switchTab(tab) { activeTab=tab;renderSheet(); }
 
   function render(nextState=state) {
     state={...state,...nextState};
+    latestCaptureByOffer=latestCollectionIndex(state.captures,item=>item.offerKey);
     state.captures=[...state.captures].sort((a,b)=>String(b.capturedAt).localeCompare(String(a.capturedAt)));
     if(!state.captures.some(item=>item.captureId===selectedCaptureId))selectedCaptureId=state.captures[0]?.captureId||'';
     const selected=selectedCapture(),previous=previousCapture(selected);
     $('#captureSelect',root).innerHTML=state.captures.map(item=>`<option value="${escape(item.captureId)}">${escape(dateTime(item.capturedAt))} · ${escape(item.offers.length)} ofertas · posições ${escape(item.page.start??'—')}–${escape(item.page.end??'—')}</option>`).join('');
     $('#captureSelect',root).value=selectedCaptureId;$('#captureSelect',root).disabled=state.captures.length<2;
-    $('#captureInfo',root).innerHTML=selected?`<b>${escape(selected.listName||'Top Offers')}</b> · Captura de ${escape(dateTime(selected.capturedAt))} · ${escape(selected.offers.length)} posições registradas${selected.page.total==null?'':` de ${escape(selected.page.total)} resultados`}. ${selected.page.completeUniverse?'Lista completa.':'Recorte parcial: itens fora deste recorte não são considerados saídas.'}`:'Nenhuma captura salva.';
+    $('#captureInfo',root).innerHTML=selected?`<b>${escape(selected.listName||'Top Offers')}</b> · Captura de ${escape(dateTime(selected.capturedAt))} · ${escape(selected.offers.length)} posições registradas${selected.page.total==null?'':` de ${escape(selected.page.total)} resultados`}.${selected.page.completeUniverse?' Lista completa.':''}`:'Nenhuma captura salva.';
     $('#captureCount',root).textContent=String(state.captures.length);$('#offerCount',root).textContent=String(selected?.offers.length||0);
     const compared=selected&&previous?compareCapturedOffers(selected.offers,previous.offers):[],moved=compared.filter(item=>item.movement==='up'||item.movement==='down').length;
     $('#movementCount',root).textContent=previous?String(moved):'—';renderTable(selected,previous);
@@ -236,6 +246,7 @@ export function mountClickBankTopOffersView({root, actions}) {
     render,
     selectCapture(captureId){selectedCaptureId=captureId;render();},
     showImportPreview,
+    prepareImport(raw) { paste.value=raw;if(!importDialog.open)openImport();else paste.focus(); },
     closeImport,
     showMessage(message,{error=false}={}){for(const id of ['message','sheetMessage']){const element=$('#'+id,root);element.textContent=message;element.classList.toggle('error',error);}},
     returnFromGlimpse(){if(activeOfferKey)switchTab('trends');},

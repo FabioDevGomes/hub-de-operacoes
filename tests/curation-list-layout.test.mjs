@@ -14,7 +14,7 @@ test('the six curation lists load the same viewport/footer layout in source and 
     assert.equal(await read(`dist/curadoria/${path}`), source, path);
     assert.match(source, /<main(?: id="[^"]*")? class="hub-curation-viewport">/, path);
     assert.equal((source.match(/hub-curation-viewport/g) || []).length, 1, path);
-    assert.ok(source.includes('href="/curadoria/curation-list-layout.css?v=1"'), path);
+    assert.ok(source.includes('href="/curadoria/curation-list-layout.css?v=2"'), path);
   }
 });
 

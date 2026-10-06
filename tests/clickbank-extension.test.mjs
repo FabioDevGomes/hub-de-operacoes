@@ -49,7 +49,7 @@ function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1
             {...attrs({'data-field':'checkbox'}),textContent:'Menu',querySelector:()=>null},
             ...visible().filter(column=>column.key!==missing).reverse().map(column=>({
               ...attrs({'data-field':column.field,'aria-colindex':String(fields.indexOf(column)+2)}),
-              textContent:data[column.key], querySelector:()=> column.key==='name' ? {textContent:data.name} : null
+              textContent:data[column.key], querySelector:()=> column.key==='name' ? {textContent:data.name,getAttribute:key=>key==='href'?`#/offer-details?offer=OFFER${data.rank}&clickUrl=undefined`:null} : null
             })),
             {...attrs({'data-field':'actions'}),textContent:'Buy now',querySelector:()=>null}
           ]};
@@ -61,12 +61,13 @@ function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1
   return { grid, scroller, writes, get styleText(){return styleText;} };
 }
 
-test('ClickBank URLs are restricted and TSV protects names, normalizes cells and keeps nine columns', () => {
+test('ClickBank URLs are restricted and TSV protects names, normalizes cells and appends optional Offer ID', () => {
   assert.ok(isClickBankMarketplace(marketplace));
   for (const url of ['https://accounts.clickbank.com.evil.test/master/dashboard/affiliate-marketplace','http://accounts.clickbank.com/master/dashboard/affiliate-marketplace','https://accounts.clickbank.com/login','chrome://extensions']) assert.equal(isClickBankMarketplace(url),false);
-  const tsv=productsToTsv([{rank:'1',name:' =HYPERLINK("test")\tname\n',seller:'@vendor',avg:'-1.20',future:'-'}]);
+  const tsv=productsToTsv([{rank:'1',name:' =HYPERLINK("test")\tname\n',seller:'@vendor',avg:'-1.20',future:'-',offerId:'ENREV'}]);
   assert.equal(tsv.split('\n').length,2);
-  assert.equal(tsv.split('\n')[1].split('\t').length,9);
+  assert.equal(tsv.split('\n')[1].split('\t').length,10);
+  assert.match(tsv,/Offer ID/); assert.match(tsv, /\tENREV$/);
   assert.match(tsv,/'=HYPERLINK/); assert.match(tsv,/'@vendor/); assert.match(tsv,/\t-1\.20\t/);
 });
 
@@ -78,7 +79,8 @@ test('50 products with both-axis virtualization, shuffled cells and repeat captu
     const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
     assert.equal(result.ok,true,result.message); assert.equal(result.capturedCount,50);
     assert.deepEqual(result.rows.map(row=>row.rank),Array.from({length:50},(_,i)=>String(i+1)));
-    assert.ok(result.rows.every(row=>Object.keys(row).length===9));
+    assert.ok(result.rows.every(row=>Object.keys(row).length===10));
+    assert.equal(result.rows[0].offerId,'OFFER1', 'o código é extraído do href interno da oferta');
     assert.equal(result.rows[0].future,'-'); assert.equal(result.rows[0].gravity,'40.87');
     assert.equal(f.scroller.scrollTop,initialTop); assert.equal(f.scroller.scrollLeft,22);
   }
@@ -91,7 +93,7 @@ test('50 products with both-axis virtualization, shuffled cells and repeat captu
 test('expanded table confirms a smaller page and last-page URL/total fallback', async t => {
   fixture(t,{count:1,total:51,offset:50,footer:false});
   const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
-  assert.equal(result.ok,true,result.message); assert.equal(result.expectedCount,1); assert.equal(result.rows[0].rank,'51');
+  assert.equal(result.ok,true,result.message); assert.equal(result.expectedCount,1); assert.equal(result.rows[0].rank,'51'); assert.equal(result.rows[0].offerId,'OFFER51');
 });
 
 test('missing horizontal metric does not announce complete capture', async t => {
@@ -118,12 +120,12 @@ test('unknown count, loading, wrong route, missing table, timeout and concurrent
   assert.match((await collectClickBankProducts(CLICKBANK_COLUMNS)).message,/ausente/);
 });
 
-function popupFixture(response, clipboard) {
+function popupFixture(response, clipboard, timeoutMs=55_000) {
   const node=()=>({disabled:false,hidden:true,value:'',textContent:'',selected:false,
     classList:{toggle(){}},addEventListener(type,handler){this[type]=handler;},focus(){},select(){this.selected=true;}});
   const nodes=Object.fromEntries(['capture-clickbank','restore-clickbank','clickbank-status','clickbank-manual','clickbank-text'].map(id=>[`#${id}`,node()]));
   const requests=[]; const disabled=[];
-  mountClickBankCapture({document:{querySelector:key=>nodes[key]},sendMessage:async msg=>{requests.push(msg.type);return typeof response==='function'?response(msg):response;},clipboard,setDisabled:value=>disabled.push(value)});
+  mountClickBankCapture({document:{querySelector:key=>nodes[key]},sendMessage:async msg=>{requests.push(msg.type);return typeof response==='function'?response(msg):response;},clipboard,setDisabled:value=>disabled.push(value),timeoutMs});
   return {nodes,requests,disabled};
 }
 
@@ -133,27 +135,36 @@ test('popup copies complete rows, reports real count, locks buttons and restores
   const pending=f.nodes['#capture-clickbank'].click();
   await f.nodes['#capture-clickbank'].click();
   assert.equal(f.requests.length,1); assert.equal(f.nodes['#capture-clickbank'].disabled,true);
-  assert.match(f.nodes['#clickbank-status'].textContent,/Preparando/);
-  resolve({ok:true,result:{ok:true,rows:[{rank:'1',name:'Synthetic',seller:'TEST'}],capturedCount:1}});
+  assert.match(f.nodes['#clickbank-status'].textContent,/preparando/);
+  resolve({ok:true,result:{ok:true,previewReady:true,parsedCount:1,rows:[{rank:'1',name:'Synthetic',seller:'TEST'}],capturedCount:1}});
   await pending;
   assert.match(copied,/Rank\tOffer Name/); assert.equal(f.nodes['#clickbank-manual'].hidden,true);
-  assert.match(f.nodes['#clickbank-status'].textContent,/1 produtos copiados/);
+  assert.match(f.nodes['#clickbank-status'].textContent,/1 ofertas recebidas/);
+  assert.match(f.nodes['#clickbank-status'].textContent,/Nada foi salvo automaticamente/);
   assert.equal(f.nodes['#capture-clickbank'].disabled,false);
   const restore=f.nodes['#restore-clickbank'].click(); resolve({ok:true,result:{message:'Restaurado'}}); await restore;
-  assert.deepEqual(f.requests,['CAPTURE_CLICKBANK_PRODUCTS','RESTORE_CLICKBANK_TABLE']);
+  assert.deepEqual(f.requests,['CAPTURE_AND_FORWARD_CLICKBANK','RESTORE_CLICKBANK_TABLE']);
 });
 
 test('clipboard failure exposes selectable TSV; partial capture is explicitly warned and never auto-copied', async () => {
   let writes=0;
   const rows=[{rank:'1',name:'Synthetic'}];
-  const f=popupFixture({ok:true,result:{ok:true,rows,capturedCount:1}},{writeText:async()=>{writes++;throw new Error('denied');}});
+  const f=popupFixture({ok:true,result:{ok:true,previewReady:true,parsedCount:1,rows,capturedCount:1}},{writeText:async()=>{writes++;throw new Error('denied');}});
   await f.nodes['#capture-clickbank'].click();
   assert.equal(f.nodes['#clickbank-manual'].hidden,false); assert.equal(f.nodes['#clickbank-text'].selected,true);
-  assert.match(f.nodes['#clickbank-status'].textContent,/Ctrl\+C/);
+  assert.match(f.nodes['#clickbank-status'].textContent,/Hub já está preenchido/);
   const partial=popupFixture({ok:false,result:{ok:false,rows,message:'Captura incompleta: 1 de 50.'}},{writeText:async()=>writes++});
   await partial.nodes['#capture-clickbank'].click();
   assert.equal(writes,1); assert.equal(partial.nodes['#clickbank-manual'].hidden,false);
   assert.match(partial.nodes['#clickbank-status'].textContent,/incompleta/);
+});
+
+test('popup releases its loading state with a clear error if the worker never replies',async()=>{
+  const f=popupFixture(()=>new Promise(()=>{}),{writeText:async()=>{}},5);
+  await f.nodes['#capture-clickbank'].click();
+  assert.match(f.nodes['#clickbank-status'].textContent,/excedeu o tempo de espera/);
+  assert.equal(f.nodes['#capture-clickbank'].disabled,false);
+  assert.equal(f.nodes['#restore-clickbank'].disabled,false);
 });
 
 test('service worker rejects incompatible sites without injection and routes capture/restore in isolated context', async () => {

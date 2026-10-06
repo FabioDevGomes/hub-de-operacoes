@@ -9,7 +9,7 @@ const maintenance = await readFile(new URL('../docs/maintenance.md',import.meta.
 
 test('Radar SpyHero and Lista de Gerente use the shared Curadoria eyebrow prefix', () => {
   assert.match(radar,/<div class="eyebrow">Curadoria · SpyHero<\/div><h1>Sinais para investigar<\/h1>/);
-  assert.match(managers,/<div class="eyebrow">Curadoria · GuruMedia<\/div><h1>Ofertas aprovadas para curadoria<\/h1>/);
+  assert.match(managers,/<div class="eyebrow">Curadoria · GuruMedia<\/div><h1>Lista de Gerente GM<\/h1>/);
 });
 
 test('the Curadoria eyebrow convention is documented for future screens', () => {

@@ -165,6 +165,22 @@ export function captureOfferHistory(capture, olderCaptures = []) {
   return (capture?.offers || []).map(offer => ({...offer, historyState: knownIds.has(offer.offerId) ? 'known' : 'first-seen'}));
 }
 
+export function latestCaptureIndex(captures = []) {
+  const index = new Map(), timestamps = new Map();
+  for (const capture of captures) {
+    if (capture?.captureId === 'smartadv-user-provided-initial') continue;
+    const timestamp = Date.parse(capture?.capturedAt || '');
+    if (!Number.isFinite(timestamp)) continue;
+    for (const offer of capture.offers || []) {
+      const offerId = String(offer?.offerId || '');
+      if (!offerId || timestamp <= (timestamps.get(offerId) ?? -Infinity)) continue;
+      timestamps.set(offerId, timestamp);
+      index.set(offerId, capture.capturedAt);
+    }
+  }
+  return index;
+}
+
 export function historyLabel(state) {
   return state === 'known' ? 'Já capturada' : 'Primeiro registro';
 }

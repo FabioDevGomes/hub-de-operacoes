@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {captureOfferHistory, historyLabel, parseSmartAdvOffersClipboard, productNameFromOfferName} from '../src/curadoria/smartadv-offers/smartadv-offers-domain.mjs';
+import {captureOfferHistory, historyLabel, latestCaptureIndex, parseSmartAdvOffersClipboard, productNameFromOfferName} from '../src/curadoria/smartadv-offers/smartadv-offers-domain.mjs';
 import {createInitialCapture} from '../src/curadoria/smartadv-offers/smartadv-offers-initial-capture.mjs';
 
 const initialCapture = createInitialCapture();
@@ -66,5 +66,14 @@ const history = captureOfferHistory({offers:[{offerId:'70601'},{offerId:'70602'}
 assert.deepEqual(history.map(item => item.historyState), ['known', 'first-seen']);
 assert.equal(historyLabel('known'), 'Já capturada');
 assert.equal(historyLabel('first-seen'), 'Primeiro registro');
+
+const latestCaptures = latestCaptureIndex([
+  {captureId:'smartadv-user-provided-initial',capturedAt:'2026-10-06T12:00:00.000Z',offers:[{offerId:'70603'}]},
+  {captureId:'capture-new',capturedAt:'2026-10-02T12:00:00.000Z',offers:[{offerId:'70601'}]},
+  {captureId:'capture-old',capturedAt:'2026-10-01T12:00:00.000Z',offers:[{offerId:'70601'},{offerId:'70602'}]},
+]);
+assert.equal(latestCaptures.get('70601'), '2026-10-02T12:00:00.000Z', 'a oferta usa a captura mais recente em que apareceu');
+assert.equal(latestCaptures.get('70602'), '2026-10-01T12:00:00.000Z', 'a ausência na captura mais nova não apaga a última data conhecida');
+assert.equal(latestCaptures.has('70603'), false, 'a captura inicial sem data original não vira uma data de coleta inventada');
 
 console.log('smartadv offers domain ok');

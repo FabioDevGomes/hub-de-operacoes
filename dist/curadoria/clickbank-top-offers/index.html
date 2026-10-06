@@ -6,9 +6,10 @@
   <title>Top Offers CB · Curadoria</title>
   <link rel="icon" href="/favicon.png">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-header-color">
-  <link rel="stylesheet" href="./clickbank-top-offers.css?v=7">
+  <link rel="stylesheet" href="./clickbank-top-offers.css?v=14">
   <link rel="stylesheet" href="/sidebar-component.css?v=11">
-<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=1"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=1"></head>
+  <link rel="stylesheet" href="/table-columns.css?v=2">
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"></head>
 <body>
   <div class="shell">
     <aside>
@@ -24,15 +25,22 @@
       </header>
       <section class="summary" aria-label="Resumo"><span class="chip">Capturas salvas <b id="captureCount">0</b></span><span class="chip">Ofertas na captura <b id="offerCount">0</b></span><span class="chip">Mudanças de posição <b id="movementCount">—</b></span></section>
       <section class="surface">
-        <div class="capture-toolbar"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura"></select></div>
-        <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
-        <div class="filter-grid hub-curation-table-filters"><input class="control search hub-search-filter" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor"></div>
-        <div class="tablewrap"><table><thead><tr>
+        <div class="capture-summary-row">
+          <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
+          <div class="capture-toolbar">
+          <details class="hub-column-picker" data-curation-columns>
+            <summary class="btn">Colunas</summary>
+            <div class="hub-column-menu"><strong>Colunas de Top Offers CB</strong><p>A oferta permanece visível. As escolhas são salvas somente para esta tela neste navegador.</p><div data-column-options></div><button class="btn" type="button" data-column-reset>Restaurar padrão</button><p data-column-message role="status" aria-live="polite"></p></div>
+          </details>
+          </div>
+        </div>
+        <div class="filter-grid hub-curation-table-filters"><input class="control search hub-search-filter" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor"><div class="capture-selection"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura"></select></div></div>
+        <div class="tablewrap"><table class="hub-curation-column-table"><thead><tr>
           <th><button class="sort-btn" data-sort="rank" type="button">Posição</button></th><th><button class="sort-btn" data-sort="offerName" type="button">Oferta</button></th><th><button class="sort-btn" data-sort="seller" type="button">Vendedor</button></th>
           <th><button class="sort-btn" data-sort="trends" type="button">Google Trends</button></th><th><button class="sort-btn" data-sort="glimpse" type="button">Glimpse</button></th><th><button class="sort-btn" data-sort="images" type="button">Imagens</button></th>
           <th><button class="sort-btn" data-sort="average" type="button">Avg $</button></th><th><button class="sort-btn" data-sort="initial" type="button">Initial $</button></th><th><button class="sort-btn" data-sort="future" type="button">Future $</button></th>
           <th><button class="sort-btn" data-sort="epc" type="button">EPC</button></th><th><button class="sort-btn" data-sort="cvr" type="button">CVR</button></th><th><button class="sort-btn" data-sort="gravity" type="button">Gravity</button></th><th><button class="sort-btn" data-sort="movement" type="button">Variação</button></th><th>Decisão</th>
-        </tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Cole a primeira captura Top Offers da ClickBank para começar.</div></div>
+        <th class="hub-last-collection"><button class="sort-btn" data-sort="lastSeen" type="button">Última coleta</button></th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Cole a primeira captura Top Offers da ClickBank para começar.</div></div>
       </section>
       <div class="message" id="message" role="status" aria-live="polite"></div>
 
@@ -43,7 +51,7 @@
       <div class="sheet-message" id="sheetMessage" role="status" aria-live="polite"></div>
       <section data-panel="trends">
         <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"></div><div id="trendCandidates"></div></article>
-        <article class="card trends-country-card"><h2>Países</h2><p>O Marketplace não informa países da oferta. Adicione manualmente os países que deseja analisar; eles não serão atribuídos à captura de origem.</p><div id="trendCountries" class="trends-country-actions"></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button></div><span id="manualCountryMessage" role="status" aria-live="polite"></span></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
+        <article class="card trends-country-card"><h2>Países</h2><p>A ClickBank não informa GEO da oferta. Adicione países manualmente ou capture “Países Comuns” no checkout DTC; esses países servem às análises e não alteram a captura original.</p><div id="dtcCountrySource" class="sub hidden" role="status" aria-live="polite"></div><div id="trendCountries" class="trends-country-actions"></div><div class="clickbank-offer-link-row"><a class="btn hidden" id="openClickBankOffer" target="_blank" rel="noopener noreferrer">Abrir oferta</a><p class="sub hidden" id="clickBankOfferUnavailable">Link disponível após uma nova captura com o plugin atualizado.</p></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button></div><span id="manualCountryMessage" role="status" aria-live="polite"></span></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
         <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><div id="trendMessage" class="sub" aria-live="polite"></div></section>
         <article class="card sheet-history"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
       </section>
@@ -65,6 +73,6 @@
     </main>
   </div>
   <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=8"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=16"></script>
 </body>
 </html>

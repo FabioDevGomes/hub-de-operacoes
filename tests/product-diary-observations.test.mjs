@@ -125,7 +125,7 @@ test('shared edit stylesheet/build contracts include both consumers without dupl
   const css=await read('src/table-edit-actions.css'),overview=await read('src/overview/view.js'),index=await read('src/index.template.html'),build=await read('build.mjs');
   assert.match(css,/\.hub-edit-host\{position:relative\}/);assert.match(css,/top:var\(--hub-corner-edit-top,1px\)/);
   assert.match(css,/right:var\(--hub-corner-edit-right,2px\)/);assert.match(css,/:focus-visible/);
-  assert.match(overview,/overview-remaining-edit hub-corner-edit/);assert.match(index,/table-edit-actions.css\?v=1/);
+  assert.match(overview,/overview-remaining-edit hub-corner-edit/);assert.match(index,/table-edit-actions.css\?v=3/);
   assert.match(build,/src\/table-edit-actions.css/);assert.match(index,/observation-storage.js\?v=1/);
   const adapter=index.match(/async function saveDiaryObservation\(input\)\{[^\r\n]+/)?.[0];
   assert.match(adapter,/diary-observation-updated/);

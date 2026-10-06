@@ -1,4 +1,4 @@
-import * as Domain from './personal-finance-domain.mjs?v=30';
+import * as Domain from './personal-finance-domain.mjs?v=31';
 import * as Storage from './personal-finance-storage.mjs?v=21';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
@@ -47,18 +47,8 @@ const weeklyCategoryPeriod = (name, monthKeys) => {
 const amount = value => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 const money = (value, code) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code, minimumFractionDigits: 2 }).format(Number(value || 0));
 const usdClass = code => code === 'USD' ? 'pf-money-usd' : '';
-const quickPayCategoryNames = new Set(['das', 'agua', 'energia', 'internet', 'academia', 'aluguel']);
 const normalizeExpenseCategoryName = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const monthlyDueDays = new Map([['aluguel', 24], ['internet', 10], ['energia', 16]]);
-const isQuickPayCategory = value => quickPayCategoryNames.has(normalizeExpenseCategoryName(value));
-const quickPayButtonMarkup = (entry, planned, editable) => {
-  if (!entry || !isQuickPayCategory(entry.category_name)) return '';
-  const isPayable = planned != null && planned > 0;
-  const isPaid = isPayable && entry.actual_amount != null && entry.actual_amount >= planned;
-  const title = isPaid ? 'Valor planejado já lançado como pago' : !editable ? 'Só é possível marcar despesas do mês atual como pagas' : !isPayable ? 'Informe um valor planejado maior que zero antes de marcar esta despesa como paga' : `Lançar ${money(planned, entry.currency)} como gasto pago`;
-  const label = isPaid ? `Pagamento de ${entry.category_name} registrado` : `Marcar ${entry.category_name} como pago`;
-  return `<button class="pf-icon-button pf-mark-paid${isPaid ? ' is-paid' : ''}" type="button" data-action="mark-expense-paid" data-id="${esc(entry.entry_id)}" title="${esc(title)}" aria-label="${esc(label)}" ${isPaid || !editable || !isPayable ? 'disabled' : ''}>${isPaid ? 'Pago' : 'Pagar'}</button>`;
-};
 const dailyBudgetTarget = pace => pace ? `<span class="pf-budget-target"><small>Meta de gasto até dia ${pace.elapsedDays} (${pace.elapsedDays}/${pace.daysInMonth} dias)</small><strong>${money(pace.expectedToDate, 'BRL')}</strong></span>` : '';
 const newId = prefix => `${prefix}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const parseAmount = value => {
@@ -289,13 +279,11 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       const weekPeriod = weeklyCategoryPeriod(row.category_name, [state.monthKey]);
       const category = categoryById(row.category_id);
       const order = state.categories.findIndex(item => item.category_id === row.category_id);
-      const quickPayAllowed = row.month_key === localMonth(now) || (row.month_key > localMonth(now) && actualEditable) || Domain.canMarkQuickPayInFutureMonthlyView(row, now);
-      const quickPayButton = quickPayButtonMarkup(row, planned, quickPayAllowed);
       const plannedField = isCard ? 'card_debt_amount' : 'planned_amount';
       const plannedInputId = isCard ? `card-debt-${row.entry_id}` : `plan-${row.entry_id}`;
       const plannedLabel = isCard ? 'Fatura total do Cartão Nubank' : `Planejado para ${row.category_name}`;
       const plannedPlaceholder = isCard ? 'Não informada' : '—';
-      return `<tr class="pf-category-row${isCard ? ' pf-nubank-card-row' : ''} status-${status}"><td class="pf-category-name"><div class="pf-category-heading"><strong>${esc(row.category_name)}</strong>${dueDateNote}${dailyBudgetTarget(pace)}${paceNote}</div>${weekPeriod}${category?.active === false ? '<small>Inativa para novos meses</small>' : ''}</td><td><span class="pf-currency-badge">${row.currency}</span></td><td><label class="pf-visually-hidden" for="${esc(plannedInputId)}">${esc(plannedLabel)}</label><input id="${esc(plannedInputId)}" class="pf-amount-input ${usdClass(row.currency)}" type="text" inputmode="decimal" data-entry-id="${esc(row.entry_id)}" data-entry-field="${plannedField}" value="${planned == null ? '' : amount(planned)}" placeholder="${plannedPlaceholder}" aria-label="${esc(plannedLabel)}" ${Domain.isLunchDinnerCategory(row) && row.planned_amount == null ? `title="Orçamento mensal padrão: ${money(Domain.LUNCH_DINNER_MONTHLY_BUDGET, 'BRL')}"` : ''}></td><td><label class="pf-visually-hidden" for="actual-${esc(row.entry_id)}">Realizado para ${esc(row.category_name)}</label><input id="actual-${esc(row.entry_id)}" class="pf-amount-input ${usdClass(row.currency)}" type="text" inputmode="decimal" data-entry-id="${esc(row.entry_id)}" data-entry-field="actual_amount" value="${actual == null ? '' : amount(actual)}" placeholder="Não lançado" aria-label="Realizado ${esc(row.category_name)}" ${actualEditable ? '' : 'disabled title="Realizado editável no mês atual e nos anteriores; demais meses futuros seguem bloqueados, exceto a semana 1 a partir do domingo fiscal."'}></td><td class="${diff == null ? 'muted' : diff < 0 ? 'negative' : 'positive'}">${diff == null ? '—' : money(diff, row.currency)}</td><td><span class="pf-status ${status}">${statusLabel}</span></td><td class="pf-row-actions">${quickPayButton}${category ? `<button class="pf-icon-button" type="button" title="Editar categoria" aria-label="Editar ${esc(category.name)}" data-action="edit-category" data-id="${esc(category.category_id)}">Editar</button>` : ''}<button class="pf-icon-button" type="button" title="Subir categoria" aria-label="Subir ${esc(row.category_name)}" data-action="move-category" data-id="${esc(row.category_id)}" data-direction="-1" ${order <= 0 ? 'disabled' : ''}>↑</button><button class="pf-icon-button" type="button" title="Descer categoria" aria-label="Descer ${esc(row.category_name)}" data-action="move-category" data-id="${esc(row.category_id)}" data-direction="1" ${order < 0 || order >= state.categories.length - 1 ? 'disabled' : ''}>↓</button></td></tr>`;
+      return `<tr class="pf-category-row${isCard ? ' pf-nubank-card-row' : ''} status-${status}"><td class="pf-category-name"><div class="pf-category-heading"><strong>${esc(row.category_name)}</strong>${dueDateNote}${dailyBudgetTarget(pace)}${paceNote}</div>${weekPeriod}${category?.active === false ? '<small>Inativa para novos meses</small>' : ''}</td><td><span class="pf-currency-badge">${row.currency}</span></td><td><label class="pf-visually-hidden" for="${esc(plannedInputId)}">${esc(plannedLabel)}</label><input id="${esc(plannedInputId)}" class="pf-amount-input ${usdClass(row.currency)}" type="text" inputmode="decimal" data-entry-id="${esc(row.entry_id)}" data-entry-field="${plannedField}" value="${planned == null ? '' : amount(planned)}" placeholder="${plannedPlaceholder}" aria-label="${esc(plannedLabel)}" ${Domain.isLunchDinnerCategory(row) && row.planned_amount == null ? `title="Orçamento mensal padrão: ${money(Domain.LUNCH_DINNER_MONTHLY_BUDGET, 'BRL')}"` : ''}></td><td><label class="pf-visually-hidden" for="actual-${esc(row.entry_id)}">Realizado para ${esc(row.category_name)}</label><input id="actual-${esc(row.entry_id)}" class="pf-amount-input ${usdClass(row.currency)}" type="text" inputmode="decimal" data-entry-id="${esc(row.entry_id)}" data-entry-field="actual_amount" value="${actual == null ? '' : amount(actual)}" placeholder="Não lançado" aria-label="Realizado ${esc(row.category_name)}" ${actualEditable ? '' : 'disabled title="Não foi possível liberar a edição deste realizado."'}></td><td class="${diff == null ? 'muted' : diff < 0 ? 'negative' : 'positive'}">${diff == null ? '—' : money(diff, row.currency)}</td><td><span class="pf-status ${status}">${statusLabel}</span></td><td class="pf-row-actions">${category ? `<button class="pf-icon-button" type="button" title="Editar categoria" aria-label="Editar ${esc(category.name)}" data-action="edit-category" data-id="${esc(category.category_id)}">Editar</button>` : ''}<button class="pf-icon-button" type="button" title="Subir categoria" aria-label="Subir ${esc(row.category_name)}" data-action="move-category" data-id="${esc(row.category_id)}" data-direction="-1" ${order <= 0 ? 'disabled' : ''}>↑</button><button class="pf-icon-button" type="button" title="Descer categoria" aria-label="Descer ${esc(row.category_name)}" data-action="move-category" data-id="${esc(row.category_id)}" data-direction="1" ${order < 0 || order >= state.categories.length - 1 ? 'disabled' : ''}>↓</button></td></tr>`;
     };
     const monthlyTotals = Domain.CURRENCIES.map(code => {
       const currencyRows = rows.filter(row => row.currency === code);
@@ -413,17 +401,11 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
           : entryByMonthCategoryCurrency.get(`${monthKey}::${row.category_id}::${row.currency}`);
         const monthActual = actualAmountForEntry(monthEntry);
         const isCurrentMonth = monthKey === currentMonthKey;
-        const isFutureMonth = monthKey > currentMonthKey;
         const actualEditable = Boolean(monthEntry && Domain.canEditActualForEntry(monthEntry, now));
-        const isFutureWeekOneBeforeStart = isFutureMonth && /\bsemana\s*1\b/i.test(row.category_name) && !actualEditable;
-        const periodQuickPayButton = monthEntry && values.planned != null && !isFutureWeekOneBeforeStart
-          ? quickPayButtonMarkup(monthEntry, values.planned, true)
-          : '';
-        const planPayButton = isFutureMonth && !actualEditable && monthEntry?.actual_amount == null ? periodQuickPayButton : '';
-        const actualMarkup = isFutureMonth && !actualEditable && monthEntry?.actual_amount == null ? '' : actualEditable && !consolidated
-          ? `<span><small>Real.</small><label class="pf-visually-hidden" for="actual-${esc(monthEntry.entry_id)}">Realizado ${esc(row.category_name)} em ${quarterMonthLabel(monthKey)}</label><input id="actual-${esc(monthEntry.entry_id)}" class="pf-amount-input ${usdClass(monthCurrency)}" type="text" inputmode="decimal" data-entry-id="${esc(monthEntry.entry_id)}" data-entry-field="actual_amount" value="${monthActual == null ? '' : amount(monthActual)}" placeholder="Adicionar" aria-label="Realizado ${esc(row.category_name)} em ${quarterMonthLabel(monthKey)}">${periodQuickPayButton}</span>`
-          : `<span><small>Real.</small><b class="${usdClass(monthCurrency)}">${monthActual == null ? '—' : money(monthActual, monthCurrency)}</b>${periodQuickPayButton}</span>`;
-        const plannedMarkup = `<span><small>Plan.</small><b class="${usdClass(monthCurrency)}">${values.planned == null ? '—' : money(values.planned, monthCurrency)}</b>${planPayButton}</span>`;
+        const actualMarkup = actualEditable
+          ? `<span><small>Real.</small><label class="pf-visually-hidden" for="actual-${esc(monthEntry.entry_id)}">Realizado ${esc(row.category_name)} em ${quarterMonthLabel(monthKey)}</label><input id="actual-${esc(monthEntry.entry_id)}" class="pf-amount-input ${usdClass(monthCurrency)}" type="text" inputmode="decimal" data-entry-id="${esc(monthEntry.entry_id)}" data-entry-field="actual_amount" value="${monthActual == null ? '' : amount(monthActual)}" placeholder="Adicionar" aria-label="Realizado ${esc(row.category_name)} em ${quarterMonthLabel(monthKey)}"></span>`
+          : `<span><small>Real.</small><b class="${usdClass(monthCurrency)}">${monthActual == null ? '—' : money(monthActual, monthCurrency)}</b></span>`;
+        const plannedMarkup = `<span><small>Plan.</small><b class="${usdClass(monthCurrency)}">${values.planned == null ? '—' : money(values.planned, monthCurrency)}</b></span>`;
         const cellContent = consolidated && isCurrentMonth
           ? `<div class="pf-consolidated-current-values">${plannedMarkup}${actualMarkup}</div>`
           : `${plannedMarkup}${actualMarkup}`;
@@ -449,7 +431,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const groupColumnCount = period.monthKeys.length + (consolidated ? 1 : 5);
     const groupRows = groups.map(group => `<tr class="pf-group-row"><th colspan="${groupColumnCount}">${esc(group)}</th></tr>${rows.filter(row => row.group_name === group).map(rowMarkup).join('')}`).join('');
     const currencyHeader = consolidated ? '' : '<th>Moeda</th>';
-    return `<div class="pf-table-scroll"><table class="pf-table pf-quarter-table ${consolidated ? 'pf-consolidated-table' : ''}"><thead><tr><th>Categoria</th>${currencyHeader}${period.monthKeys.map(monthKey => `<th class="${monthKey === currentMonthKey ? 'pf-quarter-current-month' : ''}">${quarterMonthLabel(monthKey)}<small class="pf-quarter-month-count">${monthKey > currentMonthKey ? (Domain.canEditActualForEntry({ month_key:monthKey, category_name:'semana 1' }, now) ? 'Semana 1 liberada' : 'Só planejado') : 'Planejado · realizado'}</small></th>`).join('')}${consolidated ? '' : `<th>${totalTitle}</th><th>Saldo do planejado</th><th>Situação</th>`}</tr></thead><tbody>${groupRows}</tbody>${monthlyTotalsFooter}</table></div>`;
+    return `<div class="pf-table-scroll"><table class="pf-table pf-quarter-table ${consolidated ? 'pf-consolidated-table' : ''}"><thead><tr><th>Categoria</th>${currencyHeader}${period.monthKeys.map(monthKey => `<th class="${monthKey === currentMonthKey ? 'pf-quarter-current-month' : ''}">${quarterMonthLabel(monthKey)}<small class="pf-quarter-month-count">Planejado · realizado</small></th>`).join('')}${consolidated ? '' : `<th>${totalTitle}</th><th>Saldo do planejado</th><th>Situação</th>`}</tr></thead><tbody>${groupRows}</tbody>${monthlyTotalsFooter}</table></div>`;
   }
   function managementMarkup() {
     const reserveRows = state.funds.filter(item => item.type === 'reserve');
@@ -494,13 +476,11 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const periodLabel = isPeriodView ? period.label : monthName(state.monthKey);
     const hasMonth = !!state.month;
     const now = new Date();
-    const actualMonthEditable = Domain.canEditActualForMonth(state.monthKey, now);
     const viewingPastMonth = state.monthKey < localMonth(now);
-    const fiscalWeekOpen = isMonth && !actualMonthEditable && state.entries.some(entry => Domain.canEditActualForEntry(entry, now));
     const helpText = isPeriodView
       ? ''
       : hasMonth
-        ? viewingPastMonth ? 'Mês anterior: o Realizado pode ser corrigido. Meses históricos continuam fora da diferença da reserva atual.' : actualMonthEditable ? 'Edite os valores diretamente. O realizado pode ser lançado no mês atual e corrigido em meses anteriores; zero é diferente de vazio.' : fiscalWeekOpen ? 'A semana fiscal 1 deste mês já está aberta: o realizado pode ser lançado desde o domingo que inicia o período.' : 'Realizado editável no mês atual e nos anteriores. Os demais meses futuros seguem bloqueados, exceto a semana fiscal 1 a partir do domingo que inicia seu período.'
+        ? viewingPastMonth ? 'Mês anterior: o Realizado pode ser corrigido. Meses históricos continuam fora da diferença da reserva atual.' : 'Realizado pode ser lançado ou corrigido em qualquer competência e permanece separado do Planejado. Zero é diferente de vazio.'
         : `O mês ${esc(monthName(state.monthKey))} não foi criado.`;
     const mainTable = isPeriodView ? periodCategoryTable(period, { consolidated:isConsolidated }) : categoryTable();
     const monthlyActions = isMonth && hasMonth
@@ -638,14 +618,6 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       else if (action === 'current-period') { state.monthKey = localMonth(new Date()); state.createMonthOpen = false; await loadMonth(); }
       else if (action === 'toggle-create-month') { state.createMonthOpen = !state.createMonthOpen; render(); }
       else if (action === 'create-month') await createMonthFromDialog();
-      else if (action === 'mark-expense-paid') {
-        const entry = state.entries.find(item => item.entry_id === id);
-        if (!entry || !isQuickPayCategory(entry.category_name)) throw new Error('Não encontrei esta despesa para marcar como paga.');
-        if (entry.planned_amount == null || entry.planned_amount <= 0) throw new Error('Informe um valor planejado maior que zero antes de marcar esta despesa como paga.');
-        await Storage.saveEntry(Domain.updateEntryAmount(entry, 'actual_amount', entry.planned_amount));
-        await loadMonth();
-        toast(`${entry.category_name}: ${money(entry.planned_amount, entry.currency)} lançado como pago e considerado no orçamento e na reserva global.`);
-      }
       else if (action === 'new-category') openModal('category');
       else if (action === 'edit-category') openModal('category', id);
       else if (action === 'new-group') openModal('group');
@@ -703,7 +675,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       }
       if (!existing) return;
       if (input.dataset.entryField === 'actual_amount' && !Domain.canEditActualForEntry(existing, new Date())) {
-        toast('O realizado pode ser alterado nos meses anteriores e no atual; outros meses futuros seguem bloqueados, exceto a semana fiscal 1 a partir do domingo fiscal.', true);
+        toast('Não foi possível editar o realizado desta competência.', true);
         await loadMonth();
         return;
       }

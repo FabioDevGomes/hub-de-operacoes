@@ -1,6 +1,6 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261005-analytics-badges';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261006-last-collection';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';

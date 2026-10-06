@@ -10,6 +10,11 @@ export const CLICKBANK_COLUMNS = [
   { key:'gravity', label:'Gravity', aliases:['gravity'] }
 ];
 
+export const CLICKBANK_EXPORT_COLUMNS = [
+  ...CLICKBANK_COLUMNS,
+  { key:'offerId', label:'Offer ID' }
+];
+
 export function isClickBankMarketplace(url) {
   try {
     const parsed = new URL(url);
@@ -22,8 +27,9 @@ export function productsToTsv(rows) {
   const cell = (value, key) => {
     const text = String(value ?? '').replace(/[\t\r\n]+/g, ' ').trim();
     // Protect text columns; ordinary negative numeric metrics remain numeric.
-    return /^[=+\-@]/.test(text) && ['name','seller'].includes(key) ? `'${text}` : text;
+    if (key === 'offerId' && !text) return '—';
+    return /^[=+\-@]/.test(text) && ['name','seller','offerId'].includes(key) ? `'${text}` : text;
   };
-  return [CLICKBANK_COLUMNS.map(column => column.label).join('\t'),
-    ...rows.map(row => CLICKBANK_COLUMNS.map(column => cell(row[column.key], column.key)).join('\t'))].join('\n');
+  return [CLICKBANK_EXPORT_COLUMNS.map(column => column.label).join('\t'),
+    ...rows.map(row => CLICKBANK_EXPORT_COLUMNS.map(column => cell(row[column.key], column.key)).join('\t'))].join('\n');
 }

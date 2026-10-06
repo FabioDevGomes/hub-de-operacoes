@@ -5,21 +5,41 @@ const page = await readFile(new URL('../src/curadoria/clickbank-top-offers/index
 const view = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs', import.meta.url), 'utf8');
 const controller = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers.css', import.meta.url), 'utf8');
+const publishedCss = await readFile(new URL('../dist/curadoria/clickbank-top-offers/clickbank-top-offers.css', import.meta.url), 'utf8');
+const publishedPage = await readFile(new URL('../dist/curadoria/clickbank-top-offers/index.html', import.meta.url), 'utf8');
 const sharedCss = await readFile(new URL('../src/curadoria/trends-sheet.css', import.meta.url), 'utf8');
 
 assert.match(css, /#clickbankTopOffersRoot #captureSelect,#clickbankTopOffersRoot #search\{border:0\}/, 'somente os controles de captura e busca indicados ficam sem borda');
+assert.match(css, /#clickbankTopOffersRoot #captureSelect\{font-size:\.78rem;line-height:1\.2\}/, 'o seletor de captura mantém tipografia compacta no padrão da Visão Geral');
 assert.match(css, /#clickbankTopOffersRoot #captureSelect:focus-visible,#clickbankTopOffersRoot #search:focus-visible\{outline:2px solid var\(--cb-blue\);outline-offset:2px\}/, 'os dois controles preservam foco de teclado visível');
-assert.match(page, /clickbank-top-offers\.css\?v=7/, 'a folha alterada invalida o cache');
+assert.match(page, /clickbank-top-offers\.css\?v=14/, 'a folha alterada invalida o cache');
+assert.match(css, /\.import-dialog \.btn\{[^}]*min-height:36px;padding:8px 11px;border:0;border-radius:10px;background:var\(--hub-button-bg,#101e32\);[^}]*font-size:\.78rem;font-weight:400;box-shadow:0 4px 9px rgba\(0,0,0,\.55\)/, 'os quatro botões do modal compartilham dimensão, fundo, remoção de borda e sombra');
+assert.match(css, /\.import-dialog \.btn\.primary\{background:var\(--curation-header-action-accent,#38bdf8\);color:var\(--curation-header-action-accent-text,#052037\)\}/, 'Salvar captura usa o azul primário global');
+assert.match(css, /\.import-dialog \.btn:hover:not\(:disabled\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/, 'a sombra escurece discretamente no hover');
+assert.equal((page.match(/data-close-dialog="importDialog"/g)||[]).length,2,'Fechar e Cancelar continuam presentes no diálogo');
+assert.equal(publishedCss,css,'a folha publicada corresponde à fonte canônica');
+assert.ok(publishedPage.includes('clickbank-top-offers.css?v=14'),'a página publicada carrega a versão atualizada da folha');
+assert.match(css, /\.tablewrap \[data-column="rank"\]\{text-align:center!important\}/, 'cabeçalho e conteúdo da coluna Posição ficam centralizados sem depender da ordem visual das colunas');
 
-for (const id of ['clickbankTopOffersRoot','openImport','captureSelect','captureInfo','search','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','trendCountries','trendCandidate','trendResults','imageCountries','glimpseFrame']) {
+for (const id of ['clickbankTopOffersRoot','openImport','captureSelect','captureInfo','search','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','trendCountries','dtcCountrySource','openClickBankOffer','clickBankOfferUnavailable','trendCandidate','trendResults','imageCountries','glimpseFrame']) {
   assert.ok(page.includes(`id="${id}"`), `elemento ${id} ausente da página`);
 }
 assert.ok(page.includes('data-hub-sidebar-active="clickbank-top-offers"'));
 assert.ok(page.includes('Curadoria · ClickBank') && page.includes('Top Offers CB'));
-assert.ok(page.includes('./clickbank-top-offers-page.mjs?v=8'));
-assert.ok(controller.includes('./clickbank-top-offers-view.mjs?v=7'));
-assert.ok(controller.includes("mountCurationListFocus('clickbank-top-offers'")&&controller.includes("blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'")&&controller.includes('highlightOnCapture:false'),'a lista captura o controle acionado e só pisca ao retornar da ficha/modal');
-assert.ok(controller.includes('list-focus.mjs?v=2'),'o retorno usa a versão atualizada do helper compartilhado');
+const summaryRowIndex=page.indexOf('class="capture-summary-row"'),captureInfoIndex=page.indexOf('id="captureInfo"'),toolbarIndex=page.indexOf('class="capture-toolbar"'),searchIndex=page.indexOf('id="search"'),selectionIndex=page.indexOf('class="capture-selection"'),captureSelectIndex=page.indexOf('id="captureSelect"');
+assert.ok(summaryRowIndex<captureInfoIndex&&captureInfoIndex<toolbarIndex&&toolbarIndex<searchIndex&&searchIndex<selectionIndex&&selectionIndex<captureSelectIndex,'informação da captura e Colunas dividem a mesma faixa compacta antes da busca e tabela');
+assert.match(css,/\.capture-summary-row\{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px\}/,'metadados e ação dividem a faixa para remover o espaço vertical extra');
+assert.match(css,/\.capture-summary-row\{align-items:flex-start\}/,'a faixa preserva alinhamento legível em telas estreitas');
+assert.match(page, /\.\/clickbank-top-offers-page\.mjs\?v=\d+/);
+assert.match(controller,/finishLabel:'Salvar',showSavedFeedback:true/,'Glimpse oferece Salvar e uma confirmação após persistência');
+assert.match(controller,/glimpse-embed-controls\.mjs\?v=2/,'o helper de cabeçalho atualizado invalida o cache');
+assert.match(controller, /\.\/clickbank-top-offers-view\.mjs\?v=\d+/);
+assert.ok(controller.includes('./clickbank-top-offers-domain.mjs?v=2'));
+assert.ok(view.includes('./clickbank-top-offers-domain.mjs?v=2'));
+assert.ok(controller.includes("mountCurationListFocus('clickbank-top-offers'")&&controller.includes("blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'")&&controller.includes('highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true'),'Top Offers CB pisca ao fechar a ficha/modal, não apenas ao trocar de janela');
+assert.ok(controller.includes('list-focus.mjs?v=3'),'Top Offers CB carrega a versão atualizada do helper compartilhado');
+assert.ok(controller.includes('restoreListFocus:()=>listFocus.restore()')&&view.includes("function closeSheet() { sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }"),'Voltar à lista restaura e pisca depois de ocultar a ficha');
+assert.match(controller,/clickbank-top-offers-view\.mjs\?v=14/,'a view alterada invalida o cache');
 assert.match(view, /const \$ = \(selector,\s*root\) => root\.querySelector\(selector\);/, 'a busca singular recebe o seletor antes da raiz, como fazem os consumidores da view');
 const rootStart = page.indexOf('<main id="clickbankTopOffersRoot">'), rootEnd = page.indexOf('</main>');
 assert.ok(rootStart < page.indexOf('id="offerSheet"') && page.indexOf('id="offerSheet"') < rootEnd, 'a ficha fica sob a raiz da view');
@@ -30,7 +50,8 @@ assert.match(sharedCss, /\.product-sheet\.hidden\{display:none\}/, 'fechar a fic
 assert.match(view, /if\(item\)openSheet\(item,button\.dataset\.action\)/, 'cada atalho abre diretamente sua aba na ficha');
 assert.ok(view.includes('replace(/[&<>"\']/g'), 'texto importado deve ser escapado antes de gerar HTML');
 assert.ok(view.includes('compareCapturedOffers') && view.includes('selected.page.total'));
-assert.ok(view.includes('não são considerados saídas'), 'a UI informa que o recorte não permite inferir saídas');
+assert.ok(!view.includes('Recorte parcial: itens fora deste recorte não são considerados saídas.'), 'a descrição da captura não mostra mais o aviso removido');
+assert.ok(view.includes('selected.page.completeUniverse') && view.includes('Lista completa.'), 'a descrição mantém a indicação positiva de lista completa');
 assert.ok(controller.includes('captureId:`clickbank-${crypto.randomUUID()}`'));
 assert.ok(controller.includes('await Storage.saveCapture(capture)'));
 assert.ok(controller.includes('Storage.mergeBackup(payload)'));
@@ -44,7 +65,12 @@ assert.ok(controller.includes('Decisão salva somente em Top Offers CB'), 'a int
 assert.ok(view.includes('renderResultButtons') && view.includes('renderProductAgeButtons') && view.includes('renderImageResultButtons'), 'reutiliza os componentes compartilhados de Trends e Imagens');
 assert.ok(view.includes('showRemoveForSaved:true'), 'candidatas negativas mantêm o X visível depois de reabrir a ficha');
 assert.ok(controller.includes("origin:'clickbank-top-offers'"), 'eventos de análise são atribuídos à nova origem');
-assert.ok(page.includes('O Marketplace não informa países') && view.includes('manualCountries'), 'não inventa GEO da origem e mantém países manuais separados');
+assert.ok(page.includes('A ClickBank não informa GEO') && page.includes('Países Comuns') && view.includes('manualCountries'), 'não inventa GEO e permite lista manual ou captura DTC, sem alterar a captura de origem');
+assert.ok(view.includes('Lista capturada da DTC') && view.includes("dtcCountries.has(code)?'DTC':'manual'"), 'a ficha indica origem DTC e identifica os países correspondentes');
+assert.ok(page.indexOf('id="trendCountries"') < page.indexOf('id="openClickBankOffer"'), 'o atalho ClickBank aparece abaixo dos países na aba Google Trends');
+assert.ok(view.includes('clickbank-rank-link') && view.includes('>#${escape(item.rank)}</a>'), 'a posição com # vira link quando a captura traz Offer ID');
+assert.ok(view.includes(': `#${escape(item.rank)}`'), 'capturas antigas mantêm a posição com #, sem um link fabricado');
+assert.match(page, /id="openClickBankOffer"[^>]*target="_blank" rel="noopener noreferrer"/, 'o link abre em nova aba com proteção de origem');
 assert.ok(css.includes('.top h1{') && css.includes('overflow-x') || css.includes('.tablewrap{overflow:auto'), 'layout mantém a tabela responsiva');
 assert.ok(page.includes(' nada é salvo antes de você confirmar') || page.includes('Nada é salvo antes de você confirmar'));
 

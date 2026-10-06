@@ -1,3 +1,4 @@
+import {lastCollectionCell} from '../last-collection.mjs';
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
@@ -13,7 +14,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const COLUMNS = Object.freeze([
-  ['id','ID'],['product','Produto'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Imagens'],['category','Categoria'],['affiliation','Afiliação'],['countries','Países'],['payment','Pagamento'],['created','Criado'],['signal','Sinal automático'],['movement','Movimento'],['decision','Decisão'],['lastSeen','Última coleta'],['actions','Ações'],
+  ['id','ID'],['product','Produto'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Imagens'],['category','Categoria'],['affiliation','Afiliação'],['countries','Países'],['payment','Pagamento'],['created','Criado'],['signal','Sinal automático'],['movement','Movimento'],['decision','Decisão'],['actions','Ações'],['lastSeen','Última coleta'],
 ]);
 const COLUMN_KEY = 'hot-offers-ms-columns-v1';
 const VISIBILITY_KEY = 'hot-offers-ms-hidden-v1';
@@ -113,7 +114,7 @@ export function mountHotOffersMsView({root, actions}) {
   }
   function renderHeaders() {
     const visible = COLUMNS.filter(([key]) => !hiddenColumns.has(key));
-    $('#headerRow').innerHTML = visible.map(([key,label]) => '<th data-col="' + key + '">' + (key === 'actions' ? escape(label) : '<button type="button" class="sort-btn" data-sort="' + key + '">' + escape(label) + '<span class="sort-arrow">' + (sortKey === key ? (sortDirection === 'asc' ? '↑' : '↓') : '') + '</span></button>') + '</th>').join('');
+    $('#headerRow').innerHTML = visible.map(([key,label]) => '<th data-col="' + key + '" class="' + (key === 'lastSeen' ? 'hub-last-collection' : '') + '">' + (key === 'actions' ? escape(label) : '<button type="button" class="sort-btn" data-sort="' + key + '">' + escape(label) + '<span class="sort-arrow">' + (sortKey === key ? (sortDirection === 'asc' ? '↑' : '↓') : '') + '</span></button>') + '</th>').join('');
     $('#columnMenu').innerHTML = COLUMNS.map(([key,label]) => '<label><input type="checkbox" data-column="' + key + '" ' + (hiddenColumns.has(key) ? '' : 'checked') + '> ' + escape(label) + '</label>').join('');
   }
   function visibleOffers() {
@@ -136,7 +137,7 @@ export function mountHotOffersMsView({root, actions}) {
     if (key === 'signal') return '<td>' + signalBadge(item) + '</td>';
     if (key === 'movement') return '<td>' + movement(item) + '</td>';
     if (key === 'decision') return '<td>' + Decisions.buttonHtml(decisionFor(item.offerKey).currentStatus,'data-decision-key',escape(item.offerKey)) + '</td>';
-    if (key === 'lastSeen') return '<td>' + escape(dateTime(item.lastSeenAt)) + '</td>';
+    if (key === 'lastSeen') return lastCollectionCell(item.lastSeenAt);
     if (key === 'actions') return '<td><button type="button" class="table-action" data-action="detail" data-key="' + escape(item.offerKey) + '">Abrir</button><button type="button" class="table-action" data-action="hide" data-key="' + escape(item.offerKey) + '">' + (hiddenOffers.has(item.offerKey) ? 'Exibir' : 'Ocultar') + '</button></td>';
     return '<td>—</td>';
   }

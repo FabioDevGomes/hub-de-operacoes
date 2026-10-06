@@ -16,7 +16,7 @@ Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
 ## Atualização da extensão
 
-Versão atual: `1.2.8`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão.
+Versão atual: `1.2.15`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão. A versão 1.2.11 acrescentou acesso exclusivamente à rota local Top Offers CB; aceite essa permissão caso o Chrome a solicite. A leitura da DTC usa `activeTab` somente após o clique, sem permissão permanente para `orders.clickbank.net`. Confirme que a extensão carregada usa esta pasta, não uma cópia antiga.
 
 Erros de nomes duplicados aparecem em um quadro vermelho com o título **Captura bloqueada: campanha duplicada**, a lista dos nomes envolvidos e a orientação para corrigir a duplicidade na MCC. Se todas as linhas foram capturadas e a única divergência é a repetição de nomes, não aparece o aviso genérico de captura incompleta. Outros bloqueios reais são mostrados separadamente; as validações e a exigência de confirmação para gravar a base permanecem.
 
@@ -48,9 +48,10 @@ Os quadros D0 e D−1 exibem o estado e o resumo da captura estruturada enviada 
 ## Integração e permissões
 
 - `scripting`: ler o DOM semântico da aba MCC após ação explícita e encaminhar uma captura validada ao Preparador local.
-- `activeTab`: acesso temporário à aba ativa após ação explícita no popup.
+- `activeTab`: acesso temporário à aba ativa após ação explícita no popup. Na ação da DTC, o leitor acessa somente o nome da oferta no resumo e os códigos do `optgroup` “Países Comuns”; não lê e-mail, endereço, CEP, cartão ou outros campos do checkout.
 - A rolagem automática usa o mesmo acesso temporário para alterar somente a posição da área rolável da grade/página da MCC; não extrai conteúdo, não navega e não pede permissões extras.
 - Host `http://127.0.0.1:8765/preparador-MCC/*`: restrito à rota local do Preparador.
+- Host `http://127.0.0.1:8765/curadoria/clickbank-top-offers/*`: restrito à página local de prévia ClickBank, sem gravação automática.
 - `clipboardWrite`: copiar o TSV dos produtos ClickBank após clique explícito; não lê o clipboard.
 - Não há permissão permanente para `ads.google.com`, `accounts.clickbank.com`, histórico, leitura do clipboard ou todos os sites.
 
@@ -61,21 +62,50 @@ Ao aplicar uma nova captura, o Hub usa o número completo como identidade da con
 ## Capturar produtos ClickBank
 
 1. Abra o Marketplace em `https://accounts.clickbank.com/master/dashboard/affiliate-marketplace` e aguarde a tabela carregar. Parâmetros antes do `#` e a rota de resultados depois dele são aceitos.
-2. Abra o popup da extensão e clique em **Capturar produtos ClickBank**. Mantenha-o aberto até terminar (prazo máximo de 15 segundos).
+2. Abra o popup da extensão e clique em **Capturar produtos ClickBank**. A leitura tem prazo máximo de 15 segundos; abrir/carregar o Hub e aguardar o receptor pode levar tempo adicional. A aba do Hub só é focada após aceitar a prévia.
 3. A extensão amplia a tabela, reúne as linhas da página atual e percorre internamente as duas direções quando há virtualização. Confere a quantidade pelo rodapé de paginação ou pelo total explícito de resultados combinado com `resultsPerPage`/`offset` na URL. Nunca usa 50/1251 como constantes de contagem.
-4. Somente quando a contagem e as nove colunas forem confirmadas, copia TSV com cabeçalho **Rank, Offer Name, Seller, Avg $, Initial $, Future $, EPC, CVR, Gravity**. Nomes/vendedores iniciados por símbolos de fórmula recebem apóstrofo; traços, moedas, percentuais e valores numéricos exibidos são preservados.
-5. Cole em Excel/Sheets. Se o clipboard falhar, use Ctrl+C na caixa selecionável do popup. Capturas parciais são avisadas com a contagem e ficam disponíveis apenas para cópia manual, sem anúncio de sucesso completo.
+4. Somente quando a contagem e as nove colunas forem confirmadas, o mesmo botão abre ou reutiliza `http://127.0.0.1:8765/curadoria/clickbank-top-offers/`, preenche **ClickBank — nova captura** e valida a prévia. Não é necessário Ctrl+C/Ctrl+V. A paginação (total/faixa) e o horário real da captura são preservados. Revise e clique explicitamente em **Salvar captura**; a extensão nunca salva nem chama o storage.
+5. O popup ainda tenta copiar TSV após o envio, se permanecer aberto, com cabeçalho **Rank, Offer Name, Seller, Avg $, Initial $, Future $, EPC, CVR, Gravity, Offer ID**. O Chrome pode fechar o popup ao focar o Hub; a cópia não é requisito do envio e não é garantida nesse caso. O ID vem apenas do link interno renderizado da oferta; ausente, exporta `—`. Símbolos de fórmula em texto recebem apóstrofo; traços, moedas, percentuais e zeros são preservados. Falha no clipboard não bloqueia a prévia já preenchida. Erros de envio mostram o texto capturado para recuperação manual; capturas parciais nunca são encaminhadas nem copiadas automaticamente.
 6. **Restaurar tamanho da tabela** repõe os estilos originais dos elementos alterados. A posição das rolagens já é restaurada ao terminar a captura; o botão pode ser usado depois de fechar e reabrir o popup na mesma aba. Recarregar/navegar a página também descarta as alterações visuais locais.
 
-A captura não troca filtros, ordenação ou página, não consulta endpoints/React e não grava dados nem encaminha produtos ao Hub. Para um novo recorte, use a paginação normal do Marketplace e capture novamente. Fechar o popup antes de receber a resposta interrompe a etapa de cópia, não a leitura já iniciada; reabra-o e execute novamente.
+A captura não troca filtros, ordenação ou página nem consulta endpoints/React. Encaminha somente uma prévia ao Hub, sem gravação. Se já existir texto no diálogo, ele é preservado e o novo envio é recusado: salve ou limpe o rascunho antes de tentar novamente. O receptor aguarda a leitura inicial do histórico para comparar a prévia. Para um novo recorte, use a paginação normal do Marketplace. O worker pode continuar o encaminhamento após fechar o popup; confira a aba do Hub antes de repetir. Cancelar o diálogo não salva a captura.
 
-Responsabilidades: `clickbank-domain.mjs` valida URL/define colunas/formata TSV; `clickbank-reader.mjs` faz apenas DOM/expansão reversível/contagem; `background.js` verifica a aba ativa e injeta no mundo isolado; `clickbank-popup.mjs` controla status, clipboard e alternativa manual. Não acoplar esse fluxo ao Preparador MCC.
+## Capturar países comuns da DTC
+
+1. Abra o checkout em `https://orders.clickbank.net/` e deixe carregada a lista **Top Offers CB** do Hub em alguma aba. A ficha da oferta não precisa estar aberta.
+2. No popup, clique em **Capturar países comuns da DTC**. A ação, iniciada pelo usuário, lê apenas o título exibido depois de **Cart Summary** e as opções de duas letras do grupo **Países Comuns** no seletor de país. Nenhum dado de pagamento ou endereço é consultado.
+3. O Hub normaliza o nome do produto e procura uma oferta cujo nome contenha essa frase. A gravação só acontece com uma correspondência única. Zero ou mais de uma oferta geram uma mensagem e nenhuma alteração.
+4. A lista encontrada é mesclada com os países existentes (sem duplicatas), salva na store isolada `offerMetadata` e exibida na aba Google Trends com a marca **DTC**. A ficha mostra **Lista capturada da DTC** e o horário da captura. A captura original do Marketplace, países manuais existentes e outras lojas/bases não são sobrescritos.
+5. A extensão não abre nem foca uma tela do Hub. Se a lista Top Offers não estiver carregada, o popup orienta a abri-la; basta repetir o clique depois.
+
+Não há uma permissão permanente para o domínio da DTC: `activeTab` só permite leitura após clicar no botão com o checkout na aba ativa. A ação não acessa endpoints nem percorre os campos de pagamento.
+
+Responsabilidades: `clickbank-domain.mjs` valida Marketplace/define colunas/formata TSV; `clickbank-reader.mjs` faz leitura/expansão reversível/contagem; `clickbank-dtc-reader.mjs` limita a leitura ao título e ao optgroup dos países comuns; `clickbank-forward.mjs` entrega os dois fluxos exclusivamente à rota local; `background.js` valida a aba de origem e só encaminha países a uma lista Top Offers já aberta, sem focar outra tela; `clickbank-popup.mjs` e `clickbank-dtc-popup.mjs` apresentam ações e retornos separados. No Hub, `extension-capture.mjs` valida a mensagem e exige correspondência única; `dtc-country-capture.mjs` normaliza identidade e mescla países sem perder dados; o page salva a origem/horário e a view apresenta a indicação. O store existente `offerMetadata` é mantido, sem migração de versão do banco. Nenhuma permissão permanente para domínio externo foi adicionada. MCC e velocidades VSL continuam independentes.
+
+## Velocidade da VSL (1×, 10×, 20× e 30×)
+
+Na aba da oferta, inicie o vídeo, abra a extensão e escolha uma velocidade. O controle procura o vídeo HTML5 principal visível (preferindo um em reprodução), incluindo shadow roots abertos e iframes da mesma origem. Sem vídeo acessível, usa a API pública de um `vturb-smartplayer` visível. Não consulta endpoints, não baixa mídia nem atravessa frames externos/shadow roots fechados. A injeção usa `activeTab` + `scripting`, em `MAIN` para acessar a API pública VTurb; nenhuma permissão foi ampliada.
+
+- **1× e 10×:** reprodução contínua. HTML5 confere `playbackRate` após o ajuste; a API VTurb `speed()` sem getter recebe mensagem de solicitação, não confirmação de velocidade efetiva. O áudio em 10× pode ser silenciado pelo navegador. Não inicia playback por conta própria.
+- **20× e 30×:** avanço aproximado por saltos, autorizado pelo usuário em 06/10/2026. O Chromium limita `playbackRate` a 16×, portanto estas opções **não são reprodução contínua** e nunca são reduzidas silenciosamente para 16×. Usam base 1×, saltos a cada 500 ms e áudio temporariamente silenciado. Buffering/seek/restrições do player podem reduzir a velocidade efetiva. VTurb usa `seek()`, `currentTime`, `duration`, `paused`, `volume` e `setVolume()` públicos; sem esses recursos, bloqueia com aviso.
+- Pausar o vídeo pausa os saltos. Escolher 1× ou 10× cancela o timer e restaura o estado anterior de áudio (HTML5: `muted`; VTurb: volume público), sem unmute forçado. O fim do vídeo, remoção do player ou falha de seek interrompem o modo. Trocar 20×/30× substitui o timer, não o duplica. Não tenta revelar botões de compra ou interferir em regras de venda.
+- O estado vive apenas na aba, em `window.__hubVslPlaybackV1`, e permanece ao fechar o popup. Reabrir consulta o estado sem alterar a mídia. Navegar/recarregar descarta o controle. A velocidade não é sincronizada entre abas nem armazenada na base/localStorage.
+
+Responsabilidades: `vsl-domain.mjs` valida URL/rates; `vsl-controller.mjs` é o controlador autocontido injetado; `vsl-popup.mjs` controla feedback, consulta e cliques; `background.js` restringe à aba ativa e encaminha mensagens independentes de MCC/ClickBank. Não remover botões antigos, enviar capturas ou escrever no Hub durante este fluxo.
+
+Referências: [API pública VTurb](https://smartplayer.vturb.com/en/api/) e [limites HTMLMediaElement no Chromium](https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/core/html/media/html_media_element.h).
 
 ## Testes
 
+### Verificação VSL
+
+`node --test tests/vsl-extension.test.mjs tests/mcc-extension-popup.test.mjs tests/clickbank-extension.test.mjs` cobre domínio, função serializada, reprodução nativa, saltos sem extrapolar duração, pausa/seek, troca repetida, cancelamento/áudio, falha de player, frames, popup, consulta concorrente e roteamento, somente em memória. Depois execute build e suíte completa. Para QA visual, use página sintética isolada; nunca importe dados reais ou grave fixtures nas bases do Hub. No Chrome, recarregue a extensão e valide também a oferta real: dependências do site/player e injeção `activeTab` não são substituídas pelos mocks.
+
 ### Verificação ClickBank
 
-`node --test tests/clickbank-extension.test.mjs tests/mcc-extension-popup.test.mjs tests/mcc-extension-parity.test.mjs tests/mcc-grid-experiment.test.mjs tests/mcc-text-experiment.test.mjs tests/mcc-page-scroll.test.mjs` cobre virtualização em ambos os eixos, 50 linhas, última página menor, repetição sem duplicação, nove colunas fora de ordem, completude, TSV seguro, erros, bloqueio de concorrência, clipboard negado, restauração exata e preservação do roteamento MCC, em memória. A validação final na conta real deve confirmar os seletores/cabeçalhos do Marketplace e a cópia pelo Chrome após recarregar a extensão; os testes sintéticos não substituem essa conferência.
+`node --test tests/clickbank-forward.test.mjs tests/clickbank-dtc-countries.test.mjs` cobre os fluxos ClickBank e DTC com dados sintéticos: extração restrita, correspondência ambígua, mesclagem sem sobrescrita, receiver local e roteamento sem abrir/focar aba. Após recarregar a extensão 1.2.15 em `chrome://extensions` e a página Top Offers CB, use o botão no checkout DTC para salvar países; a instalação real não é substituída pelos mocks.
+
+`node --test tests/clickbank-extension.test.mjs tests/mcc-extension-popup.test.mjs tests/mcc-extension-parity.test.mjs tests/mcc-grid-experiment.test.mjs tests/mcc-text-experiment.test.mjs tests/mcc-page-scroll.test.mjs` cobre virtualização em ambos os eixos, 50 linhas, última página menor, repetição sem duplicação, nove colunas fora de ordem, Offer ID opcional, completude, TSV seguro, erros, bloqueio de concorrência, clipboard negado, restauração exata e preservação do roteamento MCC, em memória. A validação final na conta real deve confirmar os seletores/cabeçalhos do Marketplace e a cópia pelo Chrome após recarregar a extensão; os testes sintéticos não substituem essa conferência.
 
 ### Verificação MCC
 

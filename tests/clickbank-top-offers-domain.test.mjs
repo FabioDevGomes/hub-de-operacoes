@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {compareCapturedOffers, movementLabel, parseTopOffersClipboard} from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-domain.mjs';
+import {clickBankOfferDetailsUrl, compareCapturedOffers, movementLabel, parseTopOffersClipboard} from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-domain.mjs';
 
 const tabular = [
   'ClickBank Affiliate Marketplace',
@@ -29,7 +29,22 @@ assert.equal(parsed.offers[0].epc.value, 0, 'zero observado não pode virar aus�
 assert.equal(parsed.offers[0].cvr.value, 1.55);
 assert.equal(parsed.offers[0].gravity.value, 148.47);
 assert.equal(parsed.offers[0].identitySource, 'seller+normalized-title');
+assert.equal(parsed.offers[0].offerId, null, 'capturas antigas continuam sem ID e não ganham link inventado');
 assert.equal(parsed.offers[0].average.currency, undefined, 'o símbolo $ não deve ser convertido em moeda não verificada');
+
+const withOfferId = [
+  'Top Offers', '1 result',
+  'Rank\tOffer Name\tSeller\tAvg $\tInitial $\tFuture $\tEPC\tCVR\tGravity\tOffer ID\tActions',
+  '1\tOferta Alfa (2026)\tSELLERA\t$51.32\t$51.32\t-\t$0.00\t1.55%\t148.47\tENREV\tPromote',
+  'Results per page', '50', '1 - 1 of 1',
+].join('\n');
+const parsedWithId = parseTopOffersClipboard(withOfferId);
+assert.equal(parsedWithId.valid, true);
+assert.equal(parsedWithId.sourceFormat, 'clickbank-top-offers-v2');
+assert.equal(parsedWithId.offers[0].offerId, 'ENREV');
+assert.equal(parsedWithId.offers[0].offerKey, parsed.offers[0].offerKey, 'adicionar o ID não reatribui identidade nem históricos antigos');
+assert.equal(clickBankOfferDetailsUrl('ENREV'), 'https://accounts.clickbank.com/master/dashboard/affiliate-marketplace#/offer-details?offer=ENREV&clickUrl=undefined');
+assert.equal(clickBankOfferDetailsUrl('https://example.com'), null, 'o link só aceita IDs com formato validado');
 
 const lineCells = [
   'Top Offers', '2 results', 'Rank', 'Offer Name', 'Seller', 'Avg $', 'Initial $', 'Future $', 'EPC', 'CVR', 'Gravity', 'Actions',

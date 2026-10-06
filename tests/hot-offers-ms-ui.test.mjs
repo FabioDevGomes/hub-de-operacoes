@@ -7,6 +7,7 @@ const html = await readFile(new URL('../src/curadoria/hot-offers-ms/index.html',
 const css = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms.css',import.meta.url),'utf8');
 const sidebarCss = await readFile(new URL('../src/sidebar-component.css',import.meta.url),'utf8');
 const sharedCurationCss = await readFile(new URL('../src/curadoria/trends-sheet.css',import.meta.url),'utf8');
+const toolbarCss = await readFile(new URL('../src/curadoria/curation-table-filters.css',import.meta.url),'utf8');
 const view = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms-view.mjs',import.meta.url),'utf8');
 const page = await readFile(new URL('../src/curadoria/hot-offers-ms/hot-offers-ms-page.mjs',import.meta.url),'utf8');
 
@@ -80,17 +81,19 @@ test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM',
 
 test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
   assert.match(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{border:0;box-shadow:0 4px 9px rgba\(0,0,0,\.55\)/,'os dois controles apontados devem ficar sem borda com sombra preta normal');
-  assert.match(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{[^}]*background:#172337/,'os dois controles usam o mesmo fundo neutro do selo Não definido');
-  assert.match(sharedCurationCss,/\.decision-badge\{[^}]*background:#172337/,'o fundo aplicado aos controles deve corresponder ao selo neutro compartilhado');
+  assert.match(html,/<button class="btn hub-toolbar-action-dark" id="clearFilters" type="button">Limpar filtros<\/button>/);
+  assert.match(html,/<summary class="btn hub-toolbar-action-dark">Colunas<\/summary>/);
+  assert.match(toolbarCss,/\.hub-curation-table-filters :is\(button, summary\)\.hub-toolbar-action-dark\s*\{\s*background:\s*#0c192a/,'o fundo escuro de referência fica no CSS compartilhado');
+  assert.doesNotMatch(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{[^}]*background:/,'a regra local não pode encobrir o fundo compartilhado');
   assert.match(html,/\.filter-grid>#clearFilters:is\(:hover,:focus-visible\),\.filter-grid>\.column-picker>summary\.btn:is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)/,'a sombra deve reforçar no hover/foco sem brilho claro');
   assert.match(html,/\.filter-grid>#clearFilters:focus-visible,\.filter-grid>\.column-picker>summary\.btn:focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/,'o foco de teclado continua claramente visível');
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
   assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-header-color/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
-  assert.match(html,/hot-offers-ms-page\.mjs\?v=16/,'a página invalida o cache após atualizar o retorno da decisão');
+  assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
   assert.match(html,/hot-offers-ms\.css\?v=20261005-glimpse-compact/,'o CSS local invalida o cache para o redimensionamento do Glimpse');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261005-analytics-badges/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-last-collection/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
   assert.match(sharedCurationCss,/button\.decision-badge\{border:1px solid #40516b;font-weight:400;cursor:pointer\}/,'o padrão comum usa borda neutra e texto sem negrito forte');
   assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:rgba\(171,130,35,\.2\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');

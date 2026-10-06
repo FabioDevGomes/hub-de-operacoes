@@ -15,7 +15,8 @@ function dateTime(value){const date=new Date(value);return Number.isNaN(date.get
 function relevanceLabel(value){return{high:'Alta',medium:'Média',low:'Baixa',unclear:'Indefinida'}[value]||'Indefinida'}
 function percent(value){return value===null||value===undefined?'—':`${Math.round(value*100)}%`}
 async function goBack(){if(draft&&pendingSaves.has(draft.analysisId)){const saved=await pendingSaves.get(draft.analysisId);if(!saved)return}if(embedded&&window.parent!==window){window.parent.postMessage({type:'hub-glimpse-close'},location.origin);return}location.href=returnUrl}
-async function finishAnalysis(){if(draft&&!await saveAnalysis(draft))return;await goBack()}
+function reportEmbeddedSave(saved){if(embedded&&window.parent!==window)window.parent.postMessage({type:'hub-glimpse-save-result',saved},location.origin)}
+async function finishAnalysis(){const keepOpenAfterSave=embedded&&origin==='clickbank-top-offers';if(keepOpenAfterSave&&!draft){$('#message').textContent='Nenhuma análise para salvar.';reportEmbeddedSave(false);return}if(draft&&!await saveAnalysis(draft)){if(keepOpenAfterSave)reportEmbeddedSave(false);return}if(keepOpenAfterSave){reportEmbeddedSave(true);return}await goBack()}
 function indicatorRows(analysis){const p=analysis.parsed,i=analysis.indicators,c=analysis.classified,legacyCommercial=[...c.peopleAlsoSearch,...c.relatedQueries].filter(item=>['BOFU / Reviews','Compra / Preço','Confiança / Objeção'].includes(item.category)).length,commercial=i.intent?.commercialCount??legacyCommercial,uniqueTerms=i.intent?.uniqueTermCount;return[
   ['Volume mensal',p.volume.display||'Não detectado',p.volume.operator==='<'?'Limite superior informado; não é exatamente 500.':'Estimativa informada pelo Glimpse.'],
   ['Movimento recente',p.movement.percent===null?'Não detectado':Domain.movementValueLabel(p.movement.percent),p.movement.periodLabel||p.movement.period||'Janela não detectada'],

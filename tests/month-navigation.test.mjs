@@ -12,7 +12,7 @@ test('shared month/day navigation has a single published stylesheet loaded after
   assert.equal(published, css);
   assert.match(build, /src\/month-navigation\.css/);
   assert.ok(app.indexOf('month-navigation.css?v=2') > app.indexOf('theme-colors.css?v=5'));
-  for (const asset of ['control-macro/control-macro.css?v=6','billing/billing.css?v=2','personal-finance/personal-finance.css?v=39','billing-view.mjs?v=9','personal-finance-view.mjs?v=79','meu-tempo/meu-tempo.css?v=17','meu-tempo/meu-tempo-view.mjs?v=25']) {
+  for (const asset of ['control-macro/control-macro.css?v=6','billing/billing.css?v=2','personal-finance/personal-finance.css?v=39','billing-view.mjs?v=9','personal-finance-view.mjs?v=81','meu-tempo/meu-tempo.css?v=17','meu-tempo/meu-tempo-view.mjs?v=25']) {
     assert.ok(app.includes(asset), `cache atualizado: ${asset}`);
   }
 });

@@ -12,8 +12,17 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.8', 'alterações na extensão incrementam pelo menos o patch');
-assert.match(manifest.description, /Captura a grade da MCC/);
+assert.equal(manifest.version, '1.2.15', 'alterações na extensão incrementam pelo menos o patch');
+assert.match(manifest.description, /Captura MCC D0\/D−1/);
+assert.ok(popup.includes('id="capture-title"') && popup.includes('id="vsl-title"'), 'os títulos das seções permanecem visíveis');
+assert.doesNotMatch(popup, /Na MCC, selecione um único dia, use o botão discreto abaixo/);
+assert.doesNotMatch(popup, /Inicie o vídeo na aba ativa\. 1× e 10× usam reprodução contínua/);
+assert.ok(popup.includes('id="scroll-to-bottom"') && popup.includes('id="vsl-speed-1"'), 'os controles de captura e velocidade permanecem disponíveis');
+assert.ok(popup.includes('Vídeo principal HTML5 ou VTurb.'), 'a nota sobre o vídeo permanece visível');
+assert.doesNotMatch(popup, /Captura a página atual e abre Top Offers CB com o campo preenchido/);
+assert.ok(popup.includes('id="capture-clickbank"'), 'a ação de captura ClickBank permanece disponível');
+assert.ok(popup.includes('id="capture-dtc-countries"') && popup.includes('id="dtc-countries-status"'), 'a captura de países da DTC tem ação e retorno próprios');
+assert.match(manifest.description, /países comuns ClickBank/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
 assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
 assert.ok(popup.indexOf('id="scroll-to-bottom"') < popup.indexOf('id="capture-d1"'), 'rolagem fica acima dos botões de captura');
@@ -65,12 +74,14 @@ assert.equal(status.textContent, 'Validando…');
 // Exercita os dois cliques, sem Chrome real nem escrita no Preparador.
 const d0 = new Element('button', doc), d1 = new Element('button', doc), scroll = new Element('button', doc);
 const nodes = { '#capture-d0':d0, '#capture-d1':d1, '#scroll-to-bottom':scroll, '#capture-status':status,
-  '#capture-clickbank':new Element('button',doc), '#restore-clickbank':new Element('button',doc) };
+  '#capture-clickbank':new Element('button',doc), '#restore-clickbank':new Element('button',doc),
+  '#capture-dtc-countries':new Element('button',doc),
+  ...Object.fromEntries([1,10,20,30].map(rate => [`#vsl-speed-${rate}`,new Element('button',doc)])) };
 let response = failure;
 const requests = [];
 const context = vm.createContext({
   document:{ querySelector:selector => nodes[selector] },
-  showCaptureStatus, showCaptureError, mountClickBankCapture:()=>{}, navigator:{clipboard:{}},
+  showCaptureStatus, showCaptureError, mountClickBankCapture:()=>{}, mountClickBankDtcCountries:()=>{}, mountVslSpeed:()=>{}, navigator:{clipboard:{}},
   chrome:{ runtime:{ sendMessage:async request => { requests.push(request.type); return response; } } }
 });
 vm.runInContext(script.replace(/^import .*?;\s*/gm, ''), context);
@@ -123,4 +134,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.8');
+console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.15');

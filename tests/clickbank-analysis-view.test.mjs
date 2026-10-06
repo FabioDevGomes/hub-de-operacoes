@@ -3,17 +3,19 @@ import {test} from 'node:test';
 import {mountClickBankTopOffersView} from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs';
 
 // DOM mínimo em memória: nenhuma base real, importação ou dependência de browser.
-function fixture() {
-  const document={createElement:()=>element()};
+function fixture(offerId=null) {
+  const document={createElement:()=>element(),addEventListener(){},removeEventListener(){}};
   function element(dataset={}) {
     const classes=new Set();
-    return {dataset,ownerDocument:document,children:[],value:'',innerHTML:'',textContent:'',listeners:{},
+    return {dataset,ownerDocument:document,children:[],value:'',innerHTML:'',textContent:'',listeners:{},style:{},
       classList:{add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value),toggle(value,on){if(on??!classes.has(value))classes.add(value);else classes.delete(value);}},
       append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},
-      setAttribute(){},addEventListener(type,handler){this.listeners[type]=handler;},querySelectorAll(){return [];},
+      setAttribute(){},addEventListener(type,handler){this.listeners[type]=handler;},querySelector(){return element();},querySelectorAll(){return [];},
     };
   }
   const nodes=new Map(),node=selector=>{if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);};
+  node('.tablewrap table').rows=[];
+  node('[data-curation-columns]').querySelector=node;
   const tabs=['trends','glimpse','images','history'].map(tab=>element({tab}));
   const panels=['trends','glimpse','images','history'].map(panel=>element({panel}));
   const lists=['DE','US'].map(imageCandidateList=>element({imageCandidateList}));
@@ -26,7 +28,7 @@ function fixture() {
     openGlimpse:item=>calls.push(['glimpse',item.offerKey]),saveImage:(...args)=>calls.push(['saveImage',...args]),
     openImagesExcluding:(...args)=>calls.push(['exclude',...args]),
   }});
-  const state={captures:[{captureId:'capture',capturedAt:'2026-01-02T12:00:00Z',listName:'Top Offers',page:{total:1,completeUniverse:true},offers:[{offerKey:'offer',offerName:'Produto <teste>',seller:'EXAMPLE',rank:1}]}],
+  const state={captures:[{captureId:'capture',capturedAt:'2026-01-02T12:00:00Z',listName:'Top Offers',page:{total:1,completeUniverse:true},offers:[{offerKey:'offer',offerName:'Produto <teste>',seller:'EXAMPLE',rank:1,...(offerId?{offerId}:{})}]}],
     offerMetadata:[{offerKey:'offer',manualCountries:['DE','US']}],trends:[],
     images:[{offerKey:'offer',searchTerm:'Produto',assessments:[{assessmentId:'a',country:'DE',status:'mixed',capturedAt:'2026-01-02T13:00:00Z',negativeKeywordCandidates:['outra marca']}]}],glimpse:[]};
   view.render(state);
@@ -34,6 +36,36 @@ function fixture() {
   const clickTab=tab=>node('.tabs').listeners.click({target:{closest(){return {dataset:{tab}};}}});
   return {view,state,calls,sheet,node,tabs,panels,lists,open,clickTab};
 }
+
+test('Offer ID torna a posição # clicável e mostra Abrir oferta abaixo de Países; captura antiga não inventa link',()=>{
+  const current=fixture('ENREV');current.open('trends');
+  assert.match(current.node('#rows').innerHTML,/clickbank-rank-link[^>]*>#1<\/a>/);
+  assert.equal(current.node('#openClickBankOffer').href,'https://accounts.clickbank.com/master/dashboard/affiliate-marketplace#/offer-details?offer=ENREV&clickUrl=undefined');
+  assert.equal(current.node('#openClickBankOffer').classList.contains('hidden'),false);
+  assert.equal(current.node('#clickBankOfferUnavailable').classList.contains('hidden'),true);
+  const legacy=fixture();legacy.open('trends');
+  assert.match(legacy.node('#rows').innerHTML,/>#1<\/td>/);
+  assert.doesNotMatch(legacy.node('#rows').innerHTML,/clickbank-rank-link/);
+  assert.equal(legacy.node('#openClickBankOffer').classList.contains('hidden'),true);
+  assert.equal(legacy.node('#clickBankOfferUnavailable').classList.contains('hidden'),false);
+});
+
+test('extensão preenche e abre o diálogo existente; repetição não reabre e cancelar não grava',()=>{
+  const f=fixture(),dialog=f.node('#importDialog'),paste=f.node('#pasteArea');
+  let opened=0,focused=0;
+  dialog.showModal=()=>{opened++;dialog.open=true;};
+  dialog.close=()=>{dialog.open=false;};
+  paste.focus=()=>focused++;
+  const original=JSON.stringify(f.state);
+  f.view.prepareImport('Texto recebido da extensão');
+  assert.equal(paste.value,'Texto recebido da extensão');assert.equal(dialog.open,true);
+  assert.equal(opened,1);assert.equal(focused,1);
+  f.view.prepareImport('Texto recebido da extensão');
+  assert.equal(opened,1);assert.equal(focused,2);
+  f.view.closeImport();assert.equal(dialog.open,false);
+  assert.equal(JSON.stringify(f.state),original);
+  assert.equal(f.calls.length,0);
+});
 
 test('CB abre Glimpse/Imagens diretamente, muda abas e conclui sem gravar',()=>{
   const f=fixture(),initial=JSON.stringify(f.state);

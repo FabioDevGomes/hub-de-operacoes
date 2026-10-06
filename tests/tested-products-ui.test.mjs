@@ -15,6 +15,7 @@ assert.ok(html.includes('id="testedSearch" class="search hub-search-filter" type
 assert.ok(!html.includes('O backup completo JSON no topo reúne campanhas'),'texto explicativo sinalizado ainda aparece em Produtos Testados');
 assert.ok(html.includes('products.filter(product=>product.active).length'),'indicador não conta produtos ativos consolidados');
 assert.ok(html.includes('id="testedColumnsPicker"')&&html.includes('id="testedColumnsMenu"'),'seletor de colunas de Produtos Testados ausente');
+assert.ok(html.includes('class="catalog-actions hub-table-toolbar-actions"')&&html.includes('id="testedColumnsPicker" class="tested-columns-picker"><summary class="btn">Colunas</summary>')&&html.includes('id="catalogInput"')&&html.includes('id="purgeProducts" class="btn danger hidden"')&&html.includes('id="restoreProducts" class="btn hidden"'),'ações do canto do painel Produtos Testados optam pelo padrão global de botões de tabela');
 assert.ok(html.includes("TESTED_COLUMNS_PREF='painel-produtos-testados-colunas-v1'"),'preferência de colunas não possui chave persistente');
 assert.ok(html.includes('preferences.setItem(TESTED_COLUMNS_PREF'),'preferência de colunas não é salva');
 assert.ok(html.includes('data-tested-col="related"')&&html.includes('data-tested-col="actions"'),'colunas da tabela não estão identificadas para ocultação');

@@ -3,6 +3,11 @@ import {readFile} from 'node:fs/promises';
 
 const html = await readFile(new URL('../dist/curadoria/index.html', import.meta.url), 'utf8');
 assert.ok(html.includes("import * as KeywordCandidatesUI from './keyword-candidates-ui.mjs?v=2'"));
+assert.ok(html.includes("import {mountCurationListFocus} from './list-focus.mjs?v=2'"));
+assert.ok(html.includes("mountCurationListFocus('radar-spyhero',{blockingSelector:'#productSheet:not(.hidden)'})"));
+assert.ok(html.includes('data-curation-focus="trends"') && html.includes('data-curation-focus="clickbank"') && html.includes('data-curation-focus="landing"'));
+assert.ok(html.includes('data-product="${safe(x.id)}"'), 'cada linha Radar expõe chave estável para restaurar o foco');
+assert.ok(html.includes('closeProductSheet({restoreFocus:false});await refresh();listFocus.restore();'), 'salvar Trends/ClickBank restaura o destaque após a lista ser redesenhada');
 assert.ok(html.includes('id="spyHeroTrendKeywordInput"') && html.includes('id="spyHeroTrendKeywordAdd"'));
 assert.ok(html.includes('id="spyHeroTrendKeywordList"') && html.includes('Candidatas à palavra-chave'));
 assert.ok(html.includes('data-trends-result="point_peak"') && html.includes('Pico pontual'));

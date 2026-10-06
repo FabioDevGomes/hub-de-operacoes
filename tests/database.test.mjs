@@ -347,6 +347,51 @@ assert.equal(db.salesAdjustmentMap(editedSaleResult.base).get('cmp_sale_2').comm
 const collisionBase=db.addProvisionalSale(editedSaleResult.base,{campanha_id:'cmp_sale',data:'2026-09-26',valor_brl:30,pais_codigo:'DE',chave_duplicidade:'another-sale-key'}).base;
 assert.throws(()=>db.updateProvisionalSale(collisionBase,{id:saleResult.sale.id,campanha_id:'cmp_sale',data:'2026-09-26',hora:'',produto:'Outro produto',plataforma:'Gurumedia',valor_brl:30,pais_codigo:'DE',chave_duplicidade:'another-sale-key'}),/outro lançamento já registrado/,'edição não pode colidir com uma venda ativa existente');
 
+let fractionalBase=db.create();fractionalBase.campanhas.push({id:'cmp_fractional',nome_mcc:'Campanha fracionária',nome_exibicao:'Produto fracionário',status:'ativa'});
+const fractionalAdded=db.addProvisionalSale(fractionalBase,{campanha_id:'cmp_fractional',data:'2026-10-05',hora:'12:30',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:200,pais_codigo:'US',origem:'FlowTracking',chave_duplicidade:'fractional-flow-id'});fractionalBase=fractionalAdded.base;const fractionalSale=fractionalAdded.sale;
+const fractionalManifest={separacao_temporal:{D_menos_1:{datas_detectadas:['2026-10-05']}},campanhas:[{nome_campanha_exato:'Campanha fracionária',metricas_D_menos_1:{data:{valor:'2026-10-05'},conversoes:{valor:0.98},valor_conversao:{valor:75},moeda:{valor:'BRL'}}}]};
+let fractionalResult=db.importManifest(fractionalBase,fractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}));
+let fractionalStored=fractionalResult.base.vendas_provisorias[0],fractionalAdjustment=db.salesAdjustmentMap(fractionalResult.base).get('cmp_fractional');
+assert.equal(fractionalStored.status,'conciliada','conversão D−1 positiva e fracionária reconhece uma venda');
+assert.deepEqual(JSON.parse(JSON.stringify(fractionalStored.mcc_conversao_fracionaria)),{periodo:'d1',conversoes:0.98,valor_conversao_presente:true,valor_conversao:75},'o registro conserva período, contagem e valor de conversão parcial observados');
+assert.equal(Boolean(fractionalStored.mcc_valor_real_confirmado),false);
+assert.equal(fractionalAdjustment.pendingConversions,0);
+assert.equal(fractionalAdjustment.fractionalValuePendingCount,1,'a venda reconhecida continua sinalizada até confirmar o valor real');
+assert.equal(fractionalAdjustment.commissionAdjustment,0,'o valor fracionário da MCC não é apresentado como comissão real');
+const flowOnlyBase=db.create();flowOnlyBase.campanhas.push({id:'cmp_flow_only',nome_mcc:'Campanha fracionária',nome_exibicao:'Produto fracionário',status:'ativa'});
+const flowOnlyImport=db.importManifest(flowOnlyBase,fractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}));
+assert.equal(db.salesAdjustmentMap(flowOnlyImport.base).get('cmp_flow_only').fractionalValuePendingCount,1,'conversão fracionária sem detalhe manual também mantém o aviso');
+const flowOnlySale=db.addProvisionalSale(flowOnlyImport.base,{campanha_id:'cmp_flow_only',data:'2026-10-05',hora:'12:30',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:240,pais_codigo:'US',origem:'FlowTracking',chave_duplicidade:'flow-only-id',confirmar_valor_real:true});
+assert.equal(flowOnlySale.sale.mcc_valor_real_confirmado,true,'a primeira venda recebida do FlowTracking confirma o valor real da conversão fracionária');
+assert.equal(db.salesAdjustmentMap(flowOnlySale.base).get('cmp_flow_only').fractionalValuePendingCount,0);
+assert.equal(db.salesAdjustmentMap(flowOnlySale.base).get('cmp_flow_only').commissionAdjustment,165,'o valor real recebido substitui o valor parcial mesmo quando a venda chega depois do D−1');
+const correctedFractional=db.updateProvisionalSale(fractionalResult.base,{id:fractionalSale.id,campanha_id:'cmp_fractional',data:'2026-10-05',hora:'12:30',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:240,pais_codigo:'US',chave_duplicidade:'fractional-flow-id'});
+fractionalAdjustment=db.salesAdjustmentMap(correctedFractional.base).get('cmp_fractional');
+assert.equal(correctedFractional.sale.mcc_valor_real_confirmado,true,'edição do valor no Faturamento confirma o valor real');
+assert.equal(fractionalAdjustment.fractionalValuePendingCount,0,'o aviso fracionário some após confirmação do valor');
+assert.equal(fractionalAdjustment.commissionAdjustment,165,'o valor confirmado substitui o valor parcial MCC de 75');
+const flowTrackingRefresh=db.addProvisionalSale(correctedFractional.base,{campanha_id:'cmp_fractional',data:'2026-10-05',valor_brl:255,pais_codigo:'US',chave_duplicidade:'fractional-flow-id',confirmar_valor_real:true});
+assert.equal(flowTrackingRefresh.duplicate,true);
+assert.equal(flowTrackingRefresh.updated,true,'nova captura FlowTracking atualiza o lançamento já vinculado');
+assert.equal(flowTrackingRefresh.sale.valor_brl,255);
+assert.equal(flowTrackingRefresh.sale.mcc_valor_real_confirmado,true);
+assert.equal(db.salesAdjustmentMap(flowTrackingRefresh.base).get('cmp_fractional').fractionalValuePendingCount,0);
+fractionalResult=db.importManifest(flowTrackingRefresh.base,fractionalManifest,()=>({date:'2026-10-05',period:'d1',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}),{overwrite:true});
+assert.equal(fractionalResult.base.vendas_provisorias[0].mcc_valor_real_confirmado,true,'reimportar o mesmo retrato MCC preserva a confirmação do valor real');
+assert.equal(db.salesAdjustmentMap(fractionalResult.base).get('cmp_fractional').fractionalValuePendingCount,0);
+const fractionalD0Manifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-10-05']}},campanhas:[{nome_campanha_exato:'Campanha fracionária',metricas_D_zero:{data:{valor:'2026-10-05'},conversoes:{valor:0.98},valor_conversao:{valor:75},moeda:{valor:'BRL'}}}]};
+const fractionalD0=db.importManifest(db.create(),fractionalD0Manifest,()=>({date:'2026-10-05',period:'d0',cells:{A:{value:46300},F:{value:0.98},P:{value:75}}}));
+assert.equal(fractionalD0.base.vendas_provisorias.length,0,'D0 fracionário não confirma venda manual nem inventa lançamento');
+assert.equal(db.salesAdjustmentMap(fractionalD0.base).get(fractionalD0.base.campanhas[0].id).fractionalValuePendingCount,1,'D0 fracionário também sinaliza valor real pendente sem criar uma venda');
+const fractionalD0Manual=db.addProvisionalSale(fractionalD0.base,{campanha_id:fractionalD0.base.campanhas[0].id,data:'2026-10-05',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:200,pais_codigo:'US',chave_duplicidade:'d0-fraction-manual'});
+assert.equal(fractionalD0Manual.sale.status,'provisoria','D0 não fecha o estado oficial da venda manual');
+assert.equal(fractionalD0Manual.sale.mcc_conversao_fracionaria.periodo,'d0');
+assert.equal(db.salesAdjustmentMap(fractionalD0Manual.base).get(fractionalD0.base.campanhas[0].id).pendingConversions,0,'o D0 fracionário é contado uma vez, sem duplicar a venda provisória no total');
+assert.equal(db.salesAdjustmentMap(fractionalD0Manual.base).get(fractionalD0.base.campanhas[0].id).fractionalValuePendingCount,1);
+const fractionalD0Confirmed=db.updateProvisionalSale(fractionalD0Manual.base,{id:fractionalD0Manual.sale.id,campanha_id:fractionalD0.base.campanhas[0].id,data:'2026-10-05',hora:'',produto:'Produto fracionário',plataforma:'FlowTracking',valor_brl:225,pais_codigo:'US'});
+assert.equal(db.salesAdjustmentMap(fractionalD0Confirmed.base).get(fractionalD0.base.campanhas[0].id).fractionalValuePendingCount,0,'o ajuste no Faturamento também libera o aviso vindo de D0');
+assert.equal(db.salesAdjustmentMap(fractionalD0Confirmed.base).get(fractionalD0.base.campanhas[0].id).commissionAdjustment,150,'o valor real substitui a comissão fracionária D0');
+
 const oldAccounts=db.create();
 oldAccounts.campanhas.push(
   {id:'old-a',nome_mcc:'Campanha antiga A',nome_exibicao:'Campanha antiga A',status:'ativa',conta_sufixo:'1234'},

@@ -17,7 +17,7 @@ function setup(rows,preferences){
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,referenceDate:'2026-09-30',
-    manifestCampaignCount:54,baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,
+    manifestCampaignCount:54,baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,fractionalSaleCount:0,
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args])}});
@@ -78,15 +78,20 @@ test('overview reserves an empty first card and combines daily profit with campa
   s.snapshot.activeCount=1;s.snapshot.pausedCount=1;
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
 });
-test('overview keeps a permanent information icon and changes pending-sale wording by count',()=>{
+test('overview keeps a permanent information icon and distinguishes fractional sales awaiting real value',()=>{
   const s=setup([row('Campanha','ativa',0)]);
   s.controller.render();let kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/class="kpi-label">Venda provisória,?<\/span>[\s\S]*<strong class="kpi-value">1<\/strong>[\s\S]*pendente de confirmação/);
-  assert.match(kpis,/overview-info-icon[^>]+aria-label="Informações sobre vendas provisórias"/);
+  assert.match(kpis,/overview-info-icon[^>]+aria-label="Informações sobre vendas provisórias e fracionárias"/);
   assert.match(kpis,/class="dot warn overview-kpi-pending-dot"/,'pendências devem manter o ponto âmbar');
   s.snapshot.pendingSaleCount=3;s.controller.render();kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">3<\/strong>[\s\S]*pendentes de confirmação/);
-  s.snapshot.pendingSaleCount=0;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  s.snapshot.pendingSaleCount=1;s.snapshot.fractionalSaleCount=1;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/class="kpi-label">Venda fracionária,?<\/span>[\s\S]*<strong class="kpi-value">2<\/strong>[\s\S]*1 com valor real a confirmar · 1 pendente\(s\) de MCC/);
+  assert.match(kpis,/FlowTracking ou edite o valor na linha vinculada do Faturamento/,'o cartão explica as duas formas de confirmar o valor real');
+  s.snapshot.pendingSaleCount=0;s.snapshot.fractionalSaleCount=1;s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/class="kpi-label">Venda fracionária,?<\/span>[\s\S]*<strong class="kpi-value">1<\/strong>[\s\S]*1 com valor real a confirmar/);
+  s.snapshot.fractionalSaleCount=0;s.controller.render();kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">0<\/strong>/);assert.match(kpis,/class="dot overview-kpi-pending-dot"/,'sem pendências o ponto deve ficar verde');assert.match(kpis,/overview-info-icon/);
   s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.controller.render();kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/Histórico não carregado[\s\S]*Atualização indisponível/);

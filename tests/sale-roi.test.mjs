@@ -66,7 +66,7 @@ test('manual adapter persists sale and ROI photograph together; failed persisten
   const ctx=vm.createContext({window:{},structuredClone});
   for(const file of ['database.js','overview-domain.js','overview/sale-roi-domain.js'])vm.runInContext(await readFile(new URL('../src/'+file,import.meta.url),'utf8'),ctx);
   const nodes=new Map([['#saleCampaign',{value:'campaign-a'}],['#saleIdentifier',{value:'synthetic-id'}],['#saleSaveMessage',{}]]),initial=fixture();let fail=false,writes=0,closes=0;
-  Object.assign(ctx,{CampaignDatabase:ctx.window.CampaignDatabase,OverviewDomain:ctx.window.OverviewDomain,SaleRoiDomain:ctx.window.SaleRoiDomain,
+  Object.assign(ctx,{CampaignDatabase:ctx.window.CampaignDatabase,OverviewDomain:ctx.window.OverviewDomain,SaleRoiDomain:ctx.window.SaleRoiDomain,saleSource:'flowtracking',
     state:{database:initial,rate:5,saleCountry:'ZZ',saleDraft:{date:'2026-10-05',hour:'10:00',amount:200,product:'Oferta',platform:'Teste'}},
     $:key=>nodes.get(key),sha256:async()=> 'unique',closeSaleModal:()=>closes++,showTotals:()=>{},renderStatus:()=>{},toast:()=>{},
     persistLocalBase:async({provisionalBillingSales})=>{writes++;assert.equal(provisionalBillingSales[0],ctx.state.database.vendas_provisorias.at(-1));assert.equal(provisionalBillingSales[0].roi_no_registro.investment_brl,150);if(fail)throw Error('synthetic persistence failure')}});

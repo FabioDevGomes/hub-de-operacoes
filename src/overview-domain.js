@@ -11,7 +11,10 @@
     const temporal=manifest?.separacao_temporal||{},fallbackDates={d0:manifestDate(temporal.D_zero?.datas_detectadas?.[0]),d1:manifestDate(temporal.D_menos_1?.datas_detectadas?.[0])},dateFields={d0:'metricas_D_zero',d1:'metricas_D_menos_1'},dates=new Set(Object.values(fallbackDates).filter(Boolean)),rows=[];
     for(const campaign of manifest?.campanhas||[])for(const[period,field]of Object.entries(dateFields)){
       const metrics=campaign?.[field];if(!metrics)continue;
-      const date=manifestDate(metrics.data,fallbackDates[period]);if(!date)continue;dates.add(date);
+      const date=manifestDate(metrics.data,fallbackDates[period]);if(!date)continue;
+      // A date supplied by another MCC does not make this campaign's missing period authoritative.
+      if(Array.isArray(campaign.datas_coleta)&&!campaign.datas_coleta.some(value=>manifestDate(value)===date))continue;
+      dates.add(date);
       const observed=metrics.presente!==false,retained=period==='d0'&&metrics.retida_no_dia===true,present=observed||retained,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),factor=currency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
       let investment=manifestField(metrics.custo_total),costCurrency=currency;
       if(period==='d0'){

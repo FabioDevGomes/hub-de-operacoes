@@ -8,6 +8,7 @@ import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
+import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
 
 const $ = (selector, root) => root.querySelector(selector);
 const $$ = (root, selector) => [...root.querySelectorAll(selector)];
@@ -20,7 +21,7 @@ const dateTime = value => {
 export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
   let latestCaptureByOffer = new Map();
-  let selectedCaptureId = '', sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '';
+  let selectedCaptureId = '', sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false;
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
   const columns = mountCurationColumns({root, screen:'clickbank', preferences});
 
@@ -45,8 +46,34 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     return null;
   }
   function metricText(metric) { return metric?.raw || '—'; }
+  function pageTypeText(item) { return salesPageTypeLabel(metadataFor(item).salesPageType); }
   function movementClass(item) { return item.movement === 'up' ? 'movement-up' : item.movement === 'down' ? 'movement-down' : ''; }
   function trendLatest(item) { return Trends.latestAssessment(trendsFor(item).assessments); }
+  function updateSheetSaveButton() {
+    const button=$('#saveSheetButton',root);
+    const reasons={
+      trends:['Salvar a avaliação de Google Trends.','Salvar avaliação de Google Trends'],
+      glimpse:['Salvar a análise Glimpse.','Salvar análise Glimpse'],
+      images:['As classificações e candidatas de Imagens são salvas automaticamente em cada ação.','As avaliações de Google Imagens são salvas automaticamente'],
+      history:['A aba Histórico é somente leitura.','Histórico somente leitura'],
+    };
+    const [description,label]=reasons[activeTab]||reasons.history;
+    button.hidden=false;
+    button.disabled=activeTab==='trends'?savingTrend:activeTab!=='glimpse';
+    button.title=description;
+    button.setAttribute('aria-label',label);
+  }
+  function renderTrendResultButtons(item, latest) {
+    TrendsUI.renderResultButtons($('#trendResults',root),pendingTrendStatus||latest?.status||'',status=>{
+      pendingTrendStatus=status;
+      $('#trendMessage',root).textContent='Resultado selecionado. Clique em Salvar para registrar.';
+      $('#trendMessage',root).classList.remove('error');
+      $('#sheetMessage',root).textContent='';
+      $('#sheetMessage',root).classList.remove('error');
+      updateSheetSaveButton();
+      renderTrendResultButtons(item,latest);
+    });
+  }
   function imageProgress(item) { return Images.progress(imagesFor(item).assessments,metadataFor(item).manualCountries || []); }
   function trendRank(item) { return ({up:7,stable:6,down:5,low_volume:4,point_peak:3,inconclusive:2,no_data:1})[trendLatest(item)?.status] || 0; }
   function imageRank(item) {
@@ -79,6 +106,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       const get=(item)=>sortKey==='movement'?item.rankDelta??Number.NEGATIVE_INFINITY:
         sortKey==='rank'?item.rank:
         sortKey==='lastSeen'?collectionTime(latestCaptureByOffer.get(item.offerKey))??Number.NEGATIVE_INFINITY:
+        sortKey==='future'?pageTypeText(item).toLocaleLowerCase():
         sortKey==='offerName'||sortKey==='seller'?item[sortKey].toLocaleLowerCase():
         sortKey==='trends'?trendRank(item):sortKey==='glimpse'?glimpseRank(item):sortKey==='images'?imageRank(item):item[sortKey]?.value??Number.NEGATIVE_INFINITY;
       const left=get(a),right=get(b),compare=typeof left==='string'?left.localeCompare(right):left-right;
@@ -90,7 +118,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
         : `#${escape(item.rank)}`}</td><td class="offer-name">${escape(item.offerName)}</td><td>${escape(item.seller)}</td>
       <td>${trendBadge(item)}</td><td>${glimpseBadge(item)}</td><td>${imageBadge(item)}</td>
       <td class="number">${escape(metricText(item.average))}</td><td class="number">${escape(metricText(item.initial))}</td>
-      <td class="number">${escape(metricText(item.future))}</td><td class="number">${escape(metricText(item.epc))}</td>
+      <td class="page-type-cell">${escape(pageTypeText(item))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
       <td class="number ${movementClass(item)}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
     columns.apply();
@@ -105,9 +133,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
 
   function renderTrends(item) {
     const record=trendsFor(item),latest=Trends.latestAssessment(record.assessments),metadata=metadataFor(item),countries=metadata.manualCountries||[],selected=new Set(latest?.countries||[]);
-    const dtcCapture=metadata.dtcCountryCapture,dtcCountries=new Set(dtcCapture?.countries||[]),dtcSource=$('#dtcCountrySource',root);
-    dtcSource.textContent=dtcCapture?`Lista capturada da DTC · ${dateTime(dtcCapture.capturedAt)}.`:'';
-    dtcSource.classList.toggle('hidden',!dtcCapture);
+    const dtcCountries=new Set(metadata.dtcCountryCapture?.countries||[]);
     const offerLink=$('#openClickBankOffer',root),offerUnavailable=$('#clickBankOfferUnavailable',root),offerUrl=clickBankOfferDetailsUrl(item.offerId);
     if(offerUrl){offerLink.href=offerUrl;offerLink.setAttribute('aria-label',`Abrir detalhes ClickBank para ${item.offerName}`);offerLink.classList.remove('hidden');offerUnavailable.classList.add('hidden');}
     else{offerLink.removeAttribute?.('href');offerLink.classList.add('hidden');offerUnavailable.classList.remove('hidden');}
@@ -118,10 +144,19 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       pendingProductAge=value;
       $$ (root,'[data-trends-product-age]').forEach(button=>{button.classList.toggle('selected',button.dataset.trendsProductAge===value);button.setAttribute('aria-pressed',String(button.dataset.trendsProductAge===value))});
     });
-    TrendsUI.renderResultButtons($('#trendResults',root),latest?.status||'',status=>{
-      const chosen=$$ (root,'#trendCountries [data-country].selected').map(button=>button.dataset.country);
-      actions.saveTrend(item.offerKey,status,{term:$('#trendsTerm',root).value.trim()||item.offerName,countries:chosen,productAge:pendingProductAge});
+    const salesPageType=metadata.salesPageType||null,salesPageTypeActions=$('#salesPageTypeActions',root);
+    salesPageTypeActions.innerHTML=[...SALES_PAGE_TYPES.map(value=>({value,label:value.toUpperCase()})),{value:'',label:'Não definido'}].map(({value,label})=>
+      `<button type="button" class="trends-country-action ${salesPageType===value||(!salesPageType&&!value)?'selected':''}" data-sales-page-type="${value}" aria-pressed="${salesPageType===value||(!salesPageType&&!value)}">${label}</button>`
+    ).join('');
+    $$ (root,'[data-sales-page-type]').forEach(button=>{
+      button.onclick=()=>{
+        const controls=$$ (root,'[data-sales-page-type]');controls.forEach(control=>control.disabled=true);
+        Promise.resolve(actions.saveSalesPageType(item.offerKey,button.dataset.salesPageType||null)).then(saved=>{
+          if(!saved)controls.forEach(control=>control.disabled=false);
+        }).catch(()=>controls.forEach(control=>control.disabled=false));
+      };
     });
+    renderTrendResultButtons(item,latest);
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates',root),{
       candidates:record.keywordCandidates||[],variant:'positive',searchContext:'Google Trends',showRemoveForSaved:true,
       onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index),
@@ -166,12 +201,14 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     $('#allTrendsHistory',root).innerHTML=$('#trendsHistory',root).innerHTML;
     $('#allImagesHistory',root).innerHTML=$('#imagesHistory',root).innerHTML;
     if(activeTab==='glimpse')actions.openGlimpse(item);
+    updateSheetSaveButton();
   }
   function openSheet(item,tab='trends') {
-    activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';
+    activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;
+    $('#trendMessage',root).textContent='';$('#trendMessage',root).classList.remove('error');
     sheet.classList.remove('hidden');renderSheet();
     sheet.scrollTop=0;
-    $('#sheetMessage',root).textContent='';
+    $('#sheetMessage',root).textContent='';$('#sheetMessage',root).classList.remove('error');
   }
   function closeSheet() { sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }
   function switchTab(tab) { activeTab=tab;renderSheet(); }
@@ -184,7 +221,9 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     const selected=selectedCapture(),previous=previousCapture(selected);
     $('#captureSelect',root).innerHTML=state.captures.map(item=>`<option value="${escape(item.captureId)}">${escape(dateTime(item.capturedAt))} · ${escape(item.offers.length)} ofertas · posições ${escape(item.page.start??'—')}–${escape(item.page.end??'—')}</option>`).join('');
     $('#captureSelect',root).value=selectedCaptureId;$('#captureSelect',root).disabled=state.captures.length<2;
-    $('#captureInfo',root).innerHTML=selected?`<b>${escape(selected.listName||'Top Offers')}</b> · Captura de ${escape(dateTime(selected.capturedAt))} · ${escape(selected.offers.length)} posições registradas${selected.page.total==null?'':` de ${escape(selected.page.total)} resultados`}.${selected.page.completeUniverse?' Lista completa.':''}`:'Nenhuma captura salva.';
+    const resultCount=$('#captureResultCount',root),hasResultCount=selected?.page.total!=null;
+    resultCount.textContent=hasResultCount?`${new Intl.NumberFormat('pt-BR').format(Number(selected.page.total))} resultados${selected.page.completeUniverse?' · Lista completa':''}`:'';
+    resultCount.hidden=!hasResultCount;
     $('#captureCount',root).textContent=String(state.captures.length);$('#offerCount',root).textContent=String(selected?.offers.length||0);
     const compared=selected&&previous?compareCapturedOffers(selected.offers,previous.offers):[],moved=compared.filter(item=>item.movement==='up'||item.movement==='down').length;
     $('#movementCount',root).textContent=previous?String(moved):'—';renderTable(selected,previous);
@@ -212,7 +251,31 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value='';};
   importDialog.addEventListener('close',()=>importDialog.classList.add('hidden'));
   $('#closeSheet',root).onclick=closeSheet;
-  $('#finishImages',root).onclick=closeSheet;
+  $('#saveSheetButton',root).onclick=async()=>{
+    const item=activeOffer();
+    if(!item||savingTrend||activeTab!=='trends')return;
+    const status=pendingTrendStatus||trendLatest(item)?.status;
+    if(!status){$('#trendMessage',root).textContent='Selecione um resultado da análise antes de salvar.';$('#trendMessage',root).classList.remove('error');return;}
+    savingTrend=true;updateSheetSaveButton();
+    const chosen=$$ (root,'#trendCountries [data-country].selected').map(button=>button.dataset.country);
+    try {
+      const saved=await actions.saveTrend(item.offerKey,status,{term:$('#trendsTerm',root).value.trim()||item.offerName,countries:chosen,productAge:pendingProductAge});
+      if(saved){
+        pendingTrendStatus='';
+        const fresh=activeOffer();
+        if(fresh)renderTrendResultButtons(fresh,trendLatest(fresh));
+        $('#trendMessage',root).textContent='';
+        $('#sheetMessage',root).textContent='Avaliação de Google Trends salva.';
+        $('#sheetMessage',root).classList.remove('error');
+      } else {
+        $('#trendMessage',root).textContent='Não foi possível salvar a avaliação. Tente novamente.';
+        $('#trendMessage',root).classList.add('error');
+      }
+    } catch {
+      $('#trendMessage',root).textContent='Não foi possível salvar a avaliação. Tente novamente.';
+      $('#trendMessage',root).classList.add('error');
+    } finally { savingTrend=false;updateSheetSaveButton(); }
+  };
   $('.tabs',sheet).addEventListener('click',event=>{const button=event.target.closest('[data-tab]');if(button)switchTab(button.dataset.tab);});
   $('#rows',root).addEventListener('click',event=>{
     const decisionButton=event.target.closest('[data-decision-key]');
@@ -228,7 +291,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     const button=event.target.closest('[data-country]');if(!button)return;
     const selected=$$ (root,'#trendCountries [data-country].selected');
     if(!button.classList.contains('selected')&&selected.length>=5){$('#trendMessage',root).textContent='É possível registrar até cinco países por avaliação.';return;}
-    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));$('#trendMessage',root).textContent='';
+    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));$('#trendMessage',root).textContent=pendingTrendStatus?'Resultado selecionado. Clique em Salvar para registrar.':'';
   });
   async function submitManualCountry() {
     const input=$('#manualCountry',root),item=activeOffer();if(!item)return;

@@ -1,4 +1,4 @@
-@import url("/table-headers.css?v=4");
+@import url("/table-headers.css?v=5");
 @import url("./trends-typography.css?v=1");
 @import url("./curation-header-actions.css?v=4");
 .offer-id-link{color:#9fc9ff;text-decoration:none;font-variant-numeric:tabular-nums}.offer-id-link:hover,.offer-id-link:focus-visible{text-decoration:underline}
@@ -20,14 +20,33 @@
 
 .trends-keyword-candidate{font-size:.9rem}.image-candidate{font-size:.9rem;font-weight:750}.image-candidate.saved{font-size:.9rem}
 
-/* Decisões de curadoria compartilhadas: intenção em amarelo, campanha no ar em verde. */
-.decision-badge.launch,.decision-option.launch{border-color:#8a6f18;background:#332b0f;color:#ffe46d}
-.decision-badge.live,.decision-option.live{border-color:#276249;background:#102d24;color:#83e5bb}
+/* Padrão semântico único da coluna Decisão em todas as listas de Curadoria. */
+:root{
+  --curation-decision-neutral-bg:#182337;
+  --curation-decision-neutral-text:#ccd4df;
+  --curation-decision-launch-bg:#332b0f;
+  --curation-decision-launch-text:#ffe46d;
+  --curation-decision-live-bg:#102d24;
+  --curation-decision-live-text:#83e5bb;
+  --curation-decision-review-bg:#2a2113;
+  --curation-decision-review-text:#ffd99e;
+  --curation-decision-hide-bg:#301823;
+  --curation-decision-hide-text:#ffb5c3;
+  --curation-decision-launch-row:rgba(171,130,35,.2);
+  --curation-decision-launch-row-hover:rgba(190,145,40,.32);
+  --curation-decision-live-row:rgba(16,74,54,.25);
+  --curation-decision-live-row-hover:rgba(20,92,66,.34);
+}
+.decision-badge.undefined,.decision-option.undefined{border-color:transparent;background:var(--curation-decision-neutral-bg);color:var(--curation-decision-neutral-text)}
+.decision-badge.launch,.decision-option.launch{border-color:#8a6f18;background:var(--curation-decision-launch-bg);color:var(--curation-decision-launch-text)}
+.decision-badge.live,.decision-option.live{border-color:#276249;background:var(--curation-decision-live-bg);color:var(--curation-decision-live-text)}
+.decision-badge.review,.decision-option.review{border-color:#684f25;background:var(--curation-decision-review-bg);color:var(--curation-decision-review-text)}
+.decision-badge.hide,.decision-option.hide{border-color:#714153;background:var(--curation-decision-hide-bg);color:var(--curation-decision-hide-text)}
 /* #rows specificity keeps one decision color across screens despite local row/hover styles. */
-#rows tr.decision-row-launch>td{background:rgba(171,130,35,.2)}
-#rows tr.decision-row-live>td{background:rgba(16,74,54,.25)}
-#rows tr.decision-row-launch:hover>td{background:rgba(190,145,40,.32)!important}
-#rows tr.decision-row-live:hover>td{background:rgba(20,92,66,.34)!important}
+#rows tr.decision-row-launch>td{background:var(--curation-decision-launch-row)}
+#rows tr.decision-row-live>td{background:var(--curation-decision-live-row)}
+#rows tr.decision-row-launch:hover>td{background:var(--curation-decision-launch-row-hover)!important}
+#rows tr.decision-row-live:hover>td{background:var(--curation-decision-live-row-hover)!important}
 .decision-option.selected.launch{outline-color:#ffe46d}
 .decision-option.selected.live{outline-color:#34d399}
 
@@ -69,6 +88,13 @@ button.image-search-button[data-manager-image-search],button.image-search-button
 button.image-search-button::after,#managerFinishImages::after,#topFinishImages::after{content:"→";font-weight:800}
 button.image-search-button:hover,#managerFinishImages:hover,#topFinishImages:hover,button.image-search-button:focus-visible,#managerFinishImages:focus-visible,#topFinishImages:focus-visible{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 5px 15px rgba(37,117,205,.32);outline:2px solid rgba(101,169,255,.45);outline-offset:2px}
 button.image-search-button:active,#managerFinishImages:active,#topFinishImages:active{transform:translateY(0);filter:brightness(.98)}
+/* Na ficha ClickBank, as ações de busca ficam em formato de link; os callbacks continuam sendo ações de botão. */
+#offerSheet #imageCountries button.image-search-button{appearance:none;display:inline;min-height:0;width:auto;gap:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#9ec5f4;cursor:pointer;font:inherit;line-height:inherit;white-space:normal;text-decoration:underline;text-underline-offset:2px;transform:none;filter:none}
+#offerSheet #imageCountries button.image-search-button::after{content:none}
+#offerSheet #imageCountries button.image-search-button:hover{background:transparent;box-shadow:none;color:#fff;text-decoration-thickness:2px;transform:none;filter:none}
+#offerSheet #imageCountries button.image-search-button:focus-visible{background:transparent;box-shadow:none;color:#fff;outline:2px solid var(--cyan,#22d3ee);outline-offset:3px;transform:none;filter:none}
+#offerSheet #imageCountries button.image-search-button:active{transform:none;filter:none}
+@media(max-width:760px){#offerSheet #imageCountries button.image-search-button{align-self:flex-end}}
 .image-country-card .image-mixed-editor .btn.primary{min-height:29px;padding:4px 12px;font-size:.9rem;line-height:1.2}
 button.btn.image-result-action{min-height:34px;padding:5px 6px;font-size:.74rem;line-height:1.4}
 .image-candidate-summary-head b,.image-mixed-copy b{font-weight:400}
@@ -93,10 +119,11 @@ body:has(nav[data-hub-sidebar-active="manager"]) #rows td,body:has(nav[data-hub-
 #offerSheet:has([data-panel="glimpse"]:not(.hidden)){position:absolute;inset:0 auto auto 0;width:100%;height:auto;min-height:100vh;overflow:visible}
 body:has(#offerSheet:not(.hidden) [data-panel="glimpse"]:not(.hidden)){overflow:auto!important}
 
-/* Badge de decisão compartilhado: tipografia leve, borda neutra e estados sem overrides por tela. */
-button.decision-badge{border:1px solid #40516b;font-weight:400;cursor:pointer}
-html body .decision-badge{box-shadow:0 3px 9px rgba(0,0,0,.16)}
-html body #rows tr>td:last-child>.status{box-shadow:0 3px 9px rgba(0,0,0,.16)}
+/* Badge de decisão compartilhado: cápsula sem borda, texto regular e sombra padrão da tabela. */
+button.decision-badge{border:0;font-weight:400;cursor:pointer}
+html body .decision-badge{box-shadow:0 4px 9px rgba(0,0,0,.55)}
+/* SpyHero mantém seus quatro estados manuais; só a apresentação acompanha o padrão da coluna. */
+html body #rows tr td:nth-last-child(2)>.status{padding:5px 9px;border:0;font-size:.74rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55)}
 
 /* Google Trends nas fichas: E-commerce GM é a referência visual compartilhada. */
 #offerSheet .trends-search-row{display:flex;gap:10px;align-items:end}

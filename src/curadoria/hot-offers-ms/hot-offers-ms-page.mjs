@@ -1,13 +1,13 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261006-last-collection';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261006-movement-variation';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
 
 const root = document.querySelector('#hotOffersMsRoot');
 let offers = [], collections = [], snapshots = [], decisions = [], trends = [], images = [], glimpse = [];

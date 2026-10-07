@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
-  const [manager,top,page,hotOffersPage,styles,shortcut,glimpsePage,glimpseStyles,peopleAlsoSearchStyles,distPage,distScript,distHighlightStyles,distGlimpseStyles,clickbankPage,clickbankController,smartadvPage,smartadvController,headerControls,distHeaderControls,distSharedStyles]=await Promise.all([
+  const [manager,top,page,hotOffersPage,styles,shortcut,glimpsePage,clipboard,glimpseStyles,peopleAlsoSearchStyles,distPage,distScript,distClipboard,distHighlightStyles,distGlimpseStyles,clickbankPage,clickbankController,smartadvPage,smartadvController,headerControls,distHeaderControls,distSharedStyles]=await Promise.all([
     readFile(new URL('../src/curadoria/gerentes/index.html',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/top-performance/index.html',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/index.html',import.meta.url),'utf8'),
@@ -11,10 +11,12 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
     readFile(new URL('../src/curadoria/trends-sheet.css',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse-shortcut.mjs',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/glimpse-page.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../src/curadoria/glimpse/clipboard.mjs',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/glimpse.css',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/glimpse/people-also-search.css',import.meta.url),'utf8'),
     readFile(new URL('../dist/curadoria/glimpse/index.html',import.meta.url),'utf8'),
     readFile(new URL('../dist/curadoria/glimpse/glimpse-page.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../dist/curadoria/glimpse/clipboard.mjs',import.meta.url),'utf8'),
     readFile(new URL('../dist/curadoria/glimpse/people-also-search.css',import.meta.url),'utf8'),
     readFile(new URL('../dist/curadoria/glimpse/glimpse.css',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/clickbank-top-offers/index.html',import.meta.url),'utf8'),
@@ -27,8 +29,19 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   ]);
   assert.equal(distPage,page,'a página Glimpse servida corresponde à fonte atual');
   assert.equal(distScript,glimpsePage,'o renderizador Glimpse servido corresponde à fonte atual');
+  assert.equal(distClipboard,clipboard,'o leitor de área de transferência servido corresponde à fonte');
   assert.equal(distHighlightStyles,peopleAlsoSearchStyles,'os estilos do destaque são publicados pelo build');
   assert.equal(distGlimpseStyles,glimpseStyles,'os estilos do layout Glimpse são publicados pelo build');
+  const [embedHostCss,distEmbedHostCss]=await Promise.all([
+    readFile(new URL('../src/curadoria/glimpse/glimpse-embed-host.css',import.meta.url),'utf8'),
+    readFile(new URL('../dist/curadoria/glimpse/glimpse-embed-host.css',import.meta.url),'utf8')
+  ]);
+  assert.equal(distEmbedHostCss,embedHostCss,'o CSS compartilhado dos hosts é publicado pelo build');
+  assert.ok(clickbankPage.includes('../glimpse/glimpse-embed-host.css?v=1')&&smartadvPage.includes('../glimpse/glimpse-embed-host.css?v=1'),'Top Offers CB e SmartAdv importam o mesmo CSS de integração');
+  assert.match(clickbankPage,/<section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'ClickBank mantém o iframe como filho direto do painel compartilhado');
+  assert.match(smartadvPage,/<section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'SmartAdv usa o mesmo painel direto, sem cartão hospedeiro');
+  assert.match(embedHostCss,/#offerSheet \.glimpse-embed-panel>\.glimpse-embedded-frame\{[^}]*max-height:none[^}]*border:0[^}]*background:transparent\}/,'o CSS compartilhado remove recorte, borda e fundo do iframe');
+  assert.match(embedHostCss,/#offerSheet:has\(\.glimpse-embed-panel:not\(\.hidden\)\)\{[^}]*overflow:visible\}/,'o host expande o painel Glimpse para o fluxo da página');
   assert.equal(distHeaderControls,headerControls,'o controle compartilhado do cabeçalho é publicado pelo build');
   assert.equal(distSharedStyles,styles,'os estilos dos cabeçalhos hospedeiros correspondem à fonte');
   assert.match(manager,/data-sort="glimpse"/);
@@ -36,7 +49,15 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(top,/data-open-top-glimpse/);
   assert.match(top,/glimpse-storage\.mjs/);
   assert.match(page,/Colar dados do Glimpse \/ Google Trends/);
-  assert.match(page,/Ao colar aqui, a análise é feita e salva automaticamente/);
+  assert.match(page,/Copie o conteúdo da página\. A análise é salva automaticamente/);
+  assert.match(page,/id="pasteAnalyze"[^>]*>Colar e analisar</,'a ficha ClickBank deve permitir analisar a colagem direto da área de transferência');
+  assert.match(page,/id="manualPasteToggle"[^>]*>Colar manualmente</,'a alternativa manual continua disponível aos hosts que a mantêm');
+  assert.match(glimpsePage,/clickbankOrigin=origin==='clickbank-top-offers'[\s\S]*?manualPasteToggle'\)\.classList\.add\('hidden'\)/,'Top Offers CB usa somente a captura por clipboard e oculta o fallback manual');
+  assert.match(glimpsePage,/if\(clickbankOrigin\)\{[^}]*\$\('\.footer'\)\?\.remove\(\)/,'a ficha Top Offers CB remove botão e faixa Cancelar sem afetar os demais hosts');
+  assert.match(glimpsePage,/const cancelButton=\$\('#cancel'\);if\(cancelButton\)cancelButton\.onclick=/,'a ação de retorno continua conectada nos outros hosts');
+  assert.match(glimpsePage,/Clipboard\.readClipboardText\(navigator\.clipboard\)/,'a área de transferência só é lida pela ação explícita do usuário');
+  assert.match(glimpsePage,/if\(!clickbankOrigin\)setManualPaste\(true\)/,'falha de clipboard só revela o fallback manual nos hosts que o mantêm');
+  assert.match(glimpsePage,/clickbankOrigin\?'Não foi possível acessar a área de transferência\. Permita o acesso no navegador e tente novamente\.'/,'na Top Offers CB, falha de clipboard orienta a permitir o acesso e tentar novamente');
   assert.match(page,/>Analisar novamente</);
   assert.match(page,/Indicadores principais/);
   assert.match(page,/id="v2Details"/);
@@ -52,8 +73,8 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(page,/id="peopleAlsoSearchPanel"[\s\S]*?<h2 id="peopleAlsoSearchTitle">People Also Search<\/h2>/,'People Also Search ganha um painel destacado próprio');
   assert.match(page,/<header class="hero"/,'a versão independente do Glimpse mantém cabeçalho e contexto próprios');
   assert.match(page,/<div class="hero-actions"><button class="button finish-button" id="finish"[^>]*>Concluir<\/button><button class="button back-button" id="cancelTop"/,'na Lista de Gerente, Concluir fica no cabeçalho imediatamente antes do retorno sem borda');
-  assert.match(page,/<footer class="footer"><button class="button" id="cancel"[^>]*>Cancelar<\/button><\/footer>/,'Cancelar permanece disponível sem duplicar Concluir no rodapé');
-  assert.match(glimpsePage,/if\(embedded\)\{document\.documentElement\.classList\.add\('embedded'\);document\.querySelector\('\.hero'\)\?\.classList\.add\('hidden'\)\}/,'o modo incorporado ativa o layout compacto e oculta o cabeçalho duplicado');
+  assert.match(page,/<footer class="footer"><button class="button" id="cancel"[^>]*>Cancelar<\/button><\/footer>/,'o rodapé permanece para as outras telas que compartilham o Glimpse');
+  assert.match(glimpsePage,/if\(embedded\)\{document\.documentElement\.classList\.add\('embedded'\);if\(clickbankOrigin\)document\.documentElement\.classList\.add\('clickbank-embedded'\);if\(smartadvOrigin\)document\.documentElement\.classList\.add\('smartadv-embedded'\);if\(wideOfferOrigin\)document\.documentElement\.classList\.add\('wide-offer-embedded'\);document\.querySelector\('\.hero'\)\?\.classList\.add\('hidden'\)\}/,'ClickBank e SmartAdv ativam a composição integrada compartilhada');
   assert.match(glimpsePage,/document\.documentElement\.classList\.add\('embedded'\)/,'o modo incorporado ativa o layout compacto compartilhado');
   assert.match(glimpsePage,/function resizeRawInput\(\)/,'a área colada aumenta de altura conforme o conteúdo');
   assert.match(glimpsePage,/type:'hub-glimpse-resize',height/,'o Glimpse informa ao host a altura completa do conteúdo');
@@ -73,6 +94,9 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(glimpseStyles,/strong\[data-direction="positive"\]\{color:var\(--green\)\}/);
   assert.match(glimpseStyles,/html\.embedded\{overflow-x:hidden;overflow-y:auto\}/,'o componente mantém seu fallback vertical e evita rolagem horizontal; o host acompanha a altura comunicada');
   assert.match(glimpseStyles,/html\.embedded \.input-card\{max-width:920px\}/,'o quadro de colagem incorporado usa largura mais compacta');
+  assert.match(glimpseStyles,/html\.wide-offer-embedded \.input-card\{width:100%;max-width:none\}/,'o quadro de colagem das fichas CB e SmartAdv ocupa toda a largura disponível');
+  assert.match(glimpsePage,/if\(clickbankOrigin\)document\.documentElement\.classList\.add\('clickbank-embedded'\)/,'a classe para integrar o fundo do iframe é exclusiva da origem ClickBank');
+  assert.match(glimpseStyles,/html\.wide-offer-embedded,html\.wide-offer-embedded body\{background:transparent!important\}/,'as fichas ClickBank e SmartAdv deixam o fundo do host preencher os espaços laterais');
   assert.match(glimpseStyles,/\.button\.finish-button\{background:linear-gradient\(135deg,#278de9,#38b9c5\);border-color:transparent;color:#03101c\}/,'Concluir fica azul-claro sem recuperar uma borda decorativa');
   assert.match(glimpseStyles,/overflow-y:hidden;resize:none/,'a área de texto não cria rolagem vertical interna');
   assert.match(glimpseStyles,/html\.embedded \.input-card \.actions,html\.embedded \.footer\{width:min\(100%,720px\)/,'as ações compactas continuam alinhadas dentro do iframe');
@@ -80,7 +104,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(styles,/body:has\(#offerSheet:not\(\.hidden\) \[data-panel="glimpse"\]:not\(\.hidden\)\)\{overflow:auto!important\}/,'a rolagem da ficha Glimpse fica na janela externa');
   assert.match(peopleAlsoSearchStyles,/\.people-also-search\{border-color:rgba\(90,177,255,\.72\)/,'o painel recebe contraste visual para destacar a informação capturada');
   assert.match(glimpsePage,/function reportEmbeddedSave\(saved\)/,'o Glimpse confirma ao host o resultado efetivo do salvamento');
-  assert.match(glimpsePage,/keepOpenAfterSave=embedded&&origin===\'clickbank-top-offers\'/,'Top Offers CB mantém a ficha aberta para exibir a confirmação ao lado de Salvar');
+  assert.match(glimpsePage,/keepOpenAfterSave=embedded&&origin===\'clickbank-top-offers\'/,'Top Offers CB mantém a ficha aberta para exibir a confirmação antes de Salvar');
   assert.match(glimpsePage,/if\(draft&&!await saveAnalysis\(draft\)\)\{if\(keepOpenAfterSave\)reportEmbeddedSave\(false\);return\}/,'falha no armazenamento não retorna nem confirma o salvamento no Top Offers CB');
   assert.match(glimpsePage,/if\(keepOpenAfterSave\)\{reportEmbeddedSave\(true\);return\}/,'sucesso no Top Offers CB confirma sem fechar a ficha');
   assert.match(glimpsePage,/event\.source!==window\.parent\|\|event\.data\?\.type!==\'hub-glimpse-finish\'/,'o iframe aceita Concluir somente de sua janela pai e da mesma origem');
@@ -94,8 +118,8 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(styles,/\.glimpse-host-back\{border:0!important;background:transparent!important\}/,'retorno sem borda preserva foco com outline separado');
   assert.match(styles,/\.glimpse-badge:hover,\.glimpse-badge:focus-visible/);
   assert.match(styles,/filter:brightness\(1\.25\)/);
-  assert.match(manager,/glimpse-shortcut\.mjs\?v=4" data-origin="manager"/);
-  assert.match(top,/glimpse-shortcut\.mjs\?v=4" data-origin="top"/);
+  assert.match(manager,/glimpse-shortcut\.mjs\?v=5" data-origin="manager"/);
+  assert.match(top,/glimpse-shortcut\.mjs\?v=5" data-origin="top"/);
   assert.match(shortcut,/Abrir Glimpse/);
   assert.match(shortcut,/origin==='top'\?topContext\(\):managerContext\(\)/);
   assert.match(shortcut,/overviewTab\?\.remove\(\)/,'a aba Resumo da ficha E-commerce GM deve ser removida sem afetar as demais');
@@ -116,7 +140,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(smartadvController,/event\.source!==frame\.contentWindow/,'SmartAdv mantém a validação da janela da mensagem');
   assert.match(shortcut,/closest\('\[data-open-top-glimpse\]'\)[\s\S]*?event\.preventDefault\(\);event\.stopPropagation\(\)[\s\S]*?row\.click\(\);button\.click\(\)/,'abrir Glimpse pela coluna deve manter a ficha com suas abas e selecionar a aba Glimpse');
   assert.match(glimpsePage,/embedded&&window\.parent!==window/,'a tela embutida deve retornar à ficha, sem navegar para fora');
-  assert.match(glimpsePage,/hub-glimpse-close/,'Concluir/Cancelar no Glimpse embutido deve retornar à ficha');
+  assert.match(glimpsePage,/hub-glimpse-close/,'o fluxo de conclusão do Glimpse embutido continua retornando à ficha pelo controle do host');
   assert.match(glimpsePage,/clickbank-top-offers/,'Glimpse reconhece a origem Top Offers CB, retorna à tela e registra a análise com essa origem');
   assert.match(glimpsePage,/smartadv-offers/,'Glimpse reconhece a origem SmartAdv, retorna à tela e registra a análise com essa origem');
   assert.match(glimpsePage,/offerKey:params\.get\('offerKey'\)/,'a identidade da oferta ClickBank acompanha o retorno e a observabilidade');

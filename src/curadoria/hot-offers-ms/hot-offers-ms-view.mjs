@@ -96,7 +96,7 @@ export function mountHotOffersMsView({root, actions}) {
   }
   function movement(item) {
     const value = item.latestMovement || 'same';
-    return '<span class="pill ' + escape(value) + '">' + escape(Domain.movementLabel(value,item.positionDelta)) + '</span>';
+    return {label:Domain.movementLabel(value,item.positionDelta),className:['new','returned','up','down','same','exited'].includes(value) ? 'movement-' + value : 'movement-same'};
   }
   function affiliation(item) { return '<span class="pill ' + escape(item.affiliationStatus || 'unknown') + '">' + escape(Domain.affiliationLabel(item.affiliationStatus)) + '</span>'; }
   function currentFilters() {
@@ -129,13 +129,13 @@ export function mountHotOffersMsView({root, actions}) {
     if (key === 'category') return '<td>' + escape(item.category || '—') + '</td>';
     if (key === 'affiliation') return '<td>' + affiliation(item) + '</td>';
     if (key === 'countries') return '<td title="' + escape(item.countriesRaw || '') + '">' + escape(countryText(item)) + '</td>';
-    if (key === 'payment') return '<td>' + escape(money(item.payment)) + '</td>';
+    if (key === 'payment') return '<td data-col="payment">' + escape(money(item.payment)) + '</td>';
     if (key === 'created') return '<td>' + escape(sourceDate(item.createdAt)) + '</td>';
     if (key === 'trends') return '<td>' + trendBadge(item) + '</td>';
     if (key === 'images') return '<td>' + imageBadge(item) + '</td>';
     if (key === 'glimpse') return '<td>' + glimpseBadge(item) + '</td>';
-    if (key === 'signal') return '<td>' + signalBadge(item) + '</td>';
-    if (key === 'movement') return '<td>' + movement(item) + '</td>';
+    if (key === 'signal') return '<td data-col="signal">' + signalBadge(item) + '</td>';
+    if (key === 'movement') { const value = movement(item); return '<td data-col="movement" class="number movement-cell ' + escape(value.className) + '">' + escape(value.label) + '</td>'; }
     if (key === 'decision') return '<td>' + Decisions.buttonHtml(decisionFor(item.offerKey).currentStatus,'data-decision-key',escape(item.offerKey)) + '</td>';
     if (key === 'lastSeen') return lastCollectionCell(item.lastSeenAt);
     if (key === 'actions') return '<td><button type="button" class="table-action" data-action="detail" data-key="' + escape(item.offerKey) + '">Abrir</button><button type="button" class="table-action" data-action="hide" data-key="' + escape(item.offerKey) + '">' + (hiddenOffers.has(item.offerKey) ? 'Exibir' : 'Ocultar') + '</button></td>';

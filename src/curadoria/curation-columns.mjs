@@ -15,7 +15,7 @@ export const CURATION_COLUMNS = {
     required: ['offerName'],
     columns: [['rank','Posição'],['offerName','Oferta'],['seller','Vendedor'],['trends','Google Trends'],
       ['glimpse','Glimpse'],['images','Imagens'],['average','Avg $'],['initial','Initial $'],
-      ['future','Future $'],['epc','EPC'],['cvr','CVR'],['gravity','Gravity'],
+      ['future','PAG.'],['epc','EPC'],['cvr','CVR'],['gravity','Gravity'],
       ['movement','Variação'],['decision','Decisão'],['lastSeen','Última coleta']],
   },
 };

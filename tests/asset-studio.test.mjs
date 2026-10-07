@@ -21,6 +21,15 @@ assert.ok(app.includes("async function setFaviconBlob")&&app.includes("$('#favic
 assert.ok(!app.includes('removeLightBackground'),'remoção de fundo ainda está ativa');
 assert.ok(html.includes('data-hub-sidebar-active="asset-studio"')&&html.includes('data-hub-sidebar-products'),'Asset Studio não monta o menu compartilhado nem marca a rota ativa');
 assert.ok(html.includes('/sidebar-component.js')&&html.includes('/sidebar-component.css'),'Asset Studio não carrega o componente lateral compartilhado');
+const uploadPanel=html.match(/<section class="panel">([\s\S]*?)<\/section>/)?.[1]||'';
+for(const slot of ['desktop','mobile','favicon'])assert.ok(uploadPanel.includes(`data-slot="${slot}"`),`upload ${slot} deve ficar no painel compartilhado`);
+assert.ok(uploadPanel.includes('id="skipFavicon"'),'opção para pular o favicon deve continuar dentro do painel compartilhado');
+assert.match(css,/\.asset-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,'as três imagens devem compartilhar uma linha em telas largas');
+assert.match(css,/@media\s*\(max-width:\s*1200px\)\s*\{\s*\.asset-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,'a grade deve se adaptar para duas colunas em telas médias');
+assert.match(css,/\.favicon-row\.disabled\s+\.favicon-drop,\s*\.favicon-row\.disabled\s+\.favicon-trash\s*\{[^}]*pointer-events:\s*none/,'pular o favicon deve desativar somente a área do upload, mantendo o checkbox acessível');
+assert.match(css,/\.target-button span\s*\{[^}]*font-weight:\s*400/,'rótulos dos seletores Desktop/Mobile/Favicon devem usar peso normal');
+assert.match(css,/\.badge\s*\{[^}]*font-weight:\s*400/,'selos de proporção devem usar peso normal');
+assert.match(css,/\.drop-copy b\s*\{[^}]*font-weight:\s*400/,'texto principal dos uploads deve usar peso normal');
 assert.ok(html.includes('id="openFolder"')&&html.includes('hidden>Abrir pasta</button>'),'botão Abrir pasta deve começar oculto');
 assert.ok(app.includes("$('#openFolder').hidden = false")&&app.includes('state.outputDirectory = assetsDirectory'),'pasta de saída só fica disponível após geração');
 assert.ok(app.includes('startIn: state.outputDirectory')&&app.includes("id: 'asset-studio-output'"),'Abrir pasta deve posicionar o seletor nativo na pasta assets gerada');

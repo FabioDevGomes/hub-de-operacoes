@@ -66,12 +66,13 @@
     .local-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font-weight: 650; font-size: .88rem; white-space: nowrap; }
     .local-mark::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
     .steps { display: grid; gap: 14px; }
+    .steps > #d0-changes-panel { order: -1; }
     .panel { background: var(--surface); border: 0; border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
     .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
-    #d0-changes-panel > .panel-head, #d1-changes-panel > .panel-head { padding: 12px 16px; }
+    section[aria-labelledby="step1-title"] > .panel-head, #d0-changes-panel > .panel-head, #d1-changes-panel > .panel-head { padding: 8px 16px; }
     #d0-changes-panel .panel-head h2, #d1-changes-panel .panel-head h2 { font-size: 1rem; }
     .apply-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; min-width: 0; }
-    #d0-changes-panel #apply-manifest, #d1-changes-panel #apply-manifest { padding: 6px 10px; font-size: .88rem; }
+    #d0-changes-panel #apply-manifest:not(.hub-panel-action), #d1-changes-panel #apply-manifest:not(.hub-panel-action) { padding: 6px 10px; font-size: .88rem; }
     .title-row { display: flex; align-items: center; gap: 12px; }
     .step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-weight: 750; flex: 0 0 auto; }
     .panel-body { padding: 20px; }
@@ -94,6 +95,13 @@
     .button.primary { background: var(--blue); color: light-dark(#fff, #101722); border-color: var(--blue); }
     .button.ghost { background: transparent; color: var(--muted); }
     .button:disabled { opacity: .42; cursor: not-allowed; }
+    .button.hub-panel-action { min-height: 36px; padding: 8px 11px; border: 0; border-radius: 10px; background: var(--hub-button-bg, #101e32); color: var(--hub-primary-text, var(--text, #c3cede)); font-size: .78rem; font-weight: 400; box-shadow: 0 4px 9px rgba(0, 0, 0, .55); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; font-family: inherit; text-align: center; text-decoration: none; white-space: nowrap; cursor: pointer; transition: box-shadow .15s ease, filter .15s ease, transform .15s ease; }
+    .button.hub-panel-action:not(:disabled):is(:hover, :focus-visible) { border: 0; box-shadow: 0 5px 12px rgba(0, 0, 0, .65); }
+    .button.hub-panel-action.primary { background: var(--curation-header-action-accent, #38bdf8); color: var(--curation-header-action-accent-text, #052037); }
+    .button.hub-panel-action.primary:is(:hover, :focus-visible, :active) { border: 0; background: var(--curation-header-action-accent, #38bdf8); color: var(--curation-header-action-accent-text, #052037); }
+    .button.hub-panel-action:focus-visible { outline: 2px solid rgba(101, 169, 255, .45); outline-offset: 2px; }
+    .button.hub-panel-action:disabled { opacity: .45; cursor: not-allowed; }
+    @media (prefers-reduced-motion: reduce) { .button.hub-panel-action { transition: none; } }
     .capture-summary[hidden] { display: none; }
     .capture-origin { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .capture-origin-mark { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 9px; color: var(--green); background: var(--surface); font-size: .7rem; font-weight: 750; letter-spacing: .02em; }
@@ -204,8 +212,8 @@
       .capture-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=11">
-  <link rel="stylesheet" href="/table-headers.css?v=4">
+  <link rel="stylesheet" href="/sidebar-component.css?v=12">
+  <link rel="stylesheet" href="/table-headers.css?v=5">
 </head>
 <body>
   <div class="hub-app">
@@ -220,7 +228,6 @@
     <header class="topbar">
       <div>
         <h1>Preparador do Manifesto MCC</h1>
-        <p class="subtitle">Carregue D−1, D0 ou ambos, confira as diferenças e atualize a base.</p>
       </div>
       <div class="local-mark">Processamento local</div>
     </header>
@@ -229,7 +236,7 @@
       <section class="panel" aria-labelledby="step1-title">
         <div class="panel-head">
           <div class="title-row"><span class="step-number">1</span><h2 id="step1-title">Relatórios da MCC</h2></div>
-          <button class="button ghost" id="clear-all" type="button">Limpar tudo</button>
+          <button class="button ghost hub-panel-action" id="clear-all" type="button">Limpar tudo</button>
         </div>
         <div class="panel-body">
           <div class="capture-grid">
@@ -259,7 +266,7 @@
           <div class="title-row"><h2 id="d1-changes-title">Alterações do fechamento D−1</h2></div>
           <div class="apply-actions" id="apply-actions">
             <span class="apply-feedback" id="apply-feedback" role="status" aria-live="polite" hidden></span>
-            <button class="button primary" id="apply-manifest" type="button" disabled>Atualizar base</button>
+            <button class="button primary hub-panel-action" id="apply-manifest" type="button" disabled>Atualizar base</button>
           </div>
         </div>
         <div class="panel-body">
@@ -1185,20 +1192,6 @@
       return { manifest, payload, critical, confidence };
     }
 
-    function formatCaptureConsumption(records) {
-      const totals = new Map();
-      let missing = 0;
-      for (const record of records) {
-        const cost = stateValue(record.cost, parseNumber);
-        const currency = String(record.moeda || '').trim().toUpperCase();
-        if (cost.valor == null || !/^[A-Z]{3}$/.test(currency)) { missing++; continue; }
-        totals.set(currency, (totals.get(currency) || 0) + Math.round(cost.valor * 100));
-      }
-      if (!totals.size) return 'Não disponível';
-      const values = [...totals].map(([currency, cents]) => new Intl.NumberFormat('pt-BR', { style:'currency', currency }).format(cents / 100)).join(' · ');
-      return missing ? `${values} (parcial: ${missing} sem custo/moeda válidos)` : values;
-    }
-
     function renderSlot(slot) {
       const box = q(`[data-slot="${slot}"]`), data = slots[slot], pill = box.querySelector('.status-pill'), summary = box.querySelector('.capture-summary'), originMark = box.querySelector('.capture-origin-mark'), originTitle = box.querySelector('.capture-origin-copy strong'), originDetail = box.querySelector('.capture-origin-copy span'), divider = box.querySelector('.capture-divider'), meta = box.querySelector('.capture-meta');
       box.classList.toggle('loaded', Boolean(data && !data.error)); box.classList.toggle('error', Boolean(data?.error));
@@ -1215,8 +1208,7 @@
       const detectedDates = data.dates.map(date => /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8,10)}/${date.slice(5,7)}/${date.slice(0,4)}` : date).join(', ') || 'Não encontrada';
       meta.hidden = false;
       const managerLabel = data.managerAccountName && data.managerAccountId ? `${data.managerAccountName} · ${data.managerAccountId}` : 'Não identificada';
-      meta.replaceChildren(metaLine('MCC', managerLabel), metaLine('Campanhas válidas', campaignsLabel), metaLine('Data detectada', detectedDates), metaLine('Moedas', currencies), metaLine('Tipo de captura', 'Captura MCC'));
-      if (slot === 'd0') meta.append(metaLine('Consumo acumulado do dia', formatCaptureConsumption(data.records)));
+      meta.replaceChildren(metaLine('MCC', managerLabel), metaLine('Campanhas válidas', campaignsLabel), metaLine('Data detectada', detectedDates), metaLine('Moedas', currencies));
     }
 
     function metaLine(label, value) { const row = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = label; b.textContent = String(value); row.append(a,b); return row; }

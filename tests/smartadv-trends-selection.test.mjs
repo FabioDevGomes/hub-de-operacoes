@@ -6,7 +6,7 @@ import * as Trends from '../src/curadoria/trends-domain.mjs';
 import {mountSmartAdvOffersView} from '../src/curadoria/smartadv-offers/smartadv-offers-view.mjs';
 
 // DOM isolado em memória; não abre IndexedDB nem grava avaliações reais.
-function fixture(t) {
+function fixture(t,{preferences={getItem(){return null;},setItem(){}}}={}) {
   function element(dataset={}) {
     const classes=new Set(),attributes=new Map();let html='';
     const el={dataset,ownerDocument:document,children:[],listeners:{},value:'',textContent:'',disabled:false,
@@ -41,18 +41,40 @@ function fixture(t) {
   sheet.querySelectorAll=selector=>selector==='.tabs [data-tab]'?tabs:selector==='[data-panel]'?panels:[];
   document.querySelector=node;document.querySelectorAll=()=>[];
   const previousDocument=globalThis.document,previousWindow=globalThis.window;
-  globalThis.document=document;globalThis.window={scrollTo(){}};
+  globalThis.document=document;globalThis.window={scrollTo(){},addEventListener(){},removeEventListener(){},localStorage:preferences};document.defaultView=globalThis.window;
   t.after(()=>{if(previousDocument===undefined)delete globalThis.document;else globalThis.document=previousDocument;if(previousWindow===undefined)delete globalThis.window;else globalThis.window=previousWindow;});
-  const root={querySelector:node,querySelectorAll:()=>[]},calls=[];
+  const root={ownerDocument:document,querySelector:node,querySelectorAll:()=>[]},calls=[];
+  node('#visibilityFilter').value='visible';
   const actions={closeOffer(){},saveTrend:async(...args)=>{calls.push(args);return true;}};
-  const view=mountSmartAdvOffersView({root,actions});
+  const view=mountSmartAdvOffersView({root,actions,preferences});
   const state={captures:[{captureId:'synthetic',capturedAt:'2026-01-01T12:00:00Z',offers:[{offerId:123,offerName:'Example FR',vertical:'Example',geoTargets:['FR'],allowedChannels:[],brandBidding:null,offerUrl:''}]}],trends:[],images:[],glimpse:[],decisions:[]};
   view.render(state);
   const open=()=>node('#rows').listeners.click({target:{closest:selector=>selector==='[data-action]'?{dataset:{key:'123',action:'trends'}}:null}});
   const result=status=>node('#trendResults').children.find(button=>button.dataset.trendsResult===status);
   const selectCountry=()=>{const country=node('#trendCountries').children[0];node('#trendCountries').listeners.click({target:{closest:()=>country}});};
-  open();return {view,state,node,calls,actions,open,result,selectCountry};
+  open();return {view,state,node,calls,actions,open,result,selectCountry,preferences};
 }
+
+test('SmartAdv oculta e reexibe ofertas por ID usando apenas uma preferência local',t=>{
+  const stored=new Map(),preferences={getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)};
+  const f=fixture(t,{preferences}),rows=f.node('#rows'),key='hub:smartadv-offers:hidden-offer-ids:v1';
+  const hide=rows.children.find(button=>button.dataset.toggleSmartadvVisibility==='123');
+  assert.ok(hide,'a linha oferece a ação de ocultar');
+  let prevented=false,stopped=false;
+  rows.listeners.click({target:{closest:selector=>selector==='[data-toggle-smartadv-visibility]'?hide:null},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});
+  assert.equal(prevented,true);
+  assert.equal(stopped,true);
+  assert.equal(rows.innerHTML,'','a oferta desaparece do filtro padrão após ocultar');
+  assert.deepEqual(JSON.parse(stored.get(key)),['123']);
+
+  const visibility=f.node('#visibilityFilter');visibility.value='hidden';visibility.listeners.change();
+  assert.match(rows.innerHTML,/data-offer="123"/,'a opção Itens ocultos exibe a oferta');
+  const restore=rows.children.find(button=>button.dataset.toggleSmartadvVisibility==='123');
+  assert.equal(restore.textContent,'Reexibir');
+  rows.listeners.click({target:{closest:selector=>selector==='[data-toggle-smartadv-visibility]'?restore:null},preventDefault(){},stopPropagation(){}});
+  assert.equal(rows.innerHTML,'','a oferta some da lista de ocultos depois de reexibir');
+  assert.deepEqual(JSON.parse(stored.get(key)),[]);
+});
 
 test('SmartAdv saves and marks the result without selecting or inventing a country',async t=>{
   const f=fixture(t);

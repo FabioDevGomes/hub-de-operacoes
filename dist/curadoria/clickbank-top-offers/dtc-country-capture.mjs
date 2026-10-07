@@ -1,6 +1,13 @@
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 
+function checkoutProductNameFocus(value) {
+  const fullName = normalize(value);
+  const firstNamePart = normalize(String(value || '').split(/\s+[-–—]\s+/)[0]);
+  const words = firstNamePart.split(' ').filter(Boolean);
+  return firstNamePart.length >= 8 && words.length >= 2 ? firstNamePart : fullName;
+}
+
 export function validateDtcCountryCapture(payload) {
   if (payload?.schema !== 'clickbank-dtc-country-capture-v1' || payload.source !== 'clickbank_dtc_checkout'
     || typeof payload.productName !== 'string' || payload.productName.trim().length < 5 || payload.productName.length > 200
@@ -14,13 +21,19 @@ export function validateDtcCountryCapture(payload) {
 
 export function matchDtcCheckoutOffer(productName, offers) {
   const query = normalize(productName);
-  const words = query.split(' ').filter(Boolean);
-  if (query.length < 8 || words.length < 2 || !Array.isArray(offers)) return {status:'none', matches:[]};
+  const focusedName = checkoutProductNameFocus(productName);
+  const words = focusedName.split(' ').filter(Boolean);
+  if (focusedName.length < 8 || words.length < 2 || !Array.isArray(offers)) return {status:'none', matches:[]};
   const matches = new Map();
   for (const offer of offers) {
     if (!offer || typeof offer.offerKey !== 'string' || typeof offer.offerName !== 'string') continue;
-    const title = ` ${normalize(offer.offerName)} `;
-    if (title.includes(` ${query} `)) matches.set(offer.offerKey, offer);
+    const title = normalize(offer.offerName);
+    const titleWithoutMarketplaceLabel = title.replace(/^(?:new|hot offer|top offer)\s+/, '');
+    const fullNameMatch = query.length >= 8 && ` ${title} `.includes(` ${query} `);
+    const productNameMatch = title === focusedName || title.startsWith(`${focusedName} `)
+      || titleWithoutMarketplaceLabel === focusedName
+      || titleWithoutMarketplaceLabel.startsWith(`${focusedName} `);
+    if (fullNameMatch || productNameMatch) matches.set(offer.offerKey, offer);
   }
   const result = [...matches.values()];
   return {status:result.length === 1 ? 'unique' : result.length ? 'ambiguous' : 'none', matches:result};

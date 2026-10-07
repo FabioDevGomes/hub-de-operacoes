@@ -1,5 +1,5 @@
 import {normalize} from './glimpse-domain.mjs';
-import {mountGlimpseHeaderAction} from './glimpse-embed-controls.mjs?v=1';
+import {mountGlimpseHeaderAction} from './glimpse-embed-controls.mjs?v=2';
 
 function managerContext(){
   const productName=document.querySelector('#sheetName')?.textContent.trim()||'';

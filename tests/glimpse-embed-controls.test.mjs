@@ -12,6 +12,7 @@ class Element {
     this.disabled = false;
     this.textContent = '';
     this.classes = new Set();
+    this.listeners = new Map();
     this.classList = {add:name=>this.classes.add(name),contains:name=>this.classes.has(name)};
   }
   append(...children) {
@@ -31,6 +32,7 @@ class Element {
     return this.children.find(child=>child.className.split(/\s+/).includes(className)) || null;
   }
   setAttribute(name,value) { this.attributes[name] = value; }
+  addEventListener(name,listener) { this.listeners.set(name,listener); }
 }
 
 test('Top Offers CB mostra confirmação somente após sucesso e valida a mensagem do iframe',async()=>{
@@ -53,7 +55,9 @@ test('Top Offers CB mostra confirmação somente após sucesso e valida a mensag
     assert.equal(button.textContent,'Salvar');
     assert.equal(status.hidden,true);
     assert.equal(status.attributes.role,'status');
-    assert.equal(parent.querySelector(':scope > .glimpse-host-controls').children.indexOf(status),1,'a confirmação fica ao lado do botão, antes de Voltar à lista');
+    const controls=parent.querySelector(':scope > .glimpse-host-controls');
+    assert.equal(controls.children.indexOf(status),0,'a confirmação ocupa o espaço antes de Salvar');
+    assert.equal(controls.children.indexOf(button),1,'Salvar mantém sua posição seguinte ao feedback reservado');
 
     button.onclick();
     assert.equal(button.disabled,true);
@@ -67,6 +71,7 @@ test('Top Offers CB mostra confirmação somente após sucesso e valida a mensag
     assert.equal(status.textContent,'Salvo');
     assert.equal(status.hidden,false);
     assert.equal(button.disabled,false);
+    assert.equal(controls.children.indexOf(button),1,'mostrar Salvo não muda a posição de Salvar');
 
     button.onclick();
     assert.equal(status.hidden,true,'um novo salvamento remove a confirmação anterior');
@@ -102,6 +107,35 @@ test('os outros hosts mantêm o rótulo e o fluxo padrão Concluir',()=>{
     assert.equal(button.textContent,'Concluir');
     assert.equal(parent.querySelector(':scope > .glimpse-host-controls').querySelector('.glimpse-host-saved'),null);
     button.onclick();
+    assert.deepEqual(messages.at(-1),{message:{type:'hub-glimpse-finish'},target:location.origin});
+  } finally {
+    for (const [key,descriptor] of Object.entries(original)) {
+      if (descriptor) Object.defineProperty(globalThis,key,descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
+test('Top Offers CB conecta o Glimpse ao botão compartilhado sem duplicá-lo na barra',()=>{
+  const original = Object.fromEntries(['document','window','location','MutationObserver'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
+  const parent = new Element(), actionButton = new Element(), backButton = new Element();
+  parent.append(actionButton,backButton);
+  const panel = new Element();
+  const messages = [];
+  const frame = {contentWindow:{postMessage:(message,target)=>messages.push({message,target})}};
+  globalThis.document = {createElement:()=>new Element()};
+  globalThis.window = {addEventListener(){}};
+  globalThis.location = {origin:'http://127.0.0.1:8765'};
+  globalThis.MutationObserver = class { constructor(callback){this.callback=callback} observe(){} };
+  try {
+    const button = mountGlimpseHeaderAction({frame,panel,backButton,actionButton,finishLabel:'Salvar',showSavedFeedback:true});
+    assert.equal(button,actionButton,'a função conecta o botão que já pertence à barra');
+    assert.equal(parent.children.length,3,'a barra recebe só o feedback textual; nenhum segundo botão é criado');
+    const status=parent.querySelector('.glimpse-host-saved');
+    assert.equal(parent.children.indexOf(status),0,'a confirmação fica antes de Salvar');
+    assert.equal(parent.children.indexOf(actionButton),1,'o botão permanece depois da área reservada para feedback');
+    button.listeners.get('click')();
+    assert.equal(button.disabled,true);
     assert.deepEqual(messages.at(-1),{message:{type:'hub-glimpse-finish'},target:location.origin});
   } finally {
     for (const [key,descriptor] of Object.entries(original)) {

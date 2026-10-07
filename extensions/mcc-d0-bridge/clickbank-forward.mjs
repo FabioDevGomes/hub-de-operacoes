@@ -43,6 +43,7 @@ export async function deliverClickBankPreview(payload) {
 export function isDtcCountryReceiverReady() {
   return location.origin === 'http://127.0.0.1:8765'
     && /^\/curadoria\/clickbank-top-offers\/$/.test(location.pathname)
+    && window.__hubDtcCountryReceiverVersion === 2
     && typeof window.__hubReceiveDtcCommonCountries === 'function';
 }
 
@@ -52,9 +53,12 @@ export async function deliverDtcCommonCountries(payload) {
   if (location.origin !== 'http://127.0.0.1:8765' || !/^\/curadoria\/clickbank-top-offers\/$/.test(location.pathname)) {
     return {ok:false,message:'Destino inválido: os países só podem ser aplicados à lista local Top Offers CB.'};
   }
+  if (window.__hubDtcCountryReceiverVersion !== 2) {
+    return {ok:false,message:'A lista Top Offers CB está desatualizada. Recarregue a página do Hub e tente novamente; nenhum dado foi salvo.'};
+  }
   if (typeof window.__hubReceiveDtcCommonCountries === 'function') {
     try { return await window.__hubReceiveDtcCommonCountries(payload); }
     catch { return {ok:false,message:'O Hub não conseguiu salvar a lista. Nenhum outro dado foi alterado.'}; }
   }
-  return {ok:false,message:'Deixe a lista Top Offers CB aberta no Hub e tente novamente. Não é necessário abrir a ficha da oferta.'};
+  return {ok:false,message:'Deixe a lista Top Offers CB atualizada aberta no Hub e tente novamente. Não é necessário abrir a ficha da oferta.'};
 }

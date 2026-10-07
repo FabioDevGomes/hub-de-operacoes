@@ -13,6 +13,7 @@ html.embedded .page{width:min(1120px,calc(100% - 28px));padding:12px 0 20px}
 html.embedded .surface{padding:12px;margin-bottom:9px}
 html.embedded .input-card textarea{max-height:180px;overflow-y:auto}
 html.embedded .input-card{max-width:920px}
+html.wide-offer-embedded .input-card{width:100%;max-width:none}
 html.embedded .input-card .section-title{gap:10px}
 html.embedded .input-card textarea{display:block;width:min(100%,720px);min-height:104px;margin:8px 0;padding:10px;font-size:.84rem;line-height:1.35;overflow-y:hidden;resize:none}
 html.embedded .input-card .actions,html.embedded .footer{width:min(100%,720px);gap:8px}
@@ -24,3 +25,11 @@ html.embedded .footer{padding:8px 0}
 html.embedded .page>.surface:last-child{margin-bottom:8px}
 :root body{background:#07101f!important}
 html body :is(.surface,.metric-card,.card,.badge,.pill,.tag){border:0}
+.clipboard-capture{display:grid;grid-template-columns:auto minmax(180px,1fr);align-items:center;gap:8px 14px;margin:12px 0}
+.clipboard-capture .clipboard-note{margin:0;color:var(--muted);font-size:.78rem;line-height:1.45}
+.clipboard-capture .button.primary{min-width:180px}
+.button:disabled{cursor:wait;opacity:.65}
+html.embedded .input-card .clipboard-capture,html.embedded .input-card .message{width:min(100%,720px)}
+html.embedded .clipboard-capture{gap:7px 10px;margin:8px 0}
+@media(max-width:560px){.clipboard-capture{grid-template-columns:1fr}.clipboard-capture .button.primary{justify-self:start}}
+html.wide-offer-embedded,html.wide-offer-embedded body{background:transparent!important}

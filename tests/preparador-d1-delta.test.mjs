@@ -69,7 +69,8 @@ assert.equal(context.formatD0DeltaValue(-2,'count'),'−2');
 assert.match(context.formatD0DeltaValue(1,'cost','BRL'),/^\+R\$/);
 assert.equal(context.formatD0DeltaValue(null,'cost','BRL'),'—');
 
-assert.ok(html.indexOf('id="d1-changes-panel"')<html.indexOf('id="d0-changes-panel"'),'tabela de alterações D−1 deve aparecer antes da tabela D0');
+assert.ok(html.indexOf('id="d1-changes-panel"')<html.indexOf('id="d0-changes-panel"'),'a estrutura inicial da ação de atualização permanece em D−1 antes da realocação dinâmica');
+assert.match(html,/\.steps > #d0-changes-panel\s*\{\s*order:\s*-1;\s*\}/,'quando visível, a tabela D0 deve ser o primeiro bloco de informação');
 assert.ok(html.indexOf('id="d1-changes-panel"')<html.indexOf('id="validation-panel"'),'tabela D−1 deve ficar antes da validação automática');
 assert.ok(html.includes('renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges)'),'a validação deve renderizar o delta D−1 com ou sem uma captura D0 no outro slot');
 assert.ok(html.includes('renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges)'),'tabela deve ser atualizada quando D−1 e D0 estão carregados juntos');

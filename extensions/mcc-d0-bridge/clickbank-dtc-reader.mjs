@@ -14,10 +14,16 @@ export function collectClickBankDtcCommonCountries() {
     return { ok:false, message:'Abra o checkout da DTC em orders.clickbank.net na aba ativa. Nada foi lido.' };
   }
 
-  const select = document.querySelector('select[name="billing.countryCode"], select[id="billing.countryCode"]');
-  if (!select) return { ok:false, message:'Não encontrei o seletor de países deste checkout. Nada foi salvo.' };
-  const commonGroup = [...select.querySelectorAll('optgroup')].find(group =>
-    ['paises comuns', 'common countries'].includes(normalize(group.getAttribute('label'))));
+  const countrySelectors = [
+    'select[name="billing.countryCode"]', 'select[id="billing.countryCode"]',
+    'select[name="shipping.countryCode"]', 'select[id="shipping.countryCode"]'
+  ];
+  const countrySelects = [...new Set(countrySelectors.map(selector => document.querySelector(selector)).filter(Boolean))];
+  if (!countrySelects.length) return { ok:false, message:'Não encontrei o seletor de países deste checkout. Nada foi salvo.' };
+  const commonGroup = countrySelects
+    .map(select => [...select.querySelectorAll('optgroup')].find(group =>
+      ['paises comuns', 'common countries'].includes(normalize(group.getAttribute('label')))))
+    .find(Boolean);
   if (!commonGroup) return { ok:false, message:'Não encontrei o grupo “Países Comuns” no checkout. Nada foi salvo.' };
 
   const countries = [...new Set([...commonGroup.querySelectorAll('option')]

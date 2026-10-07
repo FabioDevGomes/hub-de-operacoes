@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.15', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.18', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura MCC D0\/D−1/);
 assert.ok(popup.includes('id="capture-title"') && popup.includes('id="vsl-title"'), 'os títulos das seções permanecem visíveis');
 assert.doesNotMatch(popup, /Na MCC, selecione um único dia, use o botão discreto abaixo/);
@@ -24,6 +24,10 @@ assert.ok(popup.includes('id="capture-clickbank"'), 'a ação de captura ClickBa
 assert.ok(popup.includes('id="capture-dtc-countries"') && popup.includes('id="dtc-countries-status"'), 'a captura de países da DTC tem ação e retorno próprios');
 assert.match(manifest.description, /países comuns ClickBank/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
+assert.ok(popup.includes('class="capture-actions" role="group" aria-label="Ações de captura MCC"'), 'botões D0 e D−1 ficam em um grupo horizontal');
+assert.ok(popup.includes('class="clickbank-actions" role="group" aria-label="Ações ClickBank"'), 'ações ClickBank ficam em um grupo horizontal');
+assert.match(popup, /\.capture-actions,\s*\.clickbank-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'cada par usa duas colunas flexíveis');
+assert.match(popup, /button\.compact-action\s*\{[^}]*font-size:\s*12px[^}]*white-space:\s*nowrap/, 'botões em par são compactos e mantêm os rótulos em uma linha');
 assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
 assert.ok(popup.indexOf('id="scroll-to-bottom"') < popup.indexOf('id="capture-d1"'), 'rolagem fica acima dos botões de captura');
 assert.match(popup, /button\.scroll-page[^}]*font-size:\s*11px/, 'botão de rolagem usa apresentação compacta e discreta');
@@ -134,4 +138,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, D0/D−1, bloqueios e roteamento seguro; version 1.2.15');
+console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.18');

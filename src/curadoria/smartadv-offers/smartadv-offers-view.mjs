@@ -32,6 +32,12 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   const importDialog = $('#importDialog', root), paste = $('#pasteArea', root), confirmButton = $('#confirmImport', root);
   const sheet = $('#offerSheet'), imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
+  const hiddenOffersPreferenceKey = 'hub:smartadv-offers:hidden-offer-ids:v1';
+  let hiddenOfferIds = new Set();
+  try {
+    const savedHiddenOffers = JSON.parse(preferences?.getItem(hiddenOffersPreferenceKey) || '[]');
+    if (Array.isArray(savedHiddenOffers)) hiddenOfferIds = new Set(savedHiddenOffers.map(value => String(value)).filter(Boolean));
+  } catch {}
   const columnPreferenceKey = 'hub:smartadv-offers:visible-columns:v2';
   try {
     if (preferences?.getItem(columnPreferenceKey) == null) {
@@ -87,25 +93,46 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   function renderTable() {
     const query = $('#search', root).value.trim().toLocaleLowerCase();
     const vertical = $('#verticalFilter', root).value, geo = $('#geoFilter', root).value;
-    const brand = $('#brandFilter', root).value;
+    const brand = $('#brandFilter', root).value, visibility = $('#visibilityFilter', root).value;
     const offers = annotatedOffers.map(enrich).filter(item => {
       const haystack = `${item.offerId} ${item.offerName} ${item.vertical} ${item.geoTargets.join(' ')} ${item.allowedChannels.join(' ')}`.toLocaleLowerCase();
-      return (!query || haystack.includes(query)) && (!vertical || item.vertical === vertical) &&
+      const hidden = hiddenOfferIds.has(String(item.offerId));
+      const matchesVisibility = visibility === 'all' || (visibility === 'hidden' ? hidden : !hidden);
+      return matchesVisibility && (!query || haystack.includes(query)) && (!vertical || item.vertical === vertical) &&
         (!geo || item.geoTargets.includes(geo)) && (!brand || item.brandBidding === brand);
     });
-    $('#rows', root).innerHTML = offers.map(item => `<tr data-offer="${escape(item.offerId)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
+    $('#rows', root).innerHTML = offers.map(item => {const hidden=hiddenOfferIds.has(String(item.offerId));return `<tr data-offer="${escape(item.offerId)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
       <td class="number"><a href="${escape(item.offerUrl)}" target="_blank" rel="noopener noreferrer">${escape(item.offerId)}</a></td>
-      <td class="offer-name" title="${escape(item.productName)}">${escape(item.productName)}</td>
+      <td class="offer-name hub-edit-host" title="${escape(item.productName)}"><span>${escape(item.productName)}</span><button class="item-visibility hub-corner-edit ${hidden?'restore':''}" data-toggle-smartadv-visibility="${escape(item.offerId)}" data-hidden="${hidden}" type="button" aria-label="${hidden?'Reexibir':'Ocultar'} oferta ${escape(item.productName)}">${hidden?'Reexibir':'Ocultar'}</button></td>
       <td>${trendsBadge(item)}</td><td>${glimpseBadge(item)}</td><td>${imagesBadge(item)}</td>
       <td>${escape(item.vertical)}</td><td>${escape(item.geoTargets.join(', ') || '—')}</td><td>${escape(item.allowedChannels.join(', ') || '—')}</td>
       <td>${escape(brandLabel(item.brandBidding))}</td><td><span class="history-pill ${item.historyState}">${escape(historyLabel(item.historyState))}</span></td>
       <td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(keyFor(item)))}</td>
       ${lastCollectionCell(latestCaptureByOffer.get(String(item.offerId)))}
-    </tr>`).join('');
+    </tr>`}).join('');
     columns.apply();
     $('#empty', root).classList.toggle('hidden', offers.length > 0);
-    $('#empty', root).textContent = annotatedOffers.length ? 'Nenhuma oferta corresponde aos filtros.' : 'Cole uma captura SmartAdv para iniciar o catálogo.';
+    $('#empty', root).textContent = annotatedOffers.length
+      ? visibility === 'hidden' ? 'Nenhuma oferta oculta corresponde aos filtros.' : visibility === 'visible' ? 'Nenhuma oferta visível corresponde aos filtros.' : 'Nenhuma oferta corresponde aos filtros.'
+      : 'Cole uma captura SmartAdv para iniciar o catálogo.';
     $('#visibleOfferCount', root).textContent = String(offers.length);
+  }
+
+  function setOfferHidden(offerId, hidden) {
+    const key = String(offerId), nextHiddenOfferIds = new Set(hiddenOfferIds);
+    if (hidden) nextHiddenOfferIds.add(key); else nextHiddenOfferIds.delete(key);
+    let persisted = false;
+    try {
+      if (preferences?.setItem) {
+        preferences.setItem(hiddenOffersPreferenceKey, JSON.stringify([...nextHiddenOfferIds]));
+        persisted = true;
+      }
+    } catch {}
+    hiddenOfferIds = nextHiddenOfferIds;
+    renderTable();
+    showMessage(hidden
+      ? `Oferta ocultada${persisted ? '' : ' nesta sessão'}. Use “Itens ocultos” para reexibir.`
+      : `Oferta reexibida${persisted ? '' : ' nesta sessão'}.`);
   }
 
   function render(nextState = {}) {
@@ -248,10 +275,12 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   confirmButton.onclick=()=>actions.confirmImport(paste.value);
   paste.oninput=()=>{confirmButton.disabled=true;$('#previewStatus',root).textContent='A colagem mudou; valide novamente antes de salvar.'};
   $('#captureSelect',root).onchange=event=>{selectedCaptureId=event.target.value;render()};
-  ['search','verticalFilter','geoFilter','brandFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
+  ['search','visibilityFilter','verticalFilter','geoFilter','brandFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
   $('#exportBackup',root).onclick=()=>actions.exportBackup();
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value=''};
   $('#rows',root).addEventListener('click',event=>{
+    const visibilityButton=event.target.closest('[data-toggle-smartadv-visibility]');
+    if(visibilityButton){event.preventDefault();event.stopPropagation();setOfferHidden(visibilityButton.dataset.toggleSmartadvVisibility,visibilityButton.dataset.hidden!=='true');return;}
     const decisionButton=event.target.closest('[data-decision-key]');
     if(decisionButton){const item=annotatedOffers.map(enrich).find(offer=>keyFor(offer)===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.productName,currentValue:current.currentStatus,onSelect:status=>actions.saveDecision(item,status)});return;}
     const button=event.target.closest('[data-action]');if(!button)return;const item=offerById(button.dataset.key);if(item)openOffer(item,button.dataset.action)

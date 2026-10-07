@@ -17,17 +17,25 @@ test('checkout reader accepts only orders.clickbank.net and extracts only Paíse
   for(const url of ['http://orders.clickbank.net/','https://orders.clickbank.net.evil.test/','https://accounts.clickbank.com/'])assert.equal(isClickBankDtcCheckout(url),false);
   const group=(label,values)=>({getAttribute:key=>key==='label'?label:null,querySelectorAll:()=>values.map(value=>({value}))});
   const headings=[{textContent:'Cart Summary'},{textContent:'Energy Revolution System'}];
-  const result=vm.runInNewContext(`(${collectClickBankDtcCommonCountries.toString()})()`,{
-    location:{protocol:'https:',hostname:'orders.clickbank.net'},
-    document:{querySelector:selector=>selector.includes('billing.countryCode')?{querySelectorAll:()=>[
-      group('Países Comuns',['US','GB','CA','US','bad']),group('Outros países',['BR','AR'])]}:null,
-      querySelectorAll:()=>headings},
-    Date
-  });
-  assert.equal(result.ok,true,result.message);
-  assert.equal(result.productName,'Energy Revolution System');
-  assert.deepEqual([...result.countries],['US','GB','CA']);
-  assert.ok(Number.isFinite(Date.parse(result.capturedAt)));
+  const countrySelectors=['select[name="billing.countryCode"]','select[id="billing.countryCode"]',
+    'select[name="shipping.countryCode"]','select[id="shipping.countryCode"]'];
+  for(const countrySelector of countrySelectors){
+    const queriedSelectors=[];
+    const result=vm.runInNewContext(`(${collectClickBankDtcCommonCountries.toString()})()`,{
+      location:{protocol:'https:',hostname:'orders.clickbank.net'},
+      document:{querySelector:selector=>{
+        queriedSelectors.push(selector);
+        return selector===countrySelector?{querySelectorAll:()=>[
+          group('Países Comuns',['US','GB','CA','US','bad']),group('Outros países',['BR','AR'])]}:null;
+      },querySelectorAll:()=>headings},
+      Date
+    });
+    assert.equal(result.ok,true,result.message);
+    assert.equal(result.productName,'Energy Revolution System');
+    assert.deepEqual([...result.countries],['US','GB','CA']);
+    assert.ok(Number.isFinite(Date.parse(result.capturedAt)));
+    assert.deepEqual(queriedSelectors,countrySelectors,'consulta exclusivamente os seletores de país billing/shipping');
+  }
 });
 
 test('DTC payload validation, unique title match and ambiguity fail closed',()=>{
@@ -39,6 +47,17 @@ test('DTC payload validation, unique title match and ambiguity fail closed',()=>
   assert.equal(matchDtcCheckoutOffer(payload.productName,[]).status,'none');
   assert.equal(matchDtcCheckoutOffer(payload.productName,[offer,{...offer,offerKey:'second'}]).status,'ambiguous');
   assert.equal(matchDtcCheckoutOffer('Energy',[offer]).status,'none','nomes curtos não vinculam oferta por engano');
+
+  const checkoutName='YU SLEEP - 6 Month Supply (50% OFF)';
+  const marketplaceOffer={offerKey:'yusleep|yu sleep offer',offerName:'YU SLEEP - The #1 Sleep Offer! Make upto $5 EPC & Get Rich This Summer'};
+  assert.deepEqual(matchDtcCheckoutOffer(checkoutName,[marketplaceOffer]),{status:'unique',matches:[marketplaceOffer]},
+    'a variação do checkout associa pelo nome principal do produto no início da oferta');
+  const taggedOffer={...marketplaceOffer,offerName:'NEW : YU SLEEP - The #1 Sleep Offer!'};
+  assert.equal(matchDtcCheckoutOffer(checkoutName,[taggedOffer]).status,'unique','rótulo NEW do Marketplace não impede a associação pelo produto');
+  assert.equal(matchDtcCheckoutOffer(checkoutName,[marketplaceOffer,{...marketplaceOffer,offerKey:'other|yu sleep',offerName:'YU SLEEP - Another Offer'}]).status,'ambiguous',
+    'variantes com o mesmo nome principal continuam bloqueadas sem salvar');
+  assert.equal(matchDtcCheckoutOffer(checkoutName,[{...marketplaceOffer,offerName:'Sleep offer for YU SLEEP users'}]).status,'none',
+    'o nome principal não deve associar por ocorrência no meio do título');
 });
 
 test('DTC merge preserves manual countries and prior provenance while deduplicating',()=>{
@@ -60,6 +79,7 @@ test('Hub receiver waits for load, applies only a unique match, and refuses zero
   const offers=[{offerKey:'offer-1',offerName:'NEW Energy Revolution System Conversions Monster'}];
   mountExtensionCapture({target,ready:deferred,getBusy:()=>false,getDraft:()=>'',preparePreview:()=>{},getOffers:()=>offers,
     saveDtcCountries:async(offer,capture)=>{writes.push({offer,capture});return {ok:true,saved:true,addedCount:3,countryCount:3,offerName:offer.offerName};}});
+  assert.equal(target.__hubDtcCountryReceiverVersion,2,'o Hub anuncia a versão compatível da associação DTC');
   const pending=target.__hubReceiveDtcCommonCountries(payload);
   assert.equal(writes.length,0);ready();
   const success=await pending;
@@ -72,22 +92,36 @@ test('Hub receiver waits for load, applies only a unique match, and refuses zero
   assert.equal(unmatched.ok,false);assert.match(unmatched.message,/Não encontrei/);assert.equal(writes.length,1);
 });
 
+test('Hub receiver matches a checkout variant by the unique leading product name',async()=>{
+  const variantPayload={...payload,productName:'YU SLEEP - 6 Month Supply (50% OFF)'};
+  const offer={offerKey:'yusleep|yu sleep offer',offerName:'YU SLEEP - The #1 Sleep Offer! Make upto $5 EPC & Get Rich This Summer'};
+  const writes=[];
+  const target={};
+  mountExtensionCapture({target,ready:Promise.resolve(),getBusy:()=>false,getDraft:()=>'',getOffers:()=>[offer],preparePreview:()=>{},
+    saveDtcCountries:async(matched,capture)=>{writes.push({matched,capture});return {ok:true,saved:true,offerName:matched.offerName};}});
+  const result=await target.__hubReceiveDtcCommonCountries(variantPayload);
+  assert.equal(result.ok,true,result.message);
+  assert.equal(writes.length,1);
+  assert.equal(writes[0].matched.offerKey,offer.offerKey);
+});
+
 test('receiver stays on an already open Top Offers tab; no Hub tab creation or focus is needed',async()=>{
   const code=await readFile(new URL('../extensions/mcc-d0-bridge/background.js',import.meta.url),'utf8');
   const calls=[];let listener;
   const sourceCapture={ok:true,productName:payload.productName,countries:payload.countries,capturedAt:payload.capturedAt};
+  const staleHub={id:18,url:'http://127.0.0.1:8765/curadoria/clickbank-top-offers/',windowId:2};
   const hub={id:19,url:'http://127.0.0.1:8765/curadoria/clickbank-top-offers/',windowId:2};
   vm.runInNewContext(code.replace(/^import .*?;\s*/gm,''),{
     collectClickBankDtcCommonCountries,isClickBankDtcCheckout,deliverDtcCommonCountries,isDtcCountryReceiverReady,
     isClickBankMarketplace(){return false;},CLICKBANK_COLUMNS:[],collectClickBankProducts(){},URL,
     chrome:{runtime:{onMessage:{addListener:fn=>listener=fn}},tabs:{
-      query:async options=>options.active?[{id:8,url:checkout}]:[hub],
+      query:async options=>options.active?[{id:8,url:checkout}]:[staleHub,hub],
       create:async options=>{calls.push(['create',options]);throw Error('não deve criar aba');},
       update:async(...args)=>calls.push(['focus',...args]),
     },scripting:{executeScript:async options=>{
       calls.push(['inject',options]);
       return [{result:options.func===collectClickBankDtcCommonCountries?sourceCapture:
-        options.func===isDtcCountryReceiverReady?true:{ok:true,saved:true,offerName:'Matched Offer',addedCount:3,countryCount:3}}];
+        options.func===isDtcCountryReceiverReady?options.target.tabId===hub.id:{ok:true,saved:true,offerName:'Matched Offer',addedCount:3,countryCount:3}}];
     }}}
   });
   const response=await new Promise(resolve=>listener({type:'CAPTURE_DTC_COMMON_COUNTRIES'},null,resolve));
@@ -95,6 +129,7 @@ test('receiver stays on an already open Top Offers tab; no Hub tab creation or f
   assert.equal(response.result.saved,true);
   const callsToTarget=calls.filter(([,options])=>options?.target?.tabId===hub.id);
   assert.equal(callsToTarget.length,2,'sonda e entrega somente na aba Top Offers já carregada');
+  assert.equal(calls.filter(([,options])=>options?.target?.tabId===staleHub.id).length,1,'a aba antiga é sondada e ignorada');
   assert.equal(callsToTarget[0][1].func,isDtcCountryReceiverReady);
   assert.equal(callsToTarget[1][1].world,'MAIN');
   assert.deepEqual(calls.filter(([kind])=>kind==='create'||kind==='focus'),[]);
@@ -107,9 +142,15 @@ test('DTC receiver accepts only local Top Offers CB and asks for its list when m
   const correct={origin:'http://127.0.0.1:8765',pathname:'/curadoria/clickbank-top-offers/'};
   assert.equal((await run({...correct,origin:'https://example.test'},{__hubReceiveDtcCommonCountries(){}})).ok,false);
   const missing=await run(correct,{});
-  assert.equal(missing.ok,false);assert.match(missing.message,/lista Top Offers CB aberta/);
-  const ready=vm.runInNewContext(`(${isDtcCountryReceiverReady.toString()})()`,{location:correct,window:{__hubReceiveDtcCommonCountries(){}}});
+  assert.equal(missing.ok,false);assert.match(missing.message,/desatualizada/);
+  const staleWindow={__hubReceiveDtcCommonCountries(){},__hubDtcCountryReceiverVersion:1};
+  assert.equal(await run(correct,staleWindow).then(result=>result.ok),false,'a entrega recusa a versão antiga do Hub');
+  const currentWindow={__hubReceiveDtcCommonCountries(){return {ok:true,saved:true};},__hubDtcCountryReceiverVersion:2};
+  const ready=vm.runInNewContext(`(${isDtcCountryReceiverReady.toString()})()`,{location:correct,window:currentWindow});
   assert.equal(ready,true);
+  const staleReady=vm.runInNewContext(`(${isDtcCountryReceiverReady.toString()})()`,{location:correct,window:staleWindow});
+  assert.equal(staleReady,false,'a extensão não considera uma aba sem o contrato atualizado como pronta');
+  assert.deepEqual(await run(correct,currentWindow),{ok:true,saved:true});
 });
 
 test('popup action requests DTC capture, reports the saved offer, and restores its controls',async()=>{

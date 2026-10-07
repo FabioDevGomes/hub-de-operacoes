@@ -10,7 +10,7 @@ assert.ok(html.includes("'D0_metricas_parciais'"),'D0 ainda não é classificado
 assert.ok(html.includes('metricas_D_zero:metrics0'),'manifesto não contém as métricas completas de D0');
 assert.ok(html.includes('totais_controle_D_zero'),'totais de validação de D0 ausentes');
 assert.ok(html.includes("originDetail.textContent = 'Grade da MCC · extensão'"),'D0 deve identificar a captura recebida da MCC');
-assert.ok(html.includes("metaLine('Campanhas válidas'")&&html.includes("metaLine('Data detectada'")&&html.includes("metaLine('Moedas'")&&html.includes("metaLine('Tipo de captura'"),'D0 deve apresentar os mesmos metadados essenciais do cartão D−1');
+assert.ok(html.includes("metaLine('Campanhas válidas'")&&html.includes("metaLine('Data detectada'")&&html.includes("metaLine('Moedas'")&&!html.includes("metaLine('Tipo de captura'")&&!html.includes("metaLine('Consumo acumulado do dia'"),'D0 mantém MCC, campanhas, data e moedas sem os dois campos removidos');
 assert.ok(!html.includes("metaLine('Impressões'")&&!html.includes("metaLine('Cliques'")&&!html.includes("metaLine('Arquivo'")&&!html.includes('decodeFile')&&!html.includes('decodePastedText'),'resumo da captura não deve parecer um arquivo nem manter recursos de entrada manual');
 assert.ok(html.includes("campaign.metricas_D_zero, 'd0'"),'aplicação direta não grava a linha diária de D0');
 assert.ok(html.includes('Campanha duplicada em D0; métricas não associadas.'),'mensagem antiga de D0 ainda limita a coleta ao custo');

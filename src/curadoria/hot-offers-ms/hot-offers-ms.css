@@ -3,3 +3,5 @@
 @media(max-width:760px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;min-height:0;padding:10px}.brand{padding-bottom:8px}.filter-grid{grid-template-columns:1fr 1fr}.top,.sheet-top{flex-direction:column}.actions{width:100%}.tablewrap{max-height:60vh}.sheet{padding:13px}.decision-grid,.trends-search-row{grid-template-columns:1fr}.decision-grid button{grid-column:auto}.history-row{grid-template-columns:1fr}.modalbody{padding:12px}.paste{min-height:180px}}
 #offerSheet .trends-keyword-heading{font-weight:400}
 .glimpse-embedded-frame{min-height:0}
+.tablewrap td.movement-cell{font-variant-numeric:tabular-nums;white-space:nowrap}.tablewrap td.movement-up,.tablewrap td.movement-new,.tablewrap td.movement-returned{color:#83e5bb}.tablewrap td.movement-down,.tablewrap td.movement-exited{color:#ff9aaa}
+#hotOffersMsRoot .tablewrap th[data-col="payment"],#hotOffersMsRoot .tablewrap td[data-col="payment"],#hotOffersMsRoot .tablewrap th[data-col="movement"],#hotOffersMsRoot .tablewrap td[data-col="movement"]{text-align:center!important}

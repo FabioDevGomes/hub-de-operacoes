@@ -4,6 +4,7 @@ import {test} from 'node:test';
 
 const source=await readFile(new URL('../src/curadoria/gerentes/index.html',import.meta.url),'utf8');
 const shared=await readFile(new URL('../src/table-edit-actions.css',import.meta.url),'utf8');
+const globalTableStyles=await readFile(new URL('../src/table-headers.css',import.meta.url),'utf8');
 const sidebar=await readFile(new URL('../src/sidebar-component.js',import.meta.url),'utf8');
 
 test('Lista de Gerente GM usa o nome do menu e o padrão compartilhado de Ocultar/Reexibir',()=>{
@@ -11,10 +12,12 @@ test('Lista de Gerente GM usa o nome do menu e o padrão compartilhado de Oculta
   assert.match(source,/<title>Lista de Gerente GM<\/title>/);
   assert.match(source,/<h1>Lista de Gerente GM<\/h1>/);
   assert.match(source,/table-edit-actions\.css\?v=3/);
+  assert.match(source,/table-headers\.css\?v=5/);
   assert.match(source,/class="product-cell hub-edit-host" data-col="product"/);
   assert.match(source,/class="item-visibility hub-corner-edit \$\{hidden\?'restore':''\}"/);
   assert.match(source,/\.product-cell\.hub-edit-host\{padding-right:54px\}/);
   assert.match(shared,/html body table :is\(thead,tbody\) :is\(th,td\) :is\(a,button\):is\(\.hub-corner-edit,\.hub-discreet-action\)/);
+  assert.equal((globalTableStyles.match(/:not\(\.hub-corner-edit\):not\(\.hub-discreet-action\)/g)||[]).length,3,'o padrão global não pode elevar as ações discretas, inclusive em hover e foco');
   assert.match(shared,/:is\(\.hub-corner-edit,\.hub-discreet-action\)\{[^}]*background:transparent!important;box-shadow:none!important;/);
   assert.match(shared,/font-size:\.65rem!important/);
   assert.match(shared,/text-decoration:underline dotted/);

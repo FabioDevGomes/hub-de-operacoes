@@ -12,7 +12,6 @@ main{min-width:0;padding:24px 28px 52px}.page-head{display:flex;align-items:flex
 @media(max-width:760px){#offerSheet .sheet-inner{padding:14px}#offerSheet .sheet-top{flex-direction:column}.image-validation-intro{grid-template-columns:1fr}.image-validation-intro h2,.image-validation-intro p,.image-validation-intro label{grid-column:1;grid-row:auto}.image-result-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.image-country-head{align-items:stretch;flex-direction:column}.image-country-head .btn{width:100%}.history-row{grid-template-columns:1fr}}
 #offerSheet .candidate-entry{display:flex;align-items:center;gap:8px;margin-top:10px}#offerSheet .candidate-entry input{flex:1;width:auto;min-width:0}#offerSheet .candidate-entry .btn{flex:0 0 auto}#offerSheet .keyword-candidate-list{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
 html body .history-pill{border:0}
-#offerSheet .glimpse-embedded-frame{height:min(480px,calc(100vh - 220px));max-height:min(480px,calc(100vh - 220px))}
 .tablewrap table{min-width:1620px}
 #offerSheet .message:empty{display:none}
 #offerSheet .message.error{color:var(--smartadv-red)}
@@ -20,4 +19,5 @@ html body .history-pill{border:0}
 .capture-toolbar .hub-column-picker{margin-left:auto}
 .capture-toolbar:has(.hub-column-picker[open]){position:relative;z-index:30}
 .tablewrap table[data-column-selection="custom"]{min-width:0}
-@media(min-width:1051px){.filters{grid-template-columns:minmax(200px,1.5fr) repeat(3,minmax(135px,1fr))}}
+@media(min-width:1051px){.filters{grid-template-columns:minmax(200px,1.5fr) repeat(4,minmax(135px,1fr))}}
+.offer-name.hub-edit-host{padding-right:54px}

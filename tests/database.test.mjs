@@ -449,10 +449,16 @@ const managerManifest={...fullAccountManifest,identificacao_mcc:{id:'888-777-666
 const managerLinked=db.importManifest(db.create(),managerManifest,()=>[],{trackEvents:false}).base;
 assert.equal(managerLinked.campanhas[0].mcc_id,'888-777-6666','a campanha mantém separado o ID da MCC e da conta cliente');
 assert.deepEqual(managerLinked.mccs.map(item=>({id:item.id,nome:item.nome})),[{id:'888-777-6666',nome:'MCC e-com'}],'a base tem um catálogo compartilhado de MCCs para outras telas');
+assert.ok(Number.isFinite(Date.parse(managerLinked.mccs[0].ultima_importacao_em)),'a MCC registra a hora exata em que seu manifesto foi importado');
+managerLinked.mccs[0].ultima_importacao_em='2000-01-01T00:00:00.000Z';
 const renamedManager=db.importManifest(managerLinked,{...managerManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC atualizada'},campanhas:[{...managerManifest.campanhas[0],mcc_nome:'MCC atualizada'}]},()=>[],{trackEvents:false}).base;
 assert.equal(renamedManager.campanhas[0].mcc_id,'888-777-6666');
 assert.equal(renamedManager.mccs[0].nome,'MCC atualizada','mudança de rótulo atualiza o catálogo sem perder a chave técnica');
+assert.ok(Date.parse(renamedManager.mccs[0].ultima_importacao_em)>Date.parse('2000-01-01T00:00:00.000Z'),'cada importação atualiza o horário da MCC');
 assert.deepEqual(JSON.parse(JSON.stringify(renamedManager.mccs[0].nomes_anteriores)),['MCC e-com'],'o catálogo preserva o rótulo anterior');
+const emptyManagerImport=db.importManifest(db.create(),{...managerManifest,campanhas:[]},()=>[],{trackEvents:false}).base;
+assert.equal(emptyManagerImport.mccs[0].nome,'MCC e-com','registra a MCC mesmo quando a importação válida não contém campanhas');
+assert.ok(Number.isFinite(Date.parse(emptyManagerImport.mccs[0].ultima_importacao_em)));
 assert.deepEqual(JSON.parse(JSON.stringify(db.normalize({...managerLinked,mccs:undefined}).mccs)),[],'base legada sem catálogo continua normalizável');
 assert.throws(()=>db.importManifest(db.create(),{...managerManifest,campanhas:[{...managerManifest.campanhas[0],mcc_id:'conta-inválida'}]},()=>[],{trackEvents:false}),/ID de MCC inválido/);
 

@@ -1,7 +1,7 @@
 import * as Domain from './smartadv-offers-domain.mjs?v=4';
 import * as Storage from './smartadv-offers-storage.mjs?v=3';
 import {createInitialCapture} from './smartadv-offers-initial-capture.mjs?v=3';
-import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=13';
+import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=14';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -9,7 +9,7 @@ import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import * as DecisionUI from '../decision-ui.mjs';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=1';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
 
 const root = document.querySelector('#smartAdvOffersRoot');
 let captures = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
@@ -117,7 +117,7 @@ function openGlimpse(item) {
 function closeOffer(){listFocus.restore()}
 window.addEventListener('message',event=>{
   const frame=document.querySelector('#glimpseFrame');if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
-  if(event.data?.type==='hub-glimpse-resize'){const height=Number(event.data.height),maxHeight=Math.max(220,Math.min(480,window.innerHeight-220));if(Number.isFinite(height))frame.style.height=`${Math.min(maxHeight,Math.max(260,Math.ceil(height)))}px`;return}
+  if(event.data?.type==='hub-glimpse-resize'){const height=Number(event.data.height);if(Number.isFinite(height))frame.style.height=`${Math.max(320,Math.ceil(height))}px`;return}
   if(event.data?.type!=='hub-glimpse-close')return;
   void refresh().then(()=>{view.returnFromGlimpse();view.showMessage('Análise Glimpse atualizada.')});
 });

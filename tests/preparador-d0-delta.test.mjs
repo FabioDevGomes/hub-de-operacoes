@@ -183,8 +183,8 @@ assert.ok(html.slice(d1PanelStart,d0PanelStart).includes('id="apply-manifest"'),
 assert.ok(html.includes('function placeApplyActions(hasD0)')&&html.includes("hasD0 ? '#d0-changes-panel' : '#d1-changes-panel'"),'o botão deve acompanhar o período recebido');
 assert.equal([...html.matchAll(/id="apply-manifest"/g)].length,1,'deve haver somente um botão Atualizar base');
 assert.equal([...html.matchAll(/class="slot-note">Opcional/g)].length,2,'D−1 e D0 devem ser opcionais individualmente');
-assert.match(html,/#d0-changes-panel > \.panel-head, #d1-changes-panel > \.panel-head\s*\{\s*padding:\s*12px 16px/,'cabeçalhos de alterações devem ter espaçamento compacto');
-assert.match(html,/#d0-changes-panel #apply-manifest, #d1-changes-panel #apply-manifest\s*\{\s*padding:\s*6px 10px;\s*font-size:\s*\.88rem/,'botão Atualizar base deve ser menor em ambos os cabeçalhos compactos');
+assert.match(html,/section\[aria-labelledby="step1-title"\] > \.panel-head, #d0-changes-panel > \.panel-head, #d1-changes-panel > \.panel-head\s*\{\s*padding:\s*8px 16px/,'cabeçalhos destacados do Preparador devem manter espaçamento vertical compacto');
+assert.match(html,/#d0-changes-panel #apply-manifest:not\(\.hub-panel-action\), #d1-changes-panel #apply-manifest:not\(\.hub-panel-action\)\s*\{\s*padding:\s*6px 10px;\s*font-size:\s*\.88rem/,'o tamanho local legado só se aplica quando a ação não opta pelo padrão do topo');
 assert.ok(html.includes('id="apply-feedback" role="status" aria-live="polite"'),'status da atualização deve aparecer no cabeçalho com anúncio acessível');
 assert.ok(html.indexOf('id="apply-feedback"')<html.indexOf('id="apply-manifest"'),'status deve ficar no espaço entre o título e o botão');
 assert.ok(!html.includes('id="apply-panel"')&&!html.includes('Status da atualização'),'seção 3 de status da atualização deve ser removida');

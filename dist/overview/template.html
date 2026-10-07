@@ -33,6 +33,31 @@
             <div class="overview-roi-actions"><button id="commissionTestCancel" class="btn" type="button">Cancelar</button><button class="btn primary" type="submit">OK</button></div>
           </form>
         </dialog>
+        <dialog id="overviewTestRulesDialog" class="overview-roi-dialog overview-test-rules-dialog" aria-labelledby="overviewTestRulesTitle">
+          <form id="overviewTestRulesForm" class="overview-roi-form">
+            <div><h2 id="overviewTestRulesTitle">Regras da coluna Limite de teste</h2><p>Estas regras valem para todas as campanhas. Ajustes feitos nos links de cada campanha continuam prevalecendo sobre os padrões de ROI.</p></div>
+            <div class="overview-test-rules-pair">
+              <label for="overviewTestCpaThreshold">Exibir regra de CPA a partir de (%)</label>
+              <label for="overviewTestCommissionPercent">Teste inicial até (% da comissão)</label>
+              <input id="overviewTestCpaThreshold" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+              <input id="overviewTestCommissionPercent" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+            </div>
+            <p class="overview-test-rules-section-title">ROI mínimo por vendas</p>
+            <div class="overview-test-rules-pair overview-test-rules-roi">
+              <label for="overviewTestRoiOne">1 venda (%)</label>
+              <label for="overviewTestRoiTwo">2 vendas (%)</label>
+              <input id="overviewTestRoiOne" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+              <input id="overviewTestRoiTwo" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+              <label for="overviewTestRoiThree">3 vendas (%)</label>
+              <label for="overviewTestRoiFour">4 ou mais vendas (%)</label>
+              <input id="overviewTestRoiThree" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+              <input id="overviewTestRoiFour" class="overview-roi-input" type="text" inputmode="decimal" autocomplete="off" aria-describedby="overviewTestRulesHelp overviewTestRulesError">
+            </div>
+            <p id="overviewTestRulesHelp" class="overview-roi-help">Padrões atuais: CPA a partir de 90%, teste até 50% da comissão e ROI de 10% / 20% / 30% / 30%. O último valor também cobre 4 ou mais vendas. Cada link de ROI numa linha permite um ajuste específico daquela campanha.</p>
+            <p id="overviewTestRulesError" class="overview-roi-error" role="alert" aria-live="polite"></p>
+            <div class="overview-roi-actions"><button id="overviewTestRulesCancel" class="btn" type="button">Cancelar</button><button class="btn primary" type="submit">OK</button></div>
+          </form>
+        </dialog>
         <dialog id="remainingAlertDialog" class="overview-roi-dialog" aria-labelledby="remainingAlertTitle">
           <form id="remainingAlertForm" class="overview-roi-form">
             <div><h2 id="remainingAlertTitle">Alerta de valor restante</h2><p>Esta configuração vale para todas as campanhas e períodos da Visão Geral.</p></div>
@@ -44,6 +69,13 @@
             <p id="remainingAlertError" class="overview-roi-error" role="alert" aria-live="polite"></p>
             <div class="overview-roi-actions"><button id="remainingAlertCancel" class="btn" type="button">Cancelar</button><button class="btn primary" type="submit">OK</button></div>
           </form>
+        </dialog>
+        <dialog id="pausedTodayDialog" class="overview-roi-dialog overview-paused-today-dialog" aria-labelledby="pausedTodayTitle">
+          <div class="overview-paused-today-content">
+            <div><h2 id="pausedTodayTitle">Campanhas que pausaram hoje</h2><p id="pausedTodaySummary" aria-live="polite"></p></div>
+            <ul id="pausedTodayList" class="overview-paused-today-list" aria-label="Campanhas pausadas hoje"></ul>
+            <div class="overview-roi-actions"><button id="pausedTodayClose" class="btn" type="button">Fechar</button></div>
+          </div>
         </dialog>
         <dialog id="fractionalValueDialog" class="overview-roi-dialog overview-fractional-dialog" aria-labelledby="fractionalValueTitle">
           <div class="overview-fractional-content">

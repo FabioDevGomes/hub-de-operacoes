@@ -17,6 +17,8 @@ assert.match(source, /\['clickbank-top-offers-v1','clickbank-top-offers-v2'\]/, 
 assert.match(source, /offer\.offerId == null \|\|/, 'Offer ID é opcional, preservando capturas históricas');
 assert.match(source, /record\.dtcCountryCapture\.source === 'clickbank-dtc-checkout'/, 'a origem DTC/hora e países capturados têm validação opcional, sem migração da store');
 assert.ok(source.includes("record.dtcCountryCapture.countries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code))"), 'códigos DTC são validados como ISO de duas letras');
+assert.ok(source.includes('isSalesPageType(record.salesPageType)'), 'metadado manual de página aceita DTC, VSL, TSL, Quiz ou ausente');
+assert.ok(source.includes("import {isSalesPageType} from './sales-page-type.mjs?v=3'"), 'validação reutiliza o contrato compartilhado sem nova store ou migração');
 assert.match(source, /tx\.objectStore\(STORES\.captures\)\.add\(capture\)/, 'capturas são acrescentadas sem substituir a coleção anterior');
 assert.match(source, /export async function exportBackup\(\)/);
 assert.match(source, /offerMetadata: await getAll\(STORES\.offerMetadata\)/, 'o backup completo inclui países manuais');

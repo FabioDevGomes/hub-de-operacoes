@@ -110,7 +110,7 @@ for(const mode of ['consolidated','d1','d0']){
     const rendered=[...overviewDom.get('#totalsBody').innerHTML.matchAll(/<tr class="([^"]*)" /g)];
     assert.equal(rendered.filter(row=>!row[1].split(' ').includes('hidden')).length,expected,`${mode}/${filter} filters the correct operational status`);
     assert.match(overviewDom.get('#kpis').innerHTML,/<span class="kpi-label">Ativas<\/span><strong class="overview-kpi-detail-value">1<\/strong>/);
-    assert.match(overviewDom.get('#kpis').innerHTML,/<span class="kpi-label">Pausadas<\/span><strong class="overview-kpi-detail-value">5<\/strong>/);
+    assert.match(overviewDom.get('#kpis').innerHTML,/<span class="kpi-label">Pausaram hoje<\/span><strong class="overview-kpi-detail-value">0<\/strong>/);
   }
 }
 viewContext.state.totalsMode='consolidated';viewContext.state.campaignStatusFilter='all';overview.render();

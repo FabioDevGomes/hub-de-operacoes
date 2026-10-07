@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {canApplyDetectedValue,collectAutoFilledFieldIds,restoreAutoFilledFieldIds} from '../src/copy-ficha/copy-ficha-view.mjs';
+import {readClipboardText} from '../src/copy-ficha/copy-ficha-clipboard.mjs';
 
 const empty={id:'copyProduct',value:'',dataset:{},classList:{add(){}}};
 assert.equal(canApplyDetectedValue(empty,'Grounded Footwear'),true,'um campo vazio aceita a detecção');
@@ -30,6 +31,12 @@ assert.equal(restoredFields[0].dataset.autoFilled,'true','a restauração recupe
 assert.deepEqual(restoredFields[0].classList.values,['is-autofilled'],'a restauração recupera o destaque de detecção');
 assert.equal(restoredFields[1].dataset.autoFilled,undefined,'campos manuais continuam sem marcação automática');
 
+assert.equal(await readClipboardText({readText:async()=>'Oferta copiada\nPreço promocional'}),'Oferta copiada\nPreço promocional','a leitura preserva todo o conteúdo copiado');
+await assert.rejects(readClipboardText({readText:async()=>''}),error=>error.code==='clipboard-empty');
+await assert.rejects(readClipboardText({}),error=>error.code==='clipboard-unavailable');
+const clipboardDenied=Object.assign(new Error('denied'),{name:'NotAllowedError'});
+await assert.rejects(readClipboardText({readText:async()=>{throw clipboardDenied}}),error=>error===clipboardDenied,'o bloqueio de permissão chega ao fallback da interface');
+
 const view=(await Promise.all(['copy-ficha-view.mjs','copy-ficha-template.mjs','copy-ficha-draft.mjs','copy-ficha-workflow.mjs'].map(path=>readFile(new URL('../src/copy-ficha/'+path,import.meta.url),'utf8')))).join('\n');
 const copyCss=await readFile(new URL('../src/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
 const outputCss=await readFile(new URL('../src/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
@@ -52,6 +59,10 @@ assert.ok(!view.includes('Pacotes para a ficha')&&!view.includes('copyPackages')
 assert.ok(!view.includes('packages:[]')&&!view.includes('copyPackages'),'os pacotes não são usados na geração das perguntas nem da ficha');
 assert.match(view,/Usar sugestão de produto:/,'uma detecção divergente oferece ação explícita sem substituir o valor manual');
 assert.match(view,/useSuggestion\.onclick=\(\)=>useProductSuggestion\(/,'o botão aplica a sugestão escolhida');
+assert.match(view,/by\(root,'copyAnalyze'\)\.onclick=\(\)=>analyzeClipboard\(root\)/,'a leitura do clipboard só começa após clique explícito em Analisar oferta');
+assert.match(view,/text=await readClipboardText\(\);[\s\S]*?by\(root,'copyRawText'\)\.value=text;[\s\S]*?analyze\(root\)/,'o clique captura o texto e chama a análise existente');
+assert.match(view,/by\(root,'copyAnalyzeManual'\)\.onclick=\(\)=>analyzeManualText\(root\)/,'a colagem manual continua disponível como alternativa');
+assert.match(view,/copyManualPastePanel'\)\.hidden=false/,'o campo manual só aparece como fallback após falha de leitura');
 assert.ok(view.includes('updatePendingHighlights(root,{fields:error?.fields})')&&view.includes('error.blockers||[error.message]'),'a ficha destaca os campos obrigatórios quando não pode ser gerada');
 assert.ok(!view.includes('a ficha ainda contém confirmações ou campos sem preencher.'),'não deve voltar a exibir o bloqueio genérico sem apontar a pendência');
 

@@ -6,11 +6,11 @@ import {mountClickBankTopOffersView} from '../src/curadoria/clickbank-top-offers
 function fixture(offerId=null) {
   const document={createElement:()=>element(),addEventListener(){},removeEventListener(){}};
   function element(dataset={}) {
-    const classes=new Set();
-    return {dataset,ownerDocument:document,children:[],value:'',innerHTML:'',textContent:'',listeners:{},style:{},
+    const classes=new Set(),attributes=new Map();
+    return {dataset,ownerDocument:document,children:[],value:'',innerHTML:'',textContent:'',listeners:{},style:{},hidden:false,disabled:false,
       classList:{add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value),toggle(value,on){if(on??!classes.has(value))classes.add(value);else classes.delete(value);}},
       append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},
-      setAttribute(){},addEventListener(type,handler){this.listeners[type]=handler;},querySelector(){return element();},querySelectorAll(){return [];},
+      setAttribute(name,value){attributes.set(name,String(value));},getAttribute(name){return attributes.get(name);},addEventListener(type,handler){this.listeners[type]=handler;},querySelector(){return element();},querySelectorAll(){return [];},
     };
   }
   const nodes=new Map(),node=selector=>{if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);};
@@ -19,23 +19,74 @@ function fixture(offerId=null) {
   const tabs=['trends','glimpse','images','history'].map(tab=>element({tab}));
   const panels=['trends','glimpse','images','history'].map(panel=>element({panel}));
   const lists=['DE','US'].map(imageCandidateList=>element({imageCandidateList}));
+  const resultButtons=['up','stable','down','point_peak','low_volume','no_data','inconclusive'].map(trendsResult=>element({trendsResult}));
+  node('#trendResults').querySelectorAll=selector=>selector==='[data-trends-result]'?resultButtons:[];
   const sheet=node('#offerSheet');sheet.classList.add('hidden');
   sheet.querySelector=selector=>node(selector);
   sheet.querySelectorAll=selector=>selector==='[data-tab]'?tabs:selector==='[data-panel]'?panels:[];
   const root={querySelector:node,querySelectorAll:selector=>selector==='[data-image-candidate-list]'?lists:[]};
-  const calls=[];
-  const view=mountClickBankTopOffersView({root,actions:{
+  const calls=[],actions={
     openGlimpse:item=>calls.push(['glimpse',item.offerKey]),saveImage:(...args)=>calls.push(['saveImage',...args]),
+    saveTrend:async(...args)=>{calls.push(['saveTrend',...args]);return true;},
     openImagesExcluding:(...args)=>calls.push(['exclude',...args]),
-  }});
+  };
+  const view=mountClickBankTopOffersView({root,actions});
   const state={captures:[{captureId:'capture',capturedAt:'2026-01-02T12:00:00Z',listName:'Top Offers',page:{total:1,completeUniverse:true},offers:[{offerKey:'offer',offerName:'Produto <teste>',seller:'EXAMPLE',rank:1,...(offerId?{offerId}:{})}]}],
     offerMetadata:[{offerKey:'offer',manualCountries:['DE','US']}],trends:[],
     images:[{offerKey:'offer',searchTerm:'Produto',assessments:[{assessmentId:'a',country:'DE',status:'mixed',capturedAt:'2026-01-02T13:00:00Z',negativeKeywordCandidates:['outra marca']}]}],glimpse:[]};
   view.render(state);
   const open=action=>node('#rows').listeners.click({target:{closest(selector){return selector==='[data-action]'?{dataset:{action,key:'offer'}}:null;}}});
   const clickTab=tab=>node('.tabs').listeners.click({target:{closest(){return {dataset:{tab}};}}});
-  return {view,state,calls,sheet,node,tabs,panels,lists,open,clickTab};
+  return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,actions,open,clickTab};
 }
+
+test('Resultado de Trends fica pendente até Salvar e só então confirma a gravação',async()=>{
+  const f=fixture();f.open('trends');
+  const save=f.node('#saveSheetButton'),selected=f.resultButtons.find(button=>button.dataset.trendsResult==='up');
+  assert.equal(save.disabled,false,'Salvar permanece ativo mesmo antes de alterar o resultado');
+  selected.onclick();
+  assert.equal(f.calls.length,0,'escolher o resultado não grava automaticamente');
+  assert.equal(save.disabled,false);
+  assert.match(f.node('#trendMessage').textContent,/Clique em Salvar/);
+  await save.onclick();
+  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
+  assert.equal(f.calls.find(call=>call[0]==='saveTrend')[2],'up');
+  assert.equal(save.disabled,false,'Salvar continua ativo depois de gravar');
+  assert.match(f.node('#sheetMessage').textContent,/salva/);
+});
+
+test('Salvar ativo orienta a escolher um resultado se a oferta ainda não tiver avaliação',async()=>{
+  const f=fixture();f.open('trends');
+  const save=f.node('#saveSheetButton');
+  assert.equal(save.disabled,false);
+  await save.onclick();
+  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,0,'não grava uma avaliação sem resultado');
+  assert.match(f.node('#trendMessage').textContent,/Selecione um resultado/);
+});
+
+test('Salvar reutiliza o resultado atual quando a oferta já tem uma avaliação',async()=>{
+  const f=fixture();
+  f.state.trends=[{offerKey:'offer',assessments:[{assessmentId:'saved',status:'stable',countries:[],productAge:'old',searchTerm:'busca existente',capturedAt:'2026-01-02T13:00:00Z'}]}];
+  f.view.render(f.state);f.open('trends');
+  const save=f.node('#saveSheetButton');
+  assert.equal(save.disabled,false);
+  await save.onclick();
+  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
+  const saved=f.calls.find(call=>call[0]==='saveTrend');
+  assert.equal(saved[2],'stable','usa o último resultado selecionado');
+  assert.equal(saved[3].term,'busca existente');
+});
+
+test('falha ao salvar mantém o resultado pendente para nova tentativa',async()=>{
+  const f=fixture();f.open('trends');
+  f.actions.saveTrend=async()=>false;
+  f.resultButtons.find(button=>button.dataset.trendsResult==='stable').onclick();
+  const save=f.node('#saveSheetButton');
+  await save.onclick();
+  assert.equal(save.disabled,false,'a seleção pendente continua disponível para tentar novamente');
+  assert.match(f.node('#trendMessage').textContent,/Não foi possível salvar/);
+  assert.equal(f.node('#trendMessage').classList.contains('error'),true);
+});
 
 test('Offer ID torna a posição # clicável e mostra Abrir oferta abaixo de Países; captura antiga não inventa link',()=>{
   const current=fixture('ENREV');current.open('trends');
@@ -48,6 +99,19 @@ test('Offer ID torna a posição # clicável e mostra Abrir oferta abaixo de Pa�
   assert.doesNotMatch(legacy.node('#rows').innerHTML,/clickbank-rank-link/);
   assert.equal(legacy.node('#openClickBankOffer').classList.contains('hidden'),true);
   assert.equal(legacy.node('#clickBankOfferUnavailable').classList.contains('hidden'),false);
+});
+
+test('total de resultados vai para a faixa de filtros e não reserva a linha descritiva removida',()=>{
+  const f=fixture('ENREV'),count=f.node('#captureResultCount');
+  f.state.captures[0].page.total=1251;
+  f.view.render(f.state);
+  assert.equal(count.textContent,'1.251 resultados · Lista completa');
+  assert.equal(count.hidden,false);
+  f.state.captures[0].page.total=null;
+  f.state.captures[0].page.completeUniverse=false;
+  f.view.render(f.state);
+  assert.equal(count.textContent,'');
+  assert.equal(count.hidden,true);
 });
 
 test('extensão preenche e abre o diálogo existente; repetição não reabre e cancelar não grava',()=>{
@@ -70,6 +134,8 @@ test('extensão preenche e abre o diálogo existente; repetição não reabre e 
 test('CB abre Glimpse/Imagens diretamente, muda abas e conclui sem gravar',()=>{
   const f=fixture(),initial=JSON.stringify(f.state);
   f.open('glimpse');
+  assert.equal(f.node('#saveSheetButton').hidden,false,'Salvar continua na mesma barra também no Glimpse');
+  assert.equal(f.node('#saveSheetButton').disabled,false,'o botão compartilhado aciona o salvamento do Glimpse nessa aba');
   assert.equal(f.sheet.classList.contains('hidden'),false);
   assert.equal(f.tabs.find(tab=>tab.classList.contains('active')).dataset.tab,'glimpse');
   assert.equal(f.panels.find(panel=>!panel.classList.contains('hidden')).dataset.panel,'glimpse');
@@ -88,7 +154,14 @@ test('CB abre Glimpse/Imagens diretamente, muda abas e conclui sem gravar',()=>{
   f.clickTab('history');
   assert.equal(f.tabs.find(tab=>tab.classList.contains('active')).dataset.tab,'history');
   assert.match(f.node('#allImagesHistory').innerHTML,/Mista/);
-  f.clickTab('images');f.node('#finishImages').onclick();
+  f.clickTab('images');
+  assert.equal(f.node('#saveSheetButton').hidden,false,'Salvar permanece visível na aba Imagens');
+  assert.equal(f.node('#saveSheetButton').disabled,true,'Imagens grava cada ação automaticamente, sem um salvamento manual pendente');
+  assert.match(f.node('#saveSheetButton').title,/automaticamente/);
+  f.clickTab('history');
+  assert.equal(f.node('#saveSheetButton').disabled,true,'o histórico mantém a ação comum desativada por ser somente leitura');
+  assert.match(f.node('#saveSheetButton').title,/somente leitura/);
+  f.node('#closeSheet').onclick();
   assert.equal(f.sheet.classList.contains('hidden'),true);
   assert.equal(JSON.stringify(f.state),initial,'navegação não modifica entradas');
   assert.equal(f.calls.filter(call=>call[0]==='saveImage').length,0);
@@ -112,4 +185,13 @@ test('CB sem país mostra ausência e não inventa cartões/classificação',()=
   assert.match(f.node('#imagesMessage').textContent,/Adicione países manualmente/);
   assert.doesNotMatch(f.node('#imageCountries').innerHTML,/data-image-search/);
   assert.equal(f.calls.length,0);
+});
+
+test('Quiz pode ser classificado manualmente e aparece na ficha e na coluna PAG.',()=>{
+  const f=fixture();
+  f.state.offerMetadata[0].salesPageType='quiz';
+  f.view.render(f.state);
+  f.open('trends');
+  assert.match(f.node('#salesPageTypeActions').innerHTML,/data-sales-page-type="quiz" aria-pressed="true">QUIZ/);
+  assert.match(f.node('#rows').innerHTML,/<td class="page-type-cell">QUIZ<\/td>/);
 });

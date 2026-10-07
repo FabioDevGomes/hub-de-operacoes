@@ -30,7 +30,9 @@ test('manifest card shows Brasília time, full date in tooltip, filters are inde
   assert.match(initial,/29\/09\/2026, 22:25 \(Brasília\)/);
   assert.match(initial,/kpi-value">22:25<\/strong>[\s\S]*Última captura/);
   assert.doesNotMatch(initial,/campanhas ativas|01\/10\/2026|22:00/);
-  assert.match(initial,/D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/);
+  assert.doesNotMatch(initial,/D−1|D0/,'as datas D−1/D0 saem do cartão Manifesto MCC');
+  const provisional=()=>dom.get('#kpis').innerHTML.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)?.[0];
+  assert.match(provisional(),/D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/,'as datas ficam no cartão de Vendas provisórias');
   for(const mode of ['consolidated','d1','d0'])for(const filter of ['active','paused','all']){state.totalsMode=mode;state.campaignStatusFilter=filter;dom.get('#search').value='irrelevante';controller.render();assert.equal(card(),initial)}
   snapshot.manifestCaptureInfo={timestamp:'2026-09-30T15:40:00Z',source:'generated'};controller.render();
   assert.match(card(),/12:40[\s\S]*Manifesto gerado/);

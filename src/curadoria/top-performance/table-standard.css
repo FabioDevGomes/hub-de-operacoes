@@ -4,15 +4,34 @@
 }
 
 .offer-table-caption {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 12px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.offer-table-caption h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: .95rem;
-  line-height: 1.25;
+/* Na E-commerce GM, a classificação do Trends fica indicada pela cor do texto;
+   resultados avaliados compartilham o fundo azul do selo Estável. Estados sem
+   avaliação mantêm o fundo neutro definido pela folha compartilhada. */
+#rows button.trends-badge.up,
+#rows button.trends-badge.stable,
+#rows button.trends-badge.down,
+#rows button.trends-badge.low_volume,
+#rows button.trends-badge.point_peak,
+#rows button.trends-badge.inconclusive {
+  background: #132b44;
+}
+
+/* Mantém o valor e o indicador de movimento alinhados no centro de suas colunas. */
+.hub-table-layout th[data-col="payout"] .sort-btn,
+.hub-table-layout th[data-col="movement"] .sort-btn,
+.hub-table-layout td[data-col="payout"],
+.hub-table-layout td[data-col="movement"] {
+  text-align: center;
 }

@@ -18,6 +18,7 @@ test('Editar usa a cor do ROI mínimo no canto superior direito sem remover foco
   assert.match(overviewCss,/\.test-budget-roi-link\{[^}]*color:#88a5c2/);
   assert.match(overviewCss,/\.test-budget-detail\{[^}]*color:#88a5c2/);
   assert.match(tableEditCss,/\.hub-corner-edit\{[^}]*position:absolute;top:var\(--hub-corner-edit-top,1px\);right:var\(--hub-corner-edit-right,2px\);[^}]*margin:0;/);
+  assert.match(overviewCss,/th\[data-column="limit"\] \.overview-test-rules-edit\{right:12px\}/,'Editar precisa ficar afastado da alça de redimensionamento no canto do cabeçalho');
   assert.match(overviewCss,/th \.sort-btn\{position:relative;min-height:50px;padding-block:6px;/);
   assert.doesNotMatch(overviewCss,/th\[data-column="remaining"\] \.sort-btn\{/,'Valor restante deve herdar o mesmo alinhamento vertical dos outros títulos');
   assert.match(overviewCss,/\.test-budget-roi-link:focus-visible\{outline:2px solid var\(--cyan\)/);
@@ -44,6 +45,12 @@ test('CPA do nome >=90 aplica metade da comissão apenas com zero vendas confirm
     assert.deepEqual(json(actual),json(previous),'venda oficial, fracionária ou provisória retorna à regra anterior de ROI');
     assert.equal(actual.commissionTestPercent,undefined);
   }
+  const custom={cpaMinimumPercent:85,commissionPercent:40,roiBySales:{1:5,2:15,3:25,4:35}};
+  assert.equal(budget({cpaPercent:84.99,testLimitSettings:custom}).limit,300);
+  const threshold=budget({cpaPercent:85,testLimitSettings:custom});assert.equal(threshold.limit,120);assert.equal(threshold.commissionTestPercent,40);assert.equal(threshold.cpaMinimumPercent,85);
+  for(const [sales,minimumRoi] of [[1,5],[2,15],[3,25],[4,35],[7,35]])assert.equal(budget({sales,conversions:sales,revenue:300,testLimitSettings:custom}).minimumRoi,minimumRoi);
+  assert.equal(budget({sales:2,conversions:2,revenue:300,minimumRoiOverride:45,testLimitSettings:custom}).minimumRoi,45,'ajuste específico da campanha prevalece');
+  assert.deepEqual(json(domain.testLimitSettings()),json({cpaMinimumPercent:90,commissionPercent:50,roiBySales:{1:10,2:20,3:30,4:30}}));
 });
 
 test('percentual e valor inicial sincronizam em BRL sem conversão dupla',()=>{
@@ -60,6 +67,7 @@ test('percentual e valor inicial sincronizam em BRL sem conversão dupla',()=>{
 test('configurações são aditivas, por ID exato, preservadas no backup e sem mutação',()=>{
   const original=database.create();original.campanhas=[{id:'a',nome_mcc:'Produto A 90%'},{id:'b',nome_mcc:'Produto B 91%'}];
   original.diario=[{campanha_id:'a',data:'2026-10-01',celulas:{O:{value:100}}}];original.outra_configuracao={preservar:true};
+  original.regras_limite_teste={cpaMinimumPercent:85,commissionPercent:45,roiBySales:{1:5,2:15,3:25,4:35}};
   const before=JSON.stringify(original);
   const percentBase=database.setCampaignCommissionTestPercent(original,'a',35);
   const alertBase=database.setRemainingAlertThreshold(percentBase,80);
@@ -67,7 +75,7 @@ test('configurações são aditivas, por ID exato, preservadas no backup e sem m
   assert.equal(alertBase.campanhas[0].limite_teste_comissao_pct,35);assert.equal(alertBase.campanhas[1].limite_teste_comissao_pct,undefined);
   assert.deepEqual(json(alertBase.diario),json(original.diario));assert.deepEqual(json(alertBase.outra_configuracao),{preservar:true});
   const restored=database.normalize(JSON.parse(JSON.stringify(alertBase)));
-  assert.equal(restored.valor_restante_alerta_minimo,80);assert.equal(restored.campanhas[0].limite_teste_comissao_pct,35);
+  assert.equal(restored.valor_restante_alerta_minimo,80);assert.equal(restored.campanhas[0].limite_teste_comissao_pct,35);assert.deepEqual(json(restored.regras_limite_teste),json(original.regras_limite_teste));
   assert.equal(database.setRemainingAlertThreshold(alertBase,0).valor_restante_alerta_minimo,0);
   assert.throws(()=>database.setCampaignCommissionTestPercent(original,'ausente',35),/não encontrada/);
   for(const invalid of [NaN,Infinity,-1,'30',null])assert.throws(()=>database.setRemainingAlertThreshold(original,invalid));
@@ -81,12 +89,12 @@ function setup({sales=0,cpa=91,minimum=undefined,yellowMinimum=undefined,remaini
     c:{nome_campanha_exato:'Produto exemplo 91%',_status:'ativa'},campaignId:'a',identity:{name:'Produto exemplo 91%',dateLabel:'01/10',dateSort:'2026-10-01'},
     totals:{investment:100},d0Totals:{investment:100},budget:{...b,remaining},testLimit:{value:b.limit},testRemaining:{value:remaining},zeroDays:0,roi:null,profit:null
   }]};
-  dom.setList('.test-budget-roi-link',[{campaignId:'a',currentPercent:'50',currentLimit:'150',commissionBrl:'300'}]);
-  const link=dom.root.querySelectorAll('.test-budget-roi-link')[0];link.classList.add('test-budget-commission-link');
+  dom.setList('.test-budget-roi-link',[{campaignId:'a',currentPercent:'50',currentLimit:'150',commissionBrl:'300'},{}]);
+  const link=dom.root.querySelectorAll('.test-budget-roi-link')[0],rulesLink=dom.root.querySelectorAll('.test-budget-roi-link')[1];link.classList.add('test-budget-commission-link');rulesLink.classList.add('overview-test-rules-edit');
   const controller=context.window.OverviewView.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,actions:{
-    editCommissionTestPercent:async(...args)=>calls.push(['commission',...args]),editRemainingAlert:async(...args)=>calls.push(['remaining',...args]),...actionOverrides
+    editCommissionTestPercent:async(...args)=>calls.push(['commission',...args]),editRemainingAlert:async(...args)=>calls.push(['remaining',...args]),editTestLimitSettings:async(...args)=>calls.push(['test-rules',...args]),...actionOverrides
   }});
-  controller.render();return{...dom,calls,snapshot,state,controller,link};
+  controller.render();return{...dom,calls,snapshot,state,controller,link,rulesLink};
 }
 
 test('link CPA aparece só sem vendas e mantém ROI mínimo após venda nos três períodos',()=>{
@@ -95,6 +103,23 @@ test('link CPA aparece só sem vendas e mantém ROI mínimo após venda nos trê
   const sold=setup({sales:1});assert.match(sold.get('#totalsBody').innerHTML,/ROI mínimo 10% · 1 venda/);assert.doesNotMatch(sold.get('#totalsBody').innerHTML,/teste até .* da comissão/);
   assert.doesNotMatch(setup({cpa:85}).get('#totalsBody').innerHTML,/test-budget-commission-link/);
   assert.deepEqual(ui.calls,[],'renderizar não salva');
+  assert.match(ui.get('#totalsHead').innerHTML,/data-column="limit"[^]*overview-test-rules-edit hub-corner-edit[^]*Editar/);
+});
+
+test('Editar no cabeçalho configura CPA, percentual padrão e quatro faixas de ROI sem alterar campanha até confirmar',async()=>{
+  const ui=setup(),event={preventDefault(){},stopPropagation(){}};ui.rulesLink.onclick(event);
+  assert.equal(ui.get('#overviewTestRulesDialog').open,true);
+  assert.equal(ui.get('#overviewTestCpaThreshold').value,'90,00');assert.equal(ui.get('#overviewTestCommissionPercent').value,'50,00');
+  assert.deepEqual([1,2,3,4].map(sales=>ui.get(`#overviewTestRoi${['','One','Two','Three','Four'][sales]}`).value),['10,00','20,00','30,00','30,00']);
+  ui.get('#overviewTestCpaThreshold').value='85';ui.get('#overviewTestCommissionPercent').value='45';
+  ui.get('#overviewTestRoiOne').value='5';ui.get('#overviewTestRoiTwo').value='15';ui.get('#overviewTestRoiThree').value='25';ui.get('#overviewTestRoiFour').value='35';
+  ui.get('#overviewTestRulesCancel').onclick();assert.deepEqual(ui.calls,[],'cancelar não salva');
+  ui.rulesLink.onclick(event);ui.get('#overviewTestCpaThreshold').value='85';ui.get('#overviewTestCommissionPercent').value='45';
+  ui.get('#overviewTestRoiOne').value='5';ui.get('#overviewTestRoiTwo').value='15';ui.get('#overviewTestRoiThree').value='25';ui.get('#overviewTestRoiFour').value='35';
+  await ui.get('#overviewTestRulesForm').onsubmit(event);
+  assert.deepEqual(json(ui.calls),[['test-rules',{cpaMinimumPercent:85,commissionPercent:45,roiBySales:{1:5,2:15,3:25,4:35}}]]);assert.equal(ui.get('#overviewTestRulesDialog').open,false);
+  ui.rulesLink.onclick(event);ui.get('#overviewTestRoiFour').value='-100';await ui.get('#overviewTestRulesForm').onsubmit(event);
+  assert.equal(ui.calls.length,1);assert.equal(ui.get('#overviewTestRulesDialog').open,true);assert.notEqual(ui.get('#overviewTestRulesError').textContent,'');
 });
 
 test('editor da comissão sincroniza valor/percentual e salva somente em OK',async()=>{
@@ -222,6 +247,17 @@ test('adaptador grava explicitamente e restaura estado anterior em falha sem toc
   const saved=adapter.state.database;fail=true;await assert.rejects(()=>adapter.editAlert(30,150),/Não salvou/);assert.equal(adapter.state.database,saved);assert.equal(saved.valor_restante_alerta_minimo,75);assert.equal(saved.valor_restante_alerta_amarelo_minimo,200);assert.equal(notifications,1);assert.equal(messages.length,1);
 });
 
+test('salvar regras do limite não usa atualização operacional e propaga somente preferências',async()=>{
+  const source=panel.match(/    async function editTestLimitSettings\([^\n]+/)[0],base=database.create(),settings={cpaMinimumPercent:85,commissionPercent:45,roiBySales:{1:5,2:15,3:25,4:35}};
+  base.atualizado_em='2026-10-06T10:00:00Z';let renders=0;const messages=[];
+  const adapter={state:{database:base},derivedCache:{},renderTotals:()=>renders++,baseChannel:{postMessage:message=>messages.push(json(message))},getOverviewTestRuleStorage:async()=>({saveTestLimitSettings:async()=>settings})};
+  vm.runInNewContext(source+'\nglobalThis.editRules=editTestLimitSettings;',adapter);
+  const result=await adapter.editRules(settings);
+  assert.deepEqual(json(result),settings);assert.deepEqual(json(adapter.state.database.regras_limite_teste),settings);assert.equal(adapter.state.database.atualizado_em,'2026-10-06T10:00:00Z');assert.equal(adapter.derivedCache,null);assert.equal(renders,1);assert.deepEqual(messages,[{type:'overview-test-rules-updated'}]);
+  assert.doesNotMatch(source,/persistLocalBase|announceBaseUpdated|toast\(/);
+  const failedBase=adapter.state.database;adapter.getOverviewTestRuleStorage=async()=>({saveTestLimitSettings:async()=>{throw Error('Falha sintética')}});await assert.rejects(adapter.editRules(settings),/Falha sintética/);assert.equal(adapter.state.database,failedBase);assert.equal(renders,1);assert.equal(messages.length,1);
+});
+
 test('salvar cores atualiza só as células, preserva o relatório e aguarda confirmação sem envio duplicado',async()=>{
   let finish,calls=0;const ui=setup({minimum:100,yellowMinimum:200,actionOverrides:{editRemainingAlert:()=>{calls++;return new Promise(resolve=>{finish=resolve})}}});
   const selector='#totalsBody td[data-column="remaining"]';ui.setList(selector,[{remainingValue:'50'},{remainingValue:'150'},{remainingValue:'250'},{remainingValue:''}]);
@@ -245,4 +281,7 @@ test('a regra neutra exclui amarelo e a atualização entre abas não recarrega 
   const receiver=panel.slice(panel.indexOf("if(event.data?.type==='overview-alerts-updated')"),panel.indexOf("const fromMcc=event.data"));
   assert.match(receiver,/loadRemainingAlerts\(\)/);assert.match(receiver,/refreshRemainingAlerts\(settings\)/);
   assert.doesNotMatch(receiver,/restoreLocalBase|syncMccDiaryRowsToBilling|render\(\)|Base atualizada pelo/);
+  const ruleReceiver=panel.slice(panel.indexOf("if(event.data?.type==='overview-test-rules-updated')"),panel.indexOf('const fromMcc=event.data'));
+  assert.match(ruleReceiver,/loadTestLimitSettings\(\)/);assert.match(ruleReceiver,/derivedCache=null;renderTotals\(\)/);
+  assert.doesNotMatch(ruleReceiver,/restoreLocalBase|syncMccDiaryRowsToBilling|announceBaseUpdated|Base atualizada pelo/);
 });

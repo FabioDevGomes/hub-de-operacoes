@@ -16,8 +16,8 @@ const row=(name,status,investment,extra={})=>({
 function setup(rows,preferences){
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
-    pausedCount:rows.filter(r=>r.c._status==='pausada').length,referenceDate:'2026-09-30',
-    manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
+    pausedCount:rows.filter(r=>r.c._status==='pausada').length,pausedTodayCampaigns:[],pausedTodayDate:'2026-09-30',referenceDate:'2026-09-30',
+    manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:{ecom:{timestamp:'2026-10-05T17:57:00Z',source:'import'},nutra:{timestamp:'2026-10-05T18:40:00Z',source:'import'}},pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args])}});
@@ -100,9 +100,12 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     assert.match(kpis,/Indicadores D0/);assert.match(kpis,/Indicadores D−1/);
     assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.doesNotMatch(kpis,/class="kpi-info"|kpi-info-icon|Cliques 1\/2/);
     assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6,'os seis cartões devem manter a mesma composição');
-    assert.match(kpis,/Manifesto MCC[\s\S]*kpi-value">10:25<\/strong>[\s\S]*Última captura[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/);
+    const manifestCard=kpis.match(/<section class="kpi overview-kpi overview-kpi-manifest"[\s\S]*?<\/section>/)?.[0],provisionalCard=kpis.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)?.[0];
+    assert.match(manifestCard,/Manifesto MCC[\s\S]*kpi-value">10:25<\/strong>[\s\S]*Última captura[\s\S]*Ecom: 05\/10, 14:57[\s\S]*Nutra: 05\/10, 15:40/);
+    assert.doesNotMatch(manifestCard,/D−1|D0/,'datas dos períodos não ficam mais no cartão Manifesto MCC');
+    assert.match(provisionalCard,/D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/,'datas D−1 e D0 ficam no cartão de Vendas provisórias');
+    assert.doesNotMatch(provisionalCard,/MCC Ecom|MCC Nutra/,'horários individuais das MCCs ficam no cartão Manifesto MCC');
     assert.match(kpis,/Venda provisória[\s\S]*overview-info-icon/);
-    assert.match(kpis,/pendente de confirmação[\s\S]*Base: 4427 registros[\s\S]*05\/10\/2026, 14:57/);
     assert.match(kpis,/overview-kpi-main-label">Investimento/);assert.match(kpis,/overview-kpi-detail-value">10/);
     assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row hidden"/);
     assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,15);
@@ -117,21 +120,25 @@ test('overview removes the campaign-count badge from the table header while keep
   assert.doesNotMatch(viewSource,/totalsCount/);
   const s=setup([row('Ativa','ativa',10),row('Pausada','pausada',90)]);s.controller.render();
   assert.match(s.get('#kpis').innerHTML,/Ativas<\/span><strong class="overview-kpi-detail-value">1/);
-  assert.match(s.get('#kpis').innerHTML,/Pausadas<\/span><strong class="overview-kpi-detail-value">1/);
+  assert.match(s.get('#kpis').innerHTML,/Pausaram hoje<\/span><strong class="overview-kpi-detail-value">0/);
 });
-test('overview base count and update date share one centered line without losing either value',async()=>{
+test('overview puts D−1/D0 dates with provisional sales and compact MCC timestamps in the manifest card',async()=>{
   const s=setup([]);s.controller.render();
-  const html=s.get('#kpis').innerHTML;
-  assert.match(html,/class="overview-kpi-base-meta"><span>Base: 4427 registros<\/span><span title="Última atualização da base local">05\/10\/2026, 14:57<\/span>/);
+  const html=s.get('#kpis').innerHTML,manifest=html.match(/<section class="kpi overview-kpi overview-kpi-manifest"[\s\S]*?<\/section>/)?.[0],provisional=html.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)?.[0];
+  assert.match(manifest,/class="overview-kpi-mcc-updates" aria-label="Últimas atualizações das MCCs"><span aria-label="MCC Ecom: 05\/10, 14:57" title="Horário da última importação desta MCC\.">Ecom: 05\/10, 14:57<\/span><span aria-label="MCC Nutra: 05\/10, 15:40" title="Horário da última importação desta MCC\.">Nutra: 05\/10, 15:40<\/span>/);
+  assert.doesNotMatch(manifest,/MCC (?:Ecom|Nutra): [^<]*2026|MCC (?:Ecom|Nutra): [^<]*captura/,'linha visível não inclui ano nem o sufixo captura');
+  assert.match(provisional,/overview-kpi-dates" aria-label="Datas D−1 e D0">[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/);
   const css=await readFile(new URL('../src/overview/overview.css',import.meta.url),'utf8');
-  const rule=css.match(/#totalsView \.overview-kpi-base-meta\{([^}]+)\}/)?.[1];
+  const rule=css.match(/#totalsView \.overview-kpi-mcc-updates\{([^}]+)\}/)?.[1];
   assert.match(rule,/display:flex/);
-  assert.match(rule,/align-items:baseline;justify-content:center;flex-wrap:nowrap/);
+  assert.match(rule,/flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center/);
   assert.match(rule,/white-space:nowrap/);
-  assert.match(css, /overview-kpi-base-meta span\{flex:0 0 auto;white-space:nowrap\}/);
+  assert.match(rule,/font-size:\.65rem/,'rótulos Ecom e Nutra compactos liberam espaço para os horários sem reduzir a legibilidade');
+  assert.match(css, /overview-kpi-mcc-updates span\{flex:0 0 auto;white-space:nowrap\}/);
+  assert.match(css,/overview-kpi-mcc-updates span\+span::before\{[^}]*content:"·"/,'Ecom e Nutra ficam na mesma linha e separados visualmente');
   assert.match(css,/grid-template-columns:repeat\(5,minmax\(0,1fr\)\) minmax\(235px,1fr\)/,'o cartão da base reserva espaço para exibir a linha sem cortar texto');
   s.snapshot.baseRecordCount=0;s.controller.render();
-  assert.match(s.get('#kpis').innerHTML,/Base: 0 registros/);
+  assert.doesNotMatch(s.get('#kpis').innerHTML,/Base: 0 registros/);
   assert.deepEqual(s.calls,[]);
 });
 test('overview secondary KPI metrics stay grouped with compact spacing',async()=>{
@@ -147,6 +154,7 @@ test('overview omits consolidated caption but retains daily period context',()=>
 });
 test('overview puts D−1 investment and profit first and keeps D0 profit with campaign counts',()=>{
   const s=setup([row('Ativa','ativa',10,{d0Totals:{investment:10,commission:20}}),row('Pausada','pausada',5,{d0Totals:{investment:5,commission:0}})]);
+  s.snapshot.pausedTodayCampaigns=['Pausada'];
   s.snapshot.d1Totals=[{investment:30,commission:50},{investment:20,commission:15}];
   const before=JSON.stringify(s.snapshot);
   for(const mode of ['consolidated','d1','d0']){
@@ -157,14 +165,31 @@ test('overview puts D−1 investment and profit first and keeps D0 profit with c
     assert.match(kpis,/aria-label="Lucro de D−1 positivo: \+BRL 15\.00"/);
     assert.doesNotMatch(kpis,/class="kpi overview-kpi overview-kpi-active"/,'não duplica campanhas num cartão separado');
     const profit=kpis.match(/<section class="kpi overview-kpi overview-kpi-profit kpi-d0-profit[\s\S]*?<\/section>/)?.[0];
-    assert.match(profit,/Lucro do dia[\s\S]*\+BRL 5\.00[\s\S]*overview-kpi-details[\s\S]*Ativas[\s\S]*overview-kpi-detail-value">1[\s\S]*Pausadas[\s\S]*overview-kpi-detail-value">1/);
+    assert.match(profit,/Lucro do dia[\s\S]*\+BRL 5\.00[\s\S]*overview-kpi-details[\s\S]*Ativas[\s\S]*overview-kpi-detail-value">1[\s\S]*Pausaram hoje[\s\S]*overview-kpi-detail-value">1/);
     assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6);
     s.state.campaignStatusFilter='paused';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis,'filtro da tabela não altera cartão combinado');
   }
-  s.snapshot.activeCount=0;s.snapshot.pausedCount=0;s.controller.render();
-  assert.match(s.get('#kpis').innerHTML,/Ativas[\s\S]*overview-kpi-detail-value">0[\s\S]*Pausadas[\s\S]*overview-kpi-detail-value">0/,'zeros continuam explícitos');
-  s.snapshot.activeCount=1;s.snapshot.pausedCount=1;
+  s.snapshot.activeCount=0;s.snapshot.pausedCount=0;s.snapshot.pausedTodayCampaigns=[];s.controller.render();
+  assert.match(s.get('#kpis').innerHTML,/Ativas[\s\S]*overview-kpi-detail-value">0[\s\S]*Pausaram hoje[\s\S]*overview-kpi-detail-value">0/,'zeros continuam explícitos');
+  s.snapshot.activeCount=1;s.snapshot.pausedCount=1;s.snapshot.pausedTodayCampaigns=['Pausada'];
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
+test('D0 pause detail opens an escaped, read-only list for today',()=>{
+  const s=setup([]);
+  s.snapshot.pausedTodayCampaigns=['Campanha Alfa','<img src=x onerror=alert(1)>'];
+  s.snapshot.pausedTodayDate='2026-09-30';s.controller.render();
+  assert.match(s.get('#kpis').innerHTML,/Pausaram hoje<\/span><strong class="overview-kpi-detail-value">2/);
+  s.get('#overviewPausedToday').onclick({preventDefault(){},stopPropagation(){}});
+  assert.equal(s.get('#pausedTodayDialog').open,true);
+  assert.equal(s.get('#pausedTodaySummary').textContent,'2 campanha(s) com pausa registrada em 30/09/2026.');
+  assert.match(s.get('#pausedTodayList').innerHTML,/Campanha Alfa/);
+  assert.match(s.get('#pausedTodayList').innerHTML,/&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(s.get('#pausedTodayList').innerHTML,/<img/);
+  s.get('#pausedTodayClose').onclick();assert.equal(s.get('#pausedTodayDialog').open,false);
+  s.snapshot.pausedTodayCampaigns=[];s.controller.render();s.get('#overviewPausedToday').onclick({preventDefault(){},stopPropagation(){}});
+  assert.equal(s.get('#pausedTodaySummary').textContent,'Nenhuma campanha pausou hoje.');
+  assert.equal(s.get('#pausedTodayList').hidden,true);
+  assert.equal(s.get('#pausedTodayList').innerHTML,'');
 });
 test('D−1 profit uses observed metrics, colors by sign and preserves missing versus zero',()=>{
   const s=setup([]);
@@ -196,8 +221,9 @@ test('overview keeps a permanent information icon and distinguishes fractional s
   assert.match(kpis,/class="kpi-label">Venda fracionária,?<\/span>[\s\S]*<strong class="kpi-value">1<\/strong>[\s\S]*1 com valor real a confirmar/);
   s.snapshot.fractionalSaleCount=0;s.controller.render();kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">0<\/strong>/);assert.match(kpis,/class="dot overview-kpi-pending-dot"/,'sem pendências o ponto deve ficar verde');assert.match(kpis,/overview-info-icon/);
-  s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.controller.render();kpis=s.get('#kpis').innerHTML;
-  assert.match(kpis,/Histórico não carregado[\s\S]*Atualização indisponível/);
+  s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.snapshot.mccImportUpdates={};s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/MCC Ecom: Sem registro[\s\S]*MCC Nutra: Sem registro/);
+  assert.doesNotMatch(kpis,/Histórico não carregado|Atualização indisponível/);
 });
 test('fractional value link opens a compact per-product confirmation dialog and submits only the selected row',async()=>{
   const s=setup([row('Campanha','ativa',0)]),item={confirmationKey:'campaign|2026-09-30|d1|0.98000000|observed|75.00',campaignId:'campaign',date:'2026-09-30',period:'d1',conversions:.98,productName:'Produto fracionário',currentValueBrl:75,saleId:null};

@@ -1,3 +1,5 @@
+import {isSalesPageType} from './sales-page-type.mjs?v=3';
+
 export const DB_NAME = 'radar-clickbank-top-offers';
 export const DB_VERSION = 3;
 export const STORES = Object.freeze({captures: 'captures', offerMetadata: 'offerMetadata', trends: 'trends', images: 'images', decisions: 'decisions'});
@@ -53,6 +55,7 @@ function validOfferRecord(storeName, record) {
   if (storeName === STORES.offerMetadata) {
     return Array.isArray(record.manualCountries) && record.manualCountries.length <= 250 &&
       record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
+      isSalesPageType(record.salesPageType) &&
       (record.dtcCountryCapture == null || (record.dtcCountryCapture.source === 'clickbank-dtc-checkout' &&
         typeof record.dtcCountryCapture.productName === 'string' && record.dtcCountryCapture.productName.trim().length > 0 &&
         record.dtcCountryCapture.productName.length <= 200 && typeof record.dtcCountryCapture.capturedAt === 'string' &&

@@ -15,3 +15,14 @@
 .copy-ficha-discount-pair{align-items:start}
 .copy-ficha-shell{width:100%;margin-inline:auto}
 .copy-ficha-shell .copy-ficha-card,.copy-ficha-shell .copy-ficha-package,.copy-ficha-shell .copy-ficha-question-list,.copy-ficha-shell .copy-ficha-output-empty,.copy-ficha-shell .presell-result,.copy-ficha-shell .copy-ficha-chip{border:0}
+.copy-ficha-clipboard-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.copy-ficha-field-label{font-size:.75rem;font-weight:750;color:#c9d9ed}
+.copy-ficha-clipboard-row>.copy-ficha-btn{min-height:38px}
+.copy-ficha-clipboard-status{color:var(--muted);font-size:.76rem;line-height:1.4}
+.copy-ficha-clipboard-status.error{color:#ffabb7}
+.copy-ficha-clipboard-status.success{color:#8cf0c5}
+.copy-ficha-manual-paste{gap:7px;margin-top:10px}
+.copy-ficha-manual-paste:not([hidden]){display:grid}
+.copy-ficha-manual-paste .copy-ficha-textarea{min-height:110px}
+.copy-ficha-manual-paste #copyAnalyzeManual{justify-self:start}
+@media(max-width:620px){.copy-ficha-clipboard-row{align-items:flex-start;flex-direction:column}.copy-ficha-clipboard-row>.copy-ficha-btn{width:100%}}

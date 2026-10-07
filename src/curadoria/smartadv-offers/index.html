@@ -6,10 +6,12 @@
   <title>Ofertas SmartAdv · Curadoria</title>
   <meta name="description" content="Catálogo local de ofertas SmartAdv a partir de capturas coladas pelo usuário.">
   <link rel="icon" href="/favicon.png">
-  <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-header-color">
-  <link rel="stylesheet" href="/sidebar-component.css?v=11">
-  <link rel="stylesheet" href="./smartadv-offers.css?v=11">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-decision-column">
+  <link rel="stylesheet" href="/sidebar-component.css?v=12">
+  <link rel="stylesheet" href="./smartadv-offers.css?v=12">
+  <link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
   <link rel="stylesheet" href="/table-columns.css?v=2">
+  <link rel="stylesheet" href="/table-edit-actions.css?v=3">
   <link rel="stylesheet" href="/theme-colors.css?v=5">
 <link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"></head>
 <body>
@@ -47,6 +49,7 @@
         <p class="capture-info" id="captureInfo">Nenhuma captura salva.</p>
         <div class="filters hub-curation-table-filters">
           <input class="control search hub-search-filter hub-search-filter--fill" id="search" type="search" placeholder="Buscar ID, oferta ou vertical" aria-label="Buscar no catálogo">
+          <select class="control hub-table-filter" id="visibilityFilter" aria-label="Filtrar por visibilidade"><option value="visible">Itens visíveis</option><option value="hidden">Itens ocultos</option><option value="all">Todos os itens</option></select>
           <select class="control hub-table-filter" id="verticalFilter" aria-label="Filtrar por vertical"><option value="">Todas as verticais</option></select>
           <select class="control hub-table-filter" id="geoFilter" aria-label="Filtrar por GEO"><option value="">Todos os GEOs</option></select>
           <select class="control hub-table-filter" id="brandFilter" aria-label="Filtrar por Brand Bidding"><option value="">Brand Bidding: todos</option><option value="yes">Permitido</option><option value="no">Não permitido</option><option value="unknown">Não informado</option></select>
@@ -81,11 +84,11 @@
         <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><p id="trendResultMessage" class="message" role="status" aria-live="polite"></p></section>
         <article class="card"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
       </section>
-      <section class="hidden" data-panel="glimpse"><article class="card"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></article></section>
+      <section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></section>
       <section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país e registre o resultado visual. Ofertas sem países explícitos só serão avaliadas depois de você informar países na aba Google Trends.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><section id="imageCountries" class="image-country-list"></section><article class="card"><h2>Histórico visual</h2><div id="imagesHistory"></div></article></section>
     </div>
   </section>
   <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
-  <script type="module" src="./smartadv-offers-page.mjs?v=14"></script>
+  <script type="module" src="./smartadv-offers-page.mjs?v=16"></script>
 </body>
 </html>

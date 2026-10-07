@@ -14,7 +14,7 @@ table thead th > *::first-letter {
 
 /* Ações em células: sem borda, sombra preta, formato compacto e fonte regular.
    Filtros, ordenação no cabeçalho e ações fora das células não são alcançados. */
-html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge) {
+html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge):not(.hub-corner-edit):not(.hub-discreet-action) {
   box-sizing: border-box !important;
   min-height: 28px !important;
   padding: 5px 8px !important;
@@ -27,11 +27,11 @@ html body table tbody td :is(button, input[type="button"], input[type="submit"],
   transition: box-shadow .15s ease, filter .15s ease, transform .15s ease !important;
 }
 
-html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge):is(:hover, :focus-visible) {
+html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge):not(.hub-corner-edit):not(.hub-discreet-action):is(:hover, :focus-visible) {
   box-shadow: 0 5px 12px rgba(0, 0, 0, .65) !important;
 }
 
-html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge):focus-visible {
+html body table tbody td :is(button, input[type="button"], input[type="submit"], [role="button"], a.btn, a.table-action, a.glimpse-badge):not(.hub-corner-edit):not(.hub-discreet-action):focus-visible {
   outline: 2px solid rgba(101, 169, 255, .45) !important;
   outline-offset: 2px !important;
 }

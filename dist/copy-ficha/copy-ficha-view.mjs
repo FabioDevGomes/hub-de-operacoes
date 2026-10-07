@@ -1,10 +1,11 @@
 import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=21';
 import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=3';
 import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=1';
-import {renderTemplate} from './copy-ficha-template.mjs?v=2';
+import {renderTemplate} from './copy-ficha-template.mjs?v=3';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=1';
+import {readClipboardText} from './copy-ficha-clipboard.mjs?v=1';
 
 let mounted=false,creatingPresell=false;
 // Persistence is isolated in copy-ficha-draft.mjs.
@@ -112,6 +113,8 @@ function resetCollection(root,toast){
   root.querySelectorAll('[data-auto-filled],.is-autofilled').forEach(field=>{delete field.dataset.autoFilled;field.classList.remove('is-autofilled')});
   by(root,'copyDetected').innerHTML='';
   by(root,'copyAnalysisNote').textContent='';
+  by(root,'copyManualPastePanel').hidden=true;
+  setClipboardStatus(root,'Copie o texto visível da oferta (Ctrl+A, Ctrl+C) e clique para capturar e analisar.');
   clearGeneratedOutputs(root);clearProductPriceContext(root);updateProductPriceNote(root);updateDiscountAmountLabel(root);
   const warnings=by(root,'copyWarnings');
   warnings.className='copy-ficha-note';
@@ -223,6 +226,58 @@ function analyze(root){
   saveDraft(root);
 }
 
+function setClipboardStatus(root,message,{error=false,success=false}={}){
+  const status=by(root,'copyClipboardStatus');
+  status.textContent=message;
+  status.classList.toggle('error',error);
+  status.classList.toggle('success',success);
+}
+
+async function analyzeClipboard(root){
+  const button=by(root,'copyAnalyze'),originalLabel=button.textContent;
+  button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Capturando e analisando…';
+  setClipboardStatus(root,'Lendo a área de transferência…');
+  try{
+    let text;
+    try{text=await readClipboardText();}
+    catch(error){
+      const message=error?.code==='clipboard-empty'
+        ?'A área de transferência está vazia. Copie o texto da oferta (Ctrl+A, Ctrl+C) e tente novamente.'
+        :error?.code==='clipboard-unavailable'
+          ?'Este navegador não disponibilizou a leitura do clipboard. Você pode colar o texto manualmente abaixo.'
+          :'O navegador bloqueou a leitura do clipboard. Autorize o acesso ou cole o texto manualmente abaixo.';
+      by(root,'copyManualPastePanel').hidden=false;
+      setClipboardStatus(root,message,{error:true});
+      by(root,'copyRawText').focus();
+      return;
+    }
+    by(root,'copyRawText').value=text;
+    try{analyze(root);}
+    catch{
+      by(root,'copyManualPastePanel').hidden=false;
+      setClipboardStatus(root,'O texto foi capturado, mas a análise não foi concluída. Confira a colagem manual abaixo.',{error:true});
+      by(root,'copyRawText').focus();
+      return;
+    }
+    by(root,'copyManualPastePanel').hidden=true;
+    setClipboardStatus(root,'Texto capturado e analisado. Revise os campos preenchidos abaixo.',{success:true});
+  }finally{button.disabled=false;button.removeAttribute('aria-busy');button.textContent=originalLabel;}
+}
+
+function analyzeManualText(root){
+  if(!inputValue(root,'copyRawText')){
+    setClipboardStatus(root,'Cole o texto da oferta antes de analisar.',{error:true});
+    by(root,'copyRawText').focus();
+    return;
+  }
+  try{
+    analyze(root);
+    setClipboardStatus(root,'Texto colado e analisado. Revise os campos preenchidos abaixo.',{success:true});
+  }catch{
+    setClipboardStatus(root,'Não foi possível analisar esse texto. Confira a colagem e tente novamente.',{error:true});
+  }
+}
+
 function clearGeneratedOutputs(root){
   renderOfferQuestions(root);
   clearPresellFeedback(root,'Dados alterados. Valide novamente antes de criar a Presell.');
@@ -313,7 +368,8 @@ export async function mount({root,toast}={}){
   if(!mounted){
     root.innerHTML=renderTemplate();
     restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);renderOfferQuestions(root);
-    by(root,'copyAnalyze').onclick=()=>analyze(root);
+    by(root,'copyAnalyze').onclick=()=>analyzeClipboard(root);
+    by(root,'copyAnalyzeManual').onclick=()=>analyzeManualText(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
     by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast);
     by(root,'copyQuestionsCopy').onclick=()=>copyOfferQuestions(root,toast);

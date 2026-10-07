@@ -16,6 +16,7 @@ test('Preparador published page matches canonical source and preserves executabl
   const html=source.toString('utf8');
   for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
   for(const contract of ['window.__hubReceiveMccD0Grid','window.__hubReceiveMccD1Grid','id="apply-manifest"',
+    'class="button ghost hub-panel-action" id="clear-all"','class="button primary hub-panel-action" id="apply-manifest"',
     'const PANEL_DB_VERSION = HubDatabase.DB_VERSION;','const PANEL_DB_NAME = HubDatabase.DB_NAME;','/database.js',
     '/sidebar-component.js','/sidebar-component.css','/table-headers.css',
     "import('../billing/billing-storage.mjs?v=7')"]){
@@ -23,18 +24,21 @@ test('Preparador published page matches canonical source and preserves executabl
   }
   assert.match(html,/h1\s*\{[^}]*font-size:\s*clamp\(\.93rem,\s*1\.8vw,\s*1\.41rem\)/,'título do Preparador deve seguir a escala compacta compartilhada do Hub');
   assert.match(html,/\.subtitle\s*\{[^}]*font-size:\s*\.92rem/,'texto auxiliar deve seguir a escala tipográfica das telas compartilhadas');
-  assert.match(html,/Carregue D−1, D0 ou ambos, confira as diferenças e atualize a base\./,'descrição do Preparador deve deixar claro que qualquer período pode ser carregado sozinho');
+  assert.ok(!html.includes('Carregue D−1, D0 ou ambos, confira as diferenças e atualize a base.'),'a descrição removida não deve aparecer no cabeçalho do Preparador');
   assert.match(html,/\.capture-grid\s*\{[^}]*align-items:\s*start/,'cartões das capturas devem manter alinhamento compacto');
   assert.match(html,/\.capture-box\.loaded\s*\{[^}]*display:\s*block/,'captura carregada deve usar o cartão de resumo');
   assert.equal((html.match(/class="capture-summary" hidden/g)||[]).length,2,'D−1 e D0 devem exibir resumos no mesmo formato');
   assert.match(html,/\.capture-origin-mark\s*\{[^}]*width:\s*40px/,'resumo deve mostrar um identificador visual da origem, não um ícone de arquivo');
   assert.match(html,/originMark\.textContent = 'MCC'/,'identificador da captura deve mostrar a origem MCC');
   assert.ok(html.includes("originDetail.textContent = 'Grade da MCC · extensão'"),'resumo deve informar a origem da captura recebida');
-  assert.ok(html.includes("metaLine('Campanhas válidas'") && html.includes("metaLine('Data detectada'") && html.includes("metaLine('Moedas'") && html.includes("metaLine('Tipo de captura'"),'resumo deve apresentar campanha, data, moedas e tipo de captura');
+  assert.ok(html.includes("metaLine('Campanhas válidas'") && html.includes("metaLine('Data detectada'") && html.includes("metaLine('Moedas'") && !html.includes("metaLine('Tipo de captura'") && !html.includes("metaLine('Consumo acumulado do dia'") && !html.includes('formatCaptureConsumption'),'resumo compacto mantém MCC, campanhas, data e moedas sem os dois campos removidos');
   assert.ok(!html.includes("metaLine('Arquivo'") && !html.includes('data.name'),'a interface não deve associar os dados a um nome de arquivo');
   assert.match(html,/\.capture-meta\[hidden\]\s*\{\s*display:\s*none/,'resumo vazio não deve renderizar uma borda sem conteúdo');
   assert.ok(!/<textarea\b|type="file"|Selecionar arquivo|Ctrl\+V/i.test(html),'a tela não deve incluir controles de colagem ou seleção manual de arquivo');
   assert.match(html,/\.capture-meta\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,'resumo da captura deve distribuir os dados em uma grade de duas colunas');
+  assert.match(html,/\.button\.hub-panel-action\s*\{[^}]*min-height:\s*36px[^}]*padding:\s*8px 11px[^}]*border:\s*0[^}]*font-size:\s*\.78rem[^}]*font-weight:\s*400[^}]*box-shadow:\s*0 4px 9px rgba\(0, 0, 0, \.55\)/,'ações opt-in dos painéis repetem o padrão compacto do topo');
+  assert.match(html,/\.button\.hub-panel-action\.primary\s*\{[^}]*var\(--curation-header-action-accent, #38bdf8\)/,'Atualizar base usa a configuração azul aprovada para ações primárias');
+  assert.match(html,/section\[aria-labelledby="step1-title"\] > \.panel-head, #d0-changes-panel > \.panel-head, #d1-changes-panel > \.panel-head\s*\{\s*padding:\s*8px 16px/,'somente os cabeçalhos destacados do Preparador usam o espaçamento vertical mais compacto');
   // Behavioral parsing, receiver, safety and persistence regressions remain in
   // preparador-d0/d1, mcc-grid-production, mcc-numbering and mcc-extension-parity.
 });

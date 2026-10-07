@@ -55,17 +55,25 @@ test('junta uma categoria que foi quebrada em uma linha física do Ctrl+A', () =
 });
 
 test('separa escopos e acompanha movimentos só entre capturas comparáveis', () => {
-  const first = Domain.parseHotOffersText([header,row('1','**HOT** Produto','US','Aprovado','Cat A','$10.00','8/31/2026'),row('2','Produto B','DE','Aplicar','Cat B','$20.00','9/1/2026')].join('\n'),{scope:'bottom'}).offers;
-  const second = Domain.parseHotOffersText([header,row('2','Produto B','DE','Aprovado','Cat B','$20.00','9/1/2026'),row('1','**HOT** Produto','US','Aprovado','Cat A','$12.00','8/31/2026'),row('3','Produto C','FR','Aplicar','Cat C','$30.00','9/2/2026')].join('\n'),{scope:'bottom'}).offers;
+  const first = Domain.parseHotOffersText([header,row('1','**HOT** Produto','US','Aprovado','Cat A','$10.00','8/31/2026'),row('2','Produto B','DE','Aplicar','Cat B','$20.00','9/1/2026'),row('4','Produto D','CA','Aprovado','Cat D','$40.00','9/3/2026')].join('\n'),{scope:'bottom'}).offers;
+  const second = Domain.parseHotOffersText([header,row('2','Produto B','DE','Aprovado','Cat B','$20.00','9/1/2026'),row('1','**HOT** Produto','US','Aprovado','Cat A','$12.00','8/31/2026'),row('4','Produto D','CA','Aprovado','Cat D','$40.00','9/3/2026'),row('3','Produto C','FR','Aplicar','Cat C','$30.00','9/2/2026')].join('\n'),{scope:'bottom'}).offers;
   const comparison = Domain.compareCollections(second,first,first.map(item=>item.offerKey));
   assert.equal(comparison.summary.up,1);
   assert.equal(comparison.summary.down,1);
   assert.equal(comparison.summary.new,1);
-  assert.equal(comparison.summary.remained,2);
+  assert.equal(comparison.summary.remained,3);
+  assert.equal(comparison.summary.same,1);
   assert.equal(comparison.summary.exited,0);
   assert.equal(comparison.summary.paymentChanges,1);
   assert.equal(comparison.summary.affiliationChanges,1);
   assert.equal(comparison.summary.countryChanges,0);
+  const movements = new Map(comparison.entries.map(item => [item.offerKey,item]));
+  assert.equal(Domain.movementLabel('new',null),'Nova','a primeira presença permanece identificada como nova');
+  assert.equal(Domain.movementLabel(movements.get('bottom:2').movement,movements.get('bottom:2').positionDelta),'↑ 1','desde a segunda coleta, oferta repetida exibe variação positiva no padrão da Top Offers CB');
+  assert.equal(Domain.movementLabel(movements.get('bottom:1').movement,movements.get('bottom:1').positionDelta),'↓ 1');
+  assert.equal(Domain.movementLabel(movements.get('bottom:3').movement,movements.get('bottom:3').positionDelta),'Nova','oferta que aparece pela primeira vez na segunda coleta continua como Nova');
+  assert.equal(Domain.movementLabel(movements.get('bottom:4').movement,movements.get('bottom:4').positionDelta),'= 0','posição sem alteração usa o mesmo marcador da Variação Top Offers CB');
+  assert.equal(Domain.movementLabel('same',0),'= 0');
   const otherScope = Domain.parseHotOffersText([header,row('1','Produto','US','Aprovado','Cat','$10.00','8/31/2026')].join('\n'),{scope:'top'}).offers[0];
   assert.equal(otherScope.offerKey,'top:1');
   assert.notEqual(otherScope.offerKey,first[0].offerKey);

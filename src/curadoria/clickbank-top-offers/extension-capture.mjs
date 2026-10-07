@@ -1,5 +1,5 @@
 import { parseTopOffersClipboard } from './clickbank-top-offers-domain.mjs?v=2';
-import { matchDtcCheckoutOffer, validateDtcCountryCapture } from './dtc-country-capture.mjs?v=1';
+import { matchDtcCheckoutOffer, validateDtcCountryCapture } from './dtc-country-capture.mjs?v=2';
 
 export function validateExtensionCapture(payload) {
   if (payload?.schema !== 'clickbank-extension-preview-v1' || payload.source !== 'clickbank_chrome_extension'
@@ -16,6 +16,7 @@ export function validateExtensionCapture(payload) {
 
 export function mountExtensionCapture({target,ready,getBusy,getDraft,preparePreview,getOffers,saveDtcCountries}) {
   let receiving = false;
+  target.__hubDtcCountryReceiverVersion = 2;
   target.__hubReceiveClickBankCapture = async payload => {
     if (receiving || getBusy()) return {ok:false,message:'Uma captura já está sendo preparada ou salva. Aguarde e tente novamente.'};
     const valid = validateExtensionCapture(payload);

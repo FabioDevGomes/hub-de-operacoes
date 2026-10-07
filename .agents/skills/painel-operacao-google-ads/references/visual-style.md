@@ -22,6 +22,10 @@ A cobertura do padrão de bordas inclui CPA, Diário (inclusive resumo legado), 
 
 ## Composição e responsividade
 
+### Barra global para fichas com abas
+
+Ao reaplicar o “cenário global” em uma ficha com painéis alternáveis, use uma barra sticky da largura do conteúdo: abas à esquerda, os mesmos botões **Salvar** e **← Voltar à lista** à direita e sempre visíveis em todas as abas. Um único botão Salvar despacha para a ação da aba ativa; onde as ações já salvam automaticamente ou o painel é somente leitura, mantenha-o no mesmo lugar, desativado e com motivo acessível. Confirmação só após sucesso e junto da ação; não duplique o botão de retorno no painel. Em telas menores, preserve os controles com quebra de linha/rolagem das abas. Reutilize o helper de iframe quando aplicável e mantenha intactas as regras de persistência de cada domínio. Contrato e mapa atual em [Fichas de análise da Curadoria](../../../../docs/curation-analysis-pattern.md#barra-de-ficha-com-abas-preferência-global).
+
 ### Navegação por data/período
 
 Use `src/month-navigation.css` para controles de navegação temporal, independentemente da granularidade. O grupo `.hub-month-navigation` define o fundo marinho sem borda, espaçamento e cantos; `.hub-month-arrow` padroniza as setas compactas; `.hub-month-label` centraliza o mês/período ou o campo de data editável; e `.hub-month-current` padroniza a ação que retorna ao período corrente. O texto da ação é contextual — “Hoje” para navegação diária, “Mês atual” para mensal — sem alterar estilo ou comportamento. A tipografia herda a família global e usa tamanhos/pesos definidos no componente; mantenha os valores centralizados, alinhados e com foco acessível. Views não devem recriar essas dimensões ou cores em CSS local.

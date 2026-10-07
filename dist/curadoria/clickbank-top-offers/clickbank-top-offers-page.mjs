@@ -1,15 +1,16 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=2';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=4';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=14';
-import {mountExtensionCapture} from './extension-capture.mjs?v=2';
-import {mergeDtcCountries} from './dtc-country-capture.mjs?v=1';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=6';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=22';
+import {mountExtensionCapture} from './extension-capture.mjs?v=3';
+import {mergeDtcCountries} from './dtc-country-capture.mjs?v=2';
+import {withSalesPageType} from './sales-page-type.mjs?v=3';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=4';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
 
 const root = document.querySelector('#clickbankTopOffersRoot');
@@ -17,10 +18,10 @@ let captures = [], offerMetadata = [], trends = [], images = [], decisions = [],
 const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
-  addTrendCandidate,removeTrendCandidate,addManualCountry,saveImage,saveImageSearchTerm,
+  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveImage,saveImageSearchTerm,
   openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
 }});
-mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),finishLabel:'Salvar',showSavedFeedback:true});
+mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true});
 
 function latestMatching(listName) {
   return [...captures].filter(item => item.listName === listName).sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)))[0] || null;
@@ -52,6 +53,13 @@ async function refresh() {
   ]);
   glimpse = await GlimpseStorage.getAllAnalyses().catch(() => []);
   show();
+}
+async function refreshAfterGlimpseSave() {
+  try { await refresh(); }
+  catch (error) {
+    console.error('A análise Glimpse foi salva, mas a tabela ClickBank não pôde ser atualizada.',error);
+    view.showMessage('A análise foi salva, mas não foi possível atualizar a tabela. Recarregue a tela.',{error:true});
+  }
 }
 function fireObservability(promise) { Promise.resolve(promise).catch(error => console.warn('Não foi possível registrar a observabilidade da Curadoria.',error)); }
 async function saveDecision(offerKey,status) {
@@ -112,15 +120,23 @@ function openTrends(term) {
   if (tab) tab.focus(); else view.showMessage('O navegador bloqueou a aba. Libere pop-ups para este endereço local.',{error:true});
 }
 async function saveTrend(offerKey,status,draft={}) {
-  const item = currentOffer(offerKey); if (!item) return;
+  const item = currentOffer(offerKey); if (!item) return false;
   const old = trendsFor(item), assessment = {
     assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries || []).filter(Boolean))].slice(0,5),
     productAge:draft.productAge || null,searchTerm:String(draft.term || item.offerName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString(),
   };
   const stored = {...old,...baseRecord(item),assessments:Trends.appendAssessment(old.assessments,assessment)};
-  await Storage.putOfferRecord(Storage.STORES.trends,stored); trends=replaceRecord(trends,stored); show();
-  fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}}));
-  view.showMessage('Avaliação de Google Trends salva.');
+  try { await Storage.putOfferRecord(Storage.STORES.trends,stored); }
+  catch(error) {
+    console.error('Não foi possível salvar a avaliação de Google Trends da ClickBank.',error);
+    return false;
+  }
+  trends=replaceRecord(trends,stored);
+  try { show(); }
+  catch(error) { console.error('A avaliação foi salva, mas a ficha ClickBank não pôde ser atualizada.',error); }
+  try { fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}})); }
+  catch(error) { console.error('Não foi possível registrar a observabilidade da avaliação ClickBank.',error); }
+  return true;
 }
 async function addTrendCandidate(offerKey,value) {
   const item=currentOffer(offerKey),term=String(value||'').trim(); if(!item||!term)return false;
@@ -144,6 +160,22 @@ async function addManualCountry(offerKey,value) {
   if(old.manualCountries.includes(code)){view.showMessage(`${code} já foi adicionado.`);return false;}
   const stored={...old,...baseRecord(item),manualCountries:[...old.manualCountries,code]};
   await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);offerMetadata=replaceRecord(offerMetadata,stored);show();view.showMessage(`${code} adicionado manualmente; não faz parte dos dados da ClickBank.`);return true;
+}
+async function saveSalesPageType(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)return false;
+  if(saving){view.showMessage('Outra gravação está em andamento. Tente novamente.',{error:true});return false;}
+  saving=true;
+  try {
+    const stored=withSalesPageType(metadataFor(item),baseRecord(item),value);
+    await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);
+    offerMetadata=replaceRecord(offerMetadata,stored);show();
+    view.showMessage(value?`Tipo de página de venda salvo para ${item.offerName}: ${value.toUpperCase()}.`:`Classificação da página de venda removida para ${item.offerName}.`);
+    return true;
+  } catch(error) {
+    console.error('Não foi possível salvar o tipo de página de venda.',error);
+    view.showMessage('Não foi possível salvar a classificação. Os dados existentes foram preservados.',{error:true});
+    return false;
+  } finally {saving=false;}
 }
 async function saveDtcCountries(item,capture) {
   if(saving)return {ok:false,message:'O Hub está ocupado com outra gravação. Tente novamente.'};
@@ -205,6 +237,7 @@ window.addEventListener('message',event=>{
   const frame=root.querySelector('#glimpseFrame');
   if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
   if(event.data?.type==='hub-glimpse-resize'){const height=Number(event.data.height);if(Number.isFinite(height))frame.style.height=`${Math.max(320,Math.ceil(height))}px`;return;}
+  if(event.data?.type==='hub-glimpse-save-result'){if(event.data.saved===true)void refreshAfterGlimpseSave();return;}
   if(event.data?.type==='hub-glimpse-close')void refresh().then(()=>{view.returnFromGlimpse();view.showMessage('Análise Glimpse atualizada.');});
 });
 

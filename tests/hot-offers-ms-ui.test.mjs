@@ -79,6 +79,26 @@ test('os filtros ficam em uma linha com a tipografia compacta do E-commerce GM',
   assert.match(html,/\.filter-grid \.btn\{[^}]*font-size:\.74rem;white-space:nowrap/,'os botões devem manter a mesma tipografia e não quebrar linha');
 });
 
+test('a coluna Sinal automático usa apresentação textual simples, centrada e sem negrito', () => {
+  assert.match(view,/if \(key === 'signal'\) return '<td data-col="signal">' \+ signalBadge\(item\) \+ '<\/td>'/);
+  assert.match(html,/#hotOffersMsRoot \.tablewrap td\[data-col="signal"\]\{text-align:center\}/);
+  assert.match(html,/#hotOffersMsRoot \.tablewrap td\[data-col="signal"\] \.automatic-signal\{[^}]*padding:0;border:0;border-radius:0;background:transparent/,'o sinal fica sem cápsula, como os valores simples da coluna Variação');
+  assert.match(html,/#hotOffersMsRoot \.tablewrap td\[data-col="signal"\] \.automatic-signal strong\{font-size:inherit;font-weight:400\}/);
+  assert.match(html,/#hotOffersMsRoot \.tablewrap td\[data-col="signal"\] \.automatic-signal small\{font-size:inherit;opacity:\.82\}/);
+});
+
+test('Movimento usa o formato textual da Variação da Top Offers CB', () => {
+  assert.match(view,/return \{label:Domain\.movementLabel\(value,item\.positionDelta\),className:\['new','returned','up','down','same','exited'\]/,'mantém Nova para novas entradas e reutiliza os rótulos de variação do domínio');
+  assert.match(view,/if \(key === 'movement'\) \{ const value = movement\(item\); return '<td data-col="movement" class="number movement-cell ' \+ escape\(value\.className\)/,'a célula fica como texto numérico, sem selo');
+  assert.match(css,/\.tablewrap td\.movement-cell\{font-variant-numeric:tabular-nums;white-space:nowrap\}/);
+  assert.match(css,/\.tablewrap td\.movement-up,\.tablewrap td\.movement-new,\.tablewrap td\.movement-returned\{color:#83e5bb\}/);
+  assert.match(css,/\.tablewrap td\.movement-down,\.tablewrap td\.movement-exited\{color:#ff9aaa\}/);
+  assert.match(css,/#hotOffersMsRoot \.tablewrap th\[data-col="payment"\],#hotOffersMsRoot \.tablewrap td\[data-col="payment"\],#hotOffersMsRoot \.tablewrap th\[data-col="movement"\],#hotOffersMsRoot \.tablewrap td\[data-col="movement"\]\{text-align:center!important\}/,'cabeçalhos e células de Pagamento e Movimento ficam centralizados');
+  assert.match(view,/if \(key === 'payment'\) return '<td data-col="payment">/,'identifica as células de Pagamento com a mesma chave do cabeçalho');
+  assert.match(html,/hot-offers-ms\.css\?v=20261006-center-payment-movement/,'o CSS atualizado não fica preso no cache anterior');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-movement-variation/,'a view atualizada não fica presa no cache anterior');
+});
+
 test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
   assert.match(html,/\.filter-grid>#clearFilters,\.filter-grid>\.column-picker>summary\.btn\{border:0;box-shadow:0 4px 9px rgba\(0,0,0,\.55\)/,'os dois controles apontados devem ficar sem borda com sombra preta normal');
   assert.match(html,/<button class="btn hub-toolbar-action-dark" id="clearFilters" type="button">Limpar filtros<\/button>/);
@@ -90,14 +110,14 @@ test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantê
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
-  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-header-color/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-decision-column/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
-  assert.match(html,/hot-offers-ms\.css\?v=20261005-glimpse-compact/,'o CSS local invalida o cache para o redimensionamento do Glimpse');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-last-collection/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(html,/hot-offers-ms\.css\?v=20261006-center-payment-movement/,'o CSS local invalida o cache para centralizar Pagamento e Movimento');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-movement-variation/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
-  assert.match(sharedCurationCss,/button\.decision-badge\{border:1px solid #40516b;font-weight:400;cursor:pointer\}/,'o padrão comum usa borda neutra e texto sem negrito forte');
-  assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:rgba\(171,130,35,\.2\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
-  assert.match(sharedCurationCss,/#rows tr\.decision-row-live>td\{background:rgba\(16,74,54,\.25\)\}/,'Campanha no ar usa o mesmo verde compartilhado');
+  assert.match(sharedCurationCss,/button\.decision-badge\{border:0;font-weight:400;cursor:pointer\}/,'o padrão comum usa cápsula sem borda e texto regular');
+  assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:var\(--curation-decision-launch-row\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
+  assert.match(sharedCurationCss,/#rows tr\.decision-row-live>td\{background:var\(--curation-decision-live-row\)\}/,'Campanha no ar usa o mesmo verde compartilhado');
   assert.doesNotMatch(css,/\.decision-badge\{[^}]*\}/,'Hot Offers MS não deve redefinir a apresentação compartilhada');
   assert.match(view,/Decisions\.buttonHtml\(decisionFor\(item\.offerKey\)\.currentStatus/,'a célula usa o renderizador comum de decisões');
   assert.match(view,/Decisions\.rowClass\(decisionFor\(item\.offerKey\)\.currentStatus\)/,'o destaque da linha usa a classe compartilhada da decisão');
@@ -151,7 +171,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
   assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
   assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
-  assert.match(html,/trends-sheet\.css\?v=20261006-curation-header-color/,'a ficha carrega a folha compartilhada com sombra de decisão');
+  assert.match(html,/trends-sheet\.css\?v=20261006-curation-decision-column/,'a ficha carrega a folha compartilhada com sombra de decisão');
   assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
   assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
   assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');

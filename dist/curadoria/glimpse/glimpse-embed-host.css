@@ -1,0 +1,5 @@
+/* Contrato compartilhado do iframe Glimpse nas fichas Top Offers CB e SmartAdv.
+   O conteúdo fica no fluxo da página e o iframe permanece como filho direto do painel, sem cartão hospedeiro. */
+#offerSheet:has(.glimpse-embed-panel:not(.hidden)){position:absolute;inset:0 auto auto 0;width:100%;height:auto;min-height:100vh;overflow:visible}
+body:has(#offerSheet:not(.hidden) .glimpse-embed-panel:not(.hidden)){overflow:auto!important}
+#offerSheet .glimpse-embed-panel>.glimpse-embedded-frame{display:block;width:100%;height:min(1200px,calc(100vh - 220px));max-height:none;min-height:0;border:0;border-radius:0;background:transparent}

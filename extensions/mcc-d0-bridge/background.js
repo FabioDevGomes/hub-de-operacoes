@@ -213,7 +213,7 @@ async function captureAndSaveDtcCommonCountries() {
       if (probe?.result === true) { target = candidate; break; }
     } catch { /* Preserve tabs that are stale or still loading. */ }
   }
-  if (!target) throw new Error('Deixe a lista Top Offers CB aberta no Hub e tente novamente. Não é necessário abrir a ficha da oferta; nada foi salvo.');
+  if (!target) throw new Error('Nenhuma aba Top Offers CB atualizada foi encontrada. Recarregue a lista no Hub e tente novamente; não é necessário abrir a ficha da oferta e nada foi salvo.');
   const [delivery] = await chrome.scripting.executeScript({
     target:{tabId:target.id},world:'MAIN',func:deliverDtcCommonCountries,args:[payload]
   });

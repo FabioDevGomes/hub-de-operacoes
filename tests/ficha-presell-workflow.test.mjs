@@ -71,7 +71,9 @@ test('draft round-trip keeps the existing key, manual/autofill origin and unknow
   assert.equal(readDraft(denied),null);assert.doesNotThrow(()=>writeDraft(update,denied));assert.doesNotThrow(()=>clearDraft(denied));
 });
 test('presentation keeps creation separate from restored questions and safely escapes structured placeholder',()=>{
-  const html=renderTemplate();for(const id of ['copyRawText','copyDiscount','copyDiscountAmount','copyProductPrice','copyFichaSource','copyGenerateFicha','copyPresellStatus','copyPresellReport','copyWarnings'])assert.ok(html.includes('id="'+id+'"'));
+  const html=renderTemplate();for(const id of ['copyRawText','copyAnalyze','copyAnalyzeManual','copyClipboardStatus','copyManualPastePanel','copyDiscount','copyDiscountAmount','copyProductPrice','copyFichaSource','copyGenerateFicha','copyPresellStatus','copyPresellReport','copyWarnings'])assert.ok(html.includes('id="'+id+'"'));
+  assert.match(html,/<button id="copyAnalyze"[^>]*>Analisar oferta<\/button>/,'a ação principal substitui a caixa de texto e mantém o rótulo Analisar oferta');
+  assert.match(html,/id="copyManualPastePanel"[^>]*hidden/,'a colagem manual fica oculta até ser necessária como fallback');
   assert.equal((html.match(/id="copyGenerateFicha"/g)||[]).length,1);
   assert.ok(html.includes(structuredFichaFormat));assert.ok(!html.includes('Gerar copy')&&!html.includes('copyPackages'));
   for(const id of ['copyGenerateQuestions','copyOfferQuestions','copyQuestionsCopy'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);

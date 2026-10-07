@@ -16,7 +16,8 @@ assert.ok(trendsCss.includes('@import url("./curation-header-actions.css?v=4")')
 
 for (const [screen, path] of consumers) {
   const page = await read(path);
-  assert.ok(page.includes('trends-sheet.css?v=20261006-curation-header-color'), `${screen} invalida o cache da folha compartilhada`);
+  const version='20261006-curation-decision-column';
+  assert.ok(page.includes(`trends-sheet.css?v=${version}`), `${screen} invalida o cache da folha compartilhada`);
 }
 
 const glimpsePage = await read('src/curadoria/glimpse/index.html');
@@ -28,6 +29,7 @@ assert.match(sharedCss, /:is\(\.primary,\.finish-button,\.orange\)\{background:v
 assert.match(sharedCss, /:is\(\.primary,\.finish-button,\.orange\):is\(:hover,:focus-visible,:active\)\{background:var\(--curation-header-action-accent\);color:var\(--curation-header-action-accent-text\)\}/, 'o azul permanece consistente nos estados interativos');
 assert.match(sharedCss, /:is\(:hover,:focus-visible\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/, 'a sombra aumenta no hover e foco');
 assert.match(sharedCss, /:focus-visible\{outline:2px solid rgba\(101,169,255,\.45\);outline-offset:2px\}/, 'o foco de teclado continua visível');
+assert.ok(!sharedCss.includes('hub-panel-action'), 'ações dentro dos painéis MCC não ampliam o escopo da folha dos cabeçalhos');
 
 const publishedCss = await read('dist/curadoria/curation-header-actions.css');
 assert.equal(publishedCss, sharedCss, 'o build publica a folha compartilhada sem alterações');

@@ -16,6 +16,7 @@ const pages = [
   ['E-commerce GM', '../dist/curadoria/top-performance/index.html', 'data-hub-sidebar-active="ecommerce"'],
   ['Top Offers CB', '../dist/curadoria/clickbank-top-offers/index.html', 'data-hub-sidebar-active="clickbank-top-offers"'],
   ['Hot Offers MS', '../dist/curadoria/hot-offers-ms/index.html', 'data-hub-sidebar-active="hot-offers-ms"'],
+  ['Ofertas SmartAdv', '../dist/curadoria/smartadv-offers/index.html', 'data-hub-sidebar-active="smartadv-offers"'],
   ['Asset Studio', '../dist/asset-studio/index.html', 'data-hub-sidebar-active="asset-studio"'],
 ];
 
@@ -24,6 +25,7 @@ for (const [name, path, mode] of pages) {
   assert.ok(html.includes('data-hub-sidebar'), `${name}: mount do menu compartilhado ausente`);
   assert.ok(html.includes(mode), `${name}: modo ou item ativo não foi configurado`);
   assert.ok(html.includes('sidebar-component.js') && html.includes('sidebar-component.css'), `${name}: dependência compartilhada não foi conectada`);
+  assert.ok(html.includes('sidebar-component.css?v=12'), `${name}: cache do CSS compartilhado do menu está desatualizado`);
   assert.ok(html.includes('data-hub-sidebar-products'), `${name}: área Produtos não usa o componente`);
   assert.doesNotMatch(html, /data-sidebar-group="(?:operation|analysis|curation|creation|personal|products)"/, `${name}: grupos continuam copiados na página`);
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
@@ -75,6 +77,7 @@ assert.ok(source.includes("const COLLAPSED_STORAGE_KEY = 'painel-sidebar-recolhi
 assert.ok(source.includes('data-hub-sidebar-collapse-toggle') && source.includes('Expandir menu lateral') && source.includes('Recolher menu lateral'), 'controle acessível de recolhimento/expansão do menu ausente');
 assert.ok(source.includes("layout?.classList.toggle('hub-sidebar-collapsed', collapsed)"), 'estado recolhido não é aplicado ao layout compartilhado');
 assert.ok(css.includes('.hub-sidebar-layout.hub-sidebar-collapsed { grid-template-columns: 42px minmax(0, 1fr) !important; }') && css.includes('> :not(.hub-sidebar-collapse-toggle)'), 'modo recolhido não reduz a navegação a uma faixa estreita com controle visível');
+assert.match(css, /\.hub-sidebar-layout\s*>\s*aside\.hub-sidebar-aside\s*\{\s*background:\s*#202a3c;\s*border:\s*0;/, 'a aparência global do menu deve vencer os estilos locais do aside nas telas independentes');
 assert.ok(css.includes('.hub-menu-group.collapsed'), 'grupos expansíveis do menu devem permanecer');
 const overviewTemplate=await readFile(new URL('../src/overview/template.html',import.meta.url),'utf8');
 assert.doesNotMatch(source, /<input id="search"/, 'a busca foi movida do menu para a Visão Geral');

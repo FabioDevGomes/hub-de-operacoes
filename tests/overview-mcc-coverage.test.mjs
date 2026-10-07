@@ -47,11 +47,11 @@ test('capture metadata and persisted catalogue include an added third MCC automa
   m.cobertura_D_zero_por_mcc['333-333-3333']={data:dates.d0};assert.equal(domain.manifestMccCoverage(db,m,dates).d0.complete,true);
 });
 
-test('manifest card renders independent dots, accessible counts and centered separator without changing filters',()=>{
+test('D−1/D0 dates under provisional sales render independent dots, accessible counts and centered separator without changing filters',()=>{
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'},db=base(),m=manifest();db.diario=[row('b','d1',dates.d1)];
   const snapshot={rows:[],dates,d1Totals:[],manifestMccCoverage:domain.manifestMccCoverage(db,m,dates)},before=JSON.stringify(snapshot);
   const controller=context.window.OverviewView.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,actions:{}});
-  controller.render();const card=()=>dom.get('#kpis').innerHTML.match(/<section class="kpi overview-kpi overview-kpi-manifest"[\s\S]*?<\/section>/)[0],initial=card();
+  controller.render();const card=()=>dom.get('#kpis').innerHTML.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)[0],initial=card();
   assert.match(initial,/class="dot overview-manifest-dot" role="img" aria-label="D−1: 2 de 2 MCCs/);
   assert.match(initial,/class="dot overview-manifest-dot warn" role="img" aria-label="D0: 1 de 2 MCCs/);
   assert.match(initial,/overview-manifest-separator" aria-hidden="true">·<\/span>/);

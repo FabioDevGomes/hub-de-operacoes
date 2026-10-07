@@ -61,7 +61,7 @@ body { background: #07101f !important; }
 .hub-menu-products .sidebar-empty { padding: 7px 8px; font-size: .72rem; line-height: 1.3; }
 .hub-sidebar-aside { min-width: 0; }
 /* Menu compartilhado: contraste por superfície, sem contorno externo. */
-aside.hub-sidebar-aside {
+.hub-sidebar-layout > aside.hub-sidebar-aside {
   background: #202a3c;
   border: 0;
   box-shadow: none;

@@ -13,6 +13,7 @@ const resolveD1=window.OverviewDomain.resolveD1Totals;
 const profitForTotals=window.OverviewDomain.profitForTotals;
 const previousIsoDate=window.OverviewDomain.previousIsoDate;
 const authoritativeMccSnapshots=window.OverviewDomain.authoritativeMccSnapshots;
+const pausedCampaignNamesOnDate=window.OverviewDomain.pausedCampaignNamesOnDate;
 const replaceAuthoritativeDates=window.OverviewDomain.replaceAuthoritativeDates;
 const totalsColumns=window.OverviewDomain.totalsColumns;
 const parseMinimumRoi=window.OverviewDomain.parseMinimumRoi;
@@ -93,4 +94,6 @@ const d1Columns=totalsColumns('d1','D−1'),d0Columns=totalsColumns('d0','D zero
 assert.deepEqual(JSON.parse(JSON.stringify(d1Columns.map(([key])=>key))),JSON.parse(JSON.stringify(d0Columns.map(([key])=>key))),'D−1 e D0 preservam o mesmo formato e a mesma ordem de colunas');
 assert.deepEqual(JSON.parse(JSON.stringify(d1Columns)),[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current','Investimento D−1'],['imp','Impressões D−1'],['clicks','Cliques D−1'],['conv','Conversões D−1'],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit','Lucro D−1 (R$)'],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']],'D−1 mantém ROIs históricos de venda e lucro, com o mesmo formato de D0');
 
+assert.deepEqual(Array.from(pausedCampaignNamesOnDate([{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Zulu'},{status:'pausada',pausada_em:'2026-10-05',nome_mcc:'Ontem'},{status:'ativa',pausada_em:'2026-10-06',nome_mcc:'Ativa'},{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Akemi'}],'2026-10-06')),['Akemi','Zulu'],'somente pausadas hoje, ordenadas pelo nome');
+assert.deepEqual(Array.from(pausedCampaignNamesOnDate([{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Hoje'}],'invalid')),[],'data inválida não corresponde a pausas');
 console.log('overview-domain.test.mjs: limite de teste, somas D0, retrato D−1 e colunas por período validados');

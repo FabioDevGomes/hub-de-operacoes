@@ -4,9 +4,12 @@ import vm from'node:vm';
 
 const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8'),tableStyles=await readFile(new URL('../dist/curadoria/top-performance/table-standard.css',import.meta.url),'utf8');
 assert.ok(html.includes('E-commerce GM'));
-assert.ok(html.includes('class="surface offer-table-surface"><header class="offer-table-caption"><h2>Ofertas</h2></header>'),'a tabela principal precisa de cabeçalho próprio acima dos filtros');
+assert.ok(html.includes('class="surface offer-table-surface"><header class="offer-table-caption"><h2>Ofertas</h2></header>'),'a área da tabela mantém um título acessível');
 assert.ok(html.includes('<table class="hub-table-layout">'),'a lista de ofertas deve optar explicitamente pelo padrão compartilhado de linhas da tabela');
-assert.ok(html.includes('table-standard.css?v=1')&&tableStyles.includes('.offer-table-surface {\n  border: 0;')&&tableStyles.includes('.offer-table-caption h2'),'o painel da tabela precisa usar bordas externas removidas e cabeçalho local padronizado');
+assert.ok(html.includes('table-standard.css?v=1')&&tableStyles.includes('.offer-table-surface {\n  border: 0;'),'o painel da tabela precisa usar bordas externas removidas');
+assert.ok(['up','stable','down','low_volume','point_peak','inconclusive'].every(status=>tableStyles.includes(`#rows button.trends-badge.${status}`))&&tableStyles.includes('background: #132b44;')&&!tableStyles.includes('#rows button.trends-badge.no_data'),'na E-commerce GM, resultados do Trends usam fundo azul uniforme, sem alterar o estado Sem dados');
+assert.ok(['th[data-col="payout"] .sort-btn','th[data-col="movement"] .sort-btn','td[data-col="payout"]','td[data-col="movement"]'].every(selector=>tableStyles.includes(`.hub-table-layout ${selector}`))&&tableStyles.includes('text-align: center;'),'os títulos e valores das colunas Payout e Movimento ficam centralizados');
+assert.ok(tableStyles.includes('.offer-table-caption {\n  position: absolute;')&&tableStyles.includes('  height: 1px;\n  min-height: 0;')&&tableStyles.includes('  overflow: hidden;')&&tableStyles.includes('  clip: rect(0, 0, 0, 0);'),'o título Ofertas permanece acessível sem ocupar altura nem deixar espaço acima dos filtros');
 assert.ok(html.includes('./top-performance-storage.mjs'));
 assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
 assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));
@@ -69,7 +72,7 @@ assert.ok(html.includes("sortKey='payout';sortDirection='desc';render()"),'Limpa
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'E-commerce GM não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecision'),'decisão da E-commerce GM não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20261006-curation-header-color'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
+assert.ok(html.includes('trends-sheet.css?v=20261006-curation-decision-column'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
 assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=2'")&&html.includes("mountCurationListFocus('top-performance'"),'E-commerce GM não instala a preservação compartilhada de posição e linha');
 assert.ok(html.includes("highlightOnCapture:false")&&html.includes("function closeOffer({restoreFocus=true}={}){$('#offerSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),'E-commerce GM deve animar apenas após fechar a ficha e retornar à lista');
 assert.match(html,/async function saveTrend\(status\)\{[\s\S]*?closeOffer\(\{restoreFocus:false\}\);await refresh\(\);listFocus\.restore\(\);toast\(/,'salvar Trends precisa restaurar a linha depois que refresh recriar as linhas da lista');
@@ -77,7 +80,7 @@ assert.ok(html.includes('renderWithGlimpse=render;render=function(){renderWithGl
 const focusModule=await readFile(new URL('../dist/curadoria/list-focus.mjs',import.meta.url),'utf8'),focusStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
 assert.ok(focusStyles.includes('#offerSheet .tabs{position:sticky;top:0;z-index:5;display:flex;gap:5px;align-items:center;flex-wrap:nowrap;')&&focusStyles.includes('border:1px solid var(--line);border-radius:11px')&&focusStyles.includes('#offerSheet .tabs .btn{flex:0 0 auto;border:0;')&&focusStyles.includes('#offerSheet .tabs .btn.active{background:#18304d;color:#fff}'),'abas agrupadas da ficha, sem divisores entre botões, ausentes');
 assert.ok(focusStyles.includes('#offerSheet.sheet{padding:0}')&&focusStyles.includes('#offerSheet .sheet-inner{width:100%;max-width:1280px;margin:0 auto;padding:24px}')&&focusStyles.includes('#offerSheet .sheet-top h1{margin:5px 0 3px;font-size:1.2rem;line-height:normal}')&&focusStyles.includes('#offerSheet .sheet-top .eyebrow{color:#42e7c0;font-size:.72rem;line-height:normal;letter-spacing:.14em;font-weight:400}'),'layout horizontal ou tipografia do cabeçalho da oferta fora do padrão compartilhado');
-assert.ok(focusStyles.includes('#rows tr.decision-row-launch>td{background:rgba(171,130,35,.2)}')&&focusStyles.includes('#rows tr.decision-row-live>td{background:rgba(16,74,54,.25)}'),'E-commerce GM define o padrão compartilhado de cor das linhas por decisão');
+assert.ok(focusStyles.includes('#rows tr.decision-row-launch>td{background:var(--curation-decision-launch-row)')&&focusStyles.includes('#rows tr.decision-row-live>td{background:var(--curation-decision-live-row)'),'E-commerce GM define o padrão compartilhado de cor das linhas por decisão');
 assert.ok(focusModule.includes('pageshow')&&focusModule.includes('window.scrollTo'),'E-commerce GM não restaura a rolagem ao retornar da tela Glimpse');
 assert.ok(focusStyles.includes('curation-focus-row-pulse')&&focusStyles.includes('curation-focus-control-pulse'),'animação leve da linha e do controle ausente');
 assert.ok(focusStyles.includes('.trends-keyword-candidate')&&focusStyles.includes('background:#102d24')&&focusStyles.includes('color:#83e5bb'),'destaque verde para candidatas do Google Trends ausente');

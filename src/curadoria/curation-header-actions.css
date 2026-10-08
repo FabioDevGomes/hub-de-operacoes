@@ -1,6 +1,6 @@
-/* Fonte única das ações no cabeçalho principal de todas as telas do Hub.
+/* Fonte única da aparência das ações: cabeçalhos e opt-in .hub-standard-action.
    Importada pelo shell compartilhado e, sem sidebar, pelo Glimpse.
-   O ancestral main e os filhos diretos excluem fichas, modais e filtros. */
+   A classe .primary aplica o azul; posicionamento é exclusivo do cabeçalho. */
 :root{--curation-header-action-accent:#38bdf8;--curation-header-action-accent-text:#052037;--hub-page-action-top:16px}
 /* A distância pertence ao shell, não a deslocamentos de cada botão.
    Apenas padding superior/alinhamento têm prioridade sobre layouts locais.
@@ -10,11 +10,11 @@
   main>header:is(.topbar,.top,.page-head,.hero):has(>:is(.actions,.hero-actions)){align-items:flex-start!important;margin-top:0}
 }
 main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions){gap:var(--hub-page-action-gap,8px);flex-wrap:wrap;margin-top:0;transform:none;align-self:flex-start}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button){min-height:36px;padding:8px 11px;border:0;font-size:.78rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55);display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:10px;font-family:inherit;text-align:center;text-decoration:none;white-space:nowrap;cursor:pointer;transition:box-shadow .15s ease,filter .15s ease,transform .15s ease}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):not(.primary,.finish-button,.orange,.danger,.warn,.warning,.success,.error){background:var(--hub-button-bg,#101e32);color:var(--hub-primary-text,var(--text,#c3cede))}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(.primary,.finish-button,.orange){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(.primary,.finish-button,.orange):is(:hover,:focus-visible,:active){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):not(:disabled,[aria-disabled="true"]):is(:hover,:focus-visible){box-shadow:0 5px 12px rgba(0,0,0,.65)}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):focus-visible{outline:2px solid rgba(101,169,255,.45);outline-offset:2px}
-main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button):is(:disabled,[aria-disabled="true"]){opacity:.45;cursor:not-allowed}
-@media(prefers-reduced-motion:reduce){main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button){transition:none}}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action){min-height:36px;padding:8px 11px;border:0;font-size:.78rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55);display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:10px;font-family:inherit;text-align:center;text-decoration:none;white-space:nowrap;cursor:pointer;transition:box-shadow .15s ease,filter .15s ease,transform .15s ease}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):not(.primary,.finish-button,.orange,.danger,.warn,.warning,.success,.error){background:var(--hub-button-bg,#101e32);color:var(--hub-primary-text,var(--text,#c3cede))}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):is(.primary,.finish-button,.orange){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):is(.primary,.finish-button,.orange):is(:hover,:focus-visible,:active){background:var(--curation-header-action-accent);color:var(--curation-header-action-accent-text)}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):not(:disabled,[aria-disabled="true"]):is(:hover,:focus-visible){box-shadow:0 5px 12px rgba(0,0,0,.65)}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):focus-visible{outline:2px solid rgba(101,169,255,.45);outline-offset:2px}
+:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action):is(:disabled,[aria-disabled="true"]){opacity:.45;cursor:not-allowed}
+@media(prefers-reduced-motion:reduce){:is(main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)>:is(.btn,.button),.hub-standard-action){transition:none}}

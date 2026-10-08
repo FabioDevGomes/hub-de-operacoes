@@ -2,6 +2,11 @@
     .product-table th{white-space:normal;line-height:1.25;text-align:center;vertical-align:middle;padding:11px 10px;min-width:78px;border-right:1px solid rgba(36,52,77,.8)}.product-table th:first-child{min-width:94px}.product-table th:nth-child(4),.product-table th:nth-child(5){min-width:112px}.product-table th:nth-child(9),.product-table th:nth-child(10){min-width:104px}.product-table th:nth-child(11),.product-table th:nth-child(12){min-width:102px}.product-table th:nth-child(13){min-width:112px}.product-table th:nth-child(14){min-width:124px}.product-table th:nth-child(15),.product-table th:nth-child(16){min-width:96px}.product-table th:last-child{min-width:240px;text-align:left}.product-table th:last-child,.product-table td:last-child{border-right:0}
     @media(max-width:980px){.product-summary{grid-template-columns:1fr 1fr}}
     @media(max-width:560px){.product-summary{grid-template-columns:1fr}}
+/* Shared daily table: all campaigns, without changing fonts or observation layout. */
+#productView .product-table th,#productView .product-table td:not(.empty){padding-block:6px}
+#productView .product-table td.num{text-align:center;vertical-align:middle}
+#productView .product-table td.product-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 50%,var(--hub-table-row-bg))}
+#productView .product-table tfoot th,#productView .product-table tfoot td{position:static;background:var(--panel2);border-top:1px solid var(--line);font-size:inherit;font-weight:600;text-align:center}
 /* product-diary-sales-style */
 /* Geometry of the edit link belongs to global table-edit-actions.css. */
 #productView .product-table td.product-observation-cell{padding-right:50px;min-width:260px;white-space:normal}
@@ -37,6 +42,16 @@
 /* Resumo, indicadores e quadro do diário seguem o padrão de superfícies do Hub. */
 #productView .card,#productView .legacy-summary-item,#productView .table-wrap,#productView .tag,#productView .view-toggle{border:0}
 body.product-diary-mode #statusbar .pill{border:0}
+.product-diary-controls{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+#productDiaryPanel>.panel-head>div:first-child{min-width:0}
+#productDiaryPanel:has(#productColumnPicker[open]){overflow:visible}
+#productDiaryPanel:has(#productColumnPicker[open]) #productTableWrap{border-radius:0 0 15px 15px}
+body.product-diary-mode #productTableWrap{min-height:0;max-height:var(--product-diary-table-max-height,calc(100dvh - 280px));overflow:auto}
+body.product-diary-mode #productTableWrap::-webkit-scrollbar{width:10px;height:10px}
+body.product-diary-mode #productTableWrap::-webkit-scrollbar-track,body.product-diary-mode #productTableWrap::-webkit-scrollbar-corner{background:var(--panel2)}
+body.product-diary-mode #productTableWrap::-webkit-scrollbar-thumb{background:#52657d;border-radius:8px}
+body.product-diary-mode #productTableWrap::-webkit-scrollbar-thumb:hover{background:#70849d}
+body.product-diary-mode #productTableWrap:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 @media(min-width:981px){
   body.product-diary-mode{overflow-y:auto}
   body.product-diary-mode .main{box-sizing:border-box;min-height:100vh;min-height:100dvh;overflow:visible;padding:16px 32px 12px}
@@ -45,7 +60,7 @@ body.product-diary-mode #statusbar .pill{border:0}
   body.product-diary-mode #productSummary{flex:0 0 auto}
   body.product-diary-mode #productDiaryPanel{display:flex;flex:0 0 auto;flex-direction:column;min-height:0}
   body.product-diary-mode #productDiaryPanel>.panel-head{flex:0 0 auto}
-  body.product-diary-mode #productTableWrap{flex:0 0 auto;min-height:0;max-height:none;overflow-x:auto;overflow-y:hidden}
+  body.product-diary-mode #productTableWrap{flex:0 0 auto}
   body.product-diary-mode #legacySummaryBody{flex:0 0 auto;min-height:0;overflow:visible}
   body.product-diary-mode #productFooterNote{flex:0 0 auto}
 }

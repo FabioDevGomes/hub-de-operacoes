@@ -1,7 +1,7 @@
         <div id="productSummary" class="product-summary"></div>
         <div id="productDiaryPanel" class="card panel">
-          <div class="panel-head"><div><h2 id="productPanelTitle">Diário de campanha</h2><p id="productCaption"></p></div><span id="rowCount" class="tag"></span></div>
-          <div id="productTableWrap" class="table-wrap"><table class="product-table hub-table-layout"><thead id="productHead"></thead><tbody id="productBody"></tbody></table></div>
+          <div class="panel-head"><div><h2 id="productPanelTitle">Diário de campanha</h2><p id="productCaption"></p></div><div class="product-diary-controls"><span id="rowCount" class="tag"></span><details id="productColumnPicker" class="hub-column-picker"><summary class="btn">Colunas</summary><div class="hub-column-menu"><strong>Colunas do Diário</strong><p>A data permanece visível. Ocultar colunas não altera os dados nem os totais.</p><div data-column-options></div><button data-column-reset class="btn" type="button">Restaurar padrão</button><p data-column-message role="status"></p></div></details></div></div>
+          <div id="productTableWrap" class="table-wrap" tabindex="0" role="region" aria-labelledby="productPanelTitle"><table class="product-table hub-table-layout"><thead id="productHead"></thead><tbody id="productBody"></tbody><tfoot id="productTotals"></tfoot></table></div>
           <div id="legacySummaryBody" class="legacy-summary-grid hidden"></div>
         </div>
         <div id="productFooterNote" class="footer-note">Campos ausentes permanecem vazios. Cliques da plataforma não são inferidos pelo manifesto.</div>

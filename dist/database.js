@@ -106,9 +106,14 @@
       campaign.captura_D_zero_escopo=item.escopo;campaign.captura_D_zero_completa=item.completa;campaign.captura_D_zero_data=item.data;
     }
   }
+  function mergeD1Coverage(previous,incoming){
+    const coverage={...(previous?.cobertura_D_menos_1_por_mcc||{})},id=sourceManagerId(null,incoming),date=incoming?.separacao_temporal?.D_menos_1?.datas_detectadas?.[0];
+    if(id&&date&&incoming?.separacao_temporal?.D_menos_1?.estado!=='nao_fornecido')coverage[id]={data:date,capturada_em:incoming?.captura_D_menos_1?.capturada_em||incoming?.gerado_em_utc||null};
+    return coverage;
+  }
   function mergeAccountCaptures(base,previous,incoming){
     const managerId=sourceManagerId(null,incoming),accountScope=manifestAccountScope(incoming);
-    if((!managerId&&!accountScope)||!previous?.campanhas?.length){const result=clone(incoming);result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming);applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);return result}
+    if((!managerId&&!accountScope)||!previous?.campanhas?.length){const result=clone(incoming);result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming);result.cobertura_D_menos_1_por_mcc=mergeD1Coverage(previous,incoming);applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);return result}
     const incomingNames=new Set(manifestNames(incoming).map(name=>name.toLowerCase())),byName=new Map(base.campanhas.map(c=>[String(c.nome_mcc||'').toLowerCase(),c]));
     const dates=manifest=>['D_zero','D_menos_1'].flatMap(role=>manifest?.separacao_temporal?.[role]?.datas_detectadas||[]);
     const d0Date=incoming.separacao_temporal?.D_zero?.datas_detectadas?.[0],partialD0=managerId?incoming.captura_D_zero?.escopo!=='all_campaigns':incoming.captura_D_zero?.escopo==='active_only';
@@ -137,6 +142,7 @@
     const retainedCount=result.campanhas.filter(item=>item._d0RetidaNaCaptura).length;
     for(const item of result.campanhas)delete item._d0RetidaNaCaptura;
     result.cobertura_D_zero_por_mcc=mergeD0Coverage(previous,incoming,retainedCount);
+    result.cobertura_D_menos_1_por_mcc=mergeD1Coverage(previous,incoming);
     applyD0CoverageToCampaigns(result.campanhas,result.cobertura_D_zero_por_mcc,incoming.identificacao_mcc?.id);
     return result;
   }

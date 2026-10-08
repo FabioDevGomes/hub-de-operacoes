@@ -33,3 +33,19 @@ html.embedded .input-card .clipboard-capture,html.embedded .input-card .message{
 html.embedded .clipboard-capture{gap:7px 10px;margin:8px 0}
 @media(max-width:560px){.clipboard-capture{grid-template-columns:1fr}.clipboard-capture .button.primary{justify-self:start}}
 html.wide-offer-embedded,html.wide-offer-embedded body{background:transparent!important}
+/* Mesmo documento compacto nos atalhos independentes (Lista de Gerente). */
+html.reference-presentation:not(.embedded) .page{width:min(1120px,calc(100% - 28px));padding:12px 0 20px}
+html.reference-presentation:not(.embedded) .surface{padding:12px;margin-bottom:9px}
+html.reference-presentation:not(.embedded) .cards{gap:7px;margin:8px 0}
+html.reference-presentation:not(.embedded) .metric-card{padding:10px}
+html.reference-presentation:not(.embedded) .clipboard-capture{gap:7px 10px;margin:8px 0}
+html.reference-presentation:not(.embedded) .people-also-search-items{gap:6px;margin-top:8px}
+html.reference-presentation:not(.embedded) .people-also-search-item{padding:6px 8px;font-size:.82rem}
+.standalone-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-bottom:14px;padding:5px;background:#0a1627;border:0;border-radius:11px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.standalone-bar>span{padding:7px 11px;font-size:.82rem;font-weight:750}
+.standalone-bar .hero-actions{align-items:center;gap:6px}
+.standalone-bar .button{min-height:34px;padding:7px 11px;font-size:.82rem;border:0;white-space:nowrap}
+.standalone-bar .button:focus-visible{outline:2px solid rgba(101,169,255,.7);outline-offset:2px}
+.standalone-bar .glimpse-host-saved{color:#83e5bb;font-size:.72rem;font-weight:400;white-space:nowrap}
+.standalone-bar .glimpse-host-saved[hidden]{display:none!important}
+@media(max-width:560px){.standalone-bar{flex-wrap:wrap}.standalone-bar .hero-actions{margin-left:auto}}

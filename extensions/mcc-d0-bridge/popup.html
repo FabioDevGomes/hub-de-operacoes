@@ -28,12 +28,15 @@
     .vsl-speeds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .vsl-speeds button { padding: 10px 0; }
     .capture-actions, .clickbank-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .clickbank-actions button { min-height: 33px; }
+    #clickbank-status:empty, #dtc-countries-status:empty { display: none; }
     button.compact-action { min-width: 0; padding: 8px 5px; font-size: 12px; line-height: 1.25; white-space: nowrap; }
     .vsl-speeds button[aria-pressed="true"] { background: #38bdf8; color: #061327; border-color: transparent; }
     button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
     #clickbank-manual { margin-top: 12px; }
     #clickbank-text { box-sizing: border-box; width: 100%; min-height: 140px; padding: 8px; border: 1px solid #294764; border-radius: 8px; background: #101e32; color: #e8f0ff; font: 12px/1.4 monospace; }
   </style>
+  <link rel="stylesheet" href="white-button.css">
 </head>
 <body>
   <h1>Preparador MCC · D0 / D−1</h1>
@@ -43,7 +46,7 @@
     <button id="scroll-to-bottom" class="secondary scroll-page" type="button">Rolar MCC até o final</button>
     <div class="capture-actions" role="group" aria-label="Ações de captura MCC">
       <button id="capture-d1" class="secondary compact-action" type="button">Capturar D−1 da MCC</button>
-      <button id="capture-d0" class="compact-action" type="button">Capturar D0 da MCC</button>
+      <button id="capture-d0" class="compact-action btn hub-white-button" type="button">Capturar D0 da MCC</button>
     </div>
     <div id="capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
   </section>
@@ -61,12 +64,11 @@
   <section aria-labelledby="clickbank-title">
     <h2 id="clickbank-title">Produtos ClickBank</h2>
     <div class="clickbank-actions" role="group" aria-label="Ações ClickBank">
-      <button id="capture-clickbank" class="compact-action" type="button">Capturar produtos ClickBank</button>
+      <button id="capture-clickbank" class="compact-action btn hub-white-button" type="button">Capturar produtos ClickBank</button>
       <button id="restore-clickbank" class="secondary compact-action" type="button">Restaurar tamanho da tabela</button>
+      <button id="capture-dtc-countries" class="secondary compact-action" type="button">Capturar países comuns da DTC</button>
     </div>
     <div id="clickbank-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
-    <p class="note" style="margin:12px 0 7px">No checkout DTC, capture “Países Comuns” para a oferta correspondente. Mantenha Top Offers CB aberto no Hub; a ficha da oferta não precisa estar aberta.</p>
-    <button id="capture-dtc-countries" class="secondary" type="button">Capturar países comuns da DTC</button>
     <div id="dtc-countries-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="clickbank-manual" hidden>
       <label for="clickbank-text">Texto para cópia manual (confira o aviso de completude acima)</label>

@@ -30,6 +30,14 @@
 .hub-month-navigation>.hub-month-label:is(input.hub-month-date-entry):focus-visible,
 .hub-month-current:focus-visible{outline:2px solid var(--hub-control-focus,#5ab1ff);outline-offset:2px}
 .hub-month-navigation>.hub-month-arrow:disabled{opacity:.38;cursor:not-allowed}
+/* Lista finita de datas identificadas pela tela; preserva o seletor nativo. */
+.hub-month-navigation>.hub-month-label.hub-month-date-select{
+  display:block;height:27px;box-sizing:border-box;border:0;border-radius:0;
+  padding:0 2px;background:transparent;box-shadow:none;text-align-last:center;
+}
+.hub-month-navigation>.hub-month-date-select option{background:#0a1627;color:#c4d5e8}
+.hub-month-navigation>.hub-month-date-select:focus-visible{outline:2px solid var(--hub-control-focus,#5ab1ff);outline-offset:2px}
+.hub-month-navigation>.hub-month-date-select:disabled{opacity:.38;cursor:not-allowed}
 /* A ação leva ao período atual: o rótulo depende da granularidade (Hoje, Mês atual etc.). */
 .btn.hub-month-current{
   min-height:33px;padding:6px 9px;border:0;font-size:.72rem;line-height:1.3;white-space:nowrap;

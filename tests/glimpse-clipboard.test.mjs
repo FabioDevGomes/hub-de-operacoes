@@ -7,7 +7,7 @@ test('leitor retorna o texto completo da área de transferência sem alterar o c
   assert.equal(await readClipboardText({readText:async()=>raw}),raw);
 });
 
-test('leitor identifica clipboard vazio e API indisponível para oferecer a colagem manual',async()=>{
+test('leitor identifica clipboard vazio e API indisponível para informar o erro de captura',async()=>{
   await assert.rejects(readClipboardText({readText:async()=>''}),error=>error.code==='clipboard-empty');
   await assert.rejects(readClipboardText({}),error=>error.code==='clipboard-unavailable');
 });

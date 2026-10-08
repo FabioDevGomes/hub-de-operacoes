@@ -26,6 +26,8 @@ O ajuste de ROI mínimo da Visão Geral é por campanha e permanece no campo adi
 
 ### ROI no momento do registro de venda manual
 
+**Resumo persistido da Visão Geral:** `bases/atual.overview_cards` é um campo aditivo version 1, não uma store ou migração. `overview/cards-domain.js` calcula suas somas/contagens/metadados somente durante a aplicação explícita MCC e o Preparador o grava atomicamente com a base. `revision`/`computedAt` guardam o instante da carga; `exchangeRate` guarda a taxa usada. Resultados incluem valor observado ou null, cobertura e datas próprias. F5, abertura, navegação, virada do dia e alterações manuais apenas exibem o resumo existente; não recalculam nem gravam cartões. Backup/normalize preservam o campo. Bases antigas/sem resumo ou versão inválida aguardam próxima MCC, sem migração automática ou zero financeiro inventado. Tabela/Diário/Controle Macro continuam independentes; D0 retido após D−1-only e evidência MCC por conta/data permanecem. Ver contrato em `docs/maintenance.md` e `tests/overview-cards-persistence.test.mjs`.
+
 Cada novo lançamento rápido recebe `vendas_provisorias[].roi_no_registro` (version 1) antes do salvamento atômico da base e do espelho de Faturamento. A fotografia guarda ID da campanha, instante do registro, data/hora/valor originais da venda, investimento e receita acumulados em BRL, taxa operacional USD/BRL, última data MCC da campanha e ROI percentual. Não requer store nem migração de schema. O backup normal da base preserva a propriedade aditiva.
 
 `src/overview/sale-roi-domain.js` calcula `(receita acumulada - investimento acumulado) / investimento acumulado * 100`, com a venda recém-lançada incluída uma vez. Usa as substituições MCC autoritativas de `OverviewDomain` e a cobertura de vendas manuais de `CampaignDatabase.salesAdjustmentMap`, reconciliadas em uma cópia de apresentação contra D0/D−1, inclusive quando o Diário estiver defasado. O pareamento MCC é agregado/FIFO, não evidência de uma transação individual. Investimento ausente/zero ou receita indisponível produzem `roi_percent:null` e motivo, nunca zero artificial.
@@ -72,6 +74,8 @@ O Preparador MCC grava a base `atual` no mesmo IndexedDB `painel-campanhas` e em
 
 ### Projeção da captura atual para cálculos financeiros
 
+Na Visão Geral, `manifestPeriodDates()` também resolve D0 quando o último manifesto veio apenas com D−1: usa datas de relatório comprovadas na cobertura/retratos/Diário, limitando D0 ao dia seguinte do D−1 declarado. Não presume uma captura pela hora de upload nem reaproveita um D0 mais antigo. Se o último retrato da campanha omitiu D0, `d0Totals()` pode ler o Diário MCC D0 da mesma data; ausência explícita num D0 recebido permanece ausente e zero permanece zero. A recuperação é somente de apresentação, sem reparar ou regravar a base. Regressão: `tests/overview-d0-after-d1.test.mjs`.
+
 `OverviewDomain.authoritativeMccSnapshots` normaliza D0/D−1 do manifesto persistido, moeda e datas. `replaceAuthoritativeDates` substitui as contribuições das datas atuais em totais acumulados, preservando dias anteriores e observações ausentes. O mapa diário de `campaignTotalsMap` mantém campos ausentes como `null`, não zero. Visão Geral, Mapa por Conta, análise CPA, Controle Macro e Produtos Testados recebem essa mesma fotografia; lucro, ROI, CPA, limites e saldo de teste são derivados dos valores corrigidos. A comissão e o investimento em BRL usam a taxa operacional vigente quando a MCC informa USD.
 
 Em manifestos consolidados, um período só gera snapshot autoritativo quando sua data pertence a `campanha.datas_coleta`. Um placeholder de D−1 não recebido por uma MCC não pode herdar a data global do D−1 recebido por outra MCC e ocultar o Diário. Nesse caso, a Visão Geral consulta o registro da mesma data no Diário, sem buscar dias anteriores, alterar a base ou substituir zero/ausência de um período efetivamente capturado. Regressão: `tests/overview-d1-mcc-scope.test.mjs`.
@@ -81,6 +85,8 @@ Campanhas sem métricas no retrato atual não contribuem com linhas antigas do D
 Faturamento permanece um domínio de vendas/comissões, não um demonstrativo de custo dos anúncios. Seus totais e gráfico consultam os agregados MCC atualizados no banco; não se subtrai investimento publicitário de vendas ou de movimentos de Caixa. Ver [billing.md](billing.md) para proteção de pagamentos e sincronização.
 
 ## Diário A–Q
+
+**Cobertura de importação por período:** `manifesto_atual.cobertura_D_menos_1_por_mcc` é um mapa aditivo por ID MCC, com `data` do relatório e `capturada_em` quando disponível. `mergeD1Coverage()` o preserva entre importações de outra MCC ou somente D0, mesmo sem linhas de Diário; `cobertura_D_zero_por_mcc` permanece independente. Não há nova store/schema nem migração de métricas. Bases antigas usam evidência por campanha/data ou Diário com origem/período explícitos, sem inventar comprovantes. Na Visão Geral, os indicadores de cobertura usam ontem/hoje em Brasília, não as datas globais do último manifesto; são projeção somente de leitura. Horário de captura/importação não substitui a data do relatório nem confirma outro período. Ver `docs/maintenance.md` e `tests/overview-mcc-coverage.test.mjs`.
 
 O cartão Manifesto MCC na Visão Geral recebe `manifestCaptureInfo` do manifesto atual persistido, separado de `base.atualizado_em` e da hora de salvamento local. Horários de captura disponíveis em `captura_D_zero`/`captura_D_menos_1` têm prioridade; sem eles, `gerado_em_utc` é exibido com o rótulo Manifesto gerado. Sem timestamp válido, permanece indisponível. Apresentação em Brasília, sem gravação ou busca em capturas antigas de outra MCC.
 
@@ -105,6 +111,8 @@ Em **Produtos Testados**, a consolidação de apresentação reconhece uma séri
 | Q | Observações/status normalizado |
 
 Agregações financeiras usam F, O e P. Preserve zeros confirmados e estados ausente/inválido.
+
+Na tabela do Diário, a última linha **Totais** usa `ProductDiaryDomain.productDiaryTableTotals()` sobre a série efetivamente exibida (corte de pausa inclusivo). Soma B/C/F/O/P separadamente, ignora entradas ausentes/inválidas sem convertê-las em zero e conserva `null` quando nenhuma observação existe. O/P arredondam a centavos após somar. F soma somente conversões oficiais das células; vendas manuais provisórias continuam em notas próprias e na projeção dos cartões, não no total oficial da tabela. `tfoot#productTotals` é apenas apresentação e não cria linha diária, store, evento, persistência ou mistura entre campanhas; resumos legados e fotografias ROI permanecem separados. Testes sintéticos: `tests/product-diary-table-totals.test.mjs`.
 
 O registro da campanha pode incluir `pausa_confirmada_em`, uma propriedade aditiva do objeto armazenado na base existente. Ela só é preenchida por estado operacional pausado explícito da MCC: D0 prevalece; se D0 estiver ausente ou sem estado operacional, o estado pausado explícito D−1 confirma a pausa. Ausência em coleta ativa continua sendo `status_origem: 'ausencia_na_coleta'` e não preenche a confirmação. Uma observação ativa explícita posterior remove essa marca e reabre a série. No Diário, a linha da confirmação é inclusiva; linhas MCC posteriores não entram enquanto a pausa confirmada continuar. Dados históricos persistidos permanecem intactos, com a view limitando o que exibe. A Observabilidade/tooltip deve diferenciar a data confirmada da simples última aparição.
 
@@ -158,6 +166,8 @@ No resumo global, **gastos realizados** após o primeiro aporte reduzem a reserv
 O backup completo JSON inclui `personal_finance`. Restauração valida a estrutura e pede confirmação quando substituir dados locais existentes. Backup antigo sem essa propriedade continua válido e preserva integralmente as stores pessoais atuais. O domínio não importa a imagem de referência, não se conecta a bancos/cartões e não se integra ao Faturamento ou à MCC.
 
 Valide versões e stores antes de alterar qualquer banco local.
+
+A entrada de despesas por JSON preparado de planilha foi descontinuada. Não há mais botão/painel “Importar despesas”, conversor de `personal_finance_expenses_source_v1` ou merge aditivo exclusivo. Dados anteriormente importados e seus IDs permanecem válidos; cadastro manual e backup/restauração de `personal_finance_v1` continuam sem alteração de schema.
 
 ## Observabilidade da Curadoria — domínio separado
 

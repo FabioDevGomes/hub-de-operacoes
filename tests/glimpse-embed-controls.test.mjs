@@ -91,7 +91,7 @@ test('Top Offers CB mostra confirmação somente após sucesso e valida a mensag
   }
 });
 
-test('os outros hosts mantêm o rótulo e o fluxo padrão Concluir',()=>{
+test('o helper preserva compatibilidade com o rótulo e o fluxo legado Concluir',()=>{
   const original = Object.fromEntries(['document','window','location','MutationObserver'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
   const parent = new Element(), backButton = new Element();
   parent.append(backButton);

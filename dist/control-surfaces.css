@@ -2,10 +2,30 @@
 :root {
   --hub-input-bg: #081321;
   --hub-input-hover-bg: #0a1829;
+  --hub-input-inset-bg: #0a1728;
+  --hub-input-inset-shadow: inset 1.4px 2.1px 4.2px rgba(0,0,0,.455), inset -.7px -.7px 1.4px rgba(255,255,255,.035);
   --hub-button-bg: #101e32;
   --hub-control-focus: #5ab1ff;
   --hub-control-error: #ff7584;
 }
+
+/* Padrão aprovado para inputs editáveis: superfície rasa, sem borda decorativa.
+   Opt-in; dimensões e tipografia permanecem sob responsabilidade do componente. */
+input.hub-inset-input {
+  background: var(--hub-input-inset-bg);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--hub-input-inset-shadow);
+}
+input.hub-inset-input:focus-visible {
+  outline: 2px solid var(--hub-control-focus);
+  outline-offset: 2px;
+}
+input.hub-inset-input:is([aria-invalid="true"],.invalid,.error,:invalid) {
+  outline: 2px solid var(--hub-control-error);
+  outline-offset: 2px;
+}
+input.hub-inset-input:disabled { opacity: .55; cursor: not-allowed; }
 
 /* Opt-in para novas telas; .control é o contrato equivalente da Curadoria.
    Textareas de colagem, upload, checkboxes e demais controles nativos ficam fora. */

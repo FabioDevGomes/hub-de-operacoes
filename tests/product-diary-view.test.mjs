@@ -43,6 +43,41 @@ test('diary totals preserve absence, zero and numeric values without treating in
   assert.equal(JSON.stringify(domain.productDiaryTotals(rows.slice(1))),JSON.stringify({investment:null,clicks:null,conversions:null}));
 });
 
+test('every campaign diary dims observed zero only in the requested metric columns',()=>{
+  const columns=new Set(['B','C','D','E','F','G','H','I','J','K','L','O','P']);
+  const row={date:'2026-09-29',cells:Object.fromEntries(domain.productColumns.map(([col])=>[col,{value:col==='A'?'2026-09-29':0}]))},before=JSON.stringify(row);
+  const s=setup({...empty(),rows:[row],displayRows:[row]});
+  for(const source of ['manifest','workbook']){
+    s.controller.render('Campanha sintética',source,'campaign-synthetic');
+    const cells=[...s.get('#productBody').innerHTML.matchAll(/<td class="([^"]*)">([\s\S]*?)<\/td>/g)];
+    assert.equal(cells.length,17);
+    domain.productColumns.forEach(([col],index)=>assert.equal(cells[index][1].includes('product-zero-value'),columns.has(col),'zero em '+col));
+    assert.match(cells[6][2],/0%/);assert.match(cells[14][2],/0\.00/);
+  }
+  assert.equal(JSON.stringify(row),before,'a classificação visual não altera células nem dados de campanha');
+});
+
+test('zero styling excludes absence, invalid values and nonzero values even when formatting rounds them to zero',()=>{
+  const inputs=[0,-0,'0','0.00','0,00',' 0 ','0%','0,00%',null,undefined,'',' ',false,true,NaN,Infinity,'—','inválido',0.000001,-1,5,'0.01'];
+  for(const value of inputs){
+    const row={date:'2026-09-29',cells:{A:{value:'2026-09-29'},B:{value},O:{value}}},s=setup({...empty(),rows:[row],displayRows:[row]});
+    s.controller.render('Sintética');
+    const expected=typeof value==='number'?Number.isFinite(value)&&value===0:typeof value==='string'&&/^[+-]?0+(?:[.,]0+)?\s*%?$/.test(value.trim());
+    assert.equal((s.get('#productBody').innerHTML.match(/product-zero-value/g)||[]).length,expected?2:0,'valor '+String(value));
+  }
+  const row={date:'2026-09-29',cells:{B:{text:'0'},C:{value:null,text:'0'}}},s=setup({...empty(),rows:[row],displayRows:[row]});
+  s.controller.render('Sem valor observado');assert.doesNotMatch(s.get('#productBody').innerHTML,/product-zero-value/);
+});
+
+test('dimmed official zero preserves the separate pending-sale notice and clears on updated nonzero snapshot',()=>{
+  const row={date:'2026-09-29',cells:{F:{value:0}}},manualSalesByDate=new Map([['2026-09-29',{pendingConversions:1}]]),s=setup({...empty(),rows:[row],displayRows:[row],manualSalesByDate});
+  s.controller.render('Sintética');
+  assert.match(s.get('#productBody').innerHTML,/<td class="num product-zero-value"><span>0<\/span><small class="product-manual-sale-note">\+1 manual · provisória/);
+  const updated={...row,cells:{F:{value:1}}};s.setSnapshot({...empty(),rows:[updated],displayRows:[updated],manualSalesByDate});s.controller.render('Sintética');
+  assert.doesNotMatch(s.get('#productBody').innerHTML,/product-zero-value/);
+  assert.match(s.get('#productBody').innerHTML,/\+1 manual · provisória/);assert.equal(row.cells.F.value,0);
+});
+
 test('diary cards show accumulated investment, Google clicks and conversions even when latest day is zero',()=>{
   const rows=[{date:'2026-09-29',cells:{O:{value:34.22},C:{value:4},F:{value:1}}},{date:'2026-09-30',cells:{O:{value:'54.82'},C:{value:'5'},F:{value:1}}},{date:'2026-10-01',cells:{O:{value:0},C:{value:0},F:{value:0}}}];
   const before=JSON.stringify(rows),totals=domain.productDiaryTotals(rows);

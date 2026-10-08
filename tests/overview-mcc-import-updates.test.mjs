@@ -10,7 +10,8 @@ const template=await readFile(new URL('../src/index.template.html',import.meta.u
 
 test('overview adapter projects per-MCC timestamps from the current base without writing to storage',()=>{
   assert.match(template,/function overviewDisplaySnapshot\(\)\{const snapshot=overviewSnapshot\(\),today=new Intl\.DateTimeFormat\('sv-SE',\{timeZone:'America\/Sao_Paulo'\}\)\.format\(new Date\(\)\);snapshot\.pausedTodayDate=today;snapshot\.pausedTodayCampaigns=OverviewDomain\.pausedCampaignNamesOnDate/);
-  assert.match(template,/getSnapshot:overviewDisplaySnapshot/);
+  assert.ok(template.includes('getSnapshot:overviewTableSnapshot'));
+  assert.ok(template.includes('getCardSnapshot:()=>OverviewCardsDomain.read(state.database)'));
 });
 
 test('MCC Ecom and Nutra show the exact latest import, preserving capture-only history as marked fallback',()=>{

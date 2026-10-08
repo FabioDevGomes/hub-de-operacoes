@@ -1,8 +1,8 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=2';
 import * as Storage from './clickbank-top-offers-storage.mjs?v=6';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=22';
-import {mountExtensionCapture} from './extension-capture.mjs?v=3';
-import {mergeDtcCountries} from './dtc-country-capture.mjs?v=2';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=24';
+import {mountExtensionCapture} from './extension-capture.mjs?v=4';
+import {mergeDtcCountries} from './dtc-country-capture.mjs?v=3';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';

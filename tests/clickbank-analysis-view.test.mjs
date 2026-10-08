@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {mountClickBankTopOffersView} from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs';
 
 // DOM mínimo em memória: nenhuma base real, importação ou dependência de browser.
-function fixture(offerId=null) {
+function fixture(offerId=null, preferences) {
   const document={createElement:()=>element(),addEventListener(){},removeEventListener(){}};
   function element(dataset={}) {
     const classes=new Set(),attributes=new Map();
@@ -30,7 +30,7 @@ function fixture(offerId=null) {
     saveTrend:async(...args)=>{calls.push(['saveTrend',...args]);return true;},
     openImagesExcluding:(...args)=>calls.push(['exclude',...args]),
   };
-  const view=mountClickBankTopOffersView({root,actions});
+  const view=mountClickBankTopOffersView({root,actions,preferences});
   const state={captures:[{captureId:'capture',capturedAt:'2026-01-02T12:00:00Z',listName:'Top Offers',page:{total:1,completeUniverse:true},offers:[{offerKey:'offer',offerName:'Produto <teste>',seller:'EXAMPLE',rank:1,...(offerId?{offerId}:{})}]}],
     offerMetadata:[{offerKey:'offer',manualCountries:['DE','US']}],trends:[],
     images:[{offerKey:'offer',searchTerm:'Produto',assessments:[{assessmentId:'a',country:'DE',status:'mixed',capturedAt:'2026-01-02T13:00:00Z',negativeKeywordCandidates:['outra marca']}]}],glimpse:[]};
@@ -39,6 +39,70 @@ function fixture(offerId=null) {
   const clickTab=tab=>node('.tabs').listeners.click({target:{closest(){return {dataset:{tab}};}}});
   return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,actions,open,clickTab};
 }
+
+const hiddenKey='hub:clickbank-top-offers:hidden-offer-keys:v1';
+function visibilityClick(f,key='offer') {
+  let stopped=false;
+  f.node('#rows').listeners.click({stopPropagation(){stopped=true;},target:{closest:selector=>selector==='[data-offer-visibility]'?{dataset:{offerVisibility:key}}:null}});
+  return stopped;
+}
+function setVisibility(f,value){f.node('#visibilityFilter').value=value;f.node('#visibilityFilter').onchange();}
+
+test('Ocultar/Reexibir usa o canto discreto da Oferta sem abrir ficha ou alterar capturas/decisões',()=>{
+  const stored=new Map(),writes=[],preferences={getItem:key=>stored.get(key)??null,setItem(key,value){stored.set(key,value);writes.push([key,value]);}};
+  const f=fixture(null,preferences),original=JSON.stringify(f.state);
+  assert.match(f.node('#rows').innerHTML,/class="offer-name hub-edit-host"/);
+  assert.match(f.node('#rows').innerHTML,/<button type="button" class="hub-corner-edit" data-offer-visibility="offer" aria-label="Ocultar Produto &lt;teste&gt;">Ocultar<\/button>/);
+  assert.equal(writes.length,0,'montar/renderizar não grava preferências');
+  assert.equal(visibilityClick(f),true);
+  assert.equal(f.node('#rows').innerHTML,'');
+  assert.deepEqual(writes,[[hiddenKey,'["offer"]']]);
+  assert.equal(f.view.getActiveOfferKey(),'');
+  assert.equal(f.sheet.classList.contains('hidden'),true);
+  setVisibility(f,'hidden');
+  assert.match(f.node('#rows').innerHTML,/>Reexibir<\/button>/);
+  setVisibility(f,'all');
+  assert.match(f.node('#rows').innerHTML,/data-offer="offer"/);
+  visibilityClick(f);
+  assert.deepEqual(writes.at(-1),[hiddenKey,'[]']);
+  setVisibility(f,'visible');
+  assert.match(f.node('#rows').innerHTML,/>Ocultar<\/button>/);
+  assert.equal(JSON.stringify(f.state),original,'captura, metadados e análises permanecem intactos');
+  assert.equal(f.node('#offerCount').textContent,'1','total na captura continua representando a fonte');
+  assert.equal(f.calls.length,0,'ocultação não salva avaliação nem decisão');
+});
+
+test('ocultação persiste por offerKey entre capturas/reabertura e continua combinada à busca',()=>{
+  const stored=new Map([[hiddenKey,'["offer"]']]),preferences={getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)};
+  const f=fixture(null,preferences);
+  assert.equal(f.node('#rows').innerHTML,'');
+  f.state.captures.push({...f.state.captures[0],captureId:'older',capturedAt:'2026-01-01T12:00:00Z'});
+  f.view.render(f.state);f.view.selectCapture('older');
+  assert.equal(f.node('#rows').innerHTML,'','mesma oferta continua oculta em outra captura');
+  setVisibility(f,'hidden');
+  assert.match(f.node('#rows').innerHTML,/>Reexibir<\/button>/);
+  f.node('#search').value='não corresponde';f.node('#search').oninput();
+  assert.equal(f.node('#rows').innerHTML,'');
+  f.node('#search').value='<teste>';f.node('#search').oninput();
+  assert.match(f.node('#rows').innerHTML,/data-offer="offer"/);
+  assert.equal(fixture(null,preferences).node('#rows').innerHTML,'','nova montagem restaura a preferência');
+  visibilityClick(f,'unknown');
+  assert.equal(stored.get(hiddenKey),'["offer"]','chave não presente na captura não grava');
+});
+
+test('preferência indisponível ou inválida mantém ocultação segura na sessão com aviso',()=>{
+  const f=fixture(null,{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}});
+  assert.match(f.node('#rows').innerHTML,/>Ocultar<\/button>/);
+  visibilityClick(f);
+  assert.equal(f.node('#rows').innerHTML,'');
+  assert.match(f.node('#message').textContent,/nesta sessão/);
+  setVisibility(f,'hidden');visibilityClick(f);setVisibility(f,'visible');
+  assert.match(f.node('#rows').innerHTML,/>Ocultar<\/button>/);
+  for(const raw of ['invalid','{}','[null,42,{}]']){
+    const clean=fixture(null,{getItem:key=>key===hiddenKey?raw:null});
+    assert.match(clean.node('#rows').innerHTML,/>Ocultar<\/button>/);
+  }
+});
 
 test('Resultado de Trends fica pendente até Salvar e só então confirma a gravação',async()=>{
   const f=fixture();f.open('trends');
@@ -112,6 +176,31 @@ test('total de resultados vai para a faixa de filtros e não reserva a linha des
   f.view.render(f.state);
   assert.equal(count.textContent,'');
   assert.equal(count.hidden,true);
+});
+
+test('a lista extrai nomes atuais e futuros, busca o título original e preserva captura e chaves',()=>{
+  const f=fixture();
+  const offer=f.state.captures[0].offers[0];
+  offer.offerName='NEW : Aurora <Power> System - Conversions Monster !';
+  const original=JSON.stringify(f.state);
+  f.view.render(f.state);
+  const rows=f.node('#rows');
+  assert.match(rows.innerHTML, /class="offer-name hub-edit-host" title="NEW : Aurora &lt;Power&gt; System - Conversions Monster !"><span>Aurora &lt;Power&gt; System<\/span>/);
+  assert.match(rows.innerHTML, /data-offer="offer"/);
+  f.node('#search').value='conversions monster';
+  f.node('#search').oninput();
+  assert.match(rows.innerHTML, /Aurora &lt;Power&gt; System<\/span>/, 'o slogan original continua pesquisável');
+  f.node('#search').value='aurora <power> system';
+  f.node('#search').oninput();
+  assert.match(rows.innerHTML, /data-offer="offer"/);
+  assert.equal(JSON.stringify(f.state),original);
+  assert.equal(f.calls.length,0,'a apresentação não grava nem migra registros');
+  const next={...offer,offerKey:'future-offer',offerName:'NEW : FutureCore - $9 EPC',rank:2};
+  f.state.captures[0].offers.push(next);
+  f.node('#search').value='';
+  f.view.render(f.state);
+  assert.match(rows.innerHTML, /data-offer="future-offer"/);
+  assert.match(rows.innerHTML, />FutureCore<\/span>/, 'novas entradas usam a mesma extração');
 });
 
 test('extensão preenche e abre o diálogo existente; repetição não reabre e cancelar não grava',()=>{

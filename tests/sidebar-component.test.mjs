@@ -25,7 +25,8 @@ for (const [name, path, mode] of pages) {
   assert.ok(html.includes('data-hub-sidebar'), `${name}: mount do menu compartilhado ausente`);
   assert.ok(html.includes(mode), `${name}: modo ou item ativo não foi configurado`);
   assert.ok(html.includes('sidebar-component.js') && html.includes('sidebar-component.css'), `${name}: dependência compartilhada não foi conectada`);
-  assert.ok(html.includes('sidebar-component.css?v=12'), `${name}: cache do CSS compartilhado do menu está desatualizado`);
+  assert.ok(html.includes('sidebar-component.css?v=15'), `${name}: cache do CSS compartilhado do menu está desatualizado`);
+  assert.ok(html.includes('sidebar-component.js?v=20261008-collapse-icon'), `${name}: cache do ícone do menu está desatualizado`);
   assert.ok(html.includes('data-hub-sidebar-products'), `${name}: área Produtos não usa o componente`);
   assert.doesNotMatch(html, /data-sidebar-group="(?:operation|analysis|curation|creation|personal|products)"/, `${name}: grupos continuam copiados na página`);
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
@@ -81,7 +82,7 @@ assert.match(css, /\.hub-sidebar-layout\s*>\s*aside\.hub-sidebar-aside\s*\{\s*ba
 assert.ok(css.includes('.hub-menu-group.collapsed'), 'grupos expansíveis do menu devem permanecer');
 const overviewTemplate=await readFile(new URL('../src/overview/template.html',import.meta.url),'utf8');
 assert.doesNotMatch(source, /<input id="search"/, 'a busca foi movida do menu para a Visão Geral');
-assert.match(overviewTemplate, /class="panel-controls"><input id="search"[^>]*aria-label="Buscar campanha"[^>]*><select id="campaignStatusFilter"/, 'busca acessível deve ficar antes do filtro de situação no cabeçalho');
+assert.match(overviewTemplate, /class="panel-controls">[\s\S]*?<input id="search"[^>]*aria-label="Buscar campanha"[^>]*><select id="campaignStatusFilter"/, 'busca acessível deve ficar antes do filtro de situação no cabeçalho, após a navegação de datas');
 assert.match(overviewTemplate, /<option value="history">Histórico<\/option>/, 'registros históricos devem permanecer acessíveis no filtro da Visão Geral');
 assert.doesNotMatch(css, /data-sidebar-group="operation"\)?:not\(\.collapsed\)[^{]*\{[^}]*flex:\s*1\s+1\s+auto/s, 'a seção Operação não deve crescer para ocupar o espaço vazio do menu');
 

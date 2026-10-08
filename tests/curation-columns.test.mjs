@@ -63,7 +63,7 @@ test('all six curation list screens expose columns; new lists reuse global prese
   for(const html of [radar,cb]){
     assert.match(html,/table-columns.css\?v=2/);
     assert.match(html,/class="hub-column-picker" data-curation-columns/);
-    assert.match(html,/class="hub-curation-column-table"/);
+    assert.match(html,/class="hub-curation-column-table hub-table-button-behavior"/);
     assert.match(html,/data-column-options/);assert.match(html,/data-column-reset/);
   }
   assert.match(radar,/columns\.apply\(\);/);
@@ -71,7 +71,7 @@ test('all six curation list screens expose columns; new lists reuse global prese
   assert.match(view,/mountCurationColumns\(\{root, screen:'clickbank', preferences\}\)/);
   assert.match(view,/columns\.apply\(\);/);
   for(const [screen,html] of [['radar',radar],['clickbank',cb]]){
-    const tableHead=html.match(/<table class="hub-curation-column-table"><thead><tr>([\s\S]*?)<\/tr><\/thead>/)[1];
+    const tableHead=html.match(/<table class="hub-curation-column-table hub-table-button-behavior"><thead><tr>([\s\S]*?)<\/tr><\/thead>/)[1];
     const sortKeys=[...tableHead.matchAll(/data-sort="([^"]+)"/g)].map(match=>match[1]);
     // CB's Decision heading has no sort action, but occupies the same physical column.
     if(screen==='clickbank')sortKeys.splice(13,0,'decision');

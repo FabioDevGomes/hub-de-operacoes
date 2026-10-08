@@ -177,7 +177,7 @@ assert.ok(receiverStart >= 0 && receiverEnd > receiverStart);
 const receiver = html.slice(receiverStart, receiverEnd);
 assert.ok(receiver.includes('decodeMccD1GridCapture(capture)'));
 assert.ok(receiver.includes("parseSource(decoded, 'd1')"));
-assert.ok(receiver.includes("installParsedSource('d1', parsed)"));
+assert.ok(receiver.includes("installParsedSource('d1', parsed, { capturedAt:capture.capturedAt })"));
 assert.ok(receiver.includes('previewReady:true, waitingForD0:false'));
 assert.ok(!receiver.includes('waitingForD0:true'));
 assert.ok(!receiver.includes('applyManifestToPanel'), 'receptor D−1 não grava a base');

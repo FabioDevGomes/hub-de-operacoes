@@ -37,6 +37,14 @@ export function parseQuickDuration(raw){
   return total;
 }
 
+export function parseSignedQuickDuration(raw){
+  const text=String(raw??'').trim();
+  if(!/^[+-]?\d+$/.test(text))throw new Error('Digite uma duração como 110 ou -30.');
+  const negative=text.startsWith('-'),minutes=parseQuickDuration(text.replace(/^[+-]/,''));
+  if(!Number.isSafeInteger(minutes))throw new Error('Informe uma duração válida.');
+  return negative?-minutes:minutes;
+}
+
 export function parseLocalizedNumber(raw,{allowNegative=false}={}){
   const text=String(raw??'').trim().replace(/\s/g,'').replace(',','.');
   if(!text)throw new Error('Informe um valor.');

@@ -4,10 +4,11 @@ import vm from 'node:vm';
 
 const html=await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8');
 const functionSource=name=>html.match(new RegExp(`function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n    \\}`))?.[0]||'';
-const helpers=['canonicalAccountId','buildD0DeltaRows','buildD0DeltaTotals','formatD0DeltaValue','formatD0DeltaSum','normalizeD0CaptureHistory','readD0CaptureHistory','writeD0CaptureHistory','normalizeD0PausedCampaignHistory','readD0PausedCampaignHistory','writeD0PausedCampaignHistory','d0PausedCampaignsFromCaptureHistory','removeD0CaptureHistoryEntry','formatD0CaptureTabLabel','formatD0CaptureFullTime','updateD0ApplyAvailability'].map(functionSource).join('\n');
+const helpers=['canonicalAccountId','buildD0DeltaRows','buildD0DeltaTotals','captureFormatter','formatD0DeltaValue','formatD0DeltaSum','normalizeCapturedReports','normalizeD0CaptureHistory','readD0CaptureHistory','writeD0CaptureHistory','normalizeD0PausedCampaignHistory','readD0PausedCampaignHistory','writeD0PausedCampaignHistory','d0PausedCampaignsFromCaptureHistory','removeD0CaptureHistoryEntry','formatD0CaptureTabLabel','formatD0CaptureFullTime','updateD0ApplyAvailability'].map(functionSource).join('\n');
 assert.ok(helpers.includes('buildD0DeltaRows'),'comparador de D0 ausente');
 const applyButton={disabled:false};
 const context={Intl,Number,Map,Boolean,String,Math,Date,JSON,Array,Object,q:()=>applyButton,currentResult:{manifest:{validacao_manifesto:{modo_entrada:'D_zero_somente'}},critical:[]},slots:{d0:{captureHistory:{id:'current'}}},d0CaptureHistory:[{id:'current',state:'calculated'}],selectedD0CaptureId:'current',numberingIssues:[],numberingValidationReady:true};
+context.browsingCaptureReports=false;
 vm.runInNewContext(`const D0_CAPTURE_HISTORY_KEY='painel-preparador-mcc-capturas-d0-v1';const D0_PAUSED_CAMPAIGN_HISTORY_KEY='painel-preparador-mcc-pausas-d0-v1';const D0_CAPTURE_HISTORY_LIMIT=7;${helpers};globalThis.buildD0DeltaRows=buildD0DeltaRows;globalThis.buildD0DeltaTotals=buildD0DeltaTotals;globalThis.formatD0DeltaValue=formatD0DeltaValue;globalThis.formatD0DeltaSum=formatD0DeltaSum;globalThis.normalizeD0CaptureHistory=normalizeD0CaptureHistory;globalThis.readD0CaptureHistory=readD0CaptureHistory;globalThis.writeD0CaptureHistory=writeD0CaptureHistory;globalThis.normalizeD0PausedCampaignHistory=normalizeD0PausedCampaignHistory;globalThis.readD0PausedCampaignHistory=readD0PausedCampaignHistory;globalThis.writeD0PausedCampaignHistory=writeD0PausedCampaignHistory;globalThis.d0PausedCampaignsFromCaptureHistory=d0PausedCampaignsFromCaptureHistory;globalThis.removeD0CaptureHistoryEntry=removeD0CaptureHistoryEntry;globalThis.formatD0CaptureTabLabel=formatD0CaptureTabLabel;globalThis.formatD0CaptureFullTime=formatD0CaptureFullTime;globalThis.updateD0ApplyAvailability=updateD0ApplyAvailability;`,context);
 
 const metric=(value,estado='confirmado')=>({valor:value,estado});
@@ -178,8 +179,8 @@ assert.ok(html.includes("const explicitlyPaused = ['pausada','pausado','paused']
 assert.ok(html.includes('painel-preparador-mcc-pausas-d0-v1')&&html.includes('d0PausedCampaignsFromCaptureHistory'),'identificações antigas e novas devem alimentar um histórico persistente independente das abas');
 assert.ok(html.includes('Nenhuma diferença quantificável, campanha nova ou primeira pausa explícita nesta captura.'),'estado vazio deve indicar que campanhas novas e a primeira pausa explícita também foram verificadas');
 assert.ok(html.includes('knownMccCampaigns')&&html.includes('previousMccCampaigns'),'o comparador identifica campanhas novas e deltas dentro do escopo da mesma MCC');
-const d1PanelStart=html.indexOf('id="d1-changes-panel"'),d0PanelStart=html.indexOf('id="d0-changes-panel"'),validationPanelStart=html.indexOf('id="validation-panel"');
-assert.ok(html.slice(d1PanelStart,d0PanelStart).includes('id="apply-manifest"'),'o único botão Atualizar base deve poder ser movido para o painel D−1');
+const d1PanelStart=html.indexOf('id="d1-changes-panel"'),reportsPanelStart=html.indexOf('<section class="panel" aria-labelledby="step1-title">');
+assert.ok(html.slice(d1PanelStart,reportsPanelStart).includes('id="apply-manifest"'),'o único botão Atualizar base deve poder ser movido para o painel D−1');
 assert.ok(html.includes('function placeApplyActions(hasD0)')&&html.includes("hasD0 ? '#d0-changes-panel' : '#d1-changes-panel'"),'o botão deve acompanhar o período recebido');
 assert.equal([...html.matchAll(/id="apply-manifest"/g)].length,1,'deve haver somente um botão Atualizar base');
 assert.equal([...html.matchAll(/class="slot-note">Opcional/g)].length,2,'D−1 e D0 devem ser opcionais individualmente');

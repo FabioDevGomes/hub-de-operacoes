@@ -36,6 +36,36 @@ html body table tbody td :is(button, input[type="button"], input[type="submit"],
   outline-offset: 2px !important;
 }
 
+/* Comportamento opt-in para botões de tabela. Links ficam fora por padrão;
+   somente a.hub-table-button-appearance adota o visual mediante pedido explícito.
+   Preserve href/semântica de navegação e foco de teclado. */
+html body table.hub-table-button-behavior :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):hover:not(:focus-visible) {
+  outline: none !important;
+}
+
+html body table.hub-table-button-behavior :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):focus-visible {
+  outline: 2px solid rgba(101, 169, 255, .45) !important;
+  outline-offset: 2px !important;
+}
+
+/* Referência: Decisão. Elevação visual por transform não redistribui as células.
+   Somente controles elevados no corpo; links sem opt-in, ações discretas e desabilitados ficam fora. */
+html body table.hub-table-button-behavior tbody td :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):not(:disabled, .hub-corner-edit, .hub-discreet-action):is(:hover, :focus-visible) {
+  filter: brightness(1.25);
+  transform: translateY(-1px);
+}
+
+/* Retorno de fichas/modais: o helper conserva o pulso da linha e a duração.
+   O controle pulsa em brilho, sem outline ou halo azul; links sem opt-in ficam fora. */
+html body table.hub-table-button-behavior :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance)[data-curation-focus].curation-focus-pulse {
+  animation-name: hub-table-return-button-pulse !important;
+}
+
+@keyframes hub-table-return-button-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+
 /* Opt-in pattern for actions grouped at a table's upper edge/corner. */
 html body .hub-table-toolbar-actions .btn {
   box-sizing: border-box !important;
@@ -61,4 +91,8 @@ html body .hub-table-toolbar-actions .btn:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   html body .hub-table-toolbar-actions .btn { transition: none !important; }
+  .hub-table-button-behavior tbody td :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):not(:disabled, .hub-corner-edit, .hub-discreet-action) {
+    transition: none !important;
+    transform: none !important;
+  }
 }

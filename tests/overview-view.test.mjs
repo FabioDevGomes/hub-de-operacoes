@@ -23,6 +23,138 @@ function setup(rows,preferences){
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args])}});
   return {...dom,state,snapshot,calls,controller};
 }
+test('second-line row density follows ROI/commission detail presence, column visibility and period rerenders',()=>{
+  const budget={limit:200,remaining:190,revenue:240,commissionBrl:100,minimumRoi:20,commissionTestPercent:65,cpaMinimumPercent:80};
+  const extra=detail=>({budget:{...budget,...detail},testLimit:{value:200},testRemaining:{value:190}});
+  const s=setup([
+    row('ROI detail','ativa',10,extra({salesCount:1,cpaPercent:0})),
+    row('Commission detail','ativa',10,extra({salesCount:0,cpaPercent:85})),
+    row('No detail','ativa',10,extra({salesCount:0,cpaPercent:70})),
+    row('No budget','ativa',10)
+  ]),before=JSON.stringify(s.snapshot);
+  const renderedRow=name=>s.get('#totalsBody').innerHTML.match(new RegExp('<tr[^>]*data-campaign="'+name+'"[^>]*>(.*?)</tr>'))[1];
+  for(const mode of ['consolidated','d1','d0']){
+    s.state.totalsMode=mode;s.controller.render();
+    assert.match(renderedRow('ROI detail'),/data-column="limit"[^>]*>[^<]*<a class="test-budget-detail test-budget-roi-link"/);
+    assert.match(renderedRow('Commission detail'),/data-column="limit"[^>]*>[^<]*<a class="test-budget-detail test-budget-roi-link test-budget-commission-link"/);
+    for(const name of ['No detail','No budget'])assert.doesNotMatch(renderedRow(name),/test-budget-detail/);
+  }
+  s.setList('[data-column-choice]',[{columnChoice:'limit'}]);s.controller.render();
+  const choice=s.root.querySelectorAll('[data-column-choice]')[0];choice.checked=false;choice.onchange();
+  assert.doesNotMatch(s.get('#totalsBody').innerHTML,/data-column="limit"|test-budget-detail/);
+  choice.checked=true;choice.onchange();
+  assert.match(renderedRow('ROI detail'),/test-budget-detail/);
+  assert.match(renderedRow('Commission detail'),/test-budget-detail/);
+  s.snapshot.rows[0].budget.salesCount=0;s.snapshot.rows[0].budget.cpaPercent=0;s.controller.render();
+  assert.doesNotMatch(renderedRow('ROI detail'),/test-budget-detail/);
+  s.snapshot.rows[0].budget.salesCount=1;s.snapshot.rows[0].budget.cpaPercent=0;
+  assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
+
+test('campaign start dates are unique real calendar dates from active campaigns, independent of metrics',()=>{
+  const rows=[
+    row('Mais recente','ativa',0,{identity:{name:'Mais recente',dateSort:'2026-09-30'}}),
+    row('Mais antiga','ativa',0,{identity:{name:'Mais antiga',dateSort:'2025-12-31'}}),
+    row('Mesmo dia','ativa',null,{identity:{name:'Mesmo dia',dateSort:'2026-09-30'}}),
+    ...['2026-02-29','2026-04-31','2026-13-01','30/09/2026','',null,'<script>'].map(date=>row('Inválida','ativa',0,{identity:{dateSort:date}})),
+    row('Pausada','pausada',90,{identity:{dateSort:'2026-09-29'}}),
+    row('Histórica','historico',90,{identity:{dateSort:'2026-09-28'}}),
+    row('Bissexto','ativa',0,{identity:{dateSort:'2024-02-29'}})
+  ],before=JSON.stringify(rows);
+  assert.deepEqual([...domain.activeCampaignStartDates(rows)],['2024-02-29','2025-12-31','2026-09-30']);
+  assert.equal(JSON.stringify(rows),before);
+  assert.equal(domain.campaignDateNavigation(rows,'não existe').date,'');
+});
+
+test('finite date navigation skips gaps, starts at both ends from All and never wraps',()=>{
+  const rows=['2026-09-01','2026-09-09','2026-09-30'].map(date=>row(date,'ativa',0,{identity:{dateSort:date}}));
+  assert.equal(domain.campaignDateNavigation(rows,'',-1).date,'2026-09-30');
+  assert.equal(domain.campaignDateNavigation(rows,'',1).date,'2026-09-01');
+  assert.equal(domain.campaignDateNavigation(rows,'2026-09-30',-1).date,'2026-09-09');
+  const first=domain.campaignDateNavigation(rows,'2026-09-01',-1);
+  assert.equal(first.date,'2026-09-01');assert.equal(first.canPrevious,false);assert.equal(first.canNext,true);
+  const last=domain.campaignDateNavigation(rows,'2026-09-30',1);
+  assert.equal(last.date,'2026-09-30');assert.equal(last.canNext,false);
+  const empty=domain.campaignDateNavigation([],null,-1);
+  assert.equal(empty.date,'');assert.equal(empty.canPrevious,false);assert.equal(empty.canNext,false);
+});
+
+test('date component filters only campaign rows, composes search/status and keeps all KPIs and period metrics',()=>{
+  const s=setup([
+    row('Alfa','ativa',10),
+    row('Beta','ativa',20,{identity:{name:'Beta',dateLabel:'30/09',dateSort:'2026-09-30'}}),
+    row('Pausada Alfa','pausada',90),
+    row('Sem data','ativa',0,{identity:{name:'Sem data',dateLabel:'—',dateSort:null}})
+  ]),before=JSON.stringify(s.snapshot);
+  s.controller.render();const kpis=s.get('#kpis').innerHTML;
+  assert.equal(s.get('#campaignStartDate').value,'');
+  assert.match(s.get('#totalsBody').innerHTML,/Sem data/,'All preserves undated campaigns');
+  s.get('#campaignStartDate').onchange({target:{value:'2026-09-29'}});
+  for(const period of ['#totalsConsolidated','#totalsD1','#totalsD0']){
+    s.get(period).onclick();
+    const markup=s.get('#totalsBody').innerHTML;
+    assert.match(markup,/data-campaign="Alfa"/);assert.match(markup,/Pausada Alfa/);
+    assert.doesNotMatch(markup,/data-campaign="Beta"|Sem data/);
+    assert.match(markup,/paused-row hidden/,'status remains independent');
+    assert.equal(s.get('#kpis').innerHTML,kpis);
+    assert.equal(s.get('#campaignStartDate').value,'2026-09-29');
+  }
+  s.get('#campaignStatusFilter').onchange({target:{value:'paused'}});
+  assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row"/);
+  s.get('#search').value='BETA';s.get('#search').oninput();
+  assert.match(s.get('#totalsBody').innerHTML,/Nenhuma campanha encontrada/);
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-29/,'search never removes available dates');
+  s.get('#search').value='';s.get('#search').oninput();
+  s.get('#campaignStartDate').onchange({target:{value:''}});
+  assert.match(s.get('#totalsBody').innerHTML,/data-campaign="Beta"|Sem data/);
+  assert.equal(s.get('#kpis').innerHTML,kpis);
+  assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
+});
+
+test('date arrows, new campaigns, corrections and paused dates refresh from snapshot without saving',()=>{
+  const writes=[],s=setup([row('Alfa','ativa',0),row('Beta','ativa',0,{identity:{name:'Beta',dateSort:'2026-09-30'}})],{getItem:()=>null,setItem:(...args)=>writes.push(args)});
+  s.controller.render();s.get('#campaignPreviousDate').onclick();
+  assert.equal(s.get('#campaignStartDate').value,'2026-09-30');
+  assert.equal(s.get('#campaignNextDate').disabled,true);
+  s.get('#campaignPreviousDate').onclick();
+  assert.equal(s.get('#campaignStartDate').value,'2026-09-29');
+  assert.equal(s.get('#campaignPreviousDate').disabled,true);
+  s.snapshot.rows.push(row('Nova','ativa',0,{identity:{name:'Nova',dateSort:'2026-10-01'}}));
+  s.controller.render();
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-10-01/);
+  assert.equal(s.get('#campaignStartDate').value,'2026-09-29','new dates preserve selection');
+  s.get('#campaignNextDate').onclick();s.get('#campaignNextDate').onclick();
+  assert.equal(s.get('#campaignStartDate').value,'2026-10-01');
+  s.snapshot.rows.at(-1).c._status='pausada';s.controller.render();
+  assert.equal(s.get('#campaignStartDate').value,'','disappearing selection returns to All');
+  assert.doesNotMatch(s.get('#campaignStartDate').innerHTML,/2026-10-01/);
+  s.get('#campaignStartDate').onchange({target:{value:'2026-09-29'}});
+  s.snapshot.rows[0].identity.dateSort='2026-09-28';s.controller.render();
+  assert.equal(s.get('#campaignStartDate').value,'');
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-28/);
+  assert.deepEqual(writes,[]);assert.deepEqual(s.calls,[]);
+});
+
+test('empty active date list disables date controls without hiding campaigns or inventing dates',()=>{
+  const s=setup([row('Pausada','pausada',0),row('Sem data','ativa',0,{identity:{name:'Sem data',dateSort:null}})]);
+  s.controller.render();
+  for(const id of ['#campaignStartDate','#campaignPreviousDate','#campaignNextDate'])assert.equal(s.get(id).disabled,true);
+  assert.equal(s.get('#campaignStartDate').innerHTML,'<option value="">Todas as datas</option>');
+  assert.match(s.get('#totalsBody').innerHTML,/Sem data/);
+});
+
+test('overview date component reuses temporal styling and has labeled keyboard-accessible controls',async()=>{
+  const template=await readFile(new URL('../src/overview/template.html',import.meta.url),'utf8'),
+    css=await readFile(new URL('../src/month-navigation.css',import.meta.url),'utf8');
+  assert.match(template,/role="group" aria-label="Navegar pelas datas de início/);
+  assert.match(template,/id="campaignStartDate" class="hub-month-label hub-month-date-select" aria-label=/);
+  for(const id of ['campaignPreviousDate','campaignNextDate'])assert.match(template,new RegExp('id="'+id+'" class="btn hub-month-arrow" type="button" aria-label='));
+  assert.ok(template.indexOf('id="campaignStartDate"')<template.indexOf('id="search"'));
+  assert.match(template,/id="campaignDateStatus"[^>]*role="status"/);
+  assert.match(css,/hub-month-date-select:focus-visible\{outline:2px solid/);
+  assert.match(css,/hub-month-date-select:disabled\{opacity:/);
+});
+
 test('campaign search filters table in all periods without changing KPIs, sorting or source data',()=>{
   const s=setup([row('Produto Alfa 01','ativa',10),row('Produto Beta 02','pausada',90)]),before=JSON.stringify(s.snapshot);
   s.controller.render();const kpis=s.get('#kpis').innerHTML;

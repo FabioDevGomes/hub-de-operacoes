@@ -9,13 +9,13 @@ import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import * as DecisionUI from '../decision-ui.mjs';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
+import {mountGlimpseReferenceBar} from '../glimpse-reference-bar.mjs?v=1';
 
 const root = document.querySelector('#smartAdvOffersRoot');
 let captures = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
 const view = mountSmartAdvOffersView({root,actions:{validateImport,confirmImport,exportBackup,restoreBackup,saveTrend,saveDecision,addTrendCandidate,removeTrendCandidate,addManualCountry,openTrends,saveImage,saveImageSearchTerm,openImages,openImagesExcluding,openGlimpse,closeOffer}});
-const listFocus = mountCurationListFocus('smartadv-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'});
-mountGlimpseHeaderAction({frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
+const listFocus = mountCurationListFocus('smartadv-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
+mountGlimpseReferenceBar({sheet:document.querySelector('#offerSheet'),frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
 
 function offerContext(item) {
   const productName = Domain.productNameFromOfferName(item.offerName) || item.offerName;
@@ -118,6 +118,7 @@ function closeOffer(){listFocus.restore()}
 window.addEventListener('message',event=>{
   const frame=document.querySelector('#glimpseFrame');if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
   if(event.data?.type==='hub-glimpse-resize'){const height=Number(event.data.height);if(Number.isFinite(height))frame.style.height=`${Math.max(320,Math.ceil(height))}px`;return}
+  if(event.data?.type==='hub-glimpse-save-result'&&event.data.saved===true){void refresh().catch(error=>console.error('A análise foi salva, mas a lista não pôde ser atualizada.',error));return}
   if(event.data?.type!=='hub-glimpse-close')return;
   void refresh().then(()=>{view.returnFromGlimpse();view.showMessage('Análise Glimpse atualizada.')});
 });

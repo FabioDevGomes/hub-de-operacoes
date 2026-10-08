@@ -38,6 +38,86 @@ test('checkout reader accepts only orders.clickbank.net and extracts only Paíse
   }
 });
 
+function syntheticCountrySelect(values,groups=[]) {
+  const options=values.map(value=>typeof value==='string'?{value}:value);
+  return {querySelectorAll:selector=>{
+    if(selector==='optgroup')return groups.map(({label,codes})=>({
+      getAttribute:key=>key==='label'?label:null,
+      querySelectorAll:selector=>{assert.equal(selector,'option');return codes.map(value=>({value}));}
+    }));
+    assert.equal(selector,'option');return options;
+  }};
+}
+
+function readSyntheticDtcCountries(selects) {
+  return vm.runInNewContext(`(${collectClickBankDtcCommonCountries.toString()})()`,{
+    location:{protocol:'https:',hostname:'orders.clickbank.net'},
+    document:{querySelector:selector=>{
+      assert.match(selector,/^select\[(name|id)="(billing|shipping)\.countryCode"\]$/);
+      return selects[selector]||null;
+    },querySelectorAll:selector=>{
+      assert.equal(selector,'h1,h2,h3,h4,h5,[role="heading"]');
+      return [{textContent:'Resumo do carrinho'},{textContent:'Synthetic Product - Starter Pack'}];
+    }},Date
+  });
+}
+
+test('DTC reads all six countries from a simple list and preserves the existing capture/merge flow',()=>{
+  const countries=['AU','CA','US','IE','NZ','GB'];
+  for(const selector of ['select[name="billing.countryCode"]','select[id="billing.countryCode"]',
+    'select[name="shipping.countryCode"]','select[id="shipping.countryCode"]']){
+    const result=readSyntheticDtcCountries({[selector]:syntheticCountrySelect([
+      {value:'',disabled:true,textContent:'Selecione o país'},...countries,'US','invalid'
+    ])});
+    assert.equal(result.ok,true,result.message);
+    assert.deepEqual([...result.countries],countries);
+    const capture=validateDtcCountryCapture({...payload,...result});
+    assert.equal(capture.ok,true);
+    const merged=mergeDtcCountries({manualCountries:['FR','US']},{offerKey:'synthetic-offer'},capture);
+    assert.deepEqual(merged.record.manualCountries,['FR','US','AU','CA','IE','NZ','GB']);
+    assert.deepEqual([...merged.record.dtcCountryCapture.countries],countries);
+    assert.equal(merged.record.dtcCountryCapture.source,'clickbank-dtc-checkout');
+  }
+});
+
+test('DTC simple-list fallback accepts 1 through 10 countries and rejects empty, larger or grouped lists',()=>{
+  const selector='select[id="shipping.countryCode"]';
+  const ten=['AU','CA','US','IE','NZ','GB','FR','DE','ES','MX'];
+  for(const countries of [['US'],ten]){
+    const result=readSyntheticDtcCountries({[selector]:syntheticCountrySelect(['',...countries])});
+    assert.equal(result.ok,true,result.message);
+    assert.deepEqual([...result.countries],countries);
+  }
+  const normalized=readSyntheticDtcCountries({[selector]:syntheticCountrySelect([
+    {value:'',disabled:true},' us ','US','ca',{value:'GB',disabled:true},'USA'
+  ])});
+  assert.deepEqual([...normalized.countries],['US','CA'],'placeholder, disabled, duplicate and invalid options are excluded');
+  for(const select of [syntheticCountrySelect(['','invalid']),syntheticCountrySelect([...ten,'IT']),
+    syntheticCountrySelect([], [{label:'Outros países',codes:['US','CA']}])]){
+    const result=readSyntheticDtcCountries({[selector]:select});
+    assert.equal(result.ok,false);
+    assert.equal(result.countries,undefined);
+    assert.match(result.message,/até 10 países válidos/);
+  }
+});
+
+test('DTC common-country groups retain priority and are not limited by the simple-list threshold',()=>{
+  const common=['AU','CA','US','IE','NZ','GB','FR','DE','ES','MX','IT'];
+  const result=readSyntheticDtcCountries({
+    'select[name="billing.countryCode"]':syntheticCountrySelect(['BR']),
+    'select[name="shipping.countryCode"]':syntheticCountrySelect([], [
+      {label:'Common Countries',codes:common},{label:'Outros países',codes:['BR','AR']}
+    ])
+  });
+  assert.equal(result.ok,true,result.message);
+  assert.deepEqual([...result.countries],common);
+  const emptyCommon=readSyntheticDtcCountries({
+    'select[name="billing.countryCode"]':syntheticCountrySelect(['US']),
+    'select[name="shipping.countryCode"]':syntheticCountrySelect([], [{label:'Países Comuns',codes:['invalid']}])
+  });
+  assert.equal(emptyCommon.ok,false,'an invalid common group must not fall back to another list');
+});
+
 test('DTC payload validation, unique title match and ambiguity fail closed',()=>{
   assert.equal(validateDtcCountryCapture(payload).ok,true);
   for(const invalid of [{...payload,countries:['USA']},{...payload,productName:'x'}, {...payload,capturedAt:'invalid'}, {...payload,source:'other'}])
@@ -58,6 +138,31 @@ test('DTC payload validation, unique title match and ambiguity fail closed',()=>
     'variantes com o mesmo nome principal continuam bloqueadas sem salvar');
   assert.equal(matchDtcCheckoutOffer(checkoutName,[{...marketplaceOffer,offerName:'Sleep offer for YU SLEEP users'}]).status,'none',
     'o nome principal não deve associar por ocorrência no meio do título');
+});
+
+test('DTC associates a single-word product name without matching partial names or ambiguous offers',()=>{
+  const offer={offerKey:'synthetic-femicore',offerName:'FemiCore - $4 EPC Doctor-Endorsed Bladder-Reset Formula'};
+  for(const name of ['FemiCore','FemiCore - 2 Bottles','FemiCore – 2 Bottles','FemiCore — 2 Bottles']){
+    assert.deepEqual(matchDtcCheckoutOffer(name,[offer]),{status:'unique',matches:[offer]});
+  }
+  assert.equal(matchDtcCheckoutOffer('FemiCore - 2 Bottles',[{...offer,offerName:'NEW : FemiCore - Bladder-Reset Formula'}]).status,'unique');
+  assert.equal(matchDtcCheckoutOffer('FemiCore - 2 Bottles',[offer,{...offer,offerKey:'other-femicore',offerName:'FemiCore - Another Offer'}]).status,'ambiguous');
+  for(const title of ['FemiCorePlus - Offer','FemiCore Max - Offer','Supplement for FemiCore users','FemiCore reviews and alternatives']){
+    assert.equal(matchDtcCheckoutOffer('FemiCore - 2 Bottles',[{...offer,offerName:title}]).status,'none',title);
+  }
+  assert.equal(matchDtcCheckoutOffer('Energy',[{...offer,offerName:'Energy Revolution System - Offer'}]).status,'none');
+  assert.equal(matchDtcCheckoutOffer('Core - 2 Bottles',[{...offer,offerName:'Core - Offer'}]).status,'none','short names stay blocked');
+});
+
+test('DTC matching update invalidates the complete browser import chain and publishes the domain',async()=>{
+  const root=new URL('../',import.meta.url);
+  const read=path=>readFile(new URL(path,root),'utf8');
+  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=29/);
+  const page=await read('src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs');
+  assert.match(page,/extension-capture\.mjs\?v=4/);
+  assert.match(page,/dtc-country-capture\.mjs\?v=3/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/extension-capture.mjs'),/dtc-country-capture\.mjs\?v=3/);
+  assert.equal(await read('dist/curadoria/clickbank-top-offers/dtc-country-capture.mjs'),await read('src/curadoria/clickbank-top-offers/dtc-country-capture.mjs'));
 });
 
 test('DTC merge preserves manual countries and prior provenance while deduplicating',()=>{
@@ -103,6 +208,22 @@ test('Hub receiver matches a checkout variant by the unique leading product name
   assert.equal(result.ok,true,result.message);
   assert.equal(writes.length,1);
   assert.equal(writes[0].matched.offerKey,offer.offerKey);
+});
+
+test('Hub receiver forwards FemiCore countries only when the single-word identity is unique',async()=>{
+  const offer={offerKey:'synthetic-femicore',offerName:'FemiCore - Doctor-Endorsed Bladder-Reset Formula'};
+  const offers=[offer],writes=[],target={};
+  mountExtensionCapture({target,ready:Promise.resolve(),getBusy:()=>false,getDraft:()=>'',getOffers:()=>offers,preparePreview:()=>{},
+    saveDtcCountries:async(matched,capture)=>{writes.push({matched,capture});return {ok:true,saved:true};}});
+  const capture={...payload,productName:'FemiCore - 2 Bottles'};
+  assert.equal((await target.__hubReceiveDtcCommonCountries(capture)).saved,true);
+  assert.equal(writes[0].matched.offerKey,offer.offerKey);
+  assert.deepEqual(writes[0].capture.countries,payload.countries);
+  offers.push({...offer,offerKey:'synthetic-femicore-other',offerName:'FemiCore - Another Offer'});
+  const blocked=await target.__hubReceiveDtcCommonCountries(capture);
+  assert.equal(blocked.ok,false);
+  assert.match(blocked.message,/corresponde a 2 ofertas/);
+  assert.equal(writes.length,1,'ambiguous captures never reach the save callback');
 });
 
 test('receiver stays on an already open Top Offers tab; no Hub tab creation or focus is needed',async()=>{

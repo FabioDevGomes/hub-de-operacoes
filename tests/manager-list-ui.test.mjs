@@ -17,7 +17,12 @@ assert.ok(html.includes("sortKey='payout',sortDirection='desc'"),'Pagamento não
 assert.ok(html.includes("import * as DecisionUI from '../decision-ui.mjs'"),'Lista de Gerente não reutiliza o seletor compartilhado de decisão');
 assert.ok(html.includes('data-open-manager-decision')&&html.includes('openManagerDecision'),'decisão manual não abre o seletor pela coluna');
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
-assert.ok(html.includes('trends-sheet.css?v=20261006-curation-decision-column'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
+const glimpseBadge = html.match(/function managerGlimpseBadge\(product\)\{([^\n]+)/)?.[1] || '';
+assert.ok(glimpseBadge.includes('<a class="glimpse-badge hub-table-button-appearance '),'a coluna Glimpse deve optar pelo comportamento visual compartilhado');
+assert.ok(glimpseBadge.includes('href="${safe(href)}"')&&glimpseBadge.includes('data-open-manager-glimpse="${safe(href)}"')&&glimpseBadge.includes('data-curation-focus="glimpse"'),'o Glimpse preserva a URL, a abertura e a identidade de retorno');
+assert.ok(!glimpseBadge.includes('role="button"')&&!glimpseBadge.includes('<button'),'o atalho Glimpse deve continuar semanticamente um link');
+assert.equal((html.match(/hub-table-button-appearance/g)||[]).length,1,'o opt-in deve ficar restrito à coluna Glimpse, sem mudar outros links');
+assert.ok(html.includes('trends-sheet.css?v=20261007-glimpse-borderless'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
 const sharedStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
 assert.ok(sharedStyles.includes('nav[data-hub-sidebar-active="manager"]')&&sharedStyles.includes('#rows td *{font-weight:400!important}'),'valores das colunas da Lista de Gerente não estão em peso normal');
 assert.ok(sharedStyles.includes('#rows tr.decision-row-launch>td{background:var(--curation-decision-launch-row)')&&sharedStyles.includes('#rows tr.decision-row-live>td{background:var(--curation-decision-live-row)'),'a Lista de Gerente herda a mesma cor de linha por decisão da E-commerce GM');

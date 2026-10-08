@@ -33,7 +33,18 @@ assert.equal(productDiaryManualSaleCount(diaryRows[0], manualSalesByDate), 0, 'v
 assert.equal(productDiaryRowsWithManualSales(diaryRows, manualSalesByDate).length, 2, 'a mesma data manual não deve duplicar linha já existente');
 
 assert.match(panelSource, /product:\{[^\n]*bodyClass:'product-diary-mode'/, 'o modo do Diário deve ser ativado somente pela navegação para a tela');
+assert.match(diaryStyles, /#productView \.product-table th,#productView \.product-table td:not\(\.empty\)\{padding-block:6px\}/, 'somente a tabela diária usa linhas cerca de 20% mais compactas, sem reduzir a fonte nem o estado vazio');
+assert.match(diaryStyles, /#productView \.product-table td\.num\{text-align:center;vertical-align:middle\}/, 'dados de Data até Comissão ficam centralizados em todos os diários, sem depender da campanha');
+assert.ok(source.includes("col==='Q'?'hub-edit-host product-observation-cell':'num'"), 'centralização alcança as 16 colunas de dados, deixando Observações no componente próprio');
+assert.match(diaryStyles, /\.product-table th\{[^}]*text-align:center/, 'cabeçalhos das colunas de dados permanecem centralizados');
+assert.match(diaryStyles, /\.product-table th:last-child\{[^}]*text-align:left/, 'Observações conserva cabeçalho à esquerda');
+assert.match(panelSource, /product-diary\/product-diary\.css\?v=12/, 'a nova versão do CSS deve invalidar o cache dos diários');
+assert.match(panelSource, /product-diary\/view\.js\?v=9/, 'o renderizador compartilhado atualizado deve invalidar o cache');
+assert.ok(diaryStyles.includes('#productView .product-table td.product-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 50%,var(--hub-table-row-bg))}'), 'zeros observados usam 50% da cor padrão misturada ao fundo base, sem alterar a opacidade de notas');
 assert.match(diaryStyles, /body\.product-diary-mode\{overflow-y:auto\}/, 'a página deve rolar para alcançar o quadro de ROI abaixo do Diário');
 assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*min-height:100dvh;overflow:visible/, 'no desktop, o conteúdo do Diário pode crescer além do viewport');
-assert.match(diaryStyles, /body\.product-diary-mode #productTableWrap\{[^}]*max-height:none;overflow-x:auto;overflow-y:hidden/, 'a tabela diária cresce para mostrar os dias, preservando apenas a rolagem horizontal');
+assert.match(diaryStyles, /body\.product-diary-mode #productTableWrap\{[^}]*max-height:var\(--product-diary-table-max-height,[^}]*overflow:auto/, 'a tabela diária tem limite responsivo e rolagem interna nos dois eixos');
+assert.doesNotMatch(diaryStyles, /#productTableWrap\{[^}]*max-height:none|#productTableWrap\{[^}]*overflow-y:hidden/, 'o desktop não pode desativar o limite nem a rolagem interna');
+const template=await readFile(new URL('../src/product-diary/template.html',import.meta.url),'utf8');
+assert.match(template,/id="productTableWrap"[^>]*tabindex="0"[^>]*role="region"[^>]*aria-labelledby="productPanelTitle"/, 'a região rolável deve ser acessível por teclado e ter nome');
 console.log('product diary sales highlight ok');

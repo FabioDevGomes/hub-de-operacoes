@@ -1,9 +1,13 @@
 (function(global){
   // Presentation only: the Hub supplies read-only, already consolidated projections.
-  function mount({root,state,getSnapshot,domain,format,actions,preferences}){
+  function mount({root,state,getSnapshot,getCardSnapshot,getCardRevision,domain,format,actions,preferences}){
     const $=selector=>root.querySelector(selector),$$=selector=>[...root.querySelectorAll(selector)];
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
-    const columnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null;
+    const columnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null,selectedCampaignDate='';
+    // Full adapter refreshes invalidate presentation caches; local sorting/filtering does not.
+    let presentationSnapshot=null,renderedFilter=null,presentationRows=[];
+    let cardSnapshot=null,cardRevision;
+    const rowMarkupCache=new Map();
     const picker=$('#overviewColumnPicker'),viewport=root.ownerDocument?.defaultView;
     // Widths are presentation preferences only, shared by all three periods.
     const widthPreferenceKey='hub:overview:column-widths:v1',widthDefaults=OverviewDomain.columnWidths;
@@ -110,13 +114,15 @@
     function remainingAlertTitle(minimum,yellowMinimum){return`Vermelho abaixo de ${fmtMoney(minimum)}; ${yellowMinimum==null?'amarelo desativado':`amarelo abaixo de ${fmtMoney(yellowMinimum)}`} (vermelho tem prioridade)`}
     function refreshRemainingAlerts({minimum,yellowMinimum}){
       const red=OverviewDomain.remainingAlertThreshold(minimum),yellow=OverviewDomain.remainingWarningThreshold(yellowMinimum);
+      if(presentationSnapshot)presentationSnapshot={...presentationSnapshot,remainingAlertMinimum:red,remainingAlertYellowMinimum:yellow};
+      rowMarkupCache.clear();
       $$('#totalsBody td[data-column="remaining"]').forEach(cell=>{const tone=OverviewDomain.remainingAlertTone(cell.dataset.remainingValue,red,yellow);cell.classList.toggle('negative',tone==='negative');cell.classList.toggle('remaining-warning',tone==='remaining-warning')});
       $$('.overview-remaining-edit').forEach(link=>link.setAttribute('title',remainingAlertTitle(red,yellow)));
     }
     const fractionalDialog=$('#fractionalValueDialog'),fractionalList=$('#fractionalValueList');
     const pausedTodayDialog=$('#pausedTodayDialog'),pausedTodayList=$('#pausedTodayList'),pausedTodaySummary=$('#pausedTodaySummary');
     function showPausedTodayDialog(){
-      const snapshot=getSnapshot(),names=Array.isArray(snapshot.pausedTodayCampaigns)?snapshot.pausedTodayCampaigns:[],day=snapshot.pausedTodayDate?dateLabel(snapshot.pausedTodayDate):'hoje';
+      const snapshot=cardSnapshot||getSnapshot(),names=Array.isArray(snapshot.pausedTodayCampaigns)?snapshot.pausedTodayCampaigns:[],day=snapshot.pausedTodayDate?dateLabel(snapshot.pausedTodayDate):'hoje';
       pausedTodaySummary.textContent=names.length?fmtNum(names.length)+' campanha(s) com pausa registrada em '+day+'.':'Nenhuma campanha pausou hoje.';
       pausedTodayList.hidden=names.length===0;
       pausedTodayList.innerHTML=names.map(name=>'<li>'+esc(name)+'</li>').join('');
@@ -134,26 +140,26 @@
     function showFractionalDialog(){renderFractionalValueRows(getSnapshot().fractionalValuePendingItems||[]);if(typeof fractionalDialog.showModal==='function')fractionalDialog.showModal();else fractionalDialog.open=true;$$('.overview-fractional-value-input')[0]?.focus?.()}
     $('#fractionalValueCancel').onclick=()=>fractionalDialog.close?.();
     function metricDetail(label,result,format){return`<span class="overview-kpi-detail"><span class="kpi-label">${label}</span><strong class="overview-kpi-detail-value">${result.value==null?'—':format(result.value)}</strong></span>`}
-    function renderD0MetricSummary(rows){
-      const capturedRows=rows.filter(row=>row.c.metricas_D_zero?.presente!==false||row.c.metricas_D_zero?.retida_no_dia===true),dayTotals=capturedRows.map(row=>row.d0Totals);
-      const metrics=[['Investimento','investment',fmtMoney],['Impressões','impressions',fmtNum],['Cliques','clicks',fmtNum]],results=metrics.map(([label,field,format])=>({label,format,result:OverviewDomain.sumObservedMetric(dayTotals,field)}));
+    function renderD0MetricSummary(rows,summary){
+      const dayTotals=summary?[]:rows.filter(row=>row.c.metricas_D_zero?.presente!==false||row.c.metricas_D_zero?.retida_no_dia===true||row.d0Totals?.fromStoredCapture===true).map(row=>row.d0Totals);
+      const metrics=[['Investimento','investment',fmtMoney],['Impressões','impressions',fmtNum],['Cliques','clicks',fmtNum]],results=metrics.map(([label,field,format])=>({label,format,result:summary?summary[field]:OverviewDomain.sumObservedMetric(dayTotals,field)}));
       return`<section class="kpi overview-kpi overview-kpi-period kpi-group-d0" role="group" aria-label="Indicadores D0"><div class="overview-kpi-heading"><span class="kpi-group-label">D0</span></div><div class="overview-kpi-main"><span class="overview-kpi-main-label">${results[0].label}</span><strong class="kpi-value">${results[0].result.value==null?'—':results[0].format(results[0].result.value)}</strong></div><div class="overview-kpi-details">${metricDetail(results[1].label,results[1].result,results[1].format)}${metricDetail(results[2].label,results[2].result,results[2].format)}</div></section>`;
     }
-    function renderD0ProfitSummary(rows,counts){
-      const dayTotals=rows.filter(row=>row.c.metricas_D_zero?.presente!==false||row.c.metricas_D_zero?.retida_no_dia===true).map(row=>row.d0ProfitTotals??row.d0Totals),result=OverviewDomain.sumObservedProfit(dayTotals),profitClass=result.value==null?'':result.value<0?'negative':result.value>0?'positive':'',status=result.value==null?'sem dados':result.value<0?'negativo':result.value>0?'positivo':'zerado',value=result.value==null?'—':`${result.value>0?'+':''}${fmtMoney(result.value)}`,tooltip=`Lucro do dia = comissão observada + ajustes de vendas provisórias − investimento observado. Resultado ${status}. Cobertura: ${result.observedCount}/${result.totalCount} campanhas com investimento e comissão/ajuste disponíveis.`;
+    function renderD0ProfitSummary(rows,counts,summary){
+      const dayTotals=summary?[]:rows.filter(row=>row.c.metricas_D_zero?.presente!==false||row.c.metricas_D_zero?.retida_no_dia===true||row.d0Totals?.fromStoredCapture===true).map(row=>row.d0ProfitTotals??row.d0Totals),result=summary?summary.profit:OverviewDomain.sumObservedProfit(dayTotals),profitClass=result.value==null?'':result.value<0?'negative':result.value>0?'positive':'',status=result.value==null?'sem dados':result.value<0?'negativo':result.value>0?'positivo':'zerado',value=result.value==null?'—':`${result.value>0?'+':''}${fmtMoney(result.value)}`,tooltip=`Lucro do dia = comissão observada + ajustes de vendas provisórias − investimento observado. Resultado ${status}. Cobertura: ${result.observedCount}/${result.totalCount} campanhas com investimento e comissão/ajuste disponíveis.`;
       return`<section class="kpi overview-kpi overview-kpi-profit kpi-d0-profit" title="${esc(tooltip)}" aria-label="Lucro do dia ${esc(status)}: ${esc(value)}"><div class="overview-kpi-heading"><span class="kpi-label">Lucro do dia</span><span class="overview-kpi-context">D0</span></div><div class="overview-kpi-main"><strong class="kpi-value ${profitClass}">${value}</strong></div><div class="overview-kpi-details" role="group" aria-label="Campanhas">${metricDetail('Ativas',{value:counts.activeCount},fmtNum)}${metricDetail('Pausadas',{value:counts.pausedCount},fmtNum)}</div></section>`;
     }
-    function renderD1ProfitSummary(dayTotals){
-      const result=OverviewDomain.sumObservedProfit(dayTotals),profitClass=result.value==null?'':result.value<0?'negative':result.value>0?'positive':'',status=result.value==null?'sem dados':result.value<0?'negativo':result.value>0?'positivo':'zerado',value=result.value==null?'—':`${result.value>0?'+':''}${fmtMoney(result.value)}`,tooltip=`Lucro de D−1 = comissão observada − investimento observado. Resultado ${status}. Cobertura: ${result.observedCount}/${result.totalCount} campanhas com investimento e comissão disponíveis.`;
+    function renderD1ProfitSummary(dayTotals,summary){
+      const result=summary?summary.profit:OverviewDomain.sumObservedProfit(dayTotals),profitClass=result.value==null?'':result.value<0?'negative':result.value>0?'positive':'',status=result.value==null?'sem dados':result.value<0?'negativo':result.value>0?'positivo':'zerado',value=result.value==null?'—':`${result.value>0?'+':''}${fmtMoney(result.value)}`,tooltip=`Lucro de D−1 = comissão observada − investimento observado. Resultado ${status}. Cobertura: ${result.observedCount}/${result.totalCount} campanhas com investimento e comissão disponíveis.`;
       return`<section class="kpi overview-kpi overview-kpi-profit kpi-group-d1 kpi-d1-profit" title="${esc(tooltip)}" aria-label="Lucro de D−1 ${esc(status)}: ${esc(value)}"><div class="overview-kpi-heading"><span class="kpi-label">Lucro do dia</span><span class="overview-kpi-context">D−1</span></div><div class="overview-kpi-main"><strong class="kpi-value ${profitClass}">${value}</strong></div><div class="overview-kpi-details"><span class="kpi-foot">Comissão observada − investimento</span></div></section>`;
     }
-    function renderD1MetricSummary(dayTotals){
-      const metrics=[['Investimento','investment',fmtMoney],['Impressões','impressions',fmtNum],['Cliques','clicks',fmtNum]],results=metrics.map(([label,field,format])=>({label,format,result:OverviewDomain.sumObservedMetric(dayTotals,field)}));
+    function renderD1MetricSummary(dayTotals,summary){
+      const metrics=[['Investimento','investment',fmtMoney],['Impressões','impressions',fmtNum],['Cliques','clicks',fmtNum]],results=metrics.map(([label,field,format])=>({label,format,result:summary?summary[field]:OverviewDomain.sumObservedMetric(dayTotals,field)}));
       return`<section class="kpi overview-kpi overview-kpi-period kpi-group-d1" role="group" aria-label="Indicadores D−1"><div class="overview-kpi-heading"><span class="kpi-group-label">D−1</span></div><div class="overview-kpi-main"><span class="overview-kpi-main-label">${results[0].label}</span><strong class="kpi-value">${results[0].result.value==null?'—':results[0].format(results[0].result.value)}</strong></div><div class="overview-kpi-details">${metricDetail(results[1].label,results[1].result,results[1].format)}${metricDetail(results[2].label,results[2].result,results[2].format)}</div></section>`;
     }
     function manifestPeriodMarkup(snapshot,period,name){
-      const dates=snapshot.dates||{},coverage=snapshot.manifestMccCoverage?.[period]||{},complete=coverage.complete===true,status=`${name}: ${Number(coverage.receivedCount)||0} de ${Number(coverage.expectedCount)||2} MCCs com captura para ${dateLabel(dates[period])}`;
-      return`<span class="overview-manifest-period" title="${esc(status)}"><span class="dot overview-manifest-dot${complete?'':' warn'}" role="img" aria-label="${esc(status)}"></span><span>${name}</span><strong>${esc(dateLabel(dates[period]))}</strong></span>`;
+      const coverage=snapshot.manifestMccCoverage?.[period]||{},date=coverage.date??snapshot.dates?.[period],complete=coverage.complete===true,count=Number(coverage.receivedCount)||0,expected=Number(coverage.expectedCount)||2,status=`${name}: ${count} de ${expected} MCCs com captura para ${dateLabel(date)}`,details=(coverage.managers||[]).map(manager=>`${manager.name}: ${manager.received?'recebida':'aguardando'}`).join('; '),title=`${status}. ${details?`${details}. `:''}Conta capturas aplicadas à base; horário de envio não altera a cobertura.`;
+      return`<span class="overview-manifest-period" title="${esc(title)}"><span class="dot overview-manifest-dot${complete?'':' warn'}" role="img" aria-label="${esc(status)}"></span><span>${name}</span><strong>${esc(dateLabel(date))}</strong><span>${count}/${expected}</span></span>`;
     }
     function renderManifestSummary(snapshot){
       const capture=snapshot.manifestCaptureInfo||{},date=capture.timestamp?new Date(capture.timestamp):null,valid=date&&Number.isFinite(date.getTime()),options={timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'},time=valid?new Intl.DateTimeFormat('pt-BR',options).format(date):'—',label=capture.source==='generated'?'Manifesto gerado':'Última captura',detail=valid?`${label}: ${new Intl.DateTimeFormat('pt-BR',{...options,day:'2-digit',month:'2-digit',year:'numeric'}).format(date)} (Brasília)`:'Horário da última captura indisponível',updates=snapshot.mccImportUpdates||{},formatMccUpdate=(key,label)=>{const update=updates[key]||{},date=update.timestamp?new Date(update.timestamp):null,hasTimestamp=date&&Number.isFinite(date.getTime()),formatted=hasTimestamp?new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(date):'Sem registro',title=update.source==='capture'?'Horário da última captura da MCC; o histórico antigo não registra o horário individual de envio.':update.source==='import'?'Horário da última importação desta MCC.':'Nenhum horário de importação registrado para esta MCC.';return`<span aria-label="MCC ${esc(label)}: ${esc(formatted)}" title="${esc(title)}">${label}: ${esc(formatted)}</span>`};
@@ -198,10 +204,31 @@
         status:`<td><span class="status-tag ${statusClass}" title="${esc(statusTitle)}">${esc(statusLabel)}</span>${saleLabel?`<span class="status-tag sale-tag">${esc(saleLabel)}</span>`:''}${policyLimitation?`<span class="status-tag policy-limited" title="${esc(policyLimitation+'. Consulte “Detalhes da política” na tabela Anúncios para identificar a regra e o alcance da restrição.')}">Limitada pela política</span>`:''}</td>`};
       return`<tr class="${rowClass}${policyLimitation?' policy-limited-row':''}${OverviewDomain.rowVisible({c,pausedAt},state.campaignStatusFilter,referenceDate)?'':' hidden'}" data-campaign="${esc(diaryName||c.nome_campanha_exato)}" data-source="${diarySource||(paused?'workbook':'manifest')}" data-campaign-id="${esc(campaignId||'')}">${headers.map(([key])=>cells[key].replace('<td',`<td data-column="${key}"`)).join('')}</tr>`
     }
-    function renderTotals(){
+    // Preserve mounted cards and controls, patching only changed text/attributes.
+    function updateCardMarkup(markup){
+      const container=$('#kpis'),document=root.ownerDocument;
+      if(!document?.createElement||!container.childNodes){container.innerHTML=markup;return}
+      const template=document.createElement('template');template.innerHTML=markup;
+      function patchChildren(target,source){
+        [...source.childNodes].forEach((next,index)=>{
+          const current=target.childNodes[index];
+          if(!current){target.appendChild(next.cloneNode(true));return}
+          if(current.nodeType!==next.nodeType||current.nodeName!==next.nodeName){current.replaceWith(next.cloneNode(true));return}
+          if(next.nodeType===3){if(current.nodeValue!==next.nodeValue)current.nodeValue=next.nodeValue;return}
+          if(next.nodeType!==1)return;
+          for(const attribute of [...current.attributes])if(!next.hasAttribute(attribute.name))current.removeAttribute(attribute.name);
+          for(const attribute of [...next.attributes])if(current.getAttribute(attribute.name)!==attribute.value)current.setAttribute(attribute.name,attribute.value);
+          patchChildren(current,next);
+        });
+        while(target.childNodes.length>source.childNodes.length)target.lastChild.remove();
+      }
+      patchChildren(container,template.content);
+    }
+    function renderTotals({tableOnly=false,updateCards=true}={}){
       endResize(true);
-      const snapshot=getSnapshot(),{dates}=snapshot;
-      const kpiMarkup=`${renderD1MetricSummary(snapshot.d1Totals)}${renderD1ProfitSummary(snapshot.d1Totals)}`;
+      const reuse=tableOnly&&presentationSnapshot,snapshot=reuse?presentationSnapshot:getSnapshot(),{dates}=snapshot;
+      if(!reuse||renderedFilter!==state.campaignStatusFilter)rowMarkupCache.clear();
+      presentationSnapshot=snapshot;renderedFilter=state.campaignStatusFilter;
       $('#totalsConsolidated').classList.toggle('active',state.totalsMode==='consolidated');$('#totalsD1').classList.toggle('active',state.totalsMode==='d1');$('#totalsD0').classList.toggle('active',state.totalsMode==='d0');
       const totalLabel=state.totalsMode==='d0'?'D zero':state.totalsMode==='d1'?'D−1':'total';
       const columns=OverviewDomain.totalsColumns(state.totalsMode,totalLabel),headers=OverviewDomain.visibleColumns(columns,selectedColumns),numericHeaders=new Set(['zeroDays','current','imp','clicks','conv','roi','saleRoiFirst','saleRoiSecond','profit','account','limit','remaining']);if(!headers.some(([key])=>key===state.sortKey)){state.sortKey=headers.some(([key])=>key==='current')?'current':'campaign';state.sortDir='desc'}
@@ -210,22 +237,43 @@
       const remainingMinimum=OverviewDomain.remainingAlertThreshold(snapshot.remainingAlertMinimum),remainingYellowMinimum=OverviewDomain.remainingWarningThreshold(snapshot.remainingAlertYellowMinimum);
 $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="${key}" style="width:${columnWidth(key)}px"><button class="sort-btn ${numericHeaders.has(key)?'num':''} ${state.sortKey===key?'active':''}" data-sort="${key}" aria-label="Ordenar por ${label}"${key.startsWith('saleRoi')?' title="ROI acumulado no momento do registro da venda manual; não recalculado por período"':''}>${label}<span class="sort-arrow">${state.sortKey===key?(state.sortDir==='asc'?'↑':'↓'):''}</span></button>${key==='limit'?`<a class="test-budget-roi-link overview-test-rules-edit hub-corner-edit" href="#" aria-label="Editar regras de exibição do limite de teste" aria-haspopup="dialog" aria-controls="overviewTestRulesDialog" title="Editar regras de CPA e ROI mínimo">Editar</a>`:key==='remaining'?`<a class="test-budget-roi-link overview-remaining-edit hub-corner-edit" href="#" aria-label="Editar valor mínimo de alerta do valor restante" aria-haspopup="dialog" aria-controls="remainingAlertDialog" title="${esc(remainingAlertTitle(remainingMinimum,remainingYellowMinimum))}">Editar</a>`:''}<span class="overview-column-resizer" data-resize-column="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${widthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${columnWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`).join('')+'</tr>';
       applyWidths();bindColumnResizers();
-      const rows=OverviewDomain.sortRows(snapshot.rows,state,sortCell);
-      const pausedTodayNames=Array.isArray(snapshot.pausedTodayCampaigns)?snapshot.pausedTodayCampaigns:[],pausedTodayCount=pausedTodayNames.length,pausedTodayMarkup='<button id="overviewPausedToday" class="overview-kpi-detail overview-kpi-detail-action" type="button" aria-haspopup="dialog" aria-controls="pausedTodayDialog" aria-label="Ver as '+fmtNum(pausedTodayCount)+' campanhas que pausaram hoje"><span class="kpi-label">Pausaram hoje</span><strong class="overview-kpi-detail-value">'+fmtNum(pausedTodayCount)+'</strong></button>',d0ProfitMarkup=renderD0ProfitSummary(rows,snapshot).replace(metricDetail('Pausadas',{value:snapshot.pausedCount},fmtNum),pausedTodayMarkup);
-      $('#kpis').innerHTML=kpiMarkup+renderD0MetricSummary(rows)+d0ProfitMarkup+renderManifestSummary(snapshot)+renderBaseSummary(snapshot);$('#kpis').classList.add('has-overview-cards');
+      const rows=snapshot.rows;
+      const dateNavigation=OverviewDomain.campaignDateNavigation(rows,selectedCampaignDate);
+      selectedCampaignDate=dateNavigation.date;
+      const dateSelect=$('#campaignStartDate');
+      dateSelect.innerHTML='<option value="">Todas as datas</option>'+dateNavigation.dates.map(date=>`<option value="${esc(date)}">${esc(dateLabel(date))}</option>`).join('');
+      dateSelect.value=selectedCampaignDate;dateSelect.disabled=!dateNavigation.dates.length;
+      dateSelect.title=dateNavigation.dates.length?'Data de início das campanhas ativas; filtra somente a tabela':'Nenhuma data de início válida nas campanhas ativas';
+      $('#campaignPreviousDate').disabled=!dateNavigation.canPrevious;
+      $('#campaignNextDate').disabled=!dateNavigation.canNext;
+      $('#campaignDateStatus').textContent=selectedCampaignDate?`Filtro da tabela: campanhas iniciadas em ${dateLabel(selectedCampaignDate)}.`:'Filtro da tabela: todas as datas de início.';
+      const nextCardRevision=getCardRevision?.();
+      if(!cardSnapshot||(!reuse&&updateCards&&(!getCardRevision||nextCardRevision!==cardRevision))){
+      cardSnapshot=getCardSnapshot?getCardSnapshot():snapshot;cardRevision=nextCardRevision;
+      const cards=cardSnapshot,summary=cards.summary,cardRows=cards.rows||[],kpiMarkup=`${renderD1MetricSummary(cards.d1Totals,summary?.d1)}${renderD1ProfitSummary(cards.d1Totals,summary?.d1)}`;
+      const pausedTodayNames=Array.isArray(cards.pausedTodayCampaigns)?cards.pausedTodayCampaigns:[],pausedTodayCount=pausedTodayNames.length,pausedTodayMarkup='<button id="overviewPausedToday" class="overview-kpi-detail overview-kpi-detail-action" type="button" aria-haspopup="dialog" aria-controls="pausedTodayDialog" aria-label="Ver as '+fmtNum(pausedTodayCount)+' campanhas que pausaram hoje"><span class="kpi-label">Pausaram hoje</span><strong class="overview-kpi-detail-value">'+fmtNum(pausedTodayCount)+'</strong></button>',d0ProfitMarkup=renderD0ProfitSummary(cardRows,cards,summary?.d0).replace(metricDetail('Pausadas',{value:cards.pausedCount},fmtNum),pausedTodayMarkup);
+      updateCardMarkup(kpiMarkup+renderD0MetricSummary(cardRows,summary?.d0)+d0ProfitMarkup+renderManifestSummary(cards)+renderBaseSummary(cards));$('#kpis').classList.add('has-overview-cards');
+      $('#kpis').title=getCardSnapshot?(cards.computedAt?'Resumo salvo na última atualização MCC.':'Aguardando a próxima carga MCC para salvar o resumo dos cartões.'):'';
       $('#overviewPausedToday').onclick=event=>{event.preventDefault();event.stopPropagation();showPausedTodayDialog()};
-      const tableRows=[...rows,...OverviewDomain.historyNavigationRows(snapshot.historyEntries||[],rows)];
-      const matchingRows=OverviewDomain.searchRows(OverviewDomain.sortRows(tableRows,state,sortCell),$('#search').value);
-      $('#totalsBody').innerHTML=matchingRows.map(row=>renderRow(row,headers,snapshot.referenceDate,remainingMinimum,remainingYellowMinimum)).join('')||`<tr><td colspan="${headers.length}" class="empty">Nenhuma campanha encontrada.</td></tr>`;
-      $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}renderTotals()});
+      }
+      if(!reuse)presentationRows=[...rows,...OverviewDomain.historyNavigationRows(snapshot.historyEntries||[],rows)];
+      const tableRows=presentationRows;
+      const matchingRows=OverviewDomain.searchRows(OverviewDomain.campaignRowsOnStartDate(OverviewDomain.sortRows(tableRows,state,sortCell),selectedCampaignDate),$('#search').value);
+      $('#totalsBody').innerHTML=matchingRows.map(row=>{if(!rowMarkupCache.has(row))rowMarkupCache.set(row,renderRow(row,headers,snapshot.referenceDate,remainingMinimum,remainingYellowMinimum));return rowMarkupCache.get(row)}).join('')||`<tr><td colspan="${headers.length}" class="empty">Nenhuma campanha encontrada.</td></tr>`;
+      $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}renderTable()});
       $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();if(link.classList.contains('overview-remaining-edit'))showRemainingDialog();else if(link.classList.contains('overview-test-rules-edit'))showTestRulesDialog();else if(link.classList.contains('test-budget-commission-link'))showCommissionDialog(link.dataset);else showRoiDialog(link.dataset.campaignId,link.dataset.currentRoi,link.dataset.currentLimit,link.dataset.totalRevenue)};link.ondblclick=event=>event.stopPropagation()});
       $$('.overview-kpi-fractional-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();showFractionalDialog()};link.ondblclick=event=>event.stopPropagation()});
-      $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>tr.dataset.campaign&&actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals()};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals()};$('#totalsD0').onclick=()=>{state.totalsMode='d0';renderTotals()};
+      $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>tr.dataset.campaign&&actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals({updateCards:false})};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals({updateCards:false})};$('#totalsD0').onclick=()=>{state.totalsMode='d0';renderTotals({updateCards:false})};
       $('#campaignStatusFilter').value=state.campaignStatusFilter;
       $('#totalsCaption').textContent=state.totalsMode==='d0'?'Total do dia por campanha, inclusive pausadas; o filtro de situação afeta apenas a tabela':state.totalsMode==='d1'?`Retrato fechado de D−1${dates.d1?` · ${dateLabel(dates.d1)}`:''}`:'';
     }
-    $('#search').oninput=renderTotals;
-    $('#campaignStatusFilter').onchange=event=>{state.campaignStatusFilter=event.target.value;renderTotals()};
+    const renderTable=()=>renderTotals({tableOnly:true});
+    $('#search').oninput=renderTable;
+    $('#campaignStartDate').onchange=event=>{selectedCampaignDate=event.target.value;renderTable()};
+    const shiftCampaignDate=direction=>{selectedCampaignDate=OverviewDomain.campaignDateNavigation((presentationSnapshot||getSnapshot()).rows,selectedCampaignDate,direction).date;renderTable()};
+    $('#campaignPreviousDate').onclick=()=>shiftCampaignDate(-1);
+    $('#campaignNextDate').onclick=()=>shiftCampaignDate(1);
+    $('#campaignStatusFilter').onchange=event=>{state.campaignStatusFilter=event.target.value;renderTable()};
     return{render:renderTotals,refreshRemainingAlerts};
   }
   global.OverviewView=Object.freeze({mount});

@@ -39,6 +39,11 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character]);
 
+  function sidebarCollapseIcon(collapsed) {
+    const chevron = collapsed ? 'M13 9l3 3-3 3' : 'M16 9l-3 3 3 3';
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5.5"/><path d="M9 3v18"/><path d="${chevron}"/></svg>`;
+  }
+
   function activeGroupFor(root) {
     const activePage = root.dataset.hubSidebarActive;
     if (activePage) {
@@ -136,10 +141,8 @@
         const button = aside.querySelector(':scope > [data-hub-sidebar-collapse-toggle]');
         if (!button) continue;
         const icon = button.querySelector('.hub-sidebar-collapse-icon');
-        const label = button.querySelector('.hub-sidebar-collapse-label');
         const accessibleLabel = collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral';
-        if (icon) icon.textContent = collapsed ? '›' : '‹';
-        if (label) label.textContent = collapsed ? 'Expandir menu' : 'Recolher menu';
+        if (icon) icon.innerHTML = sidebarCollapseIcon(collapsed);
         button.setAttribute('aria-label', accessibleLabel);
         button.setAttribute('title', accessibleLabel);
         button.setAttribute('aria-expanded', String(!collapsed));
@@ -162,7 +165,7 @@
         button.type = 'button';
         button.className = 'hub-sidebar-collapse-toggle';
         button.dataset.hubSidebarCollapseToggle = '';
-        button.innerHTML = '<span class="hub-sidebar-collapse-icon" aria-hidden="true"></span><span class="hub-sidebar-collapse-label"></span>';
+        button.innerHTML = '<span class="hub-sidebar-collapse-icon" aria-hidden="true"></span>';
         aside.insertBefore(button, aside.firstChild);
       }
       if (button.dataset.hubSidebarCollapseBound !== 'true') {

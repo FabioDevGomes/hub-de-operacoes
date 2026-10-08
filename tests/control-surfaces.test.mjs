@@ -3,6 +3,19 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+
+test('approved inset input standard has a single shared owner and preserves accessible states', async () => {
+  const [css, finance] = await Promise.all([read('src/control-surfaces.css'), read('src/personal-finance/personal-finance.css')]);
+  assert.match(css, /--hub-input-inset-bg: #0a1728/);
+  assert.ok(css.includes('--hub-input-inset-shadow: inset 1.4px 2.1px 4.2px rgba(0,0,0,.455), inset -.7px -.7px 1.4px rgba(255,255,255,.035)'));
+  assert.match(css, /input\.hub-inset-input\s*\{[^}]*border: 0;[^}]*border-radius: 8px;[^}]*box-shadow: var\(--hub-input-inset-shadow\)/);
+  assert.ok(css.includes('input.hub-inset-input:focus-visible'));
+  assert.ok(css.includes('input.hub-inset-input:is([aria-invalid="true"],.invalid,.error,:invalid)'));
+  assert.ok(css.includes('input.hub-inset-input:disabled'));
+  assert.ok(finance.includes('@import url("/control-surfaces.css?v=5")'));
+  assert.ok(finance.includes('box-shadow:var(--hub-input-inset-shadow)'));
+  assert.ok(!finance.includes('box-shadow:inset 1.4px'), 'consumer must not duplicate the approved shadow');
+});
 const consumers = [
   ['curadoria/index.html', 'radar'],
   ['curadoria/gerentes/index.html', 'manager'],
@@ -43,13 +56,13 @@ test('shared control surfaces are published and loaded through the existing them
     read('dist/theme-colors.css'), read('dist/sidebar-component.css'), read('dist/index.html'),
   ]);
   assert.equal(published, source);
-  assert.match(theme, /@import url\("\/control-surfaces\.css\?v=4"\)/);
+  assert.match(theme, /@import url\("\/control-surfaces\.css\?v=5"\)/);
   assert.match(sidebar, /@import url\("\/theme-colors\.css\?v=5"\)/);
   assert.match(app, /href="theme-colors\.css\?v=5"/);
   for (const [path, key] of consumers) {
     const page = await read(`dist/${path}`);
     assert.ok(page.includes(`data-hub-sidebar-active="${key}"`), path);
-    assert.match(page, /sidebar-component\.css\?v=12/, path);
+    assert.match(page, /sidebar-component\.css\?v=15/, path);
     assert.ok(source.includes(`[data-hub-sidebar-active="${key}"]`), path);
     assert.match(page, /<(?:input|select)\b[^>]*class="[^"]*\bcontrol\b/, path);
   }

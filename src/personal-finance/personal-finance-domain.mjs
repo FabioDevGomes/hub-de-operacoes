@@ -190,11 +190,32 @@ export function hasMonthlyOccurrence(entry) {
 }
 
 export function canEditActualForMonth(monthKey, now = new Date()) {
-  return isoMonth(monthKey);
+  return isoMonth(monthKey) && monthKey <= localMonthKey(now);
 }
 
 export function canEditActualForEntry(entry, now = new Date()) {
-  return canEditActualForMonth(entry?.month_key, now);
+  if (!isoMonth(entry?.month_key)) return false;
+  if (canEditActualForMonth(entry.month_key, now)) return true;
+  const nextMonthKey = localMonthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+  const categoryName = String(entry.category_name || entry.name || '');
+  const match = categoryName.match(/\bsemana\s*(\d+)\b/i);
+  if (entry.month_key !== nextMonthKey || Number(match?.[1]) !== 1) return false;
+  const firstWeek = monthWeekRange(entry.month_key, 1);
+  return Boolean(firstWeek && localDateKey(now) >= firstWeek.start_date);
+}
+
+export function canEditActualForView(entry, viewMode, now = new Date()) {
+  if (viewMode === 'consolidated') return false;
+  if (viewMode !== 'month') return canEditActualForEntry(entry, now);
+  if (!isoMonth(entry?.month_key)) return false;
+  const nextMonthKey = localMonthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+  return canEditActualForMonth(entry.month_key, now) || entry.month_key === nextMonthKey;
+}
+
+export function canMarkQuickPayInFutureMonthlyView(entry, now = new Date()) {
+  if (!isoMonth(entry?.month_key) || entry.month_key <= localMonthKey(now)) return false;
+  const categoryName = String(entry.category_name || entry.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return categoryName === 'das' || categoryName === 'academia';
 }
 
 export function isLunchDinnerCategory(value) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ensurePersonalFinanceStores, mergeExpensesBundleToTransaction, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
+import { ensurePersonalFinanceStores, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
 
 class NameList {
   constructor() { this.values = new Set(); }
@@ -12,8 +12,7 @@ class FakeStore {
   createIndex(name, keyPath) { this.indexNames.add(name); this.indexes.set(name, keyPath); }
   clear() { this.rows.clear(); }
   put(row) { this.rows.set(row[this.keyPath], row); }
-  add(row) { if (this.rows.has(row[this.keyPath])) throw new Error('duplicate key'); this.rows.set(row[this.keyPath], row); }
-  get(key) { const request = {}; queueMicrotask(() => { request.result = this.rows.get(key); request.onsuccess?.(); }); return request; }
+
 }
 class FakeDb {
   constructor() { this.objectStoreNames = new NameList(); this.stores = new Map(); }
@@ -46,29 +45,6 @@ assert.equal(db.stores.get(STORES.groups).rows.has('obsolete'), false, 'restaura
 assert.equal(db.stores.get(STORES.entries).rows.get('2026-09:c1').actual_amount, null, 'valor realizado em branco permanece em branco no backup');
 assert.equal(db.stores.get(STORES.months).rows.get('2026-09').daily_actual_targets_applied_on, '2026-09-06', 'a restauração mantém o marcador que protege edições manuais durante o dia');
 
-const expenseImport = {
-  schema:'personal_finance_v1', version:1, groups:[{ group_id:'g-expenses', name:'Despesas', sort_order:0, active:true }],
-  categories:[{ category_id:'c-internet', name:'Internet', group_id:'g-expenses', currency:'BRL', default_plan:null, sort_order:0, active:true }],
-  months:[{ month_key:'2026-09', plan_source:'defaults' }],
-  entries:[{ entry_id:'2026-09:c-internet', month_key:'2026-09', category_id:'c-internet', category_name:'Internet', group_id:'g-expenses', group_name:'Despesas', currency:'USD', planned_amount:25, actual_amount:null }],
-  debts:[], funds:[], settings:[],
-};
-const makeTransaction = () => ({ aborted:false, objectStore:name => db.stores.get(name), abort() { this.aborted = true; } });
-const mergeTx = makeTransaction(), firstMerge = mergeExpensesBundleToTransaction(mergeTx, expenseImport);
-await new Promise(resolve => setTimeout(resolve, 0));
-assert.equal(firstMerge.error, null);
-assert.equal(firstMerge.counts.inserted, 3, 'importação aditiva grava grupo, categoria e lançamento sem substituir mês existente');
-assert.equal(db.stores.get(STORES.entries).rows.get('2026-09:c-internet').currency, 'USD', 'moeda pode variar no lançamento mensal sem conversão');
-const repeatTx = makeTransaction(), repeatedMerge = mergeExpensesBundleToTransaction(repeatTx, expenseImport);
-await new Promise(resolve => setTimeout(resolve, 0));
-assert.equal(repeatedMerge.counts.inserted, 0, 'reimportação idêntica não duplica dados');
-assert.equal(repeatedMerge.counts.unchanged, 4);
-const conflictTx = makeTransaction(), conflictingMerge = mergeExpensesBundleToTransaction(conflictTx, { ...expenseImport, groups:[{ ...expenseImport.groups[0], name:'Outro grupo' }] });
-await new Promise(resolve => setTimeout(resolve, 0));
-assert.match(conflictingMerge.error?.message || '', /registro diferente/);
-assert.equal(conflictTx.aborted, true, 'conflitos abortam a transação sem sobrescrever');
-assert.equal(db.stores.get(STORES.categories).rows.get('c-internet').name, 'Internet');
-
 const source = await readFile(new URL('../src/personal-finance/personal-finance-storage.mjs', import.meta.url), 'utf8');
 const readMonthBlock = source.match(/export async function readMonth\([\s\S]*?\n\}/)?.[0] || '';
 assert.match(readMonthBlock, /\.index\('month_key'\)\.getAll\(only\(monthKey\)\)/, 'leituras mensais filtram por índice em vez de carregar o histórico completo');
@@ -87,7 +63,7 @@ const deleteReserveBlock = source.match(/export async function deleteReserveCont
 assert.match(deleteReserveBlock, /index\('item_id'\)\.openCursor\(only\(itemId\)\)/, 'remover um aporte afeta somente as cópias daquele item, não varre a store inteira');
 assert.match(source, /export async function countData\(\)[\s\S]*?\.count\(\)/, 'a confirmação de sobrescrita usa contagens e não leitura integral');
 assert.match(source, /export async function exportBundle\(\)[\s\S]*?\.getAll\(\)/, 'leitura integral fica restrita à exportação explícita de backup');
-assert.match(source, /export async function mergeExpensesBundle\(input\)[\s\S]*?db\.transaction\(names, 'readwrite'\)/, 'importação de despesas escreve em transação separada e aditiva');
+assert.doesNotMatch(source, /mergeExpensesBundle/, 'o fluxo de importação de despesas da planilha foi removido');
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /HubDatabase\.openDatabase\(\)/, 'a tela usa o acesso compartilhado sem schema duplicado');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'personal_finance'\)/, 'backup legado sem o domínio pessoal preserva as stores locais');

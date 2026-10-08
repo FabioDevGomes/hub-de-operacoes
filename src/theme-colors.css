@@ -1,4 +1,4 @@
-@import url("/control-surfaces.css?v=4");
+@import url("/control-surfaces.css?v=5");
 
 /*
  * Cores tipográficas comuns do Hub.
@@ -69,7 +69,6 @@ html body .people-also-search-item,
 
 /* Form values are primary text too; placeholders and labels remain muted. */
 .pf-period-length input,
-.pf-import-panel textarea,
 .pf-amount-input,
 .pf-modal input,
 .pf-modal select,

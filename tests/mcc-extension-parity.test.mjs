@@ -9,7 +9,7 @@ const extensionFiles = ['popup.js', 'background.js', 'bridge.mjs', 'mcc-grid-rea
 const extensionSource = (await Promise.all(extensionFiles.map(file => readFile(new URL(`extensions/mcc-d0-bridge/${file}`, root), 'utf8')))).join('\n');
 const backgroundSource = await readFile(new URL('extensions/mcc-d0-bridge/background.js', root), 'utf8');
 
-assert.equal(manifest.version, '1.2.18', 'a extensão deve anunciar a versão da mudança');
+assert.equal(manifest.version, '1.2.21', 'a extensão deve anunciar a versão da mudança');
 assert.deepEqual(manifest.permissions, ['scripting', 'activeTab', 'clipboardWrite'], 'leitura continua via activeTab; escrita de clipboard é exclusiva da ação ClickBank');
 assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*','http://127.0.0.1:8765/curadoria/clickbank-top-offers/*'], 'somente as duas rotas locais de destino são permitidas');
 assert.ok(!/<textarea\b|type="file"|Selecionar arquivo|Ctrl\+V/i.test(html), 'a tela não deve exibir controles nem instruções para colagem ou seleção manual de arquivos');

@@ -23,6 +23,24 @@
       if(totals.investment!==null)totals.investment=Math.round((totals.investment+Number.EPSILON)*100)/100;
       return totals;
     }
+    // Sum only observed cells in the displayed daily series, never provisional notes.
+    function productDiaryTableTotals(rows){
+      const totals={B:null,C:null,F:null,O:null,P:null};
+      for(const row of rows||[]){
+        for(const column of Object.keys(totals)){
+          const raw=row?.cells?.[column]?.value;
+          if((typeof raw!=='number'&&typeof raw!=='string')||String(raw).trim()==='')continue;
+          const value=Number(raw);if(!Number.isFinite(value))continue;
+          totals[column]=(totals[column]??0)+value;
+        }
+      }
+      for(const column of Object.keys(totals)){
+        if(totals[column]===null)continue;
+        const scale=['O','P'].includes(column)?100:1e12;
+        totals[column]=Math.round((totals[column]+Number.EPSILON)*scale)/scale;
+      }
+      return totals;
+    }
     const productColumns=[['A','Data'],['B','Impr.'],['C','Cliques Google'],['D','Cliques plataforma'],['E','Avanço presell'],['F','Conv.'],['G','CTR'],['H','Checkout'],['I','Custo médio US$'],['J','Custo médio R$'],['K','% 1ª posição'],['L','% parte sup.'],['M','Orçam. diário'],['N','Estratégia'],['O','Investimento'],['P','Comissão'],['Q','Observações']];
-  global.ProductDiaryDomain=Object.freeze({excelDate,sheetDailyRows,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productDiaryTotals,productColumns});
+  global.ProductDiaryDomain=Object.freeze({excelDate,sheetDailyRows,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productDiaryTotals,productDiaryTableTotals,productColumns});
 })(typeof window==='object'?window:globalThis);

@@ -1,0 +1,28 @@
+/* Inputs escalares de todas as telas do Hub; não altera dimensões ou comportamento. */
+@import url("/control-surfaces.css?v=5");
+
+/* Tipos especiais, botões, selects e textareas preservam seu contrato próprio. */
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
+  background: var(--hub-input-inset-bg) !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+  box-shadow: var(--hub-input-inset-shadow) !important;
+}
+
+/* A largura da borda existente é preservada para não encolher campos legados.
+   Os pilotos já aprovados com border:0 mantêm seus paddings compensados. */
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):focus-visible {
+  outline: 2px solid var(--hub-control-focus) !important;
+  outline-offset: 2px !important;
+}
+
+/* Erro continua explícito e prevalece sobre o foco, sem afetar o layout. */
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):is([aria-invalid="true"],.invalid,.error,:invalid) {
+  outline: 2px solid var(--hub-control-error) !important;
+  outline-offset: 2px !important;
+}
+
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}

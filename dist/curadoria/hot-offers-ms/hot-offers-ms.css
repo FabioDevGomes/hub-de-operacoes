@@ -5,3 +5,5 @@
 .glimpse-embedded-frame{min-height:0}
 .tablewrap td.movement-cell{font-variant-numeric:tabular-nums;white-space:nowrap}.tablewrap td.movement-up,.tablewrap td.movement-new,.tablewrap td.movement-returned{color:#83e5bb}.tablewrap td.movement-down,.tablewrap td.movement-exited{color:#ff9aaa}
 #hotOffersMsRoot .tablewrap th[data-col="payment"],#hotOffersMsRoot .tablewrap td[data-col="payment"],#hotOffersMsRoot .tablewrap th[data-col="movement"],#hotOffersMsRoot .tablewrap td[data-col="movement"]{text-align:center!important}
+#hotOffersMsRoot .table-action[data-action="detail"]{background:var(--curation-decision-neutral-bg);color:var(--curation-decision-neutral-text)}
+#hotOffersMsRoot .tablewrap td.product-cell.hub-edit-host{padding-right:54px}

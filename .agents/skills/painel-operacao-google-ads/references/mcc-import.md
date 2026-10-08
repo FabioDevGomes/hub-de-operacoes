@@ -10,6 +10,7 @@
 ## Campos e estados
 
 - D−1 contém métrica fechada; D0, métrica parcial.
+- A importação preserva `cobertura_D_menos_1_por_mcc` por administrador/data, separada da cobertura D0, inclusive quando não gera linhas de Diário. Indicadores da Visão Geral contam períodos aplicados à base para ontem/hoje em Brasília; uma prévia recebida pela extensão ainda não conta. Importações em horários diferentes e só de um período não apagam a comprovação do outro. Não infira período pelo horário Ecom/Nutra do cartão Manifesto MCC. Ver [contrato](../../../../docs/maintenance.md#visão-geral-e-diário--passo-7).
 - Chave de campanha é o nome MCC completo e exato; linha diária usa `campanha_id + data`.
 - Identidade da MCC administradora vem do nome e do ID completo visíveis no cabeçalho MCC, nunca do `conta_id` cliente por linha. O ID técnico é salvo no catálogo aditivo `bases/atual.mccs[]`; `campanhas[].mcc_id` aponta para ele, e a tela resolve o nome atual pelo catálogo. Renomeações atualizam o rótulo e preservam nomes anteriores. Não guardar IDs operacionais reais em fixtures; testar com MCCs sintéticas.
 - `Status da campanha` / `Estado da campanha` alimentam `estado_campanha` (estado operacional).
@@ -53,6 +54,8 @@ Depois de receber D−1 ou D0, o cartão apresenta os metadados em uma grade com
 
 ## Reflexo no Controle Macro
 
+**Cartões da Visão Geral — somente no commit MCC:** o Preparador carrega `overview-domain.js` e `overview/cards-domain.js`, calcula `base.overview_cards` após aplicar/reconciliar o manifesto e antes de `writePanelBase`. Base, resumo, Event Log e espelhos financeiros usam a mesma transação; falha/abort não publica sucesso. Não calcular na recepção/prévia, no reload do Hub, no receptor de BroadcastChannel ou em alterações manuais. O Hub apenas lê/exibe o resumo salvo, inclusive se estava fechado durante a aplicação. Cache legado ausente só será criado na próxima MCC explícita. Teste `tests/overview-cards-persistence.test.mjs` e os contratos prioritários D0/D−1; nunca validar com gravação sintética no perfil real.
+
 - Política operacional acordada: não pedir nova importação da planilha para atualizações diárias; usar MCC D0 como parcial e D−1 como fechamento do dia anterior. Preservar o histórico da planilha já gravado.
 - O Preparador grava D−1 no mesmo IndexedDB `painel-campanhas`, store `bases`, chave `atual`, e publica `BroadcastChannel('painel-campanhas')` com `type:'base-updated'` após persistir.
 - Com o Controle Macro aberto em outra aba da mesma origem, o painel recebe o evento, restaura a base e recalcula os totais diários. Ao abrir/recarregar o painel, a base persistida também é restaurada e agregada. Não é necessária uma segunda importação do histórico da planilha.
@@ -92,6 +95,8 @@ O leitor `extensions/mcc-d0-bridge/mcc-grid-reader.mjs` procura uma única grade
 Completude exige paginação explícita começando em 1 e terminando no total, total igual às linhas capturadas e campanhas únicas, além de ausência de sinais de virtualização/truncamento conhecidos. Isso é um critério de segurança da fotografia, não prova matemática de que a página nunca use lazy loading: se os registros não estiverem materializados numa única grade completa, o fluxo deve falhar. A extensão não rola nem pagina a MCC. A data vem apenas de um controle de período com uma única data explícita; não usar “hoje” do computador, prefixo de nome da campanha ou datas múltiplas. Localidade vem do documento e é usada para validar/separar números. Código/símbolo de moeda precisa identificar uma moeda única por linha; `$` isolado é insuficiente.
 
 ### Contrato e sequência de execução
+
+**Receber apenas D−1:** um D0 incompatível que permaneceu na sessão não bloqueia a captura D−1 validada. O Preparador o mantém em memória fora da prévia (`excludedD0`), sem apagar a captura/histórico ou gravar a base, e mostra **Fora da prévia** no cartão D0. A prévia passa a `D_menos_1_somente`; D0 não fornecido permanece ausente. Para escolher esse modo mesmo com D0 compatível, use **Usar apenas D−1**. **Incluir D0 na prévia** só recompõe o manifesto após validar novamente data/identidade; incompatibilidade informa o motivo sem invalidar a prévia D−1. Uma nova captura D0 compatível volta ao modo combinado. D−1 inválido é rejeitado antes de alterar a seleção. `tests/preparador-d1-only.test.mjs` cobre recepção, repetição, exclusão/reinclusão e ausência de gravação automática.
 
 1. O popup envia `SCROLL_ACTIVE_MCC_TO_BOTTOM`, `CAPTURE_AND_FORWARD_MCC_D0` ou `CAPTURE_AND_FORWARD_MCC_D1` ao service worker. A rolagem e ambas as capturas exigem uma aba ativa `https://ads.google.com/`; somente as ações de captura usam o leitor e validam completude/campos antes da entrega.
 2. `mcc-grid-domain.mjs` emite `mcc-d0-grid-v3` ou `mcc-d1-grid-v3`; ambos carregam nome/ID MCC extraídos do cabeçalho visível; D0 inclui `capturedAt` (instante ISO em que a extensão leu a grade), D−1 inclui `periodRole:'d1'` e exige a data esperada no fuso `America/Sao_Paulo`. O payload contém só metadados e registros estruturados, nunca HTML bruto, cookies, token ou estado de sessão.
@@ -155,6 +160,12 @@ Implementação em `sortPreviewRows`/`renderPreviewTable` no Preparador: compara
 
 ### Diferenças das capturas D0
 
+- Navegar pelas capturas reutiliza o histórico já normalizado em memória (cópia rasa da lista apenas para inverter a apresentação); a validação completa continua na leitura/salvamento, sem cache de dados persistido ou regravação por seleção. Datas e deltas usam `captureFormatter`, cache local de no máximo 16 formatadores `Intl`, separado por formato/moeda e sem dados de campanhas. Preserve fuso Brasília, zero × ausência, sinais, moedas, limites das capturas por MCC e falhas de armazenamento. Regressões sintéticas: `preparador-history-performance`, `preparador-capture-layout` e deltas D0/D−1.
+
+- A barra **Capturas da MCC** mantém dois indicadores iguais à direita (**Dados D−1** e **Dados D0**), sem bordas, com os mesmos tokens verde/cinza dos cartões. Eles mostram somente o registro selecionado quando se consulta o histórico, não os slots atuais ou outra MCC; o contexto MCC/horário também fica no cabeçalho. D−1 legado sem metadados permanece **Não registrado**; ausência comprovada é **Não capturado**. No contexto atual, refletem períodos recebidos, erro e D0 **Fora da prévia**. D−1 isolado mantém essa barra visível sem criar aba D0. Capturado não significa aplicado: gravação continua exclusivamente manual. Fonte: `renderCapturePeriodIndicators`/`renderSelectedCaptureReports`; testes `preparador-capture-reports`/`preparador-capture-layout`.
+
+- A seleção das abas de captura também atualiza os cartões de **Relatórios da MCC** em modo somente leitura. Novas capturas guardam `reports:{d0,d1}` opcional no histórico D0 existente, com resumos de MCC, data, horário, contagem e moedas. D−1 é associado somente com mesma MCC/data consecutiva; sua chegada posterior complementa apenas o D0 atual sem alterar os deltas. Registros antigos sem metadados não comprovam se D−1 veio junto e exibem **Não registrado**, sem preenchimento retroativo. D−1 isolado permanece no contexto atual, sem inventar aba D0. **Ver captura atual** retorna aos slots da sessão; seleção histórica não substitui manifesto nem habilita Atualizar base, inclusive no modo D−1 isolado. Cobertura em `tests/preparador-capture-reports.test.mjs`.
+
 - Os cartões de captura apresentam somente MCC, campanhas válidas, data detectada e moedas. Não exibem o tipo técnico da captura nem um subtotal de consumo; os dados individuais continuam disponíveis na prévia.
 - No Preparador, painéis, cartões de captura, validações, resumos e contêineres de tabelas não têm bordas externas. Fundos/estados, divisórias internas, linhas das tabelas e bordas dos controles permanecem.
 - Antes da prévia do manifesto, o Preparador MCC exibe diferenças por campanha em impressões, cliques e custo e sinaliza a campanha como `Pausada` somente na primeira captura que traz o estado operacional explícito `estado_campanha` em D0. O registro persistente é separado do histórico limitado às sete abas recentes, é migrado das capturas antigas e impede repetir o aviso em novas cargas; diferenças métricas continuam aparecendo sem repetir o status. Ausência da campanha, zero de métricas e status de qualificação não indicam pausa. A consulta usa o manifesto D0 salvo anteriormente no banco local e só compara métricas quando a data do relatório é a mesma.
@@ -165,6 +176,8 @@ Implementação em `sortPreviewRows`/`renderPreviewTable` no Preparador: compara
 - Cobertura sintética: `tests/preparador-d0-delta.test.mjs`.
 
 ### Alterações do fechamento D−1
+
+- Quando visível, esse quadro precede **Relatórios da MCC** no documento, mantendo a prioridade visual já existente de **Alterações da captura D0**. IDs, conteúdo, exibição condicional e movimentação do botão Atualizar base conforme o período ativo não mudam; `tests/preparador-build.test.mjs` protege a ordem e a publicação.
 
 - Ao receber D−1, o Preparador pode exibir outra tabela de impressões, cliques e custo, comparando o fechamento com a captura D0 salva anteriormente para a mesma data. A comparação é independente de uma nova captura D0 estar carregada na sessão.
 - A comparação usa nomes completos e exatos, exceto renomeações que o detector existente confirmou como únicas. Só lista campanhas presentes uma única vez nos dois lados e com diferença numérica observável; campanha nova ou sem par D0 não é tratada como zero.

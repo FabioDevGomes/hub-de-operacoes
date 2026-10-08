@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const domain = require('../src/control-macro/domain.js');
+const CampaignBaseReader = require('../src/storage/campaign-base-reader.js');
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 const databaseContext = vm.createContext({ window:{}, structuredClone });
 vm.runInContext(await readFile(new URL('../src/database.js', import.meta.url), 'utf8'), databaseContext);
@@ -14,7 +15,8 @@ let persisted = db.create();
 persisted.campanhas = [{ id:'synthetic', nome_mcc:'Wego6 campanha', nome_exibicao:'Wego6' }];
 persisted.diario = [{ campanha_id:'synthetic', data:'2026-09-29', celulas:{ O:{value:100}, P:{value:50}, C:{value:10}, F:{value:1} } }];
 const state = { database:null, controlMacroRows:null, productCatalog:{aliases:{}} };
-const context = vm.createContext({ state, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:domain, ProductCatalog:{normalize:value=>value||{aliases:{}}},
+let aggregateCalls=0;
+const context = vm.createContext({ state, CampaignBaseReader, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:{...domain,aggregateMccDaily(...args){aggregateCalls++;return domain.aggregateMccDaily(...args)}}, ProductCatalog:{normalize:value=>value||{aliases:{}}},
   accountProductIdentity:(campaign,catalog)=>({label:catalog.aliases[String(campaign.nome_exibicao||'').toLocaleLowerCase('pt-BR')]||campaign.nome_exibicao||campaign.nome_mcc}),
   embeddedManifest:null,
   renderLegacyMigrationNotice(){}, render(){},
@@ -35,8 +37,14 @@ const restoreEnd = template.indexOf('    async function restoreProductCatalog(',
 vm.runInContext(`let derivedCache={stale:true};\n${helpers}\n${template.slice(restoreStart,restoreEnd)}`, context);
 const september = () => context.macroAllRows().filter(row => row.date.startsWith('2026-09'));
 assert.equal(september().length, 0, 'primeiro render ocorre antes da leitura assíncrona');
+const callsBeforeRestore=aggregateCalls;
 await context.restoreLocalBase({ persist:false, renderPage:false });
+assert.equal(aggregateCalls,callsBeforeRestore,'restaurar a Visão Geral apenas invalida o Macro, sem agregar uma tela não aberta');
 assert.equal(september().length, 1, 'carregar a base deve recalcular o Macro vazio');
+assert.equal(aggregateCalls,callsBeforeRestore+1);
+september();assert.equal(aggregateCalls,callsBeforeRestore+1,'segunda leitura reutiliza a projeção');
+state.rate=6;september();assert.equal(aggregateCalls,callsBeforeRestore+2,'taxa alterada invalida a projeção');
+state.productCatalog={aliases:{}};september();assert.equal(aggregateCalls,callsBeforeRestore+3,'catálogo alterado invalida a projeção');
 assert.equal(september()[0].investment, 100);
 assert.deepEqual(september()[0].productSales.map(item=>({product:item.product,sales:item.sales,amount:item.amount})),[{product:'Wego6',sales:1,amount:50}], 'refresh também associa produto às vendas oficiais MCC');
 assert.equal(vm.runInContext('derivedCache', context), null);

@@ -1,7 +1,7 @@
 import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=21';
 import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=3';
 import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=1';
-import {renderTemplate} from './copy-ficha-template.mjs?v=3';
+import {renderTemplate} from './copy-ficha-template.mjs?v=4';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=1';

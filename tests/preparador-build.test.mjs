@@ -14,6 +14,15 @@ test('Preparador published page matches canonical source and preserves executabl
   const source=await readFile(canonical),published=await readFile(join(root,'dist/preparador-MCC/index.html'));
   assert.deepEqual(published,source,'run node build.mjs: Preparador must come from src, without transformations');
   const html=source.toString('utf8');
+  const d1Panel=html.indexOf('id="d1-changes-panel"');
+  const reportsPanel=html.indexOf('<section class="panel" aria-labelledby="step1-title">');
+  const validationPanel=html.indexOf('id="validation-panel"');
+  assert.ok(d1Panel>=0 && d1Panel<reportsPanel && reportsPanel<validationPanel,'fechamento D−1 precede Relatórios da MCC e Validação na ordem do documento');
+  assert.equal((html.match(/id="d1-changes-panel"/g)||[]).length,1,'o quadro D−1 é movido, não duplicado');
+  assert.match(html,/\.steps > #d0-changes-panel\s*\{\s*order:\s*-1/,'a prioridade visual anterior do histórico D0 permanece');
+  assert.equal((html.match(/<table class="delta-table"/g)||[]).length,2,'D0 e D−1 compartilham o mesmo estilo de linhas');
+  assert.match(html,/\.delta-table th, \.delta-table td\s*\{\s*padding-block:\s*6px;\s*\}/,'as duas tabelas de alterações usam linhas cerca de 20% mais baixas, sem reduzir a fonte');
+  assert.match(html,/th, td\s*\{\s*padding:\s*10px 12px;/,'a compactação das alterações não reduz as células das outras tabelas');
   for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
   for(const contract of ['window.__hubReceiveMccD0Grid','window.__hubReceiveMccD1Grid','id="apply-manifest"',
     'class="button ghost hub-panel-action" id="clear-all"','class="button primary hub-panel-action" id="apply-manifest"',

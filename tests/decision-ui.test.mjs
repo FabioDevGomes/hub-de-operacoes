@@ -33,6 +33,6 @@ assert.ok(styles.includes('#rows tr.decision-row-launch:hover>td{background:var(
 const curatedListPages=['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html'];
 for(const pagePath of curatedListPages){
   const page=await readFile(new URL('../src/curadoria/'+pagePath,import.meta.url),'utf8');
-  assert.ok(page.includes('trends-sheet.css?v=20261006-curation-decision-column'),`${pagePath} precisa carregar o padrão compartilhado atualizado`);
+  assert.ok(page.includes('trends-sheet.css?v=20261007-glimpse-borderless'),`${pagePath} precisa carregar o padrão compartilhado atualizado`);
 }
 console.log('decision ui ok');

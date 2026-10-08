@@ -39,6 +39,12 @@ await assert.rejects(readClipboardText({readText:async()=>{throw clipboardDenied
 
 const view=(await Promise.all(['copy-ficha-view.mjs','copy-ficha-template.mjs','copy-ficha-draft.mjs','copy-ficha-workflow.mjs'].map(path=>readFile(new URL('../src/copy-ficha/'+path,import.meta.url),'utf8')))).join('\n');
 const copyCss=await readFile(new URL('../src/copy-ficha/copy-ficha.css',import.meta.url),'utf8');
+for(const id of ['copyAnalyze','copyGenerateQuestions','copyGenerateFicha'])assert.ok(view.includes('id="'+id+'" class="copy-ficha-btn primary btn hub-white-button"'),'a ação azul adota o padrão branco: '+id);
+assert.equal((view.match(/hub-white-button/g)||[]).length,3,'somente as três ações azuis recebem o padrão');
+assert.ok(view.includes('id="copyReset" class="copy-ficha-btn danger"')&&view.includes('id="copyQuestionsCopy" class="copy-ficha-btn"'),'ações neutras e Nova coleta conservam seu formato');
+assert.ok(copyCss.includes('.copy-ficha-btn.hub-white-button{padding:8px 12px;font-size:inherit}')&&!copyCss.includes('#fffaf0'),'preservar a geometria sem copiar o acabamento compartilhado');
+const publishedTemplate=await readFile(new URL('../dist/copy-ficha/copy-ficha-template.mjs',import.meta.url),'utf8');
+assert.ok(publishedTemplate.includes('primary btn hub-white-button'),'publicar os botões padronizados');
 const outputCss=await readFile(new URL('../src/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
 assert.ok(!view.includes('Resultados')&&!view.includes('copyFichaJson')&&!view.includes('copyDownloadFicha'),'a restauração das perguntas não reintroduz resultados de anúncios ou download JSON');
 assert.ok(view.includes('copyGenerateQuestions')&&view.includes('copyOfferQuestions')&&view.includes('Perguntas e respostas da oferta')&&view.includes("by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast)"),'a tela restaura o botão independente e o quadro editável de perguntas e respostas');

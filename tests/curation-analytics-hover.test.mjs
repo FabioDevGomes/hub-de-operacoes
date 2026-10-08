@@ -13,13 +13,17 @@ const [sharedCss, ecommerce, hotPage, hotView, smartPage, smartView, clickbankPa
   readFile(new URL('clickbank-top-offers/clickbank-top-offers-view.mjs', root), 'utf8'),
 ]);
 
-assert.ok(sharedCss.includes('html body :is(.table-action[data-action="trends"],.table-action[data-action="glimpse"],.table-action[data-action="images"]):is(:hover,:focus-visible){filter:brightness(1.25);transform:translateY(-1px);outline:2px solid rgba(101,169,255,.45);outline-offset:2px}'),
-  'atalhos analíticos usam o hover e foco visual compartilhados');
+assert.ok(sharedCss.includes('html body :is(.table-action[data-action="trends"],.table-action[data-action="images"]):is(:hover,:focus-visible){filter:brightness(1.25);transform:translateY(-1px);outline:2px solid rgba(101,169,255,.45);outline-offset:2px}'),
+  'Trends e Imagens preservam o contrato existente');
+assert.ok(sharedCss.includes('.glimpse-badge:is(:hover,:focus-visible){filter:brightness(1.25);transform:translateY(-1px)}') &&
+  sharedCss.includes('.glimpse-badge:hover:not(:focus-visible){outline:none}') &&
+  sharedCss.includes('.glimpse-badge:focus-visible{outline:2px solid'),
+  'Glimpse compartilha o realce sem contorno de mouse e conserva foco de teclado');
 assert.match(sharedCss, /html body :is\(\.glimpse-badge,\.table-action\[data-action="glimpse"\]\)\{border:0;background:transparent\}/,
   'a informação da coluna Glimpse não mantém borda nem fundo de botão');
 
 for (const [name, page] of [['E-commerce GM', ecommerce], ['Hot Offers MS', hotPage], ['SmartAdv', smartPage], ['Top Offers CB', clickbankPage]]) {
-  const version='20261006-curation-decision-column';
+  const version='20261007-glimpse-borderless';
   assert.ok(page.includes(`trends-sheet.css?v=${version}`), `${name} invalida o cache do estilo compartilhado atualizado`);
 }
 

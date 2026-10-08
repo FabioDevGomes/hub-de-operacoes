@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.18', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.21', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura MCC D0\/D−1/);
 assert.ok(popup.includes('id="capture-title"') && popup.includes('id="vsl-title"'), 'os títulos das seções permanecem visíveis');
 assert.doesNotMatch(popup, /Na MCC, selecione um único dia, use o botão discreto abaixo/);
@@ -22,6 +22,8 @@ assert.ok(popup.includes('Vídeo principal HTML5 ou VTurb.'), 'a nota sobre o v�
 assert.doesNotMatch(popup, /Captura a página atual e abre Top Offers CB com o campo preenchido/);
 assert.ok(popup.includes('id="capture-clickbank"'), 'a ação de captura ClickBank permanece disponível');
 assert.ok(popup.includes('id="capture-dtc-countries"') && popup.includes('id="dtc-countries-status"'), 'a captura de países da DTC tem ação e retorno próprios');
+assert.doesNotMatch(popup, /No checkout DTC, capture|Mantenha Top Offers CB aberto no Hub/);
+assert.match(popup, /class="clickbank-actions"[^>]*>[\s\S]*?id="capture-dtc-countries" class="secondary compact-action"[^>]*>[\s\S]*?<\/div>/, 'captura DTC compartilha o grupo e o tamanho compacto das ações ClickBank');
 assert.match(manifest.description, /países comuns ClickBank/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
 assert.ok(popup.includes('class="capture-actions" role="group" aria-label="Ações de captura MCC"'), 'botões D0 e D−1 ficam em um grupo horizontal');
@@ -138,4 +140,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.18');
+console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.21');

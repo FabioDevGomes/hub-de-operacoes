@@ -5,5 +5,5 @@
 .people-also-search .section-title h2{color:#c9e8ff}
 .people-also-search-count{flex:none;padding:5px 9px;border:1px solid rgba(90,177,255,.48);border-radius:999px;background:rgba(17,57,91,.68);color:#bfe2ff;font-size:.72rem;font-weight:700;white-space:nowrap}
 .people-also-search-items{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.people-also-search-item{max-width:100%;padding:8px 11px;border:1px solid rgba(90,177,255,.52);border-radius:9px;background:rgba(9,31,52,.78);color:#f0f8ff;font-size:.88rem;font-weight:650;overflow-wrap:anywhere}
+.people-also-search-item{max-width:100%;padding:8px 11px;border:1px solid rgba(90,177,255,.52);border-radius:9px;background:rgba(9,31,52,.78);color:#f0f8ff;font-size:.88rem;font-weight:400;overflow-wrap:anywhere}
 .people-also-search-empty{margin:10px 0 0;color:var(--muted);font-size:.8rem}

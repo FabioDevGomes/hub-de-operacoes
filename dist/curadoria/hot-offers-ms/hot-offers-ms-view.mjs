@@ -125,7 +125,10 @@ export function mountHotOffersMsView({root, actions}) {
   }
   function cell(key,item) {
     if (key === 'id') return '<td>' + mediaScalersOfferIdLinkMarkup(item.offerId) + '</td>';
-    if (key === 'product') return '<td><span class="product-name">' + escape(item.productName) + '</span></td>';
+    if (key === 'product') {
+      const label = hiddenOffers.has(item.offerKey) ? 'Reexibir' : 'Ocultar';
+      return '<td data-col="product" class="product-cell hub-edit-host"><span class="product-name">' + escape(item.productName) + '</span><button type="button" class="hub-corner-edit" data-action="hide" data-key="' + escape(item.offerKey) + '" aria-label="' + escape(label + ' ' + item.productName) + '">' + label + '</button></td>';
+    }
     if (key === 'category') return '<td>' + escape(item.category || '—') + '</td>';
     if (key === 'affiliation') return '<td>' + affiliation(item) + '</td>';
     if (key === 'countries') return '<td title="' + escape(item.countriesRaw || '') + '">' + escape(countryText(item)) + '</td>';
@@ -138,7 +141,7 @@ export function mountHotOffersMsView({root, actions}) {
     if (key === 'movement') { const value = movement(item); return '<td data-col="movement" class="number movement-cell ' + escape(value.className) + '">' + escape(value.label) + '</td>'; }
     if (key === 'decision') return '<td>' + Decisions.buttonHtml(decisionFor(item.offerKey).currentStatus,'data-decision-key',escape(item.offerKey)) + '</td>';
     if (key === 'lastSeen') return lastCollectionCell(item.lastSeenAt);
-    if (key === 'actions') return '<td><button type="button" class="table-action" data-action="detail" data-key="' + escape(item.offerKey) + '">Abrir</button><button type="button" class="table-action" data-action="hide" data-key="' + escape(item.offerKey) + '">' + (hiddenOffers.has(item.offerKey) ? 'Exibir' : 'Ocultar') + '</button></td>';
+    if (key === 'actions') return '<td><button type="button" class="table-action" data-action="detail" data-key="' + escape(item.offerKey) + '">Abrir</button></td>';
     return '<td>—</td>';
   }
   function renderSummary() {
@@ -334,6 +337,10 @@ export function mountHotOffersMsView({root, actions}) {
     activeTab = tab;
     $$('.tabs [data-tab]',sheet).forEach(button => button.classList.toggle('active',button.dataset.tab === tab));
     $$('[data-panel]',sheet).forEach(panel => panel.classList.toggle('hidden',panel.dataset.panel !== tab));
+    const saveButton = $('#saveSheetButton');
+    saveButton.disabled = tab !== 'glimpse';
+    saveButton.title = tab === 'glimpse' ? 'Salvar a análise Glimpse sem fechar a ficha' : tab === 'overview' ? 'Use Salvar decisão no Resumo' : tab === 'history' ? 'Histórico é somente leitura' : 'As avaliações desta aba são salvas a cada ação';
+    saveButton.setAttribute('aria-label','Salvar: ' + saveButton.title);
     const item = offerByKey(activeOfferKey);
     if (tab === 'glimpse' && item) actions.openGlimpse(item);
   }

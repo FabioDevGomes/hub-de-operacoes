@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Top Offers CB · Curadoria</title>
   <link rel="icon" href="/favicon.png">
-  <link rel="stylesheet" href="../trends-sheet.css?v=20261006-curation-decision-column">
-  <link rel="stylesheet" href="./clickbank-top-offers.css?v=24">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261007-glimpse-borderless-standard-bar">
+  <link rel="stylesheet" href="./clickbank-top-offers.css?v=25">
+  <link rel="stylesheet" href="/table-edit-actions.css?v=3">
   <link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
-  <link rel="stylesheet" href="/sidebar-component.css?v=12">
+  <link rel="stylesheet" href="../analysis-sheet-bar.css?v=3">
+  <link rel="stylesheet" href="/sidebar-component.css?v=15">
   <link rel="stylesheet" href="/table-columns.css?v=2">
-<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"></head>
-<body>
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/table-headers.css?v=9"><link rel="stylesheet" href="/white-button.css?v=5"></head>
+<body data-hub-green-actions="clickbank">
   <div class="shell">
     <aside>
       <div class="brand"><div class="logo"><img src="/brand-logo.png" alt=""></div><div><strong>Hub de Operações</strong><span>Campanhas e curadoria</span></div></div>
@@ -30,6 +32,7 @@
           <input class="control search hub-search-filter" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor">
           <div class="capture-selection"><label for="captureSelect">Captura exibida</label><select class="control" id="captureSelect" aria-label="Selecionar captura"></select></div>
           <span class="capture-results-count" id="captureResultCount" hidden></span>
+          <select class="control hub-table-filter" id="visibilityFilter" aria-label="Visibilidade das ofertas"><option value="visible">Itens visíveis</option><option value="hidden">Itens ocultos</option><option value="all">Todos os itens</option></select>
           <div class="capture-toolbar">
             <details class="hub-column-picker" data-curation-columns>
               <summary class="btn">Colunas</summary>
@@ -37,7 +40,7 @@
             </details>
           </div>
         </div>
-        <div class="tablewrap"><table class="hub-curation-column-table"><thead><tr>
+        <div class="tablewrap"><table class="hub-curation-column-table hub-table-button-behavior"><thead><tr>
           <th><button class="sort-btn" data-sort="rank" type="button">Posição</button></th><th><button class="sort-btn" data-sort="offerName" type="button">Oferta</button></th><th><button class="sort-btn" data-sort="seller" type="button">Vendedor</button></th>
           <th><button class="sort-btn" data-sort="trends" type="button">Google Trends</button></th><th><button class="sort-btn" data-sort="glimpse" type="button">Glimpse</button></th><th><button class="sort-btn" data-sort="images" type="button">Imagens</button></th>
           <th><button class="sort-btn" data-sort="average" type="button">Avg $</button></th><th><button class="sort-btn" data-sort="initial" type="button">Initial $</button></th><th><button class="sort-btn" data-sort="future" type="button">PAG.</button></th>
@@ -77,7 +80,7 @@
   </dialog>
     </main>
   </div>
-  <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=26"></script>
-</body>
+  <script src="/sidebar-component.js?v=20261008-collapse-icon"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=29"></script>
+<script type="module" src="/curadoria/sheet-escape.mjs?v=1"></script></body>
 </html>

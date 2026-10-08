@@ -28,8 +28,8 @@ assert.equal(verdeHorarioHistoryHighlightClass({id:'item-acucar',type:'boolean'}
 const view=await readFile(new URL('../src/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const publishedView=await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
-assert.ok(view.includes("['time-input','hub-input-surface',extraClass].filter(Boolean).join(' ')"),'os campos de data do Meu Tempo devem aderir ao CSS global de inputs');
-assert.ok(publishedView.includes("['time-input','hub-input-surface',extraClass].filter(Boolean).join(' ')"),'o build deve publicar o padrão global nos campos de data do Meu Tempo');
+assert.ok(view.includes("['time-input','hub-inset-input',extraClass].filter(Boolean).join(' ')"),'os campos de data do Meu Tempo devem aderir ao CSS global de inputs com sombra interna');
+assert.ok(publishedView.includes("['time-input','hub-inset-input',extraClass].filter(Boolean).join(' ')"),'o build deve publicar o padrão global nos campos de data do Meu Tempo');
 assert.ok(view.includes('id="dayOutput" class="time-textarea time-output-textarea"'),'Output do dia precisa ter estilo de altura dedicado');
 assert.ok(css.includes('.time-output-textarea{min-height:105px}')&&css.includes('.time-textarea{width:100%;min-height:84px;resize:vertical}'),'Output do dia deve ficar 25% mais alto, sem alterar largura, outros campos nem redimensionamento manual');
 assert.ok(view.includes("alcoholDates.has(date)?'time-alcohol-day':''"),'cabeçalho do dia com bebida alcoólica não recebe indicação');

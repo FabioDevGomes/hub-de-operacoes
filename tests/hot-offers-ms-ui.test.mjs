@@ -95,8 +95,8 @@ test('Movimento usa o formato textual da Variação da Top Offers CB', () => {
   assert.match(css,/\.tablewrap td\.movement-down,\.tablewrap td\.movement-exited\{color:#ff9aaa\}/);
   assert.match(css,/#hotOffersMsRoot \.tablewrap th\[data-col="payment"\],#hotOffersMsRoot \.tablewrap td\[data-col="payment"\],#hotOffersMsRoot \.tablewrap th\[data-col="movement"\],#hotOffersMsRoot \.tablewrap td\[data-col="movement"\]\{text-align:center!important\}/,'cabeçalhos e células de Pagamento e Movimento ficam centralizados');
   assert.match(view,/if \(key === 'payment'\) return '<td data-col="payment">/,'identifica as células de Pagamento com a mesma chave do cabeçalho');
-  assert.match(html,/hot-offers-ms\.css\?v=20261006-center-payment-movement/,'o CSS atualizado não fica preso no cache anterior');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-movement-variation/,'a view atualizada não fica presa no cache anterior');
+  assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS atualizado não fica preso no cache anterior');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261007-glimpse-reference/,'a view atualizada não fica presa no cache anterior');
 });
 
 test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
@@ -110,10 +110,10 @@ test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantê
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
-  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261006-curation-decision-column/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261007-glimpse-borderless/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
-  assert.match(html,/hot-offers-ms\.css\?v=20261006-center-payment-movement/,'o CSS local invalida o cache para centralizar Pagamento e Movimento');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261006-movement-variation/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS local atualizado preserva a centralização de Pagamento e Movimento');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261007-glimpse-reference/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
   assert.match(sharedCurationCss,/button\.decision-badge\{border:0;font-weight:400;cursor:pointer\}/,'o padrão comum usa cápsula sem borda e texto regular');
   assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:var\(--curation-decision-launch-row\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
@@ -151,12 +151,23 @@ test('as abas compartilhadas seguem a ordem da E-commerce GM e preservam o Resum
   assert.ok(sharedCurationCss.includes('#offerSheet.sheet{padding:0}')&&sharedCurationCss.includes('#offerSheet .sheet-inner{width:100%;max-width:1280px;margin:0 auto;padding:24px}')&&sharedCurationCss.includes('#offerSheet .sheet-top h1{margin:5px 0 3px;font-size:1.2rem;line-height:normal}')&&sharedCurationCss.includes('#offerSheet .sheet-top .eyebrow{color:#42e7c0;font-size:.72rem;line-height:normal;letter-spacing:.14em;font-weight:400}'),'a Hot Offers MS deve usar a mesma largura e tipografia de cabeçalho da E-commerce GM');
 });
 
-test('Glimpse na Hot Offers MS acompanha o layout embutido da E-commerce GM', () => {
-  assert.match(html,/#offerSheet:has\(\[data-panel="glimpse"\]:not\(\.hidden\)\)\{padding:0\}/,'somente a aba Glimpse ocupa a mesma área da E-commerce GM');
-  assert.match(html,/#offerSheet:has\(\[data-panel="glimpse"\]:not\(\.hidden\)\) \.sheet-inner\{max-width:1280px;padding:24px\}/,'a largura e o recuo da aba Glimpse seguem a ficha da E-commerce GM');
-  assert.match(html,/#offerSheet \[data-panel="glimpse"\]>.card\{padding:0;margin:0;border:0;border-radius:0;background:transparent\}/,'o cartão extra não envolve visualmente a análise');
-  assert.match(html,/#offerSheet \[data-panel="glimpse"\]>.card>p:first-child\{display:none\}/,'o texto introdutório extra não aparece no painel');
-  assert.match(html,/data-panel="glimpse"[^>]*>[\s\S]*?iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'o Glimpse continua incorporado e mantém a mesma tela funcional');
+test('Glimpse na Hot Offers MS adota a referência compartilhada Top Offers CB', async () => {
+  const barCss = await readFile(new URL('../src/curadoria/analysis-sheet-bar.css',import.meta.url),'utf8');
+  const publishedBar = await readFile(new URL('../dist/curadoria/analysis-sheet-bar.css',import.meta.url),'utf8');
+  assert.equal(publishedBar,barCss);
+  assert.match(html,/glimpse\/glimpse-embed-host\.css\?v=1/);
+  assert.match(html,/analysis-sheet-bar\.css\?v=3/);
+  assert.match(html,/<section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame"/);
+  assert.doesNotMatch(html,/Glimpse usa o histórico compartilhado|data-panel="glimpse"><article/);
+  assert.ok(html.indexOf('<div class="sheet-tab-bar">') < html.indexOf('<header class="sheet-top">'),'barra antes do contexto');
+  assert.equal((html.match(/id="saveSheetButton"/g)||[]).length,1);
+  assert.equal((html.match(/id="closeSheet"/g)||[]).length,1);
+  assert.match(page,/actionButton:document\.querySelector\('#saveSheetButton'\),finishLabel:'Salvar',showSavedFeedback:true/);
+  assert.match(page,/embedded:'1',presentation:'reference'/);
+  assert.match(page,/hub-glimpse-save-result[\s\S]*?event\.data\.saved === true[\s\S]*?refresh\(\)\.catch/);
+  assert.match(view,/saveButton\.disabled = tab !== 'glimpse'/);
+  assert.match(view,/Use Salvar decisão no Resumo/,'preserva o salvamento específico do Resumo');
+  assert.match(barCss,/font-size:\.72rem;font-weight:400/);
 });
 
 test('Google Trends oferece link da oferta na MediaScalers usando somente Offer ID numérico', () => {
@@ -171,7 +182,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
   assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
   assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
-  assert.match(html,/trends-sheet\.css\?v=20261006-curation-decision-column/,'a ficha carrega a folha compartilhada com sombra de decisão');
+  assert.match(html,/trends-sheet\.css\?v=20261007-glimpse-borderless/,'a ficha carrega a folha compartilhada com sombra de decisão');
   assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
   assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
   assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');

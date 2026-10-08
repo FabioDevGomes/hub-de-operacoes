@@ -56,8 +56,8 @@
     .hub-sidebar-foot { margin-top: auto; border-top: 1px solid #24344d; padding: 10px 6px 0; color: #92a4bc; font-size: .7rem; line-height: 1.4; }
     .hub-sidebar-foot b { color: #4ed29a; }
     .hub-main { min-width: 0; min-height: 100vh; overflow: visible; }
-    .shell { width: min(1120px, calc(100% - 32px)); margin: 28px auto 56px; }
-    .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+    .shell { width: min(1120px, calc(100% - 32px)); margin: 14px auto 56px; }
+    .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { margin-bottom: 4px; font-size: clamp(.93rem, 1.8vw, 1.41rem); line-height: 1.2; font-weight: 700; letter-spacing: -.015em; }
     h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
@@ -66,11 +66,26 @@
     .local-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font-weight: 650; font-size: .88rem; white-space: nowrap; }
     .local-mark::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
     .steps { display: grid; gap: 14px; }
+    .steps > #d0-capture-history-panel { order: -2; }
     .steps > #d0-changes-panel { order: -1; }
     .panel { background: var(--surface); border: 0; border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
     .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
     section[aria-labelledby="step1-title"] > .panel-head, #d0-changes-panel > .panel-head, #d1-changes-panel > .panel-head { padding: 8px 16px; }
     #d0-changes-panel .panel-head h2, #d1-changes-panel .panel-head h2 { font-size: 1rem; }
+    #d0-capture-history-panel > .panel-head { padding: 8px 16px; }
+    #d0-capture-history-panel .panel-head h2 { font-size: 1rem; }
+    #d0-capture-history-panel > .panel-head { flex-wrap: wrap; }
+    .capture-history-heading { flex: 1 1 240px; min-width: 0; }
+    .capture-history-heading #capture-report-context { margin: 5px 0 0; font-size: .72rem; line-height: 1.4; }
+    .capture-period-indicators { display: grid; grid-template-columns: repeat(2, 116px); gap: 8px; margin-left: auto; flex: 0 0 auto; }
+    .capture-period-indicator { display: grid; align-content: center; gap: 3px; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 9px; background: var(--surface-soft); color: var(--muted); }
+    .capture-period-indicator strong { font-size: .78rem; line-height: 1.2; }
+    .capture-period-indicator small { font-size: .68rem; line-height: 1.2; }
+    .capture-period-indicator[data-state="captured"] { background: var(--green-soft); color: var(--green); }
+    @media (max-width: 480px) { .capture-period-indicators { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    #d0-capture-history-panel > .panel-body { padding: 12px 20px; }
+    #d0-capture-history-panel .d0-capture-tabs { margin-bottom: 0; padding-bottom: 0; }
+    #d0-capture-history-panel .d0-history-save-status { margin: 8px 0 0; }
     .apply-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; min-width: 0; }
     #d0-changes-panel #apply-manifest:not(.hub-panel-action), #d1-changes-panel #apply-manifest:not(.hub-panel-action) { padding: 6px 10px; font-size: .88rem; }
     .title-row { display: flex; align-items: center; gap: 12px; }
@@ -150,6 +165,7 @@
     .delta-table { min-width: 560px; }
     #d0-changes-panel .delta-table { min-width: 620px; }
     .delta-table td { vertical-align: middle; }
+    .delta-table th, .delta-table td { padding-block: 6px; }
     .delta-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .delta-value.positive { color: var(--green); }
     .delta-value.negative { color: var(--red); }
@@ -192,7 +208,7 @@
       .hub-sidebar-foot { margin-top: 18px; }
     }
     @media (max-width: 780px) {
-      .shell { width: min(100% - 20px, 1120px); margin-top: 18px; }
+      .shell { width: min(100% - 20px, 1120px); margin-top: 12px; }
       .topbar { display: block; }
       .local-mark { margin-top: 12px; }
       .capture-grid, .check-grid { grid-template-columns: 1fr; }
@@ -212,9 +228,9 @@
       .capture-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=12">
-  <link rel="stylesheet" href="/table-headers.css?v=5">
-</head>
+  <link rel="stylesheet" href="/sidebar-component.css?v=15">
+  <link rel="stylesheet" href="/table-headers.css?v=9">
+<link rel="stylesheet" href="/input-standard.css?v=1"></head>
 <body>
   <div class="hub-app">
     <aside class="hub-sidebar">
@@ -233,30 +249,34 @@
     </header>
 
     <div class="steps">
-      <section class="panel" aria-labelledby="step1-title">
+      <section class="panel" id="d0-capture-history-panel" aria-labelledby="d0-capture-history-title" hidden>
         <div class="panel-head">
-          <div class="title-row"><span class="step-number">1</span><h2 id="step1-title">Relatórios da MCC</h2></div>
-          <button class="button ghost hub-panel-action" id="clear-all" type="button">Limpar tudo</button>
+          <div class="capture-history-heading">
+            <div class="title-row"><h2 id="d0-capture-history-title">Capturas da MCC</h2></div>
+            <p class="auto-note" id="capture-report-context" role="status" aria-live="polite" hidden></p>
+          </div>
+          <div class="capture-period-indicators" id="capture-period-indicators" role="status" aria-live="polite" aria-label="Períodos registrados da captura">
+            <div class="capture-period-indicator" data-capture-period="d1" data-state="waiting"><strong>Dados D−1</strong><small>Aguardando</small></div>
+            <div class="capture-period-indicator" data-capture-period="d0" data-state="waiting"><strong>Dados D0</strong><small>Aguardando</small></div>
+          </div>
         </div>
         <div class="panel-body">
-          <div class="capture-grid">
-            <article class="capture-box" data-slot="d1">
-              <div class="capture-label"><div class="slot-title"><strong>Dados de D−1</strong><span class="slot-note">Opcional</span></div><span class="status-pill">Aguardando</span></div>
-              <div class="capture-summary" hidden>
-                <div class="capture-origin"><span class="capture-origin-mark" aria-hidden="true"></span><div class="capture-origin-copy"><strong></strong><span></span></div></div>
-                <div class="capture-divider"></div>
-                <div class="capture-meta" hidden></div>
-              </div>
-            </article>
+          <div class="d0-capture-tabs" id="d0-capture-tabs" role="tablist" aria-label="Capturas D0"></div>
+          <p class="d0-history-save-status" id="d0-history-save-status" role="status" aria-live="polite" hidden></p>
+        </div>
+      </section>
 
-            <article class="capture-box" data-slot="d0">
-              <div class="capture-label"><div class="slot-title"><strong>Dados de D0</strong><span class="slot-note">Opcional</span></div><span class="status-pill">Aguardando</span></div>
-              <div class="capture-summary" hidden>
-                <div class="capture-origin"><span class="capture-origin-mark" aria-hidden="true"></span><div class="capture-origin-copy"><strong></strong><span></span></div></div>
-                <div class="capture-divider"></div>
-                <div class="capture-meta" hidden></div>
-              </div>
-            </article>
+      <section class="panel" id="d0-changes-panel" aria-labelledby="d0-changes-title" hidden>
+        <div class="panel-head">
+          <div class="title-row"><h2 id="d0-changes-title">Alterações da captura D0</h2></div>
+        </div>
+        <div class="panel-body">
+          <div id="d0-capture-view" role="tabpanel" tabindex="0" aria-live="polite">
+            <div class="table-wrap"><table class="delta-table" aria-label="Diferenças da captura D0 selecionada">
+              <thead><tr><th>Campanha / produto</th><th>Situação</th><th class="numeric">Impressões</th><th class="numeric">Cliques</th><th class="numeric">Custo</th></tr></thead>
+              <tbody id="d0-changes-table"></tbody>
+            </table></div>
+            <p class="empty-copy" id="d0-changes-empty" hidden></p>
           </div>
         </div>
       </section>
@@ -279,19 +299,35 @@
         </div>
       </section>
 
-      <section class="panel" id="d0-changes-panel" aria-labelledby="d0-changes-title" hidden>
+      <section class="panel" aria-labelledby="step1-title">
         <div class="panel-head">
-          <div class="title-row"><h2 id="d0-changes-title">Alterações da captura D0</h2></div>
+          <div class="title-row"><span class="step-number">1</span><h2 id="step1-title">Relatórios da MCC</h2></div>
+          <button class="button ghost hub-panel-action" id="clear-all" type="button">Limpar tudo</button>
         </div>
         <div class="panel-body">
-          <div class="d0-capture-tabs" id="d0-capture-tabs" role="tablist" aria-label="Capturas D0"></div>
-          <p class="d0-history-save-status" id="d0-history-save-status" role="status" aria-live="polite" hidden></p>
-          <div id="d0-capture-view" role="tabpanel" tabindex="0" aria-live="polite">
-            <div class="table-wrap"><table class="delta-table" aria-label="Diferenças da captura D0 selecionada">
-              <thead><tr><th>Campanha / produto</th><th>Situação</th><th class="numeric">Impressões</th><th class="numeric">Cliques</th><th class="numeric">Custo</th></tr></thead>
-              <tbody id="d0-changes-table"></tbody>
-            </table></div>
-            <p class="empty-copy" id="d0-changes-empty" hidden></p>
+          <div class="apply-actions">
+            <button class="button ghost" id="show-current-reports" type="button" hidden>Ver captura atual</button>
+            <button class="button ghost" id="d1-only" type="button" disabled>Usar apenas D−1</button>
+            <span class="auto-note" id="capture-mode-status" role="status" aria-live="polite"></span>
+          </div>
+          <div class="capture-grid">
+            <article class="capture-box" data-slot="d1">
+              <div class="capture-label"><div class="slot-title"><strong>Dados de D−1</strong><span class="slot-note">Opcional</span></div><span class="status-pill">Aguardando</span></div>
+              <div class="capture-summary" hidden>
+                <div class="capture-origin"><span class="capture-origin-mark" aria-hidden="true"></span><div class="capture-origin-copy"><strong></strong><span></span></div></div>
+                <div class="capture-divider"></div>
+                <div class="capture-meta" hidden></div>
+              </div>
+            </article>
+
+            <article class="capture-box" data-slot="d0">
+              <div class="capture-label"><div class="slot-title"><strong>Dados de D0</strong><span class="slot-note">Opcional</span></div><span class="status-pill">Aguardando</span></div>
+              <div class="capture-summary" hidden>
+                <div class="capture-origin"><span class="capture-origin-mark" aria-hidden="true"></span><div class="capture-origin-copy"><strong></strong><span></span></div></div>
+                <div class="capture-divider"></div>
+                <div class="capture-meta" hidden></div>
+              </div>
+            </article>
           </div>
         </div>
       </section>
@@ -342,8 +378,10 @@
     </div>
   </div>
 
-  <script src="/sidebar-component.js?v=20261006-tested-direct"></script>
-  <script src="/database.js?v=4"></script>
+  <script src="/sidebar-component.js?v=20261008-collapse-icon"></script>
+  <script src="/database.js?v=5"></script>
+  <script src="/overview-domain.js?v=18"></script>
+  <script src="/overview/cards-domain.js?v=1"></script>
   <script src="/storage/hub-database.js?v=1"></script>
   <script>
   (() => {
@@ -375,6 +413,8 @@
     Object.entries(FIELD_ALIASES).forEach(([key, aliases]) => aliases.forEach(alias => ALIAS_LOOKUP.set(alias, key)));
     const PT_MONTHS = { janeiro:1, jan:1, fevereiro:2, fev:2, marco:3, mar:3, abril:4, abr:4, maio:5, mai:5, junho:6, jun:6, julho:7, jul:7, agosto:8, ago:8, setembro:9, set:9, outubro:10, out:10, novembro:11, nov:11, dezembro:12, dez:12 };
     const slots = { d1: null, d0: null };
+    // Captura excluída apenas da prévia; base e histórico D0 permanecem intactos.
+    let excludedD0 = null;
     let currentManifest = null;
     let currentResult = null;
     let numberingIssues = [];
@@ -392,12 +432,56 @@
     const D0_CAPTURE_HISTORY_KEY = 'painel-preparador-mcc-capturas-d0-v1';
     const D0_PAUSED_CAMPAIGN_HISTORY_KEY = 'painel-preparador-mcc-pausas-d0-v1';
     const D0_CAPTURE_HISTORY_LIMIT = 7;
+    let browsingCaptureReports = false;
 
     const q = selector => document.querySelector(selector);
     const qa = selector => [...document.querySelectorAll(selector)];
     const escapeText = value => String(value ?? '');
     const panelValue = field => field?.valor ?? null;
     const panelIsoToSerial = iso => iso ? Date.parse(`${iso}T00:00:00Z`) / 86400000 + 25569 : null;
+
+    function captureReportSummary(source, capturedAt=null) {
+      if (!source || source.error || !Array.isArray(source.records)) return null;
+      return {
+        capturedAt:Number.isFinite(Date.parse(capturedAt)) ? new Date(capturedAt).toISOString() : null,
+        managerAccountId:source.managerAccountId || null, managerAccountName:source.managerAccountName || null,
+        dates:source.dates || [], campaignCount:source.records.length,
+        currencies:[...new Set(source.records.map(record => record.moeda).filter(Boolean))]
+      };
+    }
+
+    function normalizeCapturedReports(value, entry) {
+      // Metadados opcionais: registros antigos não comprovam ausência de D−1.
+      if (!value || !value.d0 || !Object.hasOwn(value,'d1')) return null;
+      const normalize = report => {
+        if (!report || !Array.isArray(report.dates) || report.dates.length !== 1 || !/^20\d{2}-\d{2}-\d{2}$/.test(report.dates[0])) return null;
+        const date = report.dates[0];
+        if (!Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date) return null;
+        if (!/^\d{3}-\d{3}-\d{4}$/.test(String(report.managerAccountId || '')) || !/^MCC(?:\s+.+)?$/i.test(String(report.managerAccountName || '').trim())) return null;
+        if (!Number.isInteger(report.campaignCount) || report.campaignCount < 0) return null;
+        return { capturedAt:Number.isFinite(Date.parse(report.capturedAt)) ? new Date(report.capturedAt).toISOString() : null,
+          managerAccountId:report.managerAccountId, managerAccountName:report.managerAccountName.trim().slice(0,100),
+          dates:[date], campaignCount:report.campaignCount,
+          currencies:[...new Set((Array.isArray(report.currencies) ? report.currencies : []).filter(item => typeof item === 'string' && /^[A-Z]{3}$/.test(item)))].slice(0,10) };
+      };
+      const d0 = normalize(value.d0), d1 = value.d1 === null ? null : normalize(value.d1);
+      if (!d0 || (value.d1 !== null && !d1) || d0.managerAccountId !== entry.managerAccountId || d0.dates[0] !== entry.reportDate) return null;
+      if (d1 && (d1.managerAccountId !== d0.managerAccountId || Date.parse(d0.dates[0]) - Date.parse(d1.dates[0]) !== 86400000)) return null;
+      return {d0,d1};
+    }
+
+    function capturedReportsForD0(source, timestamp) {
+      const d1 = slots.d1 && !slots.d1.error && !reportDatePairIssue(slots.d1, source) ? slots.d1 : null;
+      return {d0:captureReportSummary(source, timestamp), d1:captureReportSummary(d1, d1?.receivedAt)};
+    }
+
+    function refreshCurrentCaptureReports() {
+      const source = slots.d0;
+      const entry = source?.captureHistory && d0CaptureHistory.find(item => item.id === source.captureHistory.id);
+      if (!entry || !slots.d1 || slots.d1.error || reportDatePairIssue(slots.d1, source)) return;
+      source.captureHistory = {...entry, reports:capturedReportsForD0(source, entry.capturedAt)};
+      saveD0CaptureEntry(source.captureHistory);
+    }
 
     function normalizeD0CaptureHistory(value) {
       if (!Array.isArray(value)) return [];
@@ -407,6 +491,7 @@
           id:item.id.slice(0, 100), capturedAt:new Date(item.capturedAt).toISOString(),
           ...(/^\d{3}-\d{3}-\d{4}$/.test(String(item.managerAccountId || '')) && /^MCC(?:\s+.+)?$/i.test(String(item.managerAccountName || '').trim()) ? { managerAccountId:String(item.managerAccountId), managerAccountName:String(item.managerAccountName).trim().slice(0, 100) } : {}),
           reportDate:/^20\d{2}-\d{2}-\d{2}$/.test(item.reportDate || '') ? item.reportDate : null,
+          ...(normalizeCapturedReports(item.reports, item) ? {reports:normalizeCapturedReports(item.reports, item)} : {}),
           state:['pending','calculated','unavailable'].includes(item.state) ? item.state : 'unavailable',
           comparableDate:Boolean(item.comparableDate),
           rows:(Array.isArray(item.rows) ? item.rows : []).slice(0, 5000).filter(row => row && typeof row.campaign === 'string')
@@ -479,7 +564,7 @@
     function formatD0CaptureTabLabel(capturedAt) {
       const date = new Date(capturedAt);
       if (!Number.isFinite(date.getTime())) return 'Horário indisponível';
-      const parts = Object.fromEntries(new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).formatToParts(date).map(part => [part.type,part.value]));
+      const parts = Object.fromEntries(captureFormatter('tab').formatToParts(date).map(part => [part.type,part.value]));
       return `${parts.day}/${parts.month} · ${parts.hour}:${parts.minute}`;
     }
 
@@ -734,6 +819,7 @@
         delete base.produtos_aliases;
         // The shared importer preserves the latest captures of other MCC accounts.
         base.atualizado_em = new Date().toISOString();
+        base.overview_cards = window.OverviewCardsDomain.create(base, { computedAt:base.atualizado_em });
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
@@ -1193,12 +1279,13 @@
     }
 
     function renderSlot(slot) {
-      const box = q(`[data-slot="${slot}"]`), data = slots[slot], pill = box.querySelector('.status-pill'), summary = box.querySelector('.capture-summary'), originMark = box.querySelector('.capture-origin-mark'), originTitle = box.querySelector('.capture-origin-copy strong'), originDetail = box.querySelector('.capture-origin-copy span'), divider = box.querySelector('.capture-divider'), meta = box.querySelector('.capture-meta');
+      const box = q(`[data-slot="${slot}"]`), data = slots[slot] || (slot === 'd0' ? excludedD0 : null), pill = box.querySelector('.status-pill'), summary = box.querySelector('.capture-summary'), originMark = box.querySelector('.capture-origin-mark'), originTitle = box.querySelector('.capture-origin-copy strong'), originDetail = box.querySelector('.capture-origin-copy span'), divider = box.querySelector('.capture-divider'), meta = box.querySelector('.capture-meta');
       box.classList.toggle('loaded', Boolean(data && !data.error)); box.classList.toggle('error', Boolean(data?.error));
       if (!data) { pill.textContent = 'Aguardando'; summary.hidden = true; meta.hidden = true; return; }
       summary.hidden = false;
       if (data.error) { pill.textContent = 'Erro'; meta.hidden = false; originMark.textContent = '!'; originTitle.textContent = 'Não foi possível validar os dados'; originDetail.textContent = 'Revise a entrada e tente novamente'; divider.hidden = true; meta.replaceChildren(metaLine('Problema', data.error)); return; }
       pill.textContent = 'Recebida';
+      if (slot === 'd0' && !slots.d0 && excludedD0) pill.textContent = 'Fora da prévia';
       originMark.textContent = 'MCC';
       originTitle.textContent = 'Captura recebida';
       originDetail.textContent = 'Grade da MCC · extensão';
@@ -1212,6 +1299,61 @@
     }
 
     function metaLine(label, value) { const row = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = label; b.textContent = String(value); row.append(a,b); return row; }
+
+    function renderHistoricalReport(slot, report, entry, known) {
+      const box = q(`[data-slot="${slot}"]`), pill = box.querySelector('.status-pill'), summary = box.querySelector('.capture-summary'), meta = box.querySelector('.capture-meta');
+      const captured = Boolean(report) || slot === 'd0';
+      box.classList.toggle('loaded',captured); box.classList.toggle('error',false);
+      pill.textContent = captured ? 'Capturada' : known ? 'Não capturado' : 'Não registrado';
+      summary.hidden = false;
+      box.querySelector('.capture-origin-mark').textContent = captured ? 'MCC' : '—';
+      box.querySelector('.capture-origin-copy strong').textContent = captured ? 'Captura do histórico' : known ? 'Não recebido nesta captura' : 'Histórico anterior sem esse registro';
+      const captureTime = report ? report.capturedAt : slot === 'd0' ? entry.capturedAt : null;
+      box.querySelector('.capture-origin-copy span').textContent = captured ? captureTime ? `Capturada em ${formatD0CaptureFullTime(captureTime)} · Brasília` : 'Horário da captura não registrado.' : known ? 'Este período não acompanhou o D0 selecionado.' : 'Não é possível confirmar se D−1 foi recebido junto.';
+      box.querySelector('.capture-divider').hidden = !captured; meta.hidden = !captured;
+      meta.replaceChildren();
+      if (!captured) return;
+      const managerId = report?.managerAccountId || entry.managerAccountId, managerName = report?.managerAccountName || entry.managerAccountName;
+      const dates = report?.dates || (entry.reportDate ? [entry.reportDate] : []);
+      const count = report?.campaignCount;
+      meta.append(metaLine('MCC',managerId && managerName ? `${managerName} · ${managerId}` : 'Não identificada'),
+        metaLine('Campanhas válidas',Number.isInteger(count) ? `${count} ${count === 1 ? 'campanha' : 'campanhas'}` : 'Não registrado'),
+        metaLine('Data detectada',dates.map(date => `${date.slice(8,10)}/${date.slice(5,7)}/${date.slice(0,4)}`).join(', ') || 'Não registrada'),
+        metaLine('Moedas',report?.currencies?.join(' · ') || 'Não registradas'));
+    }
+
+    function renderCapturePeriodIndicators(entry) {
+      const reports = entry ? normalizeCapturedReports(entry.reports,entry) : null;
+      const context = entry ? `Histórico selecionado · ${entry.managerAccountName || 'MCC não identificada'} · ${formatD0CaptureFullTime(entry.capturedAt)}` : 'Captura atual da sessão';
+      q('#capture-period-indicators').setAttribute('aria-label',`Períodos registrados · ${context}. Capturado não significa aplicado à base.`);
+      for (const slot of ['d1','d0']) {
+        const source = !entry ? slots[slot] || (slot === 'd0' ? excludedD0 : null) : null;
+        const captured = entry ? slot === 'd0' || Boolean(reports?.[slot]) : Boolean(source && !source.error);
+        const unknown = Boolean(entry && slot === 'd1' && !reports);
+        const excluded = Boolean(!entry && slot === 'd0' && !slots.d0 && excludedD0 && !excludedD0.error);
+        const status = captured ? excluded ? '✓ Fora da prévia' : '✓ Capturado' : unknown ? 'Não registrado' : source?.error ? 'Erro na captura' : entry ? 'Não capturado' : 'Aguardando';
+        const indicator = q(`[data-capture-period="${slot}"]`), period = slot === 'd1' ? 'D−1' : 'D0';
+        indicator.setAttribute('data-state',captured ? 'captured' : unknown ? 'unknown' : source?.error ? 'error' : entry ? 'missing' : 'waiting');
+        indicator.querySelector('small').textContent = status;
+        indicator.setAttribute('aria-label',`Dados ${period}: ${status.replace('✓ ','')} · ${context}`);
+        indicator.title = unknown ? 'Este histórico antigo não registra se D−1 foi capturado junto. Não é possível confirmar presença ou ausência.' : excluded ? 'D0 foi capturado, mas está preservado fora da prévia atual e não será aplicado.' : `${context} · Dados ${period}: ${status.replace('✓ ','')}. Capturado não significa aplicado à base.`;
+      }
+    }
+
+    function renderSelectedCaptureReports(entry) {
+      const historical = Boolean(entry && (browsingCaptureReports || (!slots.d0 && !slots.d1)));
+      renderCapturePeriodIndicators(historical ? entry : null);
+      q('#d0-capture-history-panel').hidden = !entry && !d0CaptureHistory.length && !slots.d0 && !slots.d1 && !excludedD0 && q('#d0-history-save-status').hidden;
+      q('#show-current-reports').hidden = !historical || (!slots.d0 && !slots.d1);
+      q('#d1-only').hidden = historical;
+      q('#capture-mode-status').hidden = historical;
+      const label = q('#capture-report-context'); label.hidden = !historical;
+      if (!historical) { renderSlot('d1'); renderSlot('d0'); return; }
+      const reports = normalizeCapturedReports(entry.reports,entry);
+      label.textContent = `Histórico · ${entry.managerAccountName || 'MCC não identificada'} · ${formatD0CaptureFullTime(entry.capturedAt)} · ${reports ? reports.d1 ? 'D0 e D−1 capturados' : 'Somente D0 capturado' : 'D0 capturado; D−1 não registrado no histórico anterior'}`;
+      renderHistoricalReport('d0',reports?.d0,entry,Boolean(reports));
+      renderHistoricalReport('d1',reports?.d1,entry,Boolean(reports));
+    }
     function setPanel(id, enabled) { q(id).classList.toggle('pending', !enabled); }
 
     function renderCheck(container, status, title, detail) {
@@ -1384,22 +1526,37 @@
       return { date, comparableDate, rows };
     }
 
+    function captureFormatter(kind, currency=null) {
+      // Cache local e limitado: apenas formatadores, nunca dados de campanhas/base.
+      const cache = captureFormatter.cache ||= new Map(), key = kind === 'currency' ? `${kind}:${currency}` : kind;
+      if (cache.has(key)) return cache.get(key);
+      let formatter;
+      if (kind === 'tab') formatter = new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+      else if (kind === 'full') formatter = new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short' });
+      else if (kind === 'currency') formatter = new Intl.NumberFormat('pt-BR', { style:'currency', currency, signDisplay:'never' });
+      else if (kind === 'decimal') formatter = new Intl.NumberFormat('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+      else formatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:0 });
+      if (cache.size >= 16) cache.delete(cache.keys().next().value);
+      cache.set(key,formatter);
+      return formatter;
+    }
+
     function formatD0DeltaValue(value, kind, currency) {
       if (value == null) return '—';
       const sign = value > 0 ? '+' : value < 0 ? '−' : '';
       const absolute = Math.abs(value);
       if (kind === 'cost') {
         if (/^[A-Z]{3}$/.test(currency || '')) {
-          try { return `${sign}${new Intl.NumberFormat('pt-BR', { style:'currency', currency, signDisplay:'never' }).format(absolute)}`; } catch { /* exibe o código desconhecido abaixo */ }
+          try { return `${sign}${captureFormatter('currency',currency).format(absolute)}`; } catch { /* exibe o código desconhecido abaixo */ }
         }
-        return `${sign}${currency ? `${currency} ` : ''}${new Intl.NumberFormat('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }).format(absolute)}`;
+        return `${sign}${currency ? `${currency} ` : ''}${captureFormatter('decimal').format(absolute)}`;
       }
-      return `${sign}${new Intl.NumberFormat('pt-BR', { maximumFractionDigits:0 }).format(absolute)}`;
+      return `${sign}${captureFormatter('count').format(absolute)}`;
     }
 
     function formatD0CaptureFullTime(capturedAt) {
       const date = new Date(capturedAt);
-      return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short' }).format(date) : 'horário indisponível';
+      return Number.isFinite(date.getTime()) ? captureFormatter('full').format(date) : 'horário indisponível';
     }
 
     function updateD0ApplyAvailability() {
@@ -1407,7 +1564,7 @@
       const mode = currentResult?.manifest?.validacao_manifesto?.modo_entrada;
       const viewingCurrentD0 = Boolean(slots.d0 && !slots.d0.error && selectedEntry?.state === 'calculated' && slots.d0.captureHistory?.id && selectedD0CaptureId === slots.d0.captureHistory.id);
       const validD1Only = Boolean(mode === 'D_menos_1_somente' && slots.d1 && !slots.d1.error);
-      q('#apply-manifest').disabled = !numberingValidationReady || !(viewingCurrentD0 || validD1Only) || numberingIssues.length > 0 || Boolean(currentResult?.critical?.length);
+      q('#apply-manifest').disabled = browsingCaptureReports || !numberingValidationReady || !(viewingCurrentD0 || validD1Only) || numberingIssues.length > 0 || Boolean(currentResult?.critical?.length);
     }
 
     function placeApplyActions(hasD0) {
@@ -1460,7 +1617,9 @@
     }
 
     function renderD0CaptureHistory() {
-      const panel = q('#d0-changes-panel'), tabs = q('#d0-capture-tabs'), entries = normalizeD0CaptureHistory(d0CaptureHistory).reverse();
+      // O estado já foi normalizado na leitura/salvamento. Copie apenas a lista,
+      // sem revalidar/clonar as linhas de todas as capturas a cada seleção.
+      const panel = q('#d0-changes-panel'), historyPanel = q('#d0-capture-history-panel'), tabs = q('#d0-capture-tabs'), entries = [...d0CaptureHistory].reverse();
       tabs.replaceChildren();
       const saveWarnings = [
         d0CaptureDeleteSaveFailed ? 'Não foi possível apagar esta captura; o histórico salvo foi mantido.' : '',
@@ -1469,7 +1628,8 @@
       ].filter(Boolean);
       q('#d0-history-save-status').textContent = saveWarnings.join(' ');
       q('#d0-history-save-status').hidden = saveWarnings.length === 0;
-      if (!entries.length) { panel.hidden = true; updateD0ApplyAvailability(); return; }
+      historyPanel.hidden = !entries.length && !saveWarnings.length && !slots.d0 && !slots.d1 && !excludedD0;
+      if (!entries.length) { panel.hidden = true; browsingCaptureReports = false; renderSelectedCaptureReports(null); updateD0ApplyAvailability(); return; }
       if (!entries.some(entry => entry.id === selectedD0CaptureId)) selectedD0CaptureId = entries[0].id;
       const groups = new Map();
       entries.forEach(entry => {
@@ -1494,12 +1654,12 @@
         removeButton.type = 'button'; removeButton.className = 'd0-capture-delete'; removeButton.setAttribute('aria-label',`Apagar do histórico a captura D0 de ${formatD0CaptureFullTime(entry.capturedAt)} · ${managerLabel}`); removeButton.title = 'Apagar esta captura do histórico'; removeButton.textContent = '×';
         removeButton.addEventListener('click',() => deleteD0CaptureEntry(entry.id));
         item.append(button,removeButton);
-        button.addEventListener('click',() => { selectedD0CaptureId = entry.id; renderD0CaptureHistory(); });
+        button.addEventListener('click',() => { selectedD0CaptureId = entry.id; browsingCaptureReports = entry.id !== slots.d0?.captureHistory?.id; renderD0CaptureHistory(); });
         button.addEventListener('keydown',event => {
           const current = entries.findIndex(item => item.id === entry.id);
           const next = event.key === 'ArrowRight' ? Math.min(entries.length - 1,current + 1) : event.key === 'ArrowLeft' ? Math.max(0,current - 1) : event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1 : current;
           if (next === current) return;
-          event.preventDefault(); selectedD0CaptureId = entries[next].id; renderD0CaptureHistory(); q(`#d0-capture-tab-${next}`).focus();
+          event.preventDefault(); selectedD0CaptureId = entries[next].id; browsingCaptureReports = entries[next].id !== slots.d0?.captureHistory?.id; renderD0CaptureHistory(); q(`#d0-capture-tab-${next}`).focus();
         });
         items.set(entry.id,item);
       });
@@ -1514,6 +1674,7 @@
       const activeIndex = entries.findIndex(entry => entry.id === selectedD0CaptureId), activeEntry = entries[activeIndex];
       q('#d0-capture-view').setAttribute('aria-labelledby',`d0-capture-tab-${activeIndex}`);
       renderD0CaptureEntry(activeEntry);
+      renderSelectedCaptureReports(activeEntry);
       panel.hidden = false;
       updateD0ApplyAvailability();
     }
@@ -1524,7 +1685,7 @@
       const managerLabel = entry.managerAccountId ? `${entry.managerAccountName} · ${entry.managerAccountId}` : 'MCC não identificada';
       const captureLabel = `${managerLabel} · ${formatD0CaptureFullTime(entry.capturedAt)}`;
       if (!confirm(`Apagar somente este registro do histórico local de capturas D0?\n\n${captureLabel}\n\nA base de campanhas não será alterada.`)) return;
-      const visibleEntries = normalizeD0CaptureHistory(d0CaptureHistory).reverse();
+      const visibleEntries = [...d0CaptureHistory].reverse();
       const removedIndex = visibleEntries.findIndex(item => item.id === id);
       const nextHistory = removeD0CaptureHistoryEntry(d0CaptureHistory,id);
       if (!writeD0CaptureHistory(window.localStorage,nextHistory)) {
@@ -1535,7 +1696,7 @@
       d0CaptureDeleteSaveFailed = false;
       d0CaptureHistorySaveFailed = false;
       d0CaptureHistory = nextHistory;
-      const nextVisibleEntries = normalizeD0CaptureHistory(d0CaptureHistory).reverse();
+      const nextVisibleEntries = [...d0CaptureHistory].reverse();
       const focusIndex = Math.min(Math.max(removedIndex,0),nextVisibleEntries.length - 1);
       if (selectedD0CaptureId === id) selectedD0CaptureId = nextVisibleEntries[focusIndex]?.id || null;
       renderD0CaptureHistory();
@@ -1557,7 +1718,7 @@
       const id = `d0-${Date.parse(timestamp)}${fingerprint ? `-${fingerprint}` : ''}`;
       const managerAccountId = /^\d{3}-\d{3}-\d{4}$/.test(String(source?.managerAccountId || '')) ? String(source.managerAccountId) : null;
       const managerAccountName = managerAccountId && /^MCC(?:\s+.+)?$/i.test(String(source?.managerAccountName || '').trim()) ? String(source.managerAccountName).trim() : null;
-      return { id, capturedAt:timestamp, ...(managerAccountName ? { managerAccountId, managerAccountName } : {}), reportDate:source?.dates?.length === 1 ? source.dates[0] : null, state:'pending', comparableDate:false, rows:[] };
+      return { id, capturedAt:timestamp, ...(managerAccountName ? { managerAccountId, managerAccountName } : {}), reportDate:source?.dates?.length === 1 ? source.dates[0] : null, reports:capturedReportsForD0(source,timestamp), state:'pending', comparableDate:false, rows:[] };
     }
 
     function renderD0DeltaPanel(manifest, base, dateChanges=[], captureEntry=slots.d0?.captureHistory) {
@@ -1782,6 +1943,8 @@
     }
 
     function installParsedSource(slot, source, { capturedAt=null }={}) {
+      browsingCaptureReports = false;
+      source.receivedAt = Number.isFinite(Date.parse(capturedAt)) ? new Date(capturedAt).toISOString() : new Date().toISOString();
       const other = slot === 'd0' ? 'd1' : 'd0';
       if (sourcesHaveDisjointAccounts(source, slots[other])) {
         slots[other] = null;
@@ -1789,14 +1952,51 @@
         if (other === 'd1') clearD1DeltaPanel();
       }
       if (slot === 'd0') {
+        excludedD0 = null;
         source.captureHistory = newD0CaptureEntry(source,capturedAt);
         saveD0CaptureEntry(source.captureHistory);
       }
       slots[slot] = source;
+      if (slot === 'd1') refreshCurrentCaptureReports();
       previewSort = { key:null, direction:null };
-      renderSlot(slot);
+      renderSelectedCaptureReports(null);
+      renderCaptureMode();
       attemptBuild();
     }
+
+    function renderCaptureMode(message=null) {
+      if (!browsingCaptureReports && (slots.d0 || slots.d1 || excludedD0)) renderCapturePeriodIndicators(null);
+      const button = q('#d1-only');
+      button.disabled = !slots.d1 || Boolean(slots.d1.error) || (!slots.d0 && !excludedD0);
+      button.textContent = excludedD0 ? 'Incluir D0 na prévia' : 'Usar apenas D−1';
+      q('#capture-mode-status').textContent = message || (excludedD0
+        ? `Prévia somente D−1. D0 (${excludedD0.dates?.join(', ') || 'data indisponível'}) preservado fora da prévia; não será aplicado.`
+        : slots.d1 && !slots.d0 ? 'Prévia somente D−1; D0 não fornecido.' : '');
+    }
+
+    function useD1Only() {
+      if (slots.d0) { excludedD0 = slots.d0; slots.d0 = null; }
+      previewRole = 'd1';
+      renderSlot('d0');
+      renderCaptureMode();
+    }
+
+    q('#d1-only').addEventListener('click', () => {
+      if (!slots.d1 || slots.d1.error) return;
+      if (excludedD0) {
+        const issue = excludedD0.error || reportDatePairIssue(slots.d1, excludedD0);
+        if (issue) { renderCaptureMode(`${issue} A prévia continua somente D−1. Capture um D0 compatível para combinar.`); return; }
+        slots.d0 = excludedD0; excludedD0 = null;
+        renderSlot('d0'); renderCaptureMode();
+      } else useD1Only();
+      attemptBuild();
+    });
+
+    q('#show-current-reports').addEventListener('click', () => {
+      browsingCaptureReports = false;
+      if (slots.d0?.captureHistory) selectedD0CaptureId = slots.d0.captureHistory.id;
+      renderD0CaptureHistory(); renderSelectedCaptureReports(null); renderCaptureMode(); updateD0ApplyAvailability();
+    });
 
     qa('.source-tab').forEach(button => button.addEventListener('click', () => {
       const role = button.dataset.previewRole;
@@ -1813,7 +2013,7 @@
       if (currentResult?.manifest) renderPreviewTable(currentResult.manifest, previewRole);
     }));
 
-    q('#clear-all').addEventListener('click', () => { slots.d1=null; slots.d0=null; renderSlot('d1'); renderSlot('d0'); resetResults(); });
+    q('#clear-all').addEventListener('click', () => { slots.d1=null; slots.d0=null; excludedD0=null; renderSelectedCaptureReports(null); renderCaptureMode(); resetResults(); });
     window.__hubReceiveMccD0Grid = async capture => {
       const decoded = await decodeMccGridCapture(capture);
       const parsed = parseSource(decoded, 'd0');
@@ -1833,8 +2033,10 @@
       if (descriptor.colunas_obrigatorias_ausentes.length) throw new Error(`Campos obrigatórios não chegaram ao Preparador: ${descriptor.colunas_obrigatorias_ausentes.join(', ')}.`);
       if (parsed.dates.length !== 1 || parsed.dates[0] !== capture.reportDate) throw new Error('A data D−1 do controle MCC não corresponde à data explícita instalada no Preparador.');
       if (Object.keys(parsed.duplicateNames).length || parsed.records.length !== capture.campaignCount) throw new Error('O Preparador detectou duplicidade ou diferença na quantidade de campanhas recebidas.');
-      if (slots.d0 && !slots.d0.error && !sourcesHaveDisjointAccounts(parsed, slots.d0)) { const datePairIssue = reportDatePairIssue(parsed, slots.d0); if (datePairIssue) throw new Error(datePairIssue); }
-      installParsedSource('d1', parsed);
+      // D−1 validado pode ser usado sozinho, mesmo com D0 antigo nesta sessão.
+      // Exclui da combinação sem apagar a captura, o histórico ou a base.
+      if (slots.d0 && (slots.d0.error || reportDatePairIssue(parsed, slots.d0))) useD1Only();
+      installParsedSource('d1', parsed, { capturedAt:capture.capturedAt });
       if (slots.d0 && !currentResult?.manifest) throw new Error('O Preparador recebeu D−1, mas não conseguiu montar a prévia combinada.');
       if (!currentResult?.manifest) throw new Error('O Preparador recebeu os dados, mas não conseguiu montar a prévia D−1.');
       renderPreviewTable(currentResult.manifest, previewRole);

@@ -12,7 +12,7 @@ test('Lista de Gerente GM usa o nome do menu e o padrão compartilhado de Oculta
   assert.match(source,/<title>Lista de Gerente GM<\/title>/);
   assert.match(source,/<h1>Lista de Gerente GM<\/h1>/);
   assert.match(source,/table-edit-actions\.css\?v=3/);
-  assert.match(source,/table-headers\.css\?v=5/);
+  assert.match(source,/table-headers\.css\?v=9/);
   assert.match(source,/class="product-cell hub-edit-host" data-col="product"/);
   assert.match(source,/class="item-visibility hub-corner-edit \$\{hidden\?'restore':''\}"/);
   assert.match(source,/\.product-cell\.hub-edit-host\{padding-right:54px\}/);

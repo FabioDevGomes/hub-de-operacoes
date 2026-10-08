@@ -1,0 +1,11 @@
+/* Padrão documentado: referência Top Offers CB, abas e ações antes do contexto.
+   O Salvar reutiliza white-button.css (variante azul), sem alterar handlers. */
+#offerSheet .sheet-tab-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:0 0 14px;padding:5px;background:#0a1627;border:0;border-radius:11px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+#offerSheet .sheet-tab-bar .tabs{position:static;display:flex;flex:1 1 auto;gap:5px;align-items:center;flex-wrap:nowrap;min-width:0;width:auto;max-width:100%;margin:0;padding:0;overflow-x:auto;background:transparent;border:0;border-radius:8px;scrollbar-width:thin}
+#offerSheet .sheet-tab-bar .tabs .btn{flex:0 0 auto;width:auto;min-width:0;min-height:34px;padding:8px 12px;font-size:.82rem;font-weight:750;white-space:nowrap}
+#offerSheet .sheet-tab-bar .tabs .btn:focus-visible,#offerSheet .sheet-bar-actions .btn:focus-visible{outline:2px solid rgba(101,169,255,.7);outline-offset:2px}
+#offerSheet .sheet-bar-actions{display:flex;flex:0 0 auto;align-items:center;gap:6px}
+#offerSheet .sheet-bar-actions .btn{min-height:34px;padding:7px 11px;font-size:1rem;line-height:normal;white-space:nowrap}
+#offerSheet .glimpse-host-saved{color:#83e5bb;font-size:.72rem;font-weight:400;white-space:nowrap}
+#offerSheet .glimpse-host-saved[hidden]{display:none!important}
+@media(max-width:760px){#offerSheet .sheet-tab-bar{align-items:stretch;flex-wrap:wrap}#offerSheet .sheet-tab-bar .tabs{flex:1 1 100%;width:100%}#offerSheet .sheet-bar-actions{width:100%;justify-content:flex-end}}

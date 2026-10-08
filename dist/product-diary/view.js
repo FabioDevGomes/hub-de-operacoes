@@ -1,9 +1,53 @@
 (function(global){
-  function mount({root,getSnapshot,domain,format,actions}){
+  function mount({root,getSnapshot,domain,format,actions,preferences,loadColumnPicker=()=>import('../table-columns.mjs?v=1')}){
     const $=selector=>root.querySelector(selector);
     const {esc,num:fmtNum,money:fmtMoney,pct:fmtPct}=format;
-    const {productColumns,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,excelDate}=domain;
+    const {productColumns,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productDiaryTableTotals,excelDate}=domain;
     let selection=null,editing=null;
+    const tableWrap=$('#productTableWrap');
+    let layoutFrame=null,disposed=false;
+    const columnPicker=$('#productColumnPicker'),diaryTable=tableWrap?.querySelector('.product-table');
+    let columnController=null,columnLoading=null;
+    function syncColumnLayout(){
+      const empty=$('#productBody td.empty');
+      if(empty&&diaryTable?.tHead)empty.colSpan=[...diaryTable.tHead.rows[0].cells].filter(cell=>!cell.hidden).length;
+      scheduleTableHeight();
+    }
+    function applyColumns(){columnController?.apply();syncColumnLayout()}
+    function ensureColumnPicker(){
+      if(columnController){applyColumns();return}
+      if(columnLoading||!columnPicker?.ownerDocument||!diaryTable)return;
+      columnLoading=Promise.resolve().then(loadColumnPicker).then(({mountColumnPicker})=>{
+        if(disposed)return;
+        columnController=mountColumnPicker({picker:columnPicker,table:diaryTable,columns:productColumns,required:['A'],preferences,preferenceKey:'hub:product-diary:visible-columns:v1'});
+        syncColumnLayout();
+      }).catch(()=>{if(!disposed)columnPicker.querySelector('[data-column-message]').textContent='Não foi possível carregar o seletor de colunas. Atualize a página para tentar novamente.'}).finally(()=>{columnLoading=null});
+    }
+    columnPicker?.addEventListener?.('change',syncColumnLayout);
+    columnPicker?.addEventListener?.('click',syncColumnLayout);
+    function updateTableHeight(){
+      layoutFrame=null;
+      if(disposed||!tableWrap?.getBoundingClientRect||!tableWrap.style||tableWrap.classList.contains('hidden')||tableWrap.getClientRects?.().length===0)return;
+      const viewport=global.innerHeight;
+      if(!Number.isFinite(viewport)||viewport<=0)return;
+      // Document position keeps the cap stable while the page scrolls to the blocks below.
+      const tableTop=tableWrap.getBoundingClientRect().top+(global.scrollY||0),bottomGap=12;
+      const available=viewport-tableTop-bottomGap;
+      const height=Math.max(1,Math.min(viewport-bottomGap,Math.max(120,available)));
+      const value=`${Math.floor(height)}px`;
+      if(tableWrap.style.getPropertyValue('--product-diary-table-max-height')!==value)tableWrap.style.setProperty('--product-diary-table-max-height',value);
+    }
+    function scheduleTableHeight(){
+      if(disposed||layoutFrame!==null||typeof global.requestAnimationFrame!=='function')return;
+      layoutFrame=global.requestAnimationFrame(updateTableHeight);
+    }
+    global.addEventListener?.('resize',scheduleTableHeight);
+    const layoutObserver=typeof global.ResizeObserver==='function'?new global.ResizeObserver(scheduleTableHeight):null;
+    if(layoutObserver){
+      // Observe only content above the rows; scrolling/resizing the table must not grow its cap.
+      const main=root.parentElement;
+      for(const element of [$('#productSummary'),$('#productDiaryPanel')?.querySelector('.panel-head'),...Array.from(main?.querySelectorAll('.topbar,.statusbar,.notice')||[])])if(element)layoutObserver.observe(element);
+    }
     const dialog=$('#productObservationDialog'),input=$('#productObservationText'),saveButton=$('#productObservationSave'),cancelButton=$('#productObservationCancel'),errorBox=$('#productObservationError');
     function closeEditor(){if(editing?.saving)return;dialog.close();editing=null}
     cancelButton.onclick=closeEditor;
@@ -35,6 +79,22 @@
     };
     function formatExcelDate(serial){const d=excelDate(serial);return new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(d)}
     function formatProductCell(col,cell){if(!cell||cell.value==null||cell.value==='')return'—';if(col==='A')return typeof cell.value==='number'?formatExcelDate(cell.value):esc(cell.text??cell.value);if(['E','G','K','L'].includes(col)){const v=Number(cell.value);return Number.isFinite(v)?fmtPct(Math.abs(v)<=1?v*100:v):''}if(['I','J','O','P'].includes(col)&&typeof cell.value==='number')return fmtNum(cell.value,2);return esc(cell.text??cell.value)}
+    function productDiaryZeroClass(col,cell){
+      if(!['B','C','D','E','F','G','H','I','J','K','L','O','P'].includes(col))return'';
+      const value=cell?.value;
+      const zero=typeof value==='number'?Number.isFinite(value)&&value===0:typeof value==='string'&&/^[+-]?0+(?:[.,]0+)?\s*%?$/.test(value.trim());
+      return zero?' product-zero-value':'';
+    }
+    function renderTableTotals(rows){
+      const totals=productDiaryTableTotals(rows);
+      $('#productTotals').innerHTML='<tr class="product-total-row">'+productColumns.map(([col])=>{
+        if(col==='A')return'<th scope="row">Totais</th>';
+        const included=Object.hasOwn(totals,col),value=included?totals[col]:null;
+        const title=included?(col==='F'?'Soma das conversões oficiais disponíveis; vendas manuais provisórias não incluídas.':'Soma dos valores disponíveis nas linhas apresentadas; ausências não são tratadas como zero.'):'Coluna não somada.';
+        const text=value===null?'—':fmtNum(value,['O','P'].includes(col)?2:Number.isInteger(value)?0:2);
+        return`<td class="num${productDiaryZeroClass(col,{value})}" title="${title}">${text}</td>`;
+      }).join('')+'</tr>';
+    }
     function formatProductDiaryCell(col,row,manualSalesByDate,pauseConfirmedAt){const value=formatProductCell(col,row.cells[col]),count=productDiaryManualSaleCount(row,manualSalesByDate),pauseNote=col==='Q'&&pauseConfirmedAt&&productDiaryRowDate(row)===pauseConfirmedAt?`<small class="product-pause-note">Campanha pausada na data ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}</small>`:'';if(col==='F')return count?`<span>${value}</span><small class="product-manual-sale-note">+${count} manual · provisória</small>`:value;if(col!=='Q')return value;const notes=[];if(value!=='—')notes.push(`<span>${value}</span>`);if(count)notes.push(`<small class="product-manual-sale-note">Venda manual provisória (${count}); aguarda MCC D−1</small>`);if(pauseNote)notes.push(pauseNote);return notes.join('')||'—'}
     function saleTimestamp(value){const date=new Date(value);return value&&Number.isFinite(date.getTime())?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(date):'—'}
     function saleDate(value){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value).split('-').reverse().join('/'):'—'}
@@ -56,6 +116,8 @@
       renderSales(summary?[]:saleHistory);
       const boundedRows=pauseConfirmedAt?productDiaryRowsThroughDate(displayRows,pauseConfirmedAt):displayRows,provisionalSaleDates=new Set(manualSalesByDate.keys()),diaryRows=productDiaryRowsThroughDate(productDiaryRowsWithManualSales(boundedRows,manualSalesByDate),pauseConfirmedAt);
       if(summary){
+        columnPicker.classList.add('hidden');columnPicker.open=false;
+        $('#productTotals').innerHTML='';
         const metrics=summary.metrics||{},shown=(value,formatter)=>value&&(value.state==='observed'||value.state==='derived')?formatter(value.value):'Não registrado',account=summary.account_legacy||'Não registrada',endDate=summary.end_date?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeZone:'UTC'}).format(new Date(`${summary.end_date}T00:00:00Z`)):'Não informada';
         actions.setTitle(sheetName,'Histórico legado consolidado');
         $('#productPanelTitle').textContent='Resumo histórico legado';
@@ -75,6 +137,7 @@
         $('#rowCount').textContent='1 resumo';
         $('#productFooterNote').textContent='Os valores legados permanecem separados do Diário nativo, das métricas MCC e das vendas manuais provisórias.';
       }else{
+        columnPicker.classList.remove('hidden');
         actions.setTitle(sheetName,source==='workbook'?'Aba histórica da base local':name);
         $('#productPanelTitle').textContent='Diário de campanha';
         $('#productTableWrap').classList.remove('hidden');
@@ -86,15 +149,17 @@
           const date=productDiaryRowDate(r),manual=global.ProductDiaryObservations?.observationFor({observacoes_diario:observations},storedCampaignId,date);
           const shown=manual?{...r,cells:{...r.cells,Q:{value:manual.texto}}}:r;
           const edit=storedCampaignId&&date&&typeof actions.saveObservation==='function'?`<a href="#" class="hub-corner-edit" data-edit-observation="${esc(date)}" aria-label="Editar observações de ${esc(saleDate(date))}" aria-haspopup="dialog" aria-controls="productObservationDialog">Editar</a>`:'';
-          return `<tr${productDiaryHasSales(r,provisionalSaleDates)?' class="has-sales"':''}>${productColumns.map(([col])=>`<td class="${col==='Q'?'hub-edit-host product-observation-cell':'num'}">${col==='Q'?'<div class="product-observation-text">':''}${formatProductDiaryCell(col,shown,manualSalesByDate,pauseConfirmedAt)}${col==='Q'?'</div>'+edit:''}</td>`).join('')}</tr>`;
+          return `<tr${productDiaryHasSales(r,provisionalSaleDates)?' class="has-sales"':''}>${productColumns.map(([col])=>`<td class="${col==='Q'?'hub-edit-host product-observation-cell':'num'}${productDiaryZeroClass(col,shown.cells[col])}">${col==='Q'?'<div class="product-observation-text">':''}${formatProductDiaryCell(col,shown,manualSalesByDate,pauseConfirmedAt)}${col==='Q'?'</div>'+edit:''}</td>`).join('')}</tr>`;
         }).join(''):'<tr><td colspan="17" class="empty">Nenhum registro diário encontrado nesta aba.</td></tr>';
+        renderTableTotals(diaryRows);
         $('#productCaption').textContent=pauseConfirmedAt?`Histórico da base local encerrado na pausa confirmada em ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}.`:rows.length?'Histórico da base local; vendas manuais provisórias aparecem separadas e aguardam confirmação do MCC D−1':source==='workbook'?'Aba histórica sem linhas diárias reconhecidas':'D−1 e D zero disponíveis no manifesto atual';
         $('#rowCount').textContent=`${diaryRows.length} ${diaryRows.length===1?'dia':'dias'}`;
         $('#productFooterNote').textContent='Campos ausentes permanecem vazios. Cliques da plataforma não são inferidos pelo manifesto.';
+        ensureColumnPicker();
       }
-
+      scheduleTableHeight();
     }
-    return{render:renderProduct};
+    return{render:renderProduct,dispose(){disposed=true;columnController?.destroy();columnPicker?.removeEventListener?.('change',syncColumnLayout);columnPicker?.removeEventListener?.('click',syncColumnLayout);layoutObserver?.disconnect();global.removeEventListener?.('resize',scheduleTableHeight);if(layoutFrame!==null)global.cancelAnimationFrame?.(layoutFrame)}};
   }
   global.ProductDiaryView=Object.freeze({mount});
 })(typeof window==='object'?window:globalThis);

@@ -43,5 +43,8 @@ test('manifest card shows Brasília time, full date in tooltip, filters are inde
 
 test('overview adapter supplies capture evidence from persisted manifest before transient state',async()=>{
   const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
-  assert.ok(template.includes('manifestCaptureInfo:OverviewDomain.manifestCaptureInfo(state.database?.manifesto_atual||state.manifest)'));
+  assert.ok(template.includes('manifestCaptureInfo:includeCards?OverviewDomain.manifestCaptureInfo(state.database?.manifesto_atual||state.manifest):null'));
+  const cards=await readFile(new URL('../src/overview/cards-domain.js',import.meta.url),'utf8');
+  assert.ok(cards.includes('manifest=base.manifesto_atual'));
+  assert.ok(cards.includes('manifestCaptureInfo:domain.manifestCaptureInfo(manifest)'));
 });

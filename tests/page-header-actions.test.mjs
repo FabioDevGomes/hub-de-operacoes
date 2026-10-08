@@ -14,20 +14,20 @@ const consumers = [
 const scope = 'main>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions)';
 
 test('todas as telas do shell carregam a mesma regra, com cache atualizado', async () => {
-  assert.match(sidebar, /@import url\("\/curadoria\/curation-header-actions\.css\?v=4"\)/);
+  assert.match(sidebar, /@import url\("\/curadoria\/curation-header-actions\.css\?v=5"\)/);
   for (const path of consumers) {
     const source = await read(`src/${path}`);
     const publishedPath = path === 'index.template.html' ? 'index.html' : path;
     const published = await read(`dist/${publishedPath}`);
-    assert.match(source, /sidebar-component\.css\?v=12/, path);
-    assert.match(published, /sidebar-component\.css\?v=12/, publishedPath);
+    assert.match(source, /sidebar-component\.css\?v=15/, path);
+    assert.match(published, /sidebar-component\.css\?v=15/, publishedPath);
   }
-  assert.match(await read('src/curadoria/glimpse/index.html'), /curation-header-actions\.css\?v=4/);
+  assert.match(await read('src/curadoria/glimpse/index.html'), /curation-header-actions\.css\?v=5/);
   assert.equal(await read('dist/sidebar-component.css'), sidebar);
   assert.equal(await read('dist/curadoria/curation-header-actions.css'), css);
 });
 
-test('o contrato é único e restrito aos filhos diretos do cabeçalho principal', () => {
+test('o contrato é único para cabeçalhos e ações explicitamente opt-in', () => {
   // Cada seletor de regra, inclusive estados e mídia, mantém o escopo explícito.
   const selectors = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)]
     .map(match => match[1].trim()).filter(selector => !selector.startsWith('@') && selector !== ':root');
@@ -36,7 +36,7 @@ test('o contrato é único e restrito aos filhos diretos do cabeçalho principal
     'main:has(>header:is(.topbar,.top,.page-head,.hero)>:is(.actions,.hero-actions))',
     'main>header:is(.topbar,.top,.page-head,.hero):has(>:is(.actions,.hero-actions))',
   ];
-  assert.ok(selectors.every(selector => selector.startsWith(scope) || positionScopes.includes(selector)), selectors.join('\n'));
+  assert.ok(selectors.every(selector => selector.startsWith(scope) || selector.startsWith(`:is(${scope}>:is(.btn,.button),.hub-standard-action)`) || positionScopes.includes(selector)), selectors.join('\n'));
   assert.ok(css.includes('gap:var(--hub-page-action-gap,8px);flex-wrap:wrap'));
   for (const rule of ['min-height:36px', 'padding:8px 11px', 'border:0',
     'border-radius:10px', 'font-size:.78rem', 'font-weight:400',

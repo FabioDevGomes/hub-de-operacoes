@@ -1,6 +1,6 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261006-movement-variation';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261007-glimpse-reference';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
@@ -31,7 +31,7 @@ const view = mountHotOffersMsView({root,actions:{
   openGlimpse,
 }});
 const listFocus = mountCurationListFocus('hot-offers-ms',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'});
-mountGlimpseHeaderAction({frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
+mountGlimpseHeaderAction({frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet'),actionButton:document.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true});
 
 function show() { view.render({offers,collections,snapshots,decisions,trends,images,glimpse}); }
 function latestCollection(scope) {
@@ -238,7 +238,7 @@ function openImagesExcluding(term,country,candidates) {
 }
 function openGlimpse(item) {
   const frame = document.querySelector('#glimpseFrame');
-  const params = new URLSearchParams({origin:'hot-offers-ms',scope:item.scope,productKey:item.productKey,product:item.productName,offerIds:item.offerId,embedded:'1'});
+  const params = new URLSearchParams({origin:'hot-offers-ms',scope:item.scope,productKey:item.productKey,product:item.productName,offerIds:item.offerId,embedded:'1',presentation:'reference'});
   const url = new URL('../glimpse/?' + params.toString(),location.href).href;
   if (frame.src !== url) frame.src = url;
 }
@@ -248,6 +248,10 @@ window.addEventListener('message',event => {
   if (event.data?.type === 'hub-glimpse-resize') {
     const height = Number(event.data.height);
     if (Number.isFinite(height)) frame.style.height = `${Math.max(320,Math.ceil(height))}px`;
+    return;
+  }
+  if (event.data?.type === 'hub-glimpse-save-result') {
+    if (event.data.saved === true) void refresh().catch(error => console.warn('Análise salva; não foi possível atualizar a lista Hot Offers MS.',error));
     return;
   }
   if (event.data?.type !== 'hub-glimpse-close') return;

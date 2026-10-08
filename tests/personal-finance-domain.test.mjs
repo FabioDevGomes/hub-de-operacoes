@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyActualTargetUpdates, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, millisecondsUntilNextLocalMidnight, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, normalizeMonth, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
+  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyActualTargetUpdates, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, millisecondsUntilNextLocalMidnight, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, normalizeMonth, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
 } from '../src/personal-finance/personal-finance-domain.mjs';
 
 assert.equal(DEFAULT_CONSOLIDATED_MONTH_COUNT, 8, 'o consolidado abre com oito meses por padrão');
@@ -37,15 +37,19 @@ assert.throws(() => monthWeekRange('2026-09', 1.5), /semana de 1 a 6/);
 const today = new Date(2026, 8, 25);
 assert.equal(canEditActualForMonth('2026-09', today), true, 'realizado pode ser editado no mês atual');
 assert.equal(canEditActualForMonth('2026-08', today), true, 'realizado continua editável para corrigir meses anteriores');
-assert.equal(canEditActualForMonth('2026-10', today), true, 'realizado pode ser editado em meses futuros');
-assert.equal(canEditActualForMonth('2026-13', today), false, 'mês inválido não libera edição de realizado');
+assert.equal(canEditActualForMonth('2026-10', today), false, 'realizado fica bloqueado em meses futuros');
 assert.equal(canEditActualForEntry({ month_key:'2026-08', category_name:'Aluguel' }, today), true, 'qualquer realizado de competência anterior pode ser corrigido');
 assert.equal(canEditActualForEntry({ month_key:'2026-13', category_name:'Aluguel' }, today), false, 'mês inválido não libera edição de realizado');
 const octoberWeekOne = { month_key:'2026-10', category_name:'laser / jantar fora / cerveja – semana 1' };
 const octoberWeekTwo = { month_key:'2026-10', category_name:'laser / jantar fora / cerveja – semana 2' };
-assert.equal(canEditActualForEntry(octoberWeekOne, new Date(2026, 8, 26)), true, 'realizado de semana futura já pode ser lançado antes do início do mês');
-assert.equal(canEditActualForEntry(octoberWeekTwo, new Date(2026, 8, 27)), true, 'qualquer semana de uma competência futura pode receber realizado');
-assert.equal(canEditActualForEntry({ month_key:'2026-10', category_name:'Aluguel' }, new Date(2026, 8, 27)), true, 'qualquer categoria pode receber realizado futuro');
+assert.equal(canEditActualForEntry(octoberWeekOne, new Date(2026, 8, 26)), false, 'semana 1 seguinte não abre antes do fim da semana fiscal atual');
+assert.equal(canEditActualForEntry(octoberWeekOne, new Date(2026, 8, 27)), true, 'semana 1 seguinte abre no domingo fiscal, antes do início do mês calendário');
+assert.equal(canEditActualForEntry(octoberWeekTwo, new Date(2026, 8, 27)), false, 'a liberação antecipada não abre semanas posteriores nem outras despesas do mês seguinte');
+assert.equal(canEditActualForEntry({ month_key:'2026-10', category_name:'Aluguel' }, new Date(2026, 8, 27)), false, 'a liberação antecipada vale apenas para a primeira semana fiscal');
+assert.equal(canMarkQuickPayInFutureMonthlyView({ month_key:'2026-10', category_name:'Academia' }, new Date(2026, 8, 26)), true, 'academia pode ser marcada como paga em competência futura na visão Mensal');
+assert.equal(canMarkQuickPayInFutureMonthlyView({ month_key:'2026-10', category_name:'DAS' }, new Date(2026, 8, 26)), true, 'DAS mantém o pagamento futuro como referência na visão Mensal');
+assert.equal(canMarkQuickPayInFutureMonthlyView({ month_key:'2026-10', category_name:'Água' }, new Date(2026, 8, 26)), false, 'a exceção de pagamento futuro no modo Mensal fica limitada a DAS e academia');
+assert.equal(canMarkQuickPayInFutureMonthlyView({ month_key:'2026-09', category_name:'Academia' }, new Date(2026, 8, 26)), false, 'a exceção não libera pagamento de mês passado');
 assert.equal(LUNCH_DINNER_MONTHLY_BUDGET, 1250, 'o orçamento mensal de almoço e janta é R$ 1.250');
 assert.equal(isLunchDinnerCategory('Almoço/janta Cartão Nub'), true, 'o nome importado é reconhecido ignorando acentos');
 assert.equal(isLunchDinnerCategory('Academia'), false, 'outras categorias não recebem o orçamento especial');

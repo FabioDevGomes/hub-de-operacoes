@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const html=await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8');
 const functionSource=name=>html.match(new RegExp(`function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n    \\}`))?.[0]||'';
-const helpers=['buildD1DeltaRows','formatD0DeltaValue','renderD1DeltaPanel'].map(functionSource).join('\n');
+const helpers=['buildD1DeltaRows','captureFormatter','formatD0DeltaValue','renderD1DeltaPanel'].map(functionSource).join('\n');
 assert.ok(helpers.includes('buildD1DeltaRows'),'comparador do fechamento D−1 ausente');
 const absent=new Set(['','-','--','—','–']);
 const context={Intl,Number,Map,Boolean,String,Math,parseNumber:value=>Number(value),stateValue:(raw,parser=null)=>{
@@ -69,8 +69,8 @@ assert.equal(context.formatD0DeltaValue(-2,'count'),'−2');
 assert.match(context.formatD0DeltaValue(1,'cost','BRL'),/^\+R\$/);
 assert.equal(context.formatD0DeltaValue(null,'cost','BRL'),'—');
 
-assert.ok(html.indexOf('id="d1-changes-panel"')<html.indexOf('id="d0-changes-panel"'),'a estrutura inicial da ação de atualização permanece em D−1 antes da realocação dinâmica');
-assert.match(html,/\.steps > #d0-changes-panel\s*\{\s*order:\s*-1;\s*\}/,'quando visível, a tabela D0 deve ser o primeiro bloco de informação');
+assert.ok(html.indexOf('id="d0-capture-history-panel"')<html.indexOf('id="d0-changes-panel"') && html.indexOf('id="d0-changes-panel"')<html.indexOf('id="d1-changes-panel"'),'histórico de capturas precede alterações D0 e fechamento D−1 na ordem de leitura');
+assert.match(html,/\.steps > #d0-changes-panel\s*\{\s*order:\s*-1;\s*\}/,'a tabela D0 conserva prioridade logo abaixo do histórico de capturas');
 assert.ok(html.indexOf('id="d1-changes-panel"')<html.indexOf('id="validation-panel"'),'tabela D−1 deve ficar antes da validação automática');
 assert.ok(html.includes('renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges)'),'a validação deve renderizar o delta D−1 com ou sem uma captura D0 no outro slot');
 assert.ok(html.includes('renderD1DeltaPanel(slots.d1, comparisonBase, dateChanges)'),'tabela deve ser atualizada quando D−1 e D0 estão carregados juntos');

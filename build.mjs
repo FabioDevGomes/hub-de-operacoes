@@ -36,6 +36,10 @@ await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navi
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
 await cp(resolve(root, "src/theme-colors.css"), resolve(root, "dist/theme-colors.css"));
 await cp(resolve(root, "src/control-surfaces.css"), resolve(root, "dist/control-surfaces.css"));
+await cp(resolve(root, "src/white-button.css"), resolve(root, "dist/white-button.css"));
+// The popup is an isolated Chrome origin: package the same canonical finish locally.
+await cp(resolve(root, "src/white-button.css"), resolve(root, "extensions/mcc-d0-bridge/white-button.css"));
+await cp(resolve(root, "src/input-standard.css"), resolve(root, "dist/input-standard.css"));
 await cp(resolve(root, "src/month-navigation.css"), resolve(root, "dist/month-navigation.css"));
 await cp(resolve(root, "src/table-headers.css"), resolve(root, "dist/table-headers.css"));
 await cp(resolve(root, "src/table-layout.css"), resolve(root, "dist/table-layout.css"));

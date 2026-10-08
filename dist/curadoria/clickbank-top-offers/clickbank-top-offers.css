@@ -44,14 +44,7 @@ main{min-width:0;padding:24px 28px 52px}
 #offerSheet #sheetMessage:empty{display:none}
 #offerSheet #sheetMessage{margin:0 0 12px;color:var(--green)}
 #offerSheet #sheetMessage.error{color:var(--cb-red)}
-#offerSheet .sheet-tab-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:0 0 14px;padding:5px;background:#0a1627;border:0;border-radius:11px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-#offerSheet .sheet-tab-bar .tabs{position:static;display:flex;flex:1 1 auto;gap:5px;align-items:center;flex-wrap:nowrap;min-width:0;width:auto;max-width:100%;margin:0;padding:0;overflow-x:auto;background:transparent;border:0;border-radius:8px;scrollbar-width:thin}
-#offerSheet .sheet-tab-bar .tabs .btn:focus-visible,#offerSheet .sheet-bar-actions .btn:focus-visible{outline:2px solid rgba(101,169,255,.7);outline-offset:2px}
-#offerSheet .sheet-bar-actions{display:flex;flex:0 0 auto;align-items:center;gap:6px}
-#offerSheet .sheet-bar-actions .btn{min-height:34px;padding:7px 11px;white-space:nowrap}
 #offerSheet #saveSheetButton:disabled{cursor:not-allowed;opacity:.48;filter:saturate(.55)}
-#offerSheet .glimpse-host-saved{color:#83e5bb;font-size:.72rem;font-weight:400;white-space:nowrap}
-#offerSheet .glimpse-host-saved[hidden]{display:none!important}
 #offerSheet .image-country-title{flex-wrap:wrap}
 #offerSheet .image-country-list>.image-country-card{margin:0;padding:12px 14px}
 #offerSheet .manual-country-label{border:0}
@@ -63,7 +56,8 @@ main{min-width:0;padding:24px 28px 52px}
 body:has(#clickbankTopOffersRoot #offerSheet:not(.hidden)):not(:has(#offerSheet [data-panel="glimpse"]:not(.hidden))){overflow:hidden}
 @media(max-width:760px){#offerSheet .image-result-actions{grid-template-columns:repeat(6,minmax(96px,1fr));overflow-x:auto}}
 @media(max-width:760px){#offerSheet .trends-analysis-meta{grid-template-columns:1fr;gap:8px}}
-@media(max-width:760px){#offerSheet .sheet-tab-bar{align-items:stretch;flex-wrap:wrap}#offerSheet .sheet-tab-bar .tabs{flex:1 1 100%;width:100%}#offerSheet .sheet-bar-actions{width:100%;justify-content:flex-end}}
+
+#clickbankTopOffersRoot .tablewrap td.offer-name.hub-edit-host{padding-right:54px}
 
 /* Ações do diálogo de captura: mesmo padrão compacto, sem borda e com sombra preta. */
 .import-dialog .btn{min-height:36px;padding:8px 11px;border:0;border-radius:10px;background:var(--hub-button-bg,#101e32);color:var(--cb-text);font-family:inherit;font-size:.78rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55);transition:box-shadow .15s ease,filter .15s ease}

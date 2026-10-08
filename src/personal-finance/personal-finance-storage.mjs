@@ -441,55 +441,6 @@ export function writeBundleToTransaction(transaction, input) {
   return Object.fromEntries(Object.entries(properties).map(([key]) => [key, bundle[key].length]));
 }
 
-export function mergeExpensesBundleToTransaction(transaction, input) {
-  const bundle = validateBundle(input);
-  if (bundle.debts.length || bundle.funds.length) throw new Error('A importação de despesas aceita somente grupos, categorias, meses e lançamentos.');
-  notifyWhenCommitted(transaction);
-  const keys = { groups: 'group_id', categories: 'category_id', months: 'month_key', entries: 'entry_id' };
-  const counts = { inserted: 0, unchanged: 0 };
-  let failure = null;
-  for (const [name, keyPath] of Object.entries(keys)) {
-    const store = transaction.objectStore(STORES[name]);
-    for (const item of bundle[name]) {
-      const request = store.get(item[keyPath]);
-      request.onsuccess = () => {
-        if (failure) return;
-        const existing = request.result;
-        if (existing) {
-          const same = name === 'months' || Object.entries(item).every(([key, value]) => existing[key] === value);
-          if (same) { counts.unchanged += 1; return; }
-          failure = new Error(`Importação interrompida: já existe um registro diferente (${name}: ${item[keyPath]}). Nada existente foi substituído.`);
-          transaction.abort();
-          return;
-        }
-        store.add(item);
-        counts.inserted += 1;
-      };
-      request.onerror = () => {
-        failure = request.error || new Error('Não foi possível verificar os registros financeiros existentes.');
-        transaction.abort();
-      };
-    }
-  }
-  return { counts, get error() { return failure; } };
-}
-
-export async function mergeExpensesBundle(input) {
-  const bundle = validateBundle(input);
-  if (bundle.debts.length || bundle.funds.length) throw new Error('A importação de despesas aceita somente grupos, categorias, meses e lançamentos.');
-  const db = await openPersonalFinanceDatabase();
-  try {
-    return await new Promise((resolve, reject) => {
-      const names = [STORES.groups, STORES.categories, STORES.months, STORES.entries];
-      const transaction = db.transaction(names, 'readwrite');
-      const merge = mergeExpensesBundleToTransaction(transaction, bundle);
-      transaction.oncomplete = () => resolve(merge.counts);
-      transaction.onerror = () => reject(merge.error || transaction.error || new Error('A importação de despesas falhou.'));
-      transaction.onabort = () => reject(merge.error || transaction.error || new Error('A importação de despesas foi cancelada.'));
-    });
-  } finally { db.close(); }
-}
-
 export async function countData() {
   const db = await openPersonalFinanceDatabase();
   try {

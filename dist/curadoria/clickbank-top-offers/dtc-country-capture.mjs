@@ -1,11 +1,15 @@
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 
+function isEligibleProductName(value) {
+  const words = value.split(' ').filter(Boolean);
+  return words.length === 1 ? value.length >= 6 : value.length >= 8 && words.length >= 2;
+}
+
 function checkoutProductNameFocus(value) {
   const fullName = normalize(value);
   const firstNamePart = normalize(String(value || '').split(/\s+[-–—]\s+/)[0]);
-  const words = firstNamePart.split(' ').filter(Boolean);
-  return firstNamePart.length >= 8 && words.length >= 2 ? firstNamePart : fullName;
+  return isEligibleProductName(firstNamePart) ? firstNamePart : fullName;
 }
 
 export function validateDtcCountryCapture(payload) {
@@ -23,14 +27,17 @@ export function matchDtcCheckoutOffer(productName, offers) {
   const query = normalize(productName);
   const focusedName = checkoutProductNameFocus(productName);
   const words = focusedName.split(' ').filter(Boolean);
-  if (focusedName.length < 8 || words.length < 2 || !Array.isArray(offers)) return {status:'none', matches:[]};
+  if (!isEligibleProductName(focusedName) || !Array.isArray(offers)) return {status:'none', matches:[]};
   const matches = new Map();
   for (const offer of offers) {
     if (!offer || typeof offer.offerKey !== 'string' || typeof offer.offerName !== 'string') continue;
     const title = normalize(offer.offerName);
     const titleWithoutMarketplaceLabel = title.replace(/^(?:new|hot offer|top offer)\s+/, '');
-    const fullNameMatch = query.length >= 8 && ` ${title} `.includes(` ${query} `);
-    const productNameMatch = title === focusedName || title.startsWith(`${focusedName} `)
+    const leadingName = normalize(offer.offerName.split(/\s+[-–—]\s+/)[0]).replace(/^(?:new|hot offer|top offer)\s+/, '');
+    const fullNameMatch = words.length >= 2 && query.length >= 8 && ` ${title} `.includes(` ${query} `);
+    // Uma palavra exige o segmento inicial completo, nunca um prefixo ou ocorrência no slogan.
+    const productNameMatch = words.length === 1 ? leadingName === focusedName
+      : title === focusedName || title.startsWith(`${focusedName} `)
       || titleWithoutMarketplaceLabel === focusedName
       || titleWithoutMarketplaceLabel.startsWith(`${focusedName} `);
     if (fullNameMatch || productNameMatch) matches.set(offer.offerKey, offer);

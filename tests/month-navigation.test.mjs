@@ -12,7 +12,7 @@ test('shared month/day navigation has a single published stylesheet loaded after
   assert.equal(published, css);
   assert.match(build, /src\/month-navigation\.css/);
   assert.ok(app.indexOf('month-navigation.css?v=3') > app.indexOf('theme-colors.css?v=5'));
-for (const asset of ['control-macro/control-macro.css?v=6','billing/billing.css?v=2','personal-finance/personal-finance.css?v=50','billing-view.mjs?v=9','personal-finance-view.mjs?v=87','meu-tempo/meu-tempo.css?v=31','meu-tempo/meu-tempo-view.mjs?v=28']) {
+for (const asset of ['control-macro/control-macro.css?v=6','billing/billing.css?v=2','personal-finance/personal-finance.css?v=50','billing-view.mjs?v=9','personal-finance-view.mjs?v=88','meu-tempo/meu-tempo.css?v=31','meu-tempo/meu-tempo-view.mjs?v=28']) {
     assert.ok(app.includes(asset), `cache atualizado: ${asset}`);
   }
 });
@@ -32,7 +32,7 @@ test('monthly and daily consumers share the label, arrows and current-period act
   assert.match(macro, /id="macroCurrentMonth" class="btn hub-month-current"[^>]*>Mês atual<\/button>/);
   assert.match(finance, /hub-month-navigation--period/);
   assert.match(finance, /class="hub-month-label" aria-live="polite">\$\{esc\(periodLabel\)\}/);
-  assert.match(finance, /<\/div><button class="btn hub-month-current" type="button" data-action="current-period"/);
+  assert.match(finance, /<\/div><button class="btn hub-month-current hub-standard-action" type="button" data-action="current-period"/);
   assert.match(finance, /data-action="period-shift" data-delta="-1"/);
   assert.match(finance, /data-action="period-shift" data-delta="1"/);
   assert.match(finance, /state\.viewMode === 'quarter' \? 3 : 1/);

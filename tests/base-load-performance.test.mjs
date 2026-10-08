@@ -82,6 +82,7 @@ function adapter(records) {
   const state = {database:null,productCatalog:ProductCatalog.create(),controlMacroRows:[]};
   const db = storage(records);
   Object.assign(context, {CampaignDatabase,ProductCatalog,state,CampaignBaseReader:reader,
+    OverviewCardsRecovery:{ensure:async({base})=>({base,recovered:false})},
     openLocalDb:db.openDatabase,embeddedManifest:{campanhas:[]},renderLegacyMigrationNotice(){},render(){},
     persistLocalBase(){throw new Error('unexpected write');},persistProductCatalog(){throw new Error('unexpected write');}});
   const start = template.indexOf('    async function restoreLocalBase(');

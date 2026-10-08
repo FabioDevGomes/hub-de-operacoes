@@ -17,6 +17,7 @@ persisted.diario = [{ campanha_id:'synthetic', data:'2026-09-29', celulas:{ O:{v
 const state = { database:null, controlMacroRows:null, productCatalog:{aliases:{}} };
 let aggregateCalls=0;
 const context = vm.createContext({ state, CampaignBaseReader, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:{...domain,aggregateMccDaily(...args){aggregateCalls++;return domain.aggregateMccDaily(...args)}}, ProductCatalog:{normalize:value=>value||{aliases:{}}},
+  OverviewCardsRecovery:{ensure:async({base})=>({base,recovered:false})},
   accountProductIdentity:(campaign,catalog)=>({label:catalog.aliases[String(campaign.nome_exibicao||'').toLocaleLowerCase('pt-BR')]||campaign.nome_exibicao||campaign.nome_mcc}),
   embeddedManifest:null,
   renderLegacyMigrationNotice(){}, render(){},

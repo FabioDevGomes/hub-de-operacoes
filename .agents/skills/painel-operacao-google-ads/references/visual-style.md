@@ -38,7 +38,7 @@ Fonte única: `src/curadoria/curation-header-actions.css`. Nos cabeçalhos princ
 
 | Variante | Classes | Aparência | Exemplo no Controle de gastos |
 | --- | --- | --- | --- |
-| Padrão escuro | `btn hub-standard-action` | Fundo `--hub-button-bg` (`#101e32`), texto claro | Criar outro mês |
+| Padrão escuro | `btn hub-standard-action` | Fundo `--hub-button-bg` (`#101e32`), texto claro | Criar outro mês e Mês atual |
 | Primário azul | `btn primary hub-standard-action` | Azul sólido `#38bdf8`, texto `#052037` | Nova categoria |
 
 Ambas usam altura mínima de 36px, padding `8px 11px`, raio de 10px, fonte `.78rem` com peso 400, rótulo centralizado, sem borda e sombra preta. Hover/foco intensificam a sombra; o azul continua sólido, sem degradê. Preserve foco de teclado e estados desabilitados. O layout do consumidor define posição e espaçamento; a classe opt-in não aplica a distância superior de 16px reservada ao cabeçalho principal.

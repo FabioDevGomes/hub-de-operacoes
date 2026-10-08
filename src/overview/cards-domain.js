@@ -3,7 +3,7 @@
   const emptyResult=()=>({value:null,observedCount:0,totalCount:0});
   const emptyPeriod=()=>Object.fromEntries([...fields,'profit'].map(field=>[field,emptyResult()]));
   const empty=Object.freeze({version:VERSION,revision:'unavailable',summary:{d1:emptyPeriod(),d0:emptyPeriod()},dates:{d1:'',d0:''},activeCount:null,pausedCount:null,pausedTodayCampaigns:[],pendingSaleCount:0,fractionalSaleCount:0});
-  // No fallback calculation here: legacy bases wait for the next explicit MCC application.
+  // Reads stay pure. One-time legacy recovery is coordinated separately by cards-recovery.js.
   function read(base){
     const saved=base?.overview_cards;
     if(saved?.version!==VERSION||typeof saved.revision!=='string'||!saved.revision)return empty;

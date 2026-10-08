@@ -64,3 +64,22 @@ test('o padrão preserva acessibilidade e não substitui cores de alerta', () =>
   assert.ok(css.includes('@media(prefers-reduced-motion:reduce)'));
   assert.ok(css.includes('{transition:none}'));
 });
+
+test('Mês atual no Controle de gastos compartilha somente o acabamento escuro de Criar outro mês', async () => {
+  const [view,published,localCss,app]=await Promise.all([
+    read('src/personal-finance/personal-finance-view.mjs'),
+    read('dist/personal-finance/personal-finance-view.mjs'),
+    read('src/personal-finance/personal-finance.css'),
+    read('dist/index.html'),
+  ]);
+  assert.equal(view,published);
+  assert.match(view,/class="btn hub-month-current hub-standard-action" type="button" data-action="current-period">\$\{currentPeriodLabel\}/);
+  assert.match(view,/class="btn hub-standard-action" type="button" data-action="toggle-create-month">Criar outro mês/);
+  assert.match(view,/const currentPeriodLabel = isQuarter \? 'Trimestre atual' : isConsolidated \? 'Começar no mês atual' : 'Mês atual'/);
+  assert.ok(view.includes("else if (action === 'current-period') { state.monthKey = localMonth(new Date()); state.createMonthOpen = false; await loadMonth(); }"));
+  assert.ok(app.includes('personal-finance-view.mjs?v=88'));
+  assert.ok(css.includes('box-shadow:0 4px 9px rgba(0,0,0,.55)'));
+  assert.ok(css.includes('box-shadow:0 5px 12px rgba(0,0,0,.65)'));
+  assert.doesNotMatch(localCss,/\.hub-month-current[^{}]*\{/,'sem duplicar sombras ou alterar os outros navegadores');
+  assert.ok(!view.includes('hub-white-button'),'não troca a referência escura pelo padrão creme');
+});

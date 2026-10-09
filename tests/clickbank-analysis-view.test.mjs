@@ -41,6 +41,22 @@ function fixture(offerId=null, preferences) {
 }
 
 const hiddenKey='hub:clickbank-top-offers:hidden-offer-keys:v1';
+
+test('preview replaces source total with the supplied new-product count, including zero',()=>{
+  const f=fixture(),parsed={parsedCount:50,page:{total:1238,start:51,end:100},issues:[],valid:true};
+  for(const newProductCount of [50,7,0]){
+    f.view.showImportPreview({parsed,newProductCount});
+    assert.match(f.node('#previewMetrics').innerHTML,new RegExp('Produtos novos detectados</span><b>'+newProductCount+'</b>'));
+    assert.doesNotMatch(f.node('#previewMetrics').innerHTML,/Resultados na fonte|1238/);
+    assert.match(f.node('#previewMetrics').innerHTML,/51–100/);
+    assert.match(f.node('#previewStatus').textContent,/Captura parcial/);
+    assert.equal(f.node('#confirmImport').disabled,false);
+    assert.equal(f.calls.length,0,'rendering a preview does not save');
+  }
+  f.view.showImportPreview({parsed});
+  assert.match(f.node('#previewMetrics').innerHTML,/Produtos novos detectados<\/span><b>—<\/b>/,'unknown count is not a fabricated zero');
+});
+
 function visibilityClick(f,key='offer') {
   let stopped=false;
   f.node('#rows').listeners.click({stopPropagation(){stopped=true;},target:{closest:selector=>selector==='[data-offer-visibility]'?{dataset:{offerVisibility:key}}:null}});

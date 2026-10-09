@@ -1,5 +1,5 @@
 import { parseTopOffersClipboard } from './clickbank-top-offers-domain.mjs?v=2';
-import { matchDtcCheckoutOffer, validateDtcCountryCapture } from './dtc-country-capture.mjs?v=3';
+import { matchDtcCheckoutOffer, validateDtcCountryCapture } from './dtc-country-capture.mjs?v=4';
 
 export function validateExtensionCapture(payload) {
   if (payload?.schema !== 'clickbank-extension-preview-v1' || payload.source !== 'clickbank_chrome_extension'

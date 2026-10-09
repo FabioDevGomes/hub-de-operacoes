@@ -5,10 +5,12 @@ import { readFile } from 'node:fs/promises';
 import { CLICKBANK_COLUMNS, isClickBankMarketplace, productsToTsv } from '../extensions/mcc-d0-bridge/clickbank-domain.mjs';
 import { collectClickBankProducts } from '../extensions/mcc-d0-bridge/clickbank-reader.mjs';
 import { mountClickBankCapture } from '../extensions/mcc-d0-bridge/clickbank-popup.mjs';
+import { createClickBankTransfer } from '../extensions/mcc-d0-bridge/clickbank-forward.mjs';
+import { validateExtensionCapture } from '../src/curadoria/clickbank-top-offers/extension-capture.mjs';
 
 const marketplace = 'https://accounts.clickbank.com/master/dashboard/affiliate-marketplace?v=1#/results?resultsPerPage=50&offset=0';
 const attrs = attributes => ({ getAttribute:key => attributes[key] ?? null });
-function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1251, offset=0 } = {}) {
+function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1251, offset=0, rankOffset=offset, pageSize=50, selectedPage=null } = {}) {
   const originals = new Map(['location','document','getComputedStyle','__hubClickBankProductsCapture'].map(key => [key,Object.getOwnPropertyDescriptor(globalThis,key)]));
   t.after(() => { for (const [key,descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis,key,descriptor); else delete globalThis[key]; } });
   delete globalThis.__hubClickBankProductsCapture;
@@ -19,7 +21,7 @@ function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1
     get scrollHeight() { return count*52; } };
   const fields = CLICKBANK_COLUMNS.map((column,index) => ({...column, field:`opaqueField${index}`}));
   const visible = () => fields.slice(Math.floor(scroller.scrollLeft/800*6), Math.floor(scroller.scrollLeft/800*6)+3);
-  const values = n => ({ rank:String(n+offset), name:`Produto sintético ${n}`, seller:`VENDOR${n}`, avg:'$55.41', initial:'$55.41', future:'-', epc:'$0.14', cvr:'0.26%', gravity:'40.87' });
+  const values = n => ({ rank:String(n+rankOffset), name:`Produto sintético ${n}`, seller:`VENDOR${n}`, avg:'$55.41', initial:'$55.41', future:'-', epc:'$0.14', cvr:'0.26%', gravity:'40.87' });
   const grid = {
     isConnected:true, parentElement:null,
     getAttribute:key => key === 'style' ? styleText : null,
@@ -31,7 +33,7 @@ function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1
       if (selector === 'a[id="title-offer-details"]') return {};
       if (selector === '.MuiDataGrid-virtualScroller') return scroller;
       if (selector === '.MuiDataGrid-virtualScrollerContent') return {scrollHeight:count*52,getBoundingClientRect:()=>({height:count*52})};
-      if (selector === '.MuiTablePagination-displayedRows' && footer) return {textContent:`${offset+1}–${offset+count} of ${total}`};
+      if (selector === '.MuiTablePagination-displayedRows' && footer) return {textContent:`${rankOffset+1}–${rankOffset+count} of ${total}`};
       return null;
     },
     querySelectorAll(selector) {
@@ -56,8 +58,8 @@ function fixture(t, { count=50, capped=false, missing=null, footer=true, total=1
       });
     }
   };
-  Object.assign(globalThis,{ location:{href:marketplace.replace('offset=0',`offset=${offset}`)},
-    document:{body:{innerText:`${total} results`},querySelectorAll:()=>[grid]},getComputedStyle:()=>({overflowY:'visible'}) });
+  Object.assign(globalThis,{ location:{href:marketplace.replace('offset=0',`offset=${offset}`).replace('resultsPerPage=50',`resultsPerPage=${pageSize}`)},
+    document:{body:{innerText:`${total} results`},querySelectorAll:selector=>selector==='.MuiDataGrid-root'?[grid]:selectedPage==null?[]:[{textContent:String(selectedPage)}]},getComputedStyle:()=>({overflowY:'visible'}) });
   return { grid, scroller, writes, get styleText(){return styleText;} };
 }
 
@@ -94,6 +96,86 @@ test('expanded table confirms a smaller page and last-page URL/total fallback', 
   fixture(t,{count:1,total:51,offset:50,footer:false});
   const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
   assert.equal(result.ok,true,result.message); assert.equal(result.expectedCount,1); assert.equal(result.rows[0].rank,'51'); assert.equal(result.rows[0].offerId,'OFFER51');
+});
+
+for (const scenario of [
+  {offset:1,rankOffset:50,selectedPage:2},
+  {offset:1,rankOffset:50},
+  {offset:50,rankOffset:50},
+  {offset:2,rankOffset:100,selectedPage:3},
+  {offset:25,rankOffset:1250,count:1,selectedPage:26},
+  {offset:1,rankOffset:100,count:100,pageSize:100,selectedPage:2}
+]) test('reader → transfer → Hub accepts the actual page range '+JSON.stringify(scenario),async t=>{
+  const f=fixture(t,{footer:false,capped:true,...scenario});
+  // Real-world shape: no MUI "x–y of total" label, global ranks and page buttons.
+  const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,true,result.message);
+  const size=scenario.count??50,start=scenario.rankOffset+1,end=scenario.rankOffset+size;
+  assert.equal(result.page.start,start,'URL offset must not be assumed to be a product index');
+  assert.equal(result.page.end,end);
+  assert.equal(result.expectedCount,size);
+  const payload=createClickBankTransfer(result),valid=validateExtensionCapture(payload);
+  assert.equal(valid.ok,true,valid.message);
+  assert.equal(valid.parsed.page.start,start);assert.equal(valid.parsed.page.end,end);
+  assert.equal(valid.parsed.offers[0].rank,start);assert.equal(valid.parsed.offers.at(-1).rank,end);
+  assert.equal(valid.parsed.page.completeUniverse,false);
+  assert.equal(f.scroller.scrollTop,17);assert.equal(f.scroller.scrollLeft,22);
+});
+
+test('selected page inconsistent with visible global ranks is rejected without guessing from offset',async t=>{
+  const f=fixture(t,{footer:false,offset:1,rankOffset:50,selectedPage:1,capped:true});
+  const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/não correspondem/);
+  assert.throws(()=>createClickBankTransfer(result));
+  assert.equal(f.scroller.scrollTop,17);assert.equal(f.scroller.scrollLeft,22);
+});
+
+test('later-page reader remains self-contained when Chrome serializes it into the isolated world',async t=>{
+  fixture(t,{footer:false,count:3,total:53,offset:1,rankOffset:50,selectedPage:2});
+  const result=await vm.runInNewContext('('+collectClickBankProducts.toString()+')(columns,"capture",{settleMs:0})',
+    {location,document,getComputedStyle,URL,URLSearchParams,setTimeout,columns:CLICKBANK_COLUMNS});
+  assert.equal(result.ok,true,result.message);assert.equal(result.page.start,51);assert.equal(result.page.end,53);
+  assert.equal(validateExtensionCapture(createClickBankTransfer(result)).ok,true);
+});
+
+test('unverifiable or ambiguous page is rejected even when URL has an offset',async t=>{
+  fixture(t,{footer:false,missing:'rank',offset:1,rankOffset:50});
+  let result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/confirmar a faixa/);
+  const query=document.querySelectorAll;
+  document.querySelectorAll=selector=>selector==='.MuiDataGrid-root'?query(selector):[{textContent:'2'},{textContent:'3'}];
+  result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/ambígua/);
+});
+
+test('page change during capture is rejected even when the URL does not change',async t=>{
+  const f=fixture(t,{footer:false,offset:1,rankOffset:50,selectedPage:2,capped:true}),query=document.querySelectorAll;
+  let checks=0;
+  document.querySelectorAll=selector=>{
+    if(selector==='.MuiDataGrid-root')return query(selector);
+    return [{textContent:String(++checks===1?2:3)}];
+  };
+  const result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/página mudou|não correspondem/);
+  assert.equal(f.scroller.scrollTop,17);assert.equal(f.scroller.scrollLeft,22);
+});
+
+test('matching row count cannot override wrong footer range or duplicate global ranks',async t=>{
+  const f=fixture(t,{count:3,total:53,offset:50,rankOffset:50}),query=f.grid.querySelector.bind(f.grid);
+  f.grid.querySelector=selector=>selector==='.MuiTablePagination-displayedRows'?{textContent:'1–3 of 53'}:query(selector);
+  let result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/faixa completa/);
+  f.grid.querySelector=query;
+  const queryAll=f.grid.querySelectorAll.bind(f.grid);
+  f.grid.querySelectorAll=selector=>{
+    const nodes=queryAll(selector);
+    if(selector!=='.MuiDataGrid-row')return nodes;
+    return nodes.map(row=>({...row,querySelectorAll:cellSelector=>row.querySelectorAll(cellSelector).map(cell=>
+      cell.getAttribute('data-field')==='opaqueField0'&&cell.textContent==='53'?{...cell,textContent:'52'}:cell)}));
+  };
+  result=await collectClickBankProducts(CLICKBANK_COLUMNS,'capture',{settleMs:0});
+  assert.equal(result.ok,false);assert.match(result.message,/faixa completa/);
+  assert.throws(()=>createClickBankTransfer(result));
 });
 
 test('missing horizontal metric does not announce complete capture', async t => {

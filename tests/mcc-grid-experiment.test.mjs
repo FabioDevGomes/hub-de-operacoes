@@ -13,8 +13,8 @@ const domainSource = await readFile(new URL('extensions/mcc-d0-bridge/mcc-grid-d
 
 assert.deepEqual(manifest.permissions, ['scripting', 'activeTab', 'clipboardWrite']);
 assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1:8765/preparador-MCC/*','http://127.0.0.1:8765/curadoria/clickbank-top-offers/*']);
-assert.equal(D0_FIELDS.length, 18);
-assert.equal(Object.keys(HEADER_ALIASES).length, 18);
+assert.equal(D0_FIELDS.length, 19);
+assert.equal(Object.keys(HEADER_ALIASES).length, 19);
 assert.ok(!/\.([a-z]+__[a-z0-9_-]+|_[a-z0-9]{6,})/i.test(source), 'não usar classes CSS obfuscadas como seletor');
 assert.ok(!/fetch\s*\(|indexedDB|chrome\.storage|\.click\s*\(|\.scroll(?:To|By)?\s*\(/i.test(`${source}\n${domainSource}`), 'leitura/comparação não deve enviar, gravar, clicar ou rolar');
 assert.equal(normalizeHeader('Impr. (1ª posição)'), 'impr 1a posicao');

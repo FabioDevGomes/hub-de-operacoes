@@ -1,5 +1,11 @@
 # Manutenção gradual do Hub
 
+## Participação de impressões da rede de pesquisa no Diário
+
+Implementação aditiva: extensão 1.2.22 lê `search_impression_share` por cabeçalho próprio; Preparador emite `participacao_impressao_rede_pesquisa` separadamente em D0/D−1. O parser e o adaptador compartilhados pertencem a `src/database.js`, sem nova store/schema, cálculo financeiro ou inferência de posição/entrega. O Diário acrescenta R após L na apresentação, preservando os códigos M–Q da base. Valores exatos são frações na célula; limites como “< 10%” são texto com metadados e nunca tratados como percentual exato. Zero, ausente e inválido continuam distintos, e capturas antigas/sem coluna confiável não apagam observações.
+
+A nova coluna aparece também nas preferências antigas do Diário, sem redefinir as demais escolhas nem escrever ao abrir a tela. Uma escolha explícita posterior pode ocultá-la e é respeitada ao reabrir. Backups conservam R e o texto original; não há preenchimento retroativo. O registro ainda depende de **Atualizar base**. Validação sintética: `search-impression-share`, `mcc-grid-production`, `product-diary-columns`, totais/view do Diário e contrato prioritário `overview-d0-after-d1`. Não importar fixtures no perfil real.
+
 ## Desempenho da Visão Geral — leitura inicial e caches em memória
 
 Na abertura, `src/storage/campaign-base-reader.js` lê base, Event Log completo e catálogo em uma transação readonly e fecha a conexão em sucesso/erro/abort. Não omitir histórico ou eventos para acelerar. A única fotografia persistida de apresentação é o resumo autorizado dos seis cartões, descrito abaixo; schema e stores permanecem na versão 5.
@@ -35,6 +41,10 @@ Fonte de apresentação: `src/curadoria/trends-sheet.css`, em conjunto com `src/
 Radar SpyHero não possui coluna Glimpse. Ao acrescentá-la ou criar outro consumidor, reutilizar o contrato compartilhado. Validar `tests/glimpse-column-borderless.test.mjs`, os testes das cinco listas/retorno e a suíte completa; no navegador, conferir normal, salvo, hover, clique, Tab/Shift+Tab, pulso e movimento reduzido com dados sintéticos somente em DOM/perfil isolado.
 
 ## Controle de gastos — sem importação de planilha
+
+**Mensal sem Pagar/Pago:** a tabela `categoryTable` não monta os atalhos de pagamento (inclusive estados pagos/desabilitados). Preserve inputs Planejado/Realizado, saldos, totais, Editar e ordenação. Nenhum lançamento, estado de pagamento ou regra de domínio/storage é apagado; helper, handler e tabela por período das outras visões permanecem. Cache da view `v=90`; regressão com tabela mensal sintética em `tests/personal-finance-monthly-no-pay.test.mjs`.
+
+**Novo grupo e Adicionar disponível com sombra:** somente as ações `new-group` e `new-fund` nos cabeçalhos auxiliares recebem `hub-standard-action`, compartilhando o acabamento escuro de Mês atual/Criar outro mês. Preserve rótulos, abertura dos modais e `new-fund` desabilitado quando o mês ainda não existe; ações azuis adjacentes e controles de tabela não mudam. Cache da view `v=89`; nenhum CSS duplicado nem mudança de domínio/storage. Regressão: `tests/page-header-actions.test.mjs`.
 
 **Botão Mês atual com sombra:** a ação `current-period` mantém `hub-month-current` para navegação e adota `hub-standard-action` para compartilhar o acabamento escuro com **Criar outro mês** (fundo do tema, texto normal, sombra preta, hover/foco e desabilitado). No Consolidado/compatibilidade trimestral, o mesmo controle conserva seus rótulos existentes. Sem CSS local duplicado, alteração de handler ou de persistência; somente o cache da view passa a `v=88`. Não ampliar o estilo aos outros navegadores nem aplicar o padrão creme. Regressões: `tests/page-header-actions.test.mjs` e `tests/month-navigation.test.mjs`.
 
@@ -274,6 +284,8 @@ O backup completo inclui os patches no `catalogo_produtos`; normalização/resta
 
 ### Meu Tempo — seletores de valor sem contorno decorativo
 
+**Densidade do Lançamento rápido (09/10/2026):** somente `.time-daily-table-wrap .time-table tbody` usa padding vertical de célula 2,65px e botões com mínimo 25,2px/padding vertical 4px, reduzindo as linhas simples de 35px para cerca de 31,5px (10%). Fonte de tabela e botões permanece intacta; rótulos/setas centralizados via inline-flex. Cabeçalhos, Histórico, Configurar, notas, gráficos e ações externas ficam fora. Preserve sombras, divisórias, foco visível, disabled e dados/eventos; linhas podem crescer se o conteúdo exigir. Fonte: `src/meu-tempo/meu-tempo.css?v=32`; contrato em `tests/meu-tempo-daily-density.test.mjs`.
+
 Somente os selects `time-select[data-value]` na tabela diária (`.time-daily-table-wrap`) ficam com borda transparente. A largura de 1px continua reservada, preservando dimensões, padding, fundo, cantos, opções e eventos. A regra cobre Sim/Não e escalas de sintomas, existentes ou redesenhadas, sem atingir os filtros, Histórico, Configurar, inputs ou textareas. O foco de teclado mantém outline azul de 2px; estados inválidos conservam contorno vermelho. Fonte: `src/meu-tempo/meu-tempo.css`, cache `v=31`; regressão em `tests/meu-tempo-select-border.test.mjs`, build e suíte completa. Nenhum lançamento é salvo durante a validação.
 
 ### Meu Tempo — aparência desabilitada de Até agora
@@ -287,6 +299,16 @@ No Diário, **Adicionar manualmente** é o único campo de ajuste de duração; 
 `parseSignedQuickDuration()` reutiliza o parser de duração positiva, sem mudar intervalos, edições e outros tipos de item. Na view, valores negativos usam a transação existente `Storage.removeDuration()`, restrita à atividade e à data selecionada. Ela reduz os lançamentos mais recentes primeiro, exclui os totalmente consumidos e preserva os snapshots dos remanescentes; ajustes parciais perdem início/fim para não apresentar um intervalo que deixou de corresponder à duração. Remover mais que o total disponível é bloqueado antes de qualquer gravação. Não persistir durações negativas nem mudar o schema ou os cálculos de produtividade/totais. O histórico reflete os registros remanescentes; não se cria um lançamento negativo separado.
 
 O Enter continua protegido contra repetição, composição de teclado e envio duplicado. Após sucesso, totais, gráficos e histórico são atualizados pelo fluxo compartilhado. “Até agora”, Intervalo, valores não temporais, ordem das atividades e **Desfazer último** conservam suas regras anteriores; Desfazer último não passa a reverter descontos e continua removendo o lançamento elegível mais recente. Não alterar dados reais durante a validação. Testes: `tests/meu-tempo-signed-duration.test.mjs`, suites de Meu Tempo, build e suíte completa.
+
+### Top Offers CB — primeira aparição na Variação
+
+Na tabela, **Nova** indica que o `offerKey` não aparece em nenhuma captura salva anterior à selecionada, inclusive em listas diferentes dessa mesma tela. Não significa lançamento no marketplace nem altera a classificação manual Momento do produto. Na primeira captura do histórico disponível, todas as ofertas são Nova. Capturas futuras não influenciam a consulta de uma captura antiga.
+
+`captureOfferVariations()` no domínio puro preserva ↑/↓/= 0 contra a captura anterior da mesma lista. Uma oferta já observada que reaparece após faltar no recorte anterior mostra **—** quando não há posição comparável; ausência em captura parcial não significa remoção. Identidade permanece baseada em `offerKey`, nunca no nome simplificado de apresentação. O cálculo é feito ao renderizar para capturas existentes e futuras, sem gravação, migração, renomeação ou alteração de backups.
+
+A prévia de importação mostra **Produtos novos detectados** no lugar de **Resultados na fonte**. `countNewCapturedOffers()` conta identidades `offerKey` distintas da colagem ainda não presentes em nenhuma captura salva dessa tela, incluindo outras páginas/listas. Na primeira captura todos são novos; repetir uma captura salva retorna zero; retorno de oferta já observada não é novidade. Não indica lançamento no Marketplace. O adaptador fornece a quantidade à view; o total/paginação da fonte permanece no parser, validação, captura e filtros da lista. Comparações de posição continuam contra a captura anterior da mesma lista; nada é salvo antes da confirmação.
+
+Regressões sintéticas: `tests/clickbank-first-appearance.test.mjs`, `tests/clickbank-analysis-view.test.mjs` e `tests/clickbank-top-offers-ui.test.mjs` (primeira coleta, novidade posterior, retorno após recorte, repetição/zero, prévia montada, setas/igualdade, seleção histórica e listas distintas). Cache transitivo: domínio `?v=4`, view `?v=26`, page `?v=32`. Recarregue a lista Top Offers CB; não exige atualizar a extensão.
 
 ### Mapa de responsabilidades
 
@@ -353,6 +375,8 @@ O Enter continua protegido contra repetição, composição de teclado e envio d
 
 ### Captura DTC de países — seletor com ou sem grupos
 
+**Complementos promocionais no título (09/10/2026):** o domínio DTC adiciona uma comparação conservadora para grupos entre parênteses/colchetes com `Money Back Guarantee` (percentual opcional) ou `NEW … Offer` (prefixos Killer/Brand opcionais). O fallback remove somente esses grupos reconhecidos em memória e exige igualdade do segmento inicial completo nos dois títulos; não aceita produto maior por prefixo nem ocorrência no slogan. Fórmulas, doses e grupos desconhecidos permanecem relevantes. Mantém os caminhos anteriores de associação, deduplicação por `offerKey` e bloqueio de múltiplas ofertas; não muda títulos originais, IDs, registros históricos, payload ou proveniência. Regressão sintética em `tests/clickbank-dtc-promotional-title.test.mjs` cobre leitor → receptor → merge, nove países comuns, variantes, ausência/ambiguidade sem save e preservação dos dados recebidos. Cache transitivo: page v30, receptor v5, domínio v4; requer recarregar a lista Top Offers CB, sem reinstalar/recarregar a extensão. Build e testes não executam captura/gravação na base real.
+
 **Associação por nome (07/10/2026):** `src/curadoria/clickbank-top-offers/dtc-country-capture.mjs` também aceita nomes principais de uma palavra com pelo menos 6 caracteres, como `FemiCore` em `FemiCore - 2 Bottles`. Esse caso exige igualdade do segmento inicial completo da oferta (antes de hífen/travessão cercado de espaços, ignorando o prefixo promocional conhecido); não aceita prefixos parciais, ocorrência no slogan ou nomes compostos maiores como `FemiCore Max`. Frases de duas ou mais palavras mantêm o mínimo de 8 caracteres e a associação anterior. Correspondências múltiplas continuam bloqueadas antes do salvamento. Os imports transitivos têm cache atualizado; esta correção requer recarregar Top Offers CB, não reinstalar a extensão. Testes de domínio e receptor usam somente memória; não alteram registros reais.
 
 O botão existente **Capturar países comuns da DTC** usa `extensions/mcc-d0-bridge/clickbank-dtc-reader.mjs`. Ele reconhece somente os campos de país `billing.countryCode` e `shipping.countryCode` por `name` ou `id`. O grupo **Países Comuns/Common Countries** tem prioridade, inclusive se outro seletor oferecer uma lista simples; **Outros países** não é incluído. Sem grupo comum, aceita todos os países de um seletor sem `optgroup` somente quando há de 1 a 10 códigos válidos distintos. O placeholder “Selecione o país”, opções desabilitadas, duplicatas e códigos inválidos não entram nessa contagem. Uma lista simples de 11 ou mais países, uma lista vazia ou grupos não reconhecidos bloqueiam essa alternativa. O limite de 10 não se aplica ao grupo comum do formato anterior.
@@ -363,7 +387,7 @@ Os dois formatos enviam o mesmo payload ao receptor DTC existente: associação 
 
 Os cards de diferença BRL/USD são 25% mais estreitos em desktop que uma divisão em quatro larguras iguais (grade 1.25/1.25/.75/.75), sem reduzir a altura. Título, moeda, saldo e texto auxiliar ficam centralizados. Em larguras intermediárias/estreitas, preserve a grade de duas/uma coluna já existente.
 
-A edição manual do Realizado inclui o mês imediatamente seguinte ao mês civil atual somente na aba Mensal, por `canEditActualForView` (renderização e salvamento). O Consolidado segue sem inputs de Realizado; meses a partir do segundo futuro ficam bloqueados no Mensal. As regras de Pagar, da compatibilidade trimestral e as fórmulas de totais/reserva não mudam. Os lançamentos continuam compartilhados entre as abas.
+A edição manual do Realizado inclui o mês imediatamente seguinte ao mês civil atual somente na aba Mensal, por `canEditActualForView` (renderização e salvamento). O Consolidado segue sem inputs de Realizado; meses a partir do segundo futuro ficam bloqueados no Mensal. Os atalhos Pagar/Pago não são exibidos na tabela Mensal; a compatibilidade trimestral e as fórmulas de totais/reserva não mudam. Os lançamentos continuam compartilhados entre as abas.
 
 A diferença da reserva usa dois cards exclusivos, BRL e USD, com valores maiores e quatro cards responsivos na primeira linha. Ambos reutilizam `reserveCoverage(code).globalDifference`, sem novo cálculo ou gravação. Regressão: `tests/personal-finance-monthly-edit-permission.test.mjs`.
 
@@ -371,7 +395,7 @@ O resumo global da reserva que fica acima da tabela é uma informação comum à
 
 A diferença global da reserva é exibida em dois cartões exclusivos e destacados, BRL e USD, junto dos indicadores da primeira linha, pelo renderizador compartilhado `renderReserveDifferenceCard()`. Use a fonte única `reserveCoverage()` e mantenha BRL e USD separados. Não duplique os valores de diferença na faixa inferior do resumo global; ela permanece com os outros indicadores de compromissos.
 
-Na visão **Mensal**, Realizado pode ser corrigido no mês atual, em competências anteriores e no mês imediatamente seguinte ao mês civil atual. Meses posteriores continuam bloqueados. Valores históricos atualizam os respectivos totais, mas não entram na diferença global atual. No **Consolidado**, os campos Realizado seguem somente para leitura. O atalho **Pagar** permanece uma ação distinta da edição manual, com suas regras anteriores.
+Na visão **Mensal**, Realizado pode ser corrigido no mês atual, em competências anteriores e no mês imediatamente seguinte ao mês civil atual. Meses posteriores continuam bloqueados. Valores históricos atualizam os respectivos totais, mas não entram na diferença global atual. No **Consolidado**, os campos Realizado seguem somente para leitura. Os atalhos **Pagar/Pago** não aparecem na tabela Mensal; a edição manual, os lançamentos e as demais visões permanecem.
 
 - Na extensão MCC, erros estruturados atravessam o service worker até o popup. Duplicidade de nomes deve ter destaque vermelho e lista dos nomes; não apresentar como captura incompleta quando todas as linhas foram lidas e a única divergência é a quantidade de nomes únicos. Paginação parcial, contagem divergente, virtualização, campos/data inválidos continuam bloqueantes e aparecem separadamente. Não enviar capturas rejeitadas nem alterar a base. Toda mudança na extensão incrementa pelo menos o patch de `manifest.json` e exige recarregamento em `chrome://extensions`.
 
@@ -499,6 +523,16 @@ O HTML de cada tela fica no seu `template.html`. O build incorpora esse arquivo 
 - Campanhas, nomes MCC, IDs e diários não são fundidos nem renomeados pela consolidação de apresentação.
 
 Antes de atualizar essas telas, rode seus testes e `tests/extracted-views-build.test.mjs`, depois build e suíte completa. Dados dos testes são sintéticos em memória. No navegador, confira as rotas `/?view=macro`, `/?view=cpa` e `/?view=tested`, navegação entre telas, meses/gráficos, filtros/período/seleção, ordenação e preferências, sem editar ou importar dados reais.
+
+### Paginação da captura ClickBank — extensão 1.2.23
+
+`extensions/mcc-d0-bridge/clickbank-reader.mjs` confirma a faixa da **página atual**, inclusive páginas posteriores e última página menor. O fallback antigo assumia `start = offset + 1`; quando `offset` representava o índice da página, o texto enviado ao Hub tinha uma faixa incompatível com as posições globais e era corretamente rejeitado pelo receptor.
+
+O rodapé explícito continua prioritário. Sem ele, o leitor combina total de resultados, `resultsPerPage`, página selecionada e/ou Rank renderizado; não interpreta a unidade de `offset`. Lê Rank antes da virtualização horizontal e conserva a faixa confirmada durante a varredura. Ao finalizar, exige contagem, nove colunas e todas as posições globais consecutivas da faixa, sem duplicatas. Página/posições divergentes, mudança durante a leitura e falta de evidência bloqueiam o envio. Não altera filtros/ordenação/página, não consulta endpoints/React e não toca em storage.
+
+Cada captura é um recorte próprio: página 2 com 50 itens conserva 51–100, não 1–50; última página conserva sua contagem real. Total/faixa/horário seguem no envelope existente e o Hub continua exigindo **Salvar captura** explícito. Não deduza saída de ofertas fora do recorte. MCC D0/D−1, VSL, DTC, permissões e bancos não mudam.
+
+Regressões em `tests/clickbank-extension.test.mjs` percorrem leitor → envelope → receptor reais em memória, cobrindo offset como página/linha, página 2/3, último recorte menor, 100 itens, virtualização, restauração de rolagem, divergência/ambiguidade/mudança de página e posições duplicadas. Execute também `tests/clickbank-forward.test.mjs`, regressões MCC/VSL, build e suíte completa. A instalação carregada exige reload manual de **Hub MCC D0** em `chrome://extensions` e confirmação da versão **1.2.23**; atualizar somente o Hub não atualiza o worker.
 
 ## Visão Geral e Diário — passo 7
 

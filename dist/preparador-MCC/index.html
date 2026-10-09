@@ -379,7 +379,7 @@
   </div>
 
   <script src="/sidebar-component.js?v=20261008-collapse-icon"></script>
-  <script src="/database.js?v=5"></script>
+  <script src="/database.js?v=6"></script>
   <script src="/overview-domain.js?v=18"></script>
   <script src="/overview/cards-domain.js?v=1"></script>
   <script src="/storage/hub-database.js?v=1"></script>
@@ -404,6 +404,7 @@
       avg_cost: ['custo medio', 'avg cost', 'average cost', 'custo med'],
       abs_top_share: ['porcentagem de impressao na primeira posicao', 'porcentagem de impressoes na primeira posicao', 'parcela de impr na 1a posicao na rede de pesquisa', 'search abs top is', 'search absolute top impression share', 'parc impr 1a posicao pesq', '% de impr 1a posicao'],
       top_share: ['porcentagem de impressao na parte superior', 'porcentagem de impressoes na parte superior', 'parcela de impr na parte superior da rede de pesquisa', 'search top is', 'search top impression share', 'parc impr parte sup pesq', '% de impr parte sup'],
+      search_impression_share: ['parc de impr da rede de pesquisa', 'parcela de impr da rede de pesquisa', 'parcela de impressoes da rede de pesquisa', 'participacao de impressoes da rede de pesquisa', 'parc impr rede de pesquisa', 'search impression share', 'search impr share', 'search is'],
       budget: ['orcamento', 'orcamento diario', 'budget', 'daily budget', 'budget amount'],
       bid_strategy: ['estrategia de lance', 'estrategia de lances', 'tipo de estrategia de lances', 'bid strategy', 'bid strategy type', 'bidding strategy type'],
       target_cpa: ['cpa desejado', 'target cpa', 'cpa alvo', 'meta de cpa'],
@@ -628,6 +629,7 @@
         I:{ value:usd ? averageCost : null }, J:{ value:averageCostBrl },
         K:{ value:panelPctDecimal(metrics.porcentagem_impressao_primeira_posicao) },
         L:{ value:panelPctDecimal(metrics.porcentagem_impressao_parte_superior) },
+        ...window.CampaignDatabase.searchImpressionShareCells(metrics),
         M:{ value:`${usd ? 'US$' : 'R$'} ${panelNumber(panelValue(metrics.orcamento_diario))}/dia` },
         N:{ value:panelStrategyLabel(campaign, metrics) }, O:{ value:total }, P:{ value:panelValue(metrics.valor_conversao) == null ? null : (usd ? Number(panelValue(metrics.valor_conversao)) * PANEL_USD_BRL_RATE : Number(panelValue(metrics.valor_conversao))) }, Q:{ value:panelStatusObservation(metrics.status_campanha) }
       }};
@@ -1009,6 +1011,7 @@
     ];
     const MCC_GRID_OPTIONAL_COLUMNS = [
       ['campaign_state','Campaign status'], ['target_geo','Target geo'],
+      ['search_impression_share','Search impression share'],
       ['conversion_value','Conversion value'], ['target_cpa','Target CPA']
     ];
     const MCC_GRID_NUMERIC_FIELDS = new Set(['impressions','clicks','conversions','conversion_value','avg_cost','abs_top_share','top_share','budget','target_cpa','cost']);
@@ -1059,7 +1062,7 @@
       if (accountIdMissing.length) throw new Error(`Número completo da conta ilegível em ${accountIdMissing.length} campanha(s); a captura não foi aceita.`);
       const headers = [...MCC_GRID_COLUMNS];
       for (const [fieldName, header] of MCC_GRID_OPTIONAL_COLUMNS) {
-        if (capture.fields?.[fieldName]?.found && !capture.fields?.[fieldName]?.ambiguous) headers.push([fieldName, header]);
+        if (capture.fields?.[fieldName]?.found && !capture.fields?.[fieldName]?.hidden && !capture.fields?.[fieldName]?.ambiguous) headers.push([fieldName, header]);
       }
       const locale = capture.locale || 'en-US';
       const headerRow = headers.map(([, header]) => csvCell(header)).join(',');
@@ -1096,6 +1099,11 @@
       if (!source) return null;
       const matches = source.records.filter(record => record.nome_campanha_exato === name);
       return matches.length === 1 ? matches[0] : null;
+    }
+
+    function searchImpressionShareMetric(record) {
+      if (!Object.hasOwn(record?.raw || {}, 'search_impression_share')) return {};
+      return { participacao_impressao_rede_pesquisa:window.CampaignDatabase.parseSearchImpressionShare(record.raw.search_impression_share) };
     }
 
     function field(record, key, parser = null) { return record ? stateValue(record.raw[key], parser) : { valor:null, estado:'ausente' }; }
@@ -1228,11 +1236,14 @@
         if (canCompare && r1 && r0 && r1.moeda && r0.moeda && r1.moeda !== r0.moeda) { pending = true; observations.push('Mesmo nome exato, mas moedas diferentes entre D−1 e D0.'); }
         const date1 = r1?.data_linha || (d1?.dates.length === 1 ? d1.dates[0] : null);
         const date0 = r0?.data_linha || (d0?.dates.length === 1 ? d0.dates[0] : null);
-        const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), estado_campanha:stateValue(r1?.estado_campanha), status_qualificacao:stateValue(r1?.status_qualificacao), status_campanha:stateValue(r1?.status_campanha), geo:stateValue(r1?.geo), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
-        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0?.name ?? null, linha:r0?.linha_origem ?? null } };
+        const metrics = { presente:names1.has(name), data:stateValue(date1), conta:stateValue(r1?.conta), estado_campanha:stateValue(r1?.estado_campanha), status_qualificacao:stateValue(r1?.status_qualificacao), status_campanha:stateValue(r1?.status_campanha), geo:stateValue(r1?.geo), moeda:stateValue(r1?.moeda), impressoes:field(r1,'impressions',parseNumber), cliques_google:field(r1,'clicks',parseNumber), conversoes:field(r1,'conversions',parseNumber), valor_conversao:field(r1,'conversion_value',parseNumber), custo_medio:field(r1,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r1,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r1,'top_share',parseNumber), ...searchImpressionShareMetric(r1), orcamento_diario:field(r1,'budget',parseNumber), estrategia_lance:field(r1,'bid_strategy'), cpa_desejado:field(r1,'target_cpa',parseNumber), custo_total:field(r1,'cost',parseNumber), origem:{ arquivo:d1?.name ?? null, linha:r1?.linha_origem ?? null } };
+        const metrics0 = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), estado_campanha:stateValue(r0?.estado_campanha), status_qualificacao:stateValue(r0?.status_qualificacao), status_campanha:stateValue(r0?.status_campanha), geo:stateValue(r0?.geo), moeda:stateValue(r0?.moeda), impressoes:field(r0,'impressions',parseNumber), cliques_google:field(r0,'clicks',parseNumber), conversoes:field(r0,'conversions',parseNumber), valor_conversao:field(r0,'conversion_value',parseNumber), custo_medio:field(r0,'avg_cost',parseNumber), porcentagem_impressao_primeira_posicao:field(r0,'abs_top_share',parseNumber), porcentagem_impressao_parte_superior:field(r0,'top_share',parseNumber), ...searchImpressionShareMetric(r0), orcamento_diario:field(r0,'budget',parseNumber), estrategia_lance:field(r0,'bid_strategy'), cpa_desejado:field(r0,'target_cpa',parseNumber), custo_total:field(r0,'cost',parseNumber), origem:{ arquivo:d0?.name ?? null, linha:r0?.linha_origem ?? null } };
         metrics.conta_id = stateValue(r1?.conta_id); metrics0.conta_id = stateValue(r0?.conta_id);
         const todayCost = { presente:names0.has(name), data:stateValue(date0), conta:stateValue(r0?.conta), status_campanha:stateValue(r0?.status_campanha), moeda:stateValue(r0?.moeda), custo_total_destino_totais_coluna_M:field(r0,'cost',parseNumber), origem:{ arquivo:d0?.name ?? null, linha:r0?.linha_origem ?? null } };
         if ([metrics.impressoes, metrics.cliques_google, metrics.conversoes, metrics.valor_conversao].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D−1.'); }
+        for (const [label, data] of [['D−1', metrics], ['D0', metrics0]]) {
+          if (data.presente && data.participacao_impressao_rede_pesquisa?.estado === 'invalido') { pending = true; observations.push(`Participação de impressões da rede de pesquisa inválida em ${label}.`); }
+        }
         if (hasD0 && [metrics0.impressoes, metrics0.cliques_google, metrics0.conversoes, metrics0.valor_conversao, metrics0.custo_medio, metrics0.porcentagem_impressao_primeira_posicao, metrics0.porcentagem_impressao_parte_superior, metrics0.orcamento_diario, metrics0.custo_total].some(v => v.estado === 'invalido')) { pending = true; observations.push('Há métrica inválida em D0.'); }
         if (hasD0 && todayCost.custo_total_destino_totais_coluna_M.estado === 'invalido') { pending = true; observations.push('Custo total inválido em D0.'); }
         if (r1 && !r1.moeda) { pending = true; observations.push('Moeda ausente em D−1.'); }

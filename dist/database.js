@@ -238,6 +238,25 @@
   }
   function metricValue(value){if(value==null||value==='')return null;if(typeof value==='object'&&Object.hasOwn(value,'valor')){if(['ausente','invalido'].includes(value.estado))return null;return value.valor===''?null:value.valor}return value}
   function metricRecord(metrics,key){return Object.hasOwn(metrics||{},key)?clone(metrics[key]):null}
+  // Search impression share is a percentage, not a top/absolute-top rate.
+  // Bounds remain non-numeric observations; absent/invalid values never become zero.
+  function parseSearchImpressionShare(raw){
+    const original=String(raw??'').trim();
+    if(!original||/^(?:--?|—|n\/?a|n\.a\.|não disponível|nao disponivel)$/i.test(original))return{valor:null,estado:'ausente',original};
+    const match=original.match(/^([<>])?\s*(\d+(?:[.,]\d+)?)\s*%?$/),value=match?Number(match[2].replace(',','.')):NaN;
+    if(!Number.isFinite(value)||value<0||value>100)return{valor:null,estado:'invalido',original};
+    if(match[1])return{valor:null,estado:'limite',operador:match[1],limite:value,original};
+    return{valor:value,estado:value===0?'zero_confirmado':'confirmado',original};
+  }
+  function searchImpressionShareCells(metrics){
+    const key='participacao_impressao_rede_pesquisa';
+    if(!Object.hasOwn(metrics||{},key))return{};
+    const field=metrics[key],state=field?.estado;
+    const parsed=state==='ausente'||state==='invalido'?{valor:null,estado:state,original:String(field.original??'')}:parseSearchImpressionShare(state==='limite'?`${field.operador} ${field.limite}%`:field?.valor??field);
+    const cell={value:parsed.estado==='limite'?`${parsed.operador} ${String(parsed.limite).replace('.',',')}%`:parsed.valor==null?null:parsed.valor/100,estado:parsed.estado,original:String(field?.original??parsed.original)};
+    if(parsed.estado==='limite')Object.assign(cell,{operador:parsed.operador,limite:parsed.limite});
+    return{R:cell};
+  }
   function explicitCampaignStatus(source){for(const metrics of[source?.metricas_D_zero,source?.metricas_D_menos_1]){const value=metricValue(metrics?.estado_campanha)??metrics?.raw?.campaign_state;if(value!=null&&String(value).trim())return String(value).trim();const fallback=metricValue(metrics?.status_campanha),normalized=normalizeProductKey(fallback);if(fallback!=null&&(pausedCampaignState.test(normalized)||activeCampaignState.test(normalized)))return String(fallback).trim()}return null}
   function qualificationStatus(source){for(const metrics of[source?.metricas_D_zero,source?.metricas_D_menos_1]){const value=metricValue(metrics?.status_qualificacao)??metricValue(metrics?.status_campanha)??metrics?.raw?.status;if(value!=null&&String(value).trim())return String(value).trim()}return null}
   function isRejectedQualification(value){const normalized=normalizeProductKey(value);return /nao qualificad|reprovad|disapprov|not eligible|ineligible/.test(normalized)}
@@ -257,7 +276,7 @@
   }
   function explicitGeo(source){for(const value of[source?.geo,source?.geo_codes,source?.metricas_D_zero?.geo,source?.metricas_D_menos_1?.geo]){const resolved=metricValue(value);if(resolved!=null&&String(resolved).trim())return clone(resolved)}return null}
   function derivedMetricSnapshot(metrics){const value=key=>metricValue(metrics?.[key]),cost=Number(value('custo_total')),conversions=Number(value('conversoes')),revenue=Number(value('valor_conversao')),validCost=value('custo_total')!=null&&Number.isFinite(cost),validConversions=value('conversoes')!=null&&Number.isFinite(conversions),validRevenue=value('valor_conversao')!=null&&Number.isFinite(revenue);return{cpa_real:validCost&&validConversions&&conversions>0?cost/conversions:null,roi:validCost&&validRevenue&&cost>0?(revenue-cost)/cost*100:null}}
-  function snapshotPeriod(metrics){if(!metrics||metrics.presente===false)return null;const fields=['data','moeda','impressoes','cliques_google','custo_total','conversoes','valor_conversao','cpa_desejado','orcamento_diario','estrategia_lance','porcentagem_impressao_primeira_posicao','porcentagem_impressao_parte_superior'];const snapshot={};for(const key of fields)snapshot[key]=metricRecord(metrics,key);snapshot.status_campanha_observado=metricRecord(metrics,'estado_campanha')||metricRecord(metrics,'raw')?.campaign_state||null;snapshot.status_qualificacao=metricRecord(metrics,'status_qualificacao')||metricRecord(metrics,'status_campanha')||metricRecord(metrics,'raw')?.status||null;snapshot.geo=metricRecord(metrics,'geo');Object.assign(snapshot,derivedMetricSnapshot(metrics));return snapshot}
+  function snapshotPeriod(metrics){if(!metrics||metrics.presente===false)return null;const fields=['data','moeda','impressoes','cliques_google','custo_total','conversoes','valor_conversao','cpa_desejado','orcamento_diario','estrategia_lance','porcentagem_impressao_primeira_posicao','porcentagem_impressao_parte_superior','participacao_impressao_rede_pesquisa'];const snapshot={};for(const key of fields)snapshot[key]=metricRecord(metrics,key);snapshot.status_campanha_observado=metricRecord(metrics,'estado_campanha')||metricRecord(metrics,'raw')?.campaign_state||null;snapshot.status_qualificacao=metricRecord(metrics,'status_qualificacao')||metricRecord(metrics,'status_campanha')||metricRecord(metrics,'raw')?.status||null;snapshot.geo=metricRecord(metrics,'geo');Object.assign(snapshot,derivedMetricSnapshot(metrics));return snapshot}
   function campaignSnapshot(base,source,campaign,identity){const operation=base.campos_operacionais.find(item=>item.campanha_id===campaign?.id);return{status_hub:campaign?.status||null,status_campanha_observado:explicitCampaignStatus(source),status_qualificacao:qualificationStatus(source),geo:explicitGeo(source),periods:{D_menos_1:snapshotPeriod(source?.metricas_D_menos_1),D_zero:snapshotPeriod(source?.metricas_D_zero)},campos_operacionais:operation?{roi_atual:clone(operation.roi_atual??null),investimento_atual:clone(operation.investimento_atual??null),limite_teste:clone(operation.limite_teste??null),valor_restante:clone(operation.valor_restante??null)}:null,identity_confidence:identity.confidence}}
   function eventId(type,entity,fingerprint='once'){return`evt:${type}:${encodeURIComponent(String(entity||'unknown'))}:${encodeURIComponent(String(fingerprint))}`}
   function buildObservabilityEvents({base,beforeCampaigns,beforeDaily,beforeManifest,beforeSnapshotNames,manifest,source,dateChanges=[]}){
@@ -471,5 +490,5 @@
     }
     return map;
   }
-  window.CampaignDatabase={SCHEMA,create,normalize,mergeEventLogs,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,salesAdjustmentMap};
+  window.CampaignDatabase={parseSearchImpressionShare,searchImpressionShareCells,SCHEMA,create,normalize,mergeEventLogs,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,salesAdjustmentMap};
 })();

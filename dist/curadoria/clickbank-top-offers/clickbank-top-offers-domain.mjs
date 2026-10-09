@@ -212,7 +212,27 @@ export function compareCapturedOffers(current = [], previous = []) {
   });
 }
 
+// First appearance is relative to the selected capture, never to future captures or a partial previous page alone.
+export function captureOfferVariations(selected, captures = []) {
+  if (!selected) return [];
+  const ordered = [...captures].sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)));
+  const index = ordered.findIndex(capture => capture.captureId === selected.captureId);
+  if (index < 0) return compareCapturedOffers(selected.offers);
+  const earlier = ordered.slice(index + 1);
+  const previous = earlier.find(capture => capture.listName === selected.listName);
+  const seen = new Set(earlier.flatMap(capture => capture.offers.map(offer => offer.offerKey)));
+  return compareCapturedOffers(selected.offers, previous?.offers || []).map(item =>
+    !seen.has(item.offerKey) ? {...item, movement:'new', priorRank:null, rankDelta:null} : item);
+}
+
+// The draft is not part of saved history; count distinct identities, not source totals.
+export function countNewCapturedOffers(offers = [], captures = []) {
+  const seen = new Set(captures.flatMap(capture => capture.offers.map(offer => offer.offerKey)));
+  return new Set(offers.filter(offer => !seen.has(offer.offerKey)).map(offer => offer.offerKey)).size;
+}
+
 export function movementLabel(item = {}) {
+  if (item.movement === 'new') return 'Nova';
   if (item.movement === 'up') return `↑ ${item.rankDelta}`;
   if (item.movement === 'down') return `↓ ${Math.abs(item.rankDelta)}`;
   if (item.movement === 'same') return '= 0';

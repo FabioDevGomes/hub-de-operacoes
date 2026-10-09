@@ -17,8 +17,8 @@ const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesB
 test('native diary preserves columns, empty data, escaping and selection arguments',()=>{
   const s=setup(empty());s.controller.render('MCC exata','workbook','campaign-123');
   assert.deepEqual(s.requests,[['MCC exata','workbook','campaign-123']]);
-  assert.equal((s.get('#productHead').innerHTML.match(/<th>/g)||[]).length,17);
-  assert.match(s.get('#productBody').innerHTML,/colspan="17"/);assert.match(s.get('#productSummary').innerHTML,/&lt;Teste&gt;/);
+  assert.equal((s.get('#productHead').innerHTML.match(/<th\b[^>]*>/g)||[]).length,18);
+  assert.match(s.get('#productBody').innerHTML,/colspan="18"/);assert.match(s.get('#productSummary').innerHTML,/&lt;Teste&gt;/);
   assert.match(s.get('#productSummary').innerHTML,/<strong>—<\/strong>/);assert.equal(s.get('#rowCount').textContent,'0 dias');
   assert.equal(s.get('#legacySummaryBody').classList.contains('hidden'),true);
 });
@@ -44,15 +44,15 @@ test('diary totals preserve absence, zero and numeric values without treating in
 });
 
 test('every campaign diary dims observed zero only in the requested metric columns',()=>{
-  const columns=new Set(['B','C','D','E','F','G','H','I','J','K','L','O','P']);
+  const columns=new Set(['B','C','D','E','F','G','H','I','J','K','L','R','O','P']);
   const row={date:'2026-09-29',cells:Object.fromEntries(domain.productColumns.map(([col])=>[col,{value:col==='A'?'2026-09-29':0}]))},before=JSON.stringify(row);
   const s=setup({...empty(),rows:[row],displayRows:[row]});
   for(const source of ['manifest','workbook']){
     s.controller.render('Campanha sintética',source,'campaign-synthetic');
     const cells=[...s.get('#productBody').innerHTML.matchAll(/<td class="([^"]*)">([\s\S]*?)<\/td>/g)];
-    assert.equal(cells.length,17);
+    assert.equal(cells.length,18);
     domain.productColumns.forEach(([col],index)=>assert.equal(cells[index][1].includes('product-zero-value'),columns.has(col),'zero em '+col));
-    assert.match(cells[6][2],/0%/);assert.match(cells[14][2],/0\.00/);
+    assert.match(cells[6][2],/0%/);assert.match(cells[15][2],/0\.00/);
   }
   assert.equal(JSON.stringify(row),before,'a classificação visual não altera células nem dados de campanha');
 });

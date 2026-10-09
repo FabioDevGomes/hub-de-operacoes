@@ -1,4 +1,4 @@
-import {clickBankOfferDetailsUrl, compareCapturedOffers, movementLabel} from './clickbank-top-offers-domain.mjs?v=2';
+import {clickBankOfferDetailsUrl, compareCapturedOffers, captureOfferVariations, movementLabel} from './clickbank-top-offers-domain.mjs?v=4';
 import {lastCollectionCell, latestCollectionIndex, collectionTime} from '../last-collection.mjs';
 import {mountCurationColumns} from '../curation-columns.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
@@ -55,7 +55,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   }
   function metricText(metric) { return metric?.raw || '—'; }
   function pageTypeText(item) { return salesPageTypeLabel(metadataFor(item).salesPageType); }
-  function movementClass(item) { return item.movement === 'up' ? 'movement-up' : item.movement === 'down' ? 'movement-down' : ''; }
+  function movementClass(item) { return item.movement === 'up' || item.movement === 'new' ? 'movement-up' : item.movement === 'down' ? 'movement-down' : ''; }
   function trendLatest(item) { return Trends.latestAssessment(trendsFor(item).assessments); }
   function updateSheetSaveButton() {
     const button=$('#saveSheetButton',root);
@@ -109,7 +109,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   function renderTable(selected, previous) {
     const query=$('#search',root).value.trim().toLocaleLowerCase();
     const visibility=$('#visibilityFilter',root).value || 'visible';
-    let offers=selected?compareCapturedOffers(selected.offers,previous?.offers||[]).map(item=>({...item,displayName:productNameFromOfferTitle(item.offerName,item.seller)})):[];
+    let offers=captureOfferVariations(selected,state.captures).map(item=>({...item,displayName:productNameFromOfferTitle(item.offerName,item.seller)}));
     offers=offers.filter(item=>!query||`${item.displayName} ${item.offerName} ${item.seller}`.toLocaleLowerCase().includes(query));
     offers=offers.filter(item=>visibility==='all'||(visibility==='hidden')===hiddenOffers.has(item.offerKey));
     offers.sort((a,b)=>{
@@ -130,7 +130,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       <td class="number">${escape(metricText(item.average))}</td><td class="number">${escape(metricText(item.initial))}</td>
       <td class="page-type-cell">${escape(pageTypeText(item))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
-      <td class="number ${movementClass(item)}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
+      <td class="number ${movementClass(item)}" title="${escape(item.movement==='new'?'Primeira aparição desta oferta no histórico até esta captura.':item.movement==='uncompared'?'Oferta já observada no histórico; sem posição na captura anterior comparável.':'Variação de posição em relação à captura anterior comparável.')}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
     columns.apply();
     $('#empty',root).classList.toggle('hidden',offers.length>0);
     $('#empty',root).textContent=selected?'Nenhuma oferta corresponde aos filtros.':'Cole a primeira captura Top Offers da ClickBank para começar.';
@@ -240,8 +240,8 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     if(!sheet.classList.contains('hidden'))renderSheet();
   }
 
-  function showImportPreview({parsed,compared=[]}) {
-    $('#previewMetrics',root).innerHTML=[['Linhas lidas',parsed.parsedCount],['Resultados na fonte',parsed.page.total??'—'],['Faixa de posições',parsed.page.start==null?'—':`${parsed.page.start}–${parsed.page.end}`],['Correspondências anteriores',compared.filter(item=>item.movement!=='uncompared').length],['Subiram',compared.filter(item=>item.movement==='up').length],['Caíram',compared.filter(item=>item.movement==='down').length]].map(([label,value])=>`<div><span>${escape(label)}</span><b>${escape(value)}</b></div>`).join('');
+  function showImportPreview({parsed,compared=[],newProductCount=null}) {
+    $('#previewMetrics',root).innerHTML=[['Linhas lidas',parsed.parsedCount],['Produtos novos detectados',newProductCount??'—'],['Faixa de posições',parsed.page.start==null?'—':`${parsed.page.start}–${parsed.page.end}`],['Correspondências anteriores',compared.filter(item=>item.movement!=='uncompared').length],['Subiram',compared.filter(item=>item.movement==='up').length],['Caíram',compared.filter(item=>item.movement==='down').length]].map(([label,value])=>`<div><span>${escape(label)}</span><b>${escape(value)}</b></div>`).join('');
     const partial=parsed.page.total!=null&&parsed.parsedCount<parsed.page.total;
     $('#previewStatus',root).textContent=partial?'Captura parcial do ranking. A ausência de um item não será interpretada como saída.':'Revise a prévia; nada será salvo antes de confirmar.';
     $('#previewIssues',root).innerHTML=parsed.issues.length?parsed.issues.map(issue=>`<div class="${escape(issue.severity)}">${escape(issue.reason)}</div>`).join(''):'<div class="ok">Estrutura reconhecida.</div>';

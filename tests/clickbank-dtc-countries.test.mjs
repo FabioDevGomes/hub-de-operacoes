@@ -157,11 +157,11 @@ test('DTC associates a single-word product name without matching partial names o
 test('DTC matching update invalidates the complete browser import chain and publishes the domain',async()=>{
   const root=new URL('../',import.meta.url);
   const read=path=>readFile(new URL(path,root),'utf8');
-  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=29/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=32/);
   const page=await read('src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs');
-  assert.match(page,/extension-capture\.mjs\?v=4/);
-  assert.match(page,/dtc-country-capture\.mjs\?v=3/);
-  assert.match(await read('src/curadoria/clickbank-top-offers/extension-capture.mjs'),/dtc-country-capture\.mjs\?v=3/);
+  assert.match(page,/extension-capture\.mjs\?v=5/);
+  assert.match(page,/dtc-country-capture\.mjs\?v=4/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/extension-capture.mjs'),/dtc-country-capture\.mjs\?v=4/);
   assert.equal(await read('dist/curadoria/clickbank-top-offers/dtc-country-capture.mjs'),await read('src/curadoria/clickbank-top-offers/dtc-country-capture.mjs'));
 });
 

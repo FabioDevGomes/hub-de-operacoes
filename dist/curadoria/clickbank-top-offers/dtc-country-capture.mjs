@@ -12,6 +12,22 @@ function checkoutProductNameFocus(value) {
   return isEligibleProductName(firstNamePart) ? firstNamePart : fullName;
 }
 
+// Comparação apenas: nunca reescreve título, identidade ou proveniência da captura.
+// Grupos desconhecidos (variante, fórmula, dose etc.) continuam fazendo parte do nome.
+function withoutKnownPromotionalGroups(value) {
+  return String(value || '').replace(/\([^()]*\)|\[[^\[\]]*\]/g, group => {
+    const text = group.slice(1,-1).trim();
+    const guarantee = /^(?:\d{1,3}\s*%\s+)?money[\s-]+back[\s-]+guarantee[!.]*$/i.test(text);
+    const newOffer = /^(?:killer\s+)?(?:brand[\s-]+)?new(?:\s+[a-z]+){0,4}\s+offer[!.]*$/i.test(text);
+    return guarantee || newOffer ? ' ' : group;
+  }).replace(/\s+/g,' ').trim();
+}
+
+function promotionalComparisonName(value) {
+  return normalize(withoutKnownPromotionalGroups(value).split(/\s+[-–—]\s+/)[0])
+    .replace(/^(?:new|hot offer|top offer)\s+/, '');
+}
+
 export function validateDtcCountryCapture(payload) {
   if (payload?.schema !== 'clickbank-dtc-country-capture-v1' || payload.source !== 'clickbank_dtc_checkout'
     || typeof payload.productName !== 'string' || payload.productName.trim().length < 5 || payload.productName.length > 200
@@ -26,6 +42,7 @@ export function validateDtcCountryCapture(payload) {
 export function matchDtcCheckoutOffer(productName, offers) {
   const query = normalize(productName);
   const focusedName = checkoutProductNameFocus(productName);
+  const promotionalName = promotionalComparisonName(productName);
   const words = focusedName.split(' ').filter(Boolean);
   if (!isEligibleProductName(focusedName) || !Array.isArray(offers)) return {status:'none', matches:[]};
   const matches = new Map();
@@ -40,7 +57,12 @@ export function matchDtcCheckoutOffer(productName, offers) {
       : title === focusedName || title.startsWith(`${focusedName} `)
       || titleWithoutMarketplaceLabel === focusedName
       || titleWithoutMarketplaceLabel.startsWith(`${focusedName} `);
-    if (fullNameMatch || productNameMatch) matches.set(offer.offerKey, offer);
+    // O fallback novo exige igualdade do segmento inicial inteiro, não um prefixo.
+    const promotionalNameMatch = isEligibleProductName(promotionalName)
+      && (withoutKnownPromotionalGroups(productName) !== String(productName || '').trim()
+        || withoutKnownPromotionalGroups(offer.offerName) !== offer.offerName.trim())
+      && promotionalComparisonName(offer.offerName) === promotionalName;
+    if (fullNameMatch || productNameMatch || promotionalNameMatch) matches.set(offer.offerKey, offer);
   }
   const result = [...matches.values()];
   return {status:result.length === 1 ? 'unique' : result.length ? 'ambiguous' : 'none', matches:result};

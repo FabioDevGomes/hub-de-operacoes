@@ -31,16 +31,16 @@ test('diary reuses global picker, preserves Data, synchronizes footer and persis
   assert.deepEqual(s.counts(),{loads:1,mounts:1});assert.equal(s.writes.length,0);
   assert.match(s.parts['[data-column-options]'].innerHTML,/data-column-choice="A" checked disabled/);
   const before=JSON.stringify(s.snapshot()),cards=s.get('#productSummary').innerHTML,totals=s.get('#productTotals').innerHTML;
-  s.choose('O',false);for(const row of s.table.rows)assert.equal(row.cells[14].hidden,true);
+  s.choose('O',false);for(const row of s.table.rows)assert.equal(row.cells[15].hidden,true);
   s.choose('A',false);assert.equal(s.table.rows[0].cells[0].hidden,false);
-  assert.deepEqual(s.writes,['hub:product-diary:visible-columns:v1']);assert.equal(s.values.has('hub:overview:visible-columns:v1'),false);
+  assert.deepEqual(s.writes,['hub:product-diary:visible-columns:v1','hub:product-diary:search-share-choice:v1']);assert.equal(s.values.has('hub:overview:visible-columns:v1'),false);
   assert.equal(s.get('#productSummary').innerHTML,cards);assert.equal(s.get('#productTotals').innerHTML,totals);assert.equal(JSON.stringify(s.snapshot()),before);
   s.table.rows=[s.row(),s.row(),s.row()];s.table.tHead.rows=[s.table.rows[0]];s.controller.render('Segunda','workbook','exact-id');
-  for(const row of s.table.rows)assert.equal(row.cells[14].hidden,true);assert.deepEqual(s.counts(),{loads:1,mounts:1});
-  s.choose('O',true);for(const row of s.table.rows)assert.equal(row.cells[14].hidden,false);
+  for(const row of s.table.rows)assert.equal(row.cells[15].hidden,true);assert.deepEqual(s.counts(),{loads:1,mounts:1});
+  s.choose('O',true);for(const row of s.table.rows)assert.equal(row.cells[15].hidden,false);
   for(const [key] of s.table.rows[0].cells.map((_,i)=>[String.fromCharCode(65+i)]))if(key!=='A')s.choose(key,false);
   assert.equal(s.get('#productBody td.empty').colSpan,1,'empty state follows visible columns');
-  s.parts['[data-column-reset]'].emit('click');s.picker.emit('click');assert.equal(s.table.dataset.columnSelection,'all');assert.equal(s.get('#productBody td.empty').colSpan,17);
+  s.parts['[data-column-reset]'].emit('click');s.picker.emit('click');assert.equal(s.table.dataset.columnSelection,'all');assert.equal(s.get('#productBody td.empty').colSpan,18);
   assert.equal(s.values.has('hub:product-diary:visible-columns:v1'),false);
   s.picker.open=true;s.picker.emit('keydown',{key:'Escape',preventDefault(){}});assert.equal(s.picker.open,false);assert.equal(s.parts.summary.focused,true);
   s.picker.open=true;s.doc.emit('pointerdown',{target:{}});assert.equal(s.picker.open,false);
@@ -54,6 +54,19 @@ test('stored diary preference restores on reopen, blocked storage reports sessio
   assert.equal(s.picker.classList.contains('hidden'),true);assert.equal(s.picker.open,false);assert.equal(s.get('#productTableWrap').classList.contains('hidden'),true);
   s.setSnapshot({...s.snapshot(),summary:null});s.controller.render('Nativa');assert.equal(s.picker.classList.contains('hidden'),false);assert.equal(s.table.rows[0].cells[1].hidden,false);
   s.controller.dispose();
+});
+test('new share column appears in older saved preferences but respects a later explicit hide',async()=>{
+  const stored=new Map([['hub:product-diary:visible-columns:v1','["A","C"]']]),writes=[];
+  const preferences={getItem:key=>stored.get(key),setItem:(key,value)=>{writes.push(key);stored.set(key,value)},removeItem:key=>stored.delete(key)};
+  const first=setup({preferences});first.controller.render('Antiga');await settled();
+  assert.equal(first.table.rows[0].cells[12].hidden,false);
+  assert.equal(first.table.rows[0].cells[1].hidden,true);
+  assert.equal(writes.length,0,'displaying an old preference does not write storage');
+  first.choose('R',false);first.controller.dispose();
+  const reopened=setup({preferences});reopened.controller.render('Reaberta');await settled();
+  assert.equal(reopened.table.rows[0].cells[12].hidden,true);
+  assert.equal(reopened.table.rows[0].cells[1].hidden,true);
+  reopened.controller.dispose();
 });
 test('loading failure never alters the table or reports a saved preference; disposal cancels late mounting',async()=>{
   const s=setup({loader:()=>Promise.reject(Error('offline'))});s.controller.render('Teste');await settled();assert.match(s.parts['[data-column-message]'].textContent,/Não foi possível carregar/);assert.equal(s.writes.length,0);assert.equal(s.table.rows[0].cells[1].hidden,false);s.controller.dispose();

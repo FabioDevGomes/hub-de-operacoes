@@ -41,6 +41,6 @@
       }
       return totals;
     }
-    const productColumns=[['A','Data'],['B','Impr.'],['C','Cliques Google'],['D','Cliques plataforma'],['E','Avanço presell'],['F','Conv.'],['G','CTR'],['H','Checkout'],['I','Custo médio US$'],['J','Custo médio R$'],['K','% 1ª posição'],['L','% parte sup.'],['M','Orçam. diário'],['N','Estratégia'],['O','Investimento'],['P','Comissão'],['Q','Observações']];
+    const productColumns=[['A','Data'],['B','Impr.'],['C','Cliques Google'],['D','Cliques plataforma'],['E','Avanço presell'],['F','Conv.'],['G','CTR'],['H','Checkout'],['I','Custo médio US$'],['J','Custo médio R$'],['K','% 1ª posição'],['L','% parte sup.'],['R','Parc. impr. pesquisa'],['M','Orçam. diário'],['N','Estratégia'],['O','Investimento'],['P','Comissão'],['Q','Observações']];
   global.ProductDiaryDomain=Object.freeze({excelDate,sheetDailyRows,productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,productDiaryTotals,productDiaryTableTotals,productColumns});
 })(typeof window==='object'?window:globalThis);

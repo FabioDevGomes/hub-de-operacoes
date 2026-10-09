@@ -61,6 +61,30 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
     const content = grid.querySelector('.MuiDataGrid-virtualScrollerContent');
     if (!scroller || !content || grid.getAttribute('aria-busy') === 'true') throw new Error('A tabela ainda não terminou de carregar.');
     const initialUrl = location.href;
+    let verifiedStart = null;
+    const renderedPageStart = limit => {
+      const rankFields = new Set(), rankIndices = new Set();
+      for (const header of grid.querySelectorAll('[role="columnheader"]')) {
+        const label = header.querySelector('.MuiDataGrid-columnHeaderTitle')?.textContent ?? header.textContent;
+        const rankColumn = columns.find(column => column.key === 'rank');
+        if (!rankColumn || !(normalize(label) === normalize(rankColumn.label)
+          || rankColumn.aliases.includes(normalize(header.getAttribute('data-field'))))) continue;
+        const field = header.getAttribute('data-field'), index = header.getAttribute('aria-colindex');
+        if (field) rankFields.add(field);
+        if (index) rankIndices.add(index);
+      }
+      const starts = new Set();
+      for (const row of grid.querySelectorAll('.MuiDataGrid-row')) {
+        for (const cell of row.querySelectorAll('.MuiDataGrid-cell')) {
+          if (!rankFields.has(cell.getAttribute('data-field')) && !rankIndices.has(cell.getAttribute('aria-colindex'))) continue;
+          const text = clean(cell.textContent), rank = /^\d+$/.test(text) ? Number(text) : null;
+          if (!Number.isSafeInteger(rank) || rank < 1) throw new Error('Uma posição de produto não pôde ser confirmada.');
+          starts.add(Math.floor((rank - 1) / limit) * limit + 1);
+        }
+      }
+      if (starts.size > 1) throw new Error('As posições visíveis pertencem a páginas diferentes. Aguarde o carregamento e tente novamente.');
+      return starts.size ? [...starts][0] : null;
+    };
     const countSnapshot = () => {
       const pagination = clean(grid.querySelector('.MuiTablePagination-displayedRows')?.textContent);
       const range = pagination.match(/([\d,.]+)\s*[-–—]\s*([\d,.]+)\s*(?:of|de)\s*([\d,.]+)/i);
@@ -70,19 +94,33 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
         return { count:total === 0 ? 0 : last - first + 1, signature:pagination, start:first, end:last, total };
       }
       const params = new URLSearchParams(url.hash.split('?')[1] || url.search.slice(1));
-      const limit = Number(params.get('resultsPerPage')), offset = Number(params.get('offset'));
+      const limit = Number(params.get('resultsPerPage'));
       const totalMatch = clean(document.body?.innerText).match(/([\d,.]+)\s+results\b/i);
-      if (params.has('resultsPerPage') && params.has('offset') && totalMatch && limit > 0 && offset >= 0) {
+      if (params.has('resultsPerPage') && totalMatch && Number.isSafeInteger(limit) && limit > 0 && limit <= 1000) {
         const total = number(totalMatch[1]);
-        return { count:Math.min(limit, Math.max(0, total - offset)), signature:`${limit}:${offset}:${total}`,
-          start:offset + 1, end:Math.min(offset + limit,total), total, pageSize:limit };
+        // "offset" can be a page index, not a row offset. Confirm from rendered UI.
+        const selectedPages = new Set([...document.querySelectorAll('[aria-current="page"], .MuiPaginationItem-page.Mui-selected, .ant-pagination-item-active')]
+          .map(element => clean(element.textContent)).filter(text => /^\d+$/.test(text)).map(Number));
+        if (selectedPages.size > 1) throw new Error('A página selecionada é ambígua. Nenhum dado foi enviado.');
+        const selected = selectedPages.size ? [...selectedPages][0] : null;
+        if (selected !== null && (!Number.isSafeInteger(selected) || selected < 1)) throw new Error('Página selecionada inválida.');
+        const visibleStart = renderedPageStart(limit), selectedStart = selected === null ? null : (selected - 1) * limit + 1;
+        const start = selectedStart ?? visibleStart ?? verifiedStart;
+        if (!Number.isSafeInteger(total) || !Number.isSafeInteger(start) || start < 1 || start > total) throw new Error('Não foi possível confirmar a faixa de posições desta página.');
+        if ((visibleStart !== null && visibleStart !== start) || (verifiedStart !== null && verifiedStart !== start)) throw new Error('A página mudou ou suas posições não correspondem à paginação. Aguarde e tente novamente.');
+        verifiedStart = start; // Survives horizontal virtualization hiding the Rank column.
+        const end = Math.min(start + limit - 1, total);
+        return { count:end - start + 1, signature:`${limit}:${start}:${total}`,
+          start, end, total, pageSize:limit };
       }
       throw new Error('Não foi possível confirmar a quantidade esperada nesta página. Nenhum sucesso completo será anunciado.');
     };
+    state.scroller = { element:scroller, top:scroller.scrollTop, left:scroller.scrollLeft };
+    scroller.scrollLeft = 0; // Read global Rank before any horizontal sweep hides it.
+    await pause();
     const initialCount = countSnapshot();
     expectedCount = initialCount.count;
     if (!Number.isInteger(expectedCount) || expectedCount < 1 || expectedCount > 1000) throw new Error('A página não contém uma quantidade verificável de produtos (limite de segurança: 1000).');
-    state.scroller = { element:scroller, top:scroller.scrollTop, left:scroller.scrollLeft };
     const virtualHeight = Math.max(content.scrollHeight, content.getBoundingClientRect().height);
     if (!Number.isFinite(virtualHeight) || virtualHeight <= 0 || virtualHeight > 100000) throw new Error('Dimensões da tabela não puderam ser verificadas.');
     const chromeHeight = Math.max(0, grid.getBoundingClientRect().height - scroller.clientHeight);
@@ -153,6 +191,10 @@ export async function collectClickBankProducts(columns, mode = 'capture', option
       if (scroller.scrollTop <= before) break;
     }
     const products = [...rows.values()].sort((a,b) => a.order - b.order).map(row => row.values);
+    if (complete) {
+      const ranks = products.map(row => /^\d+$/.test(row.rank) ? Number(row.rank) : null).sort((a,b) => a - b);
+      if (ranks.some((rank, index) => !Number.isSafeInteger(rank) || rank !== initialCount.start + index)) throw new Error('As posições capturadas não correspondem à faixa completa da página. Nenhum dado foi enviado.');
+    }
     return { ok:complete, rows:products, capturedCount:rows.size, expectedCount, expanded:true,
       capturedAt:new Date().toISOString(), page:{start:initialCount.start,end:initialCount.end,total:initialCount.total,pageSize:initialCount.pageSize ?? null},
       message:complete ? `${rows.size} produtos capturados da página atual.`

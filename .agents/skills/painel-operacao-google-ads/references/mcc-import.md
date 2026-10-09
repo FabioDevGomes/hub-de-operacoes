@@ -9,6 +9,8 @@
 
 ## Campos e estados
 
+- A extensão 1.2.22 mapeia opcionalmente `search_impression_share` pelo cabeçalho “Parc. de impr. da rede de pesquisa” / “Search impression share”. O adaptador tabular mantém esse campo como texto (inclusive limites), separado das duas parcelas de posição. O Preparador usa o parser compartilhado de `src/database.js`, emitindo `participacao_impressao_rede_pesquisa` somente quando há coluna confiável. Cabeçalhos ausentes, ocultos ou ambíguos não geram a propriedade; valores inválidos geram aviso, não zero. Os dois adaptadores diários usam o mesmo helper de células R, sem deslocar A–Q; o Diário apresenta R após L. Histórico sem captura permanece ausente. Regressões sintéticas: `tests/search-impression-share.test.mjs`, `tests/mcc-grid-production.test.mjs` e `tests/product-diary-columns.test.mjs`.
+
 - D−1 contém métrica fechada; D0, métrica parcial.
 - A importação preserva `cobertura_D_menos_1_por_mcc` por administrador/data, separada da cobertura D0, inclusive quando não gera linhas de Diário. Indicadores da Visão Geral contam períodos aplicados à base para ontem/hoje em Brasília; uma prévia recebida pela extensão ainda não conta. Importações em horários diferentes e só de um período não apagam a comprovação do outro. Não infira período pelo horário Ecom/Nutra do cartão Manifesto MCC. Ver [contrato](../../../../docs/maintenance.md#visão-geral-e-diário--passo-7).
 - Chave de campanha é o nome MCC completo e exato; linha diária usa `campanha_id + data`.

@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.21', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.23', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura MCC D0\/D−1/);
 assert.ok(popup.includes('id="capture-title"') && popup.includes('id="vsl-title"'), 'os títulos das seções permanecem visíveis');
 assert.doesNotMatch(popup, /Na MCC, selecione um único dia, use o botão discreto abaixo/);
@@ -140,4 +140,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.21');
+console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.23');

@@ -38,8 +38,8 @@ assert.match(diaryStyles, /#productView \.product-table td\.num\{text-align:cent
 assert.ok(source.includes("col==='Q'?'hub-edit-host product-observation-cell':'num'"), 'centralização alcança as 16 colunas de dados, deixando Observações no componente próprio');
 assert.match(diaryStyles, /\.product-table th\{[^}]*text-align:center/, 'cabeçalhos das colunas de dados permanecem centralizados');
 assert.match(diaryStyles, /\.product-table th:last-child\{[^}]*text-align:left/, 'Observações conserva cabeçalho à esquerda');
-assert.match(panelSource, /product-diary\/product-diary\.css\?v=12/, 'a nova versão do CSS deve invalidar o cache dos diários');
-assert.match(panelSource, /product-diary\/view\.js\?v=9/, 'o renderizador compartilhado atualizado deve invalidar o cache');
+assert.match(panelSource, /product-diary\/product-diary\.css\?v=13/, 'a nova versão do CSS deve invalidar o cache dos diários');
+assert.match(panelSource, /product-diary\/view\.js\?v=10/, 'o renderizador compartilhado atualizado deve invalidar o cache');
 assert.ok(diaryStyles.includes('#productView .product-table td.product-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 50%,var(--hub-table-row-bg))}'), 'zeros observados usam 50% da cor padrão misturada ao fundo base, sem alterar a opacidade de notas');
 assert.match(diaryStyles, /body\.product-diary-mode\{overflow-y:auto\}/, 'a página deve rolar para alcançar o quadro de ROI abaixo do Diário');
 assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*min-height:100dvh;overflow:visible/, 'no desktop, o conteúdo do Diário pode crescer além do viewport');

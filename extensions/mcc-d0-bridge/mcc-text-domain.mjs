@@ -25,6 +25,7 @@ const FIELD_DESCRIPTIONS = {
   avg_cost: ['D', 'Há valores monetários, mas ainda não é seguro distingui-los por coluna no bloco de texto.'],
   abs_top_share: ['D', 'Há percentuais, mas ainda não é seguro vinculá-los à coluna no bloco de texto.'],
   top_share: ['D', 'Há percentuais, mas ainda não é seguro vinculá-los à coluna no bloco de texto.'],
+  search_impression_share: ['D', 'Parcela de pesquisa requer coluna identificada; texto sem vínculo não confirma um percentual nem seu limite.'],
   budget: ['B', 'Orçamento é identificável pelo formato monetário terminado em “/dia”.'],
   bid_strategy: ['B', 'Estratégia aparece como texto próprio no bloco, sem cabeçalho de coluna.'],
   target_cpa: ['D', 'O cabeçalho pode estar visível, mas o valor ainda não foi vinculado à coluna com segurança.'],

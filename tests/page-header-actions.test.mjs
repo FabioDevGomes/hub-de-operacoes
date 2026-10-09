@@ -77,9 +77,23 @@ test('Mês atual no Controle de gastos compartilha somente o acabamento escuro d
   assert.match(view,/class="btn hub-standard-action" type="button" data-action="toggle-create-month">Criar outro mês/);
   assert.match(view,/const currentPeriodLabel = isQuarter \? 'Trimestre atual' : isConsolidated \? 'Começar no mês atual' : 'Mês atual'/);
   assert.ok(view.includes("else if (action === 'current-period') { state.monthKey = localMonth(new Date()); state.createMonthOpen = false; await loadMonth(); }"));
-  assert.ok(app.includes('personal-finance-view.mjs?v=88'));
+  assert.ok(app.includes('personal-finance-view.mjs?v=90'));
   assert.ok(css.includes('box-shadow:0 4px 9px rgba(0,0,0,.55)'));
   assert.ok(css.includes('box-shadow:0 5px 12px rgba(0,0,0,.65)'));
   assert.doesNotMatch(localCss,/\.hub-month-current[^{}]*\{/,'sem duplicar sombras ou alterar os outros navegadores');
   assert.ok(!view.includes('hub-white-button'),'não troca a referência escura pelo padrão creme');
+});
+
+test('Novo grupo e Adicionar disponível adotam a mesma sombra sem alterar ações e bloqueios', async () => {
+  const [view,published]=await Promise.all([
+    read('src/personal-finance/personal-finance-view.mjs'),
+    read('dist/personal-finance/personal-finance-view.mjs'),
+  ]);
+  assert.equal(view,published);
+  assert.ok(view.includes('class="btn hub-standard-action" type="button" data-action="new-group">Novo grupo</button>'));
+  assert.ok(view.includes('class="btn hub-standard-action" type="button" data-action="new-fund" \$\{state.month ? \'\' : \'disabled\'\}>Adicionar disponível</button>'));
+  assert.ok(view.includes("else if (action === 'new-group') openModal('group');"));
+  assert.ok(view.includes("else if (action === 'new-fund') openModal('fund');"));
+  assert.ok(view.includes('class="btn primary" type="button" data-action="new-reserve"'),'a ação azul não muda');
+  assert.ok(view.includes('class="btn primary" type="button" data-action="new-category">Nova categoria'),'a outra ação de cadastro não muda');
 });

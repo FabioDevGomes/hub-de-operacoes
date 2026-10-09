@@ -68,8 +68,8 @@ const rowValues = [
   ['Oferta Ativa', '7527 - Conta Alpha\n111-222-3333', 'Qualificada', '1,234', '10', '0.00', 'US$ 1.25', '75%', '20%', 'US$ 45.00/day', 'Maximizar conversões', 'US$ 12.50']
 ];
 
-function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length + ' de ' + rowValues.length, dateRange = 'Sep 23, 2026 – Sep 23, 2026', linkedColumns = [0], leadingCell = true, leadingCellCounts = null, leadingCellLink = false, leadingCellText = '', managerName='MCC de teste', managerAccountId='999-888-7777' } = {}) {
-  const header = new Row(headers.map((label, index) => new Cell(label, {
+function makeDocument({ headerLabels = headers, values = rowValues, footer = '1 - ' + rowValues.length + ' de ' + rowValues.length, dateRange = 'Sep 23, 2026 – Sep 23, 2026', linkedColumns = [0], leadingCell = true, leadingCellCounts = null, leadingCellLink = false, leadingCellText = '', managerName='MCC de teste', managerAccountId='999-888-7777' } = {}) {
+  const header = new Row(headerLabels.map((label, index) => new Cell(label, {
     role: 'columnheader',
     ariaLabel: index === 7 ? '% de impr. (1ª posição)' : ''
   })), true, 1);
@@ -97,6 +97,16 @@ function makeDocument({ values = rowValues, footer = '1 - ' + rowValues.length +
   };
   return { doc, grid };
 }
+
+const searchShareSnapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({
+  headerLabels:[...headers, 'Parc. de impr. da rede de pesquisa'],
+  values:rowValues.map((row,index)=>[...row,index?'22,22%':'< 10%'])
+}).doc);
+assert.equal(searchShareSnapshot.ok,true,searchShareSnapshot.error);
+assert.equal(searchShareSnapshot.fields.search_impression_share.found,true);
+assert.equal(searchShareSnapshot.records[0].search_impression_share,'< 10%');
+assert.equal(searchShareSnapshot.records[1].search_impression_share,'22,22%');
+assert.equal(validateMccD0Capture(searchShareSnapshot).ok,true);
 
 const { doc } = makeDocument();
 const snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, doc);

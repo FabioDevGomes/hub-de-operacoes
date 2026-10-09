@@ -109,6 +109,9 @@ Em **Produtos Testados**, a consolidação de apresentação reconhece uma séri
 | M/N | Orçamento diário / estratégia de lance e CPA desejado |
 | O/P | Investimento BRL / valor de conversão BRL |
 | Q | Observações/status normalizado |
+| R (aditivo) | Participação de impressões da rede de pesquisa; apresentada depois de L |
+
+`participacao_impressao_rede_pesquisa` é um campo opcional próprio nos períodos do manifesto, distinto de K/L. O parser compartilhado em `CampaignDatabase.parseSearchImpressionShare` conserva o texto original: percentuais exatos usam `{valor,estado,original}`; limites como `< 10%` usam `{valor:null,estado:'limite',operador,limite,original}`. Zero, ausência e inválido são distintos. `searchImpressionShareCells` projeta R como fração para valores exatos e texto não numérico para limites. Não deslocar M–Q nem somar R nos totais. Capturas antigas sem a coluna não emitem R; ausências não apagam observações anteriores pelo merge existente. Normalize/backup preservam essa propriedade aditiva, sem store, schema ou migração retroativa.
 
 Agregações financeiras usam F, O e P. Preserve zeros confirmados e estados ausente/inválido.
 

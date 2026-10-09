@@ -60,6 +60,7 @@ assert.equal(complete.fieldMatrix.account.classification, 'B');
 assert.equal(complete.fieldMatrix.status.classification, 'B');
 assert.equal(complete.fieldMatrix.currency.classification, 'B');
 assert.equal(complete.fieldMatrix.impressions.classification, 'D');
+assert.equal(complete.fieldMatrix.search_impression_share.classification, 'D', 'não inferir parcela de pesquisa pelo texto sem associação à coluna');
 assert.equal(complete.fieldMatrix.clicks.classification, 'D');
 assert.equal(complete.fieldMatrix.target_cpa.classification, 'D', 'não usa CPA escrito no nome da campanha como campo');
 assert.ok(complete.unmappedValues.numeric > 0 && complete.unmappedValues.zeroNumeric > 0 && complete.unmappedValues.dash > 0,

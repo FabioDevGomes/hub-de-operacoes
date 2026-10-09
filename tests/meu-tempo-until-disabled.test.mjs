@@ -30,5 +30,5 @@ test('estilo desabilitado é local, sem sombra/hover e publicado com cache atual
   assert.ok(rule,'estado visual deve ser restrito a Até agora desabilitado');
   for(const declaration of ['opacity:.45','cursor:not-allowed','background:#0a1627!important','color:var(--muted)!important','box-shadow:none!important','filter:none!important','transform:none!important']) assert.ok(rule.includes(declaration),declaration);
   assert.ok(!/outline|padding|height|width|pointer-events/.test(rule),'não alterar geometria, foco ou tooltip');
-  assert.ok(app.includes('meu-tempo/meu-tempo.css?v=31'));
+  assert.ok(app.includes('meu-tempo/meu-tempo.css?v=32'));
 });

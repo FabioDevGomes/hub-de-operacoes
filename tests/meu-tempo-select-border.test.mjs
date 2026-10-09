@@ -17,5 +17,5 @@ test('daily value selectors hide only decorative borders and retain geometry, fo
   assert.equal((view.match(/<select class="time-select value-input" data-value=/g)||[]).length,2,'boolean and symptom selects share the same scoped rule');
   assert.ok(view.includes('<option value="">Escolha</option><option value="1">Sim</option><option value="0">Não</option>'));
   assert.ok(view.includes('Domain.SYMPTOM_SCALE_OPTIONS.map'));
-  for(const path of ['src/index.template.html','dist/index.html'])assert.ok((await read(path)).includes('meu-tempo/meu-tempo.css?v=31'));
+  for(const path of ['src/index.template.html','dist/index.html'])assert.ok((await read(path)).includes('meu-tempo/meu-tempo.css?v=32'));
 });

@@ -32,7 +32,7 @@ test('footer is the last table section, totals use centered compact style and fr
   const template=await read('src/product-diary/template.html'),css=await read('src/product-diary/product-diary.css'),index=await read('src/index.template.html');
   assert.match(template,/<tbody id="productBody"><\/tbody><tfoot id="productTotals"><\/tfoot><\/table>/);
   assert.match(css,/#productView \.product-table tfoot th,#productView \.product-table tfoot td\{position:static;[^}]*text-align:center/);
-  assert.match(index,/product-diary\/domain\.js\?v=4/);assert.match(index,/product-diary\/view\.js\?v=9/);assert.match(index,/product-diary\/product-diary\.css\?v=12/);
+  assert.match(index,/product-diary\/domain\.js\?v=5/);assert.match(index,/product-diary\/view\.js\?v=10/);assert.match(index,/product-diary\/product-diary\.css\?v=13/);
 });
 
 test('all native campaign diaries append one aligned totals row, separate from daily count and provisional sales',()=>{
@@ -40,9 +40,9 @@ test('all native campaign diaries append one aligned totals row, separate from d
   for(const source of ['manifest','workbook']){
     s.controller.render('Sintética',source,'campaign-id');
     const footer=s.get('#productTotals').innerHTML,values=cells(footer);
-    assert.equal(values.length,17);assert.equal((footer.match(/<tr/g)||[]).length,1);
-    assert.equal(values[0],'Totais');assert.equal(values[1],'30');assert.equal(values[2],'5');assert.equal(values[5],'1.50');assert.equal(values[14],'4.00');assert.equal(values[15],'7.00');
-    for(const index of [3,4,6,7,8,9,10,11,12,13,16])assert.equal(values[index],'—');
+    assert.equal(values.length,18);assert.equal((footer.match(/<tr/g)||[]).length,1);
+    assert.equal(values[0],'Totais');assert.equal(values[1],'30');assert.equal(values[2],'5');assert.equal(values[5],'1.50');assert.equal(values[15],'4.00');assert.equal(values[16],'7.00');
+    for(const index of [3,4,6,7,8,9,10,11,12,13,14,17])assert.equal(values[index],'—');
     assert.match(footer,/vendas manuais provisórias não incluídas/);assert.doesNotMatch(footer,/data-edit-observation|has-sales|manual-sale-note/);
     assert.equal(s.get('#rowCount').textContent,'3 dias');assert.doesNotMatch(s.get('#productBody').innerHTML,/Totais/);
     const previous=footer;s.controller.render('Sintética',source,'campaign-id');assert.equal(s.get('#productTotals').innerHTML,previous);
@@ -52,9 +52,9 @@ test('all native campaign diaries append one aligned totals row, separate from d
 
 test('footer follows inclusive pause cutoff, clears in legacy summary and recalculates on campaign switch',()=>{
   const rows=[row('2026-10-01',{B:1,C:2,F:0,O:3,P:0}),row('2026-10-02',{B:4,C:5,F:1,O:6,P:7}),row('2026-10-03',{B:999,C:999,F:999,O:999,P:999})],s=mount({...empty(),rows,displayRows:rows,pauseConfirmedAt:'2026-10-02'});
-  s.controller.render('Pausada');let values=cells(s.get('#productTotals').innerHTML);assert.equal(values[1],'5');assert.equal(values[14],'9.00');assert.equal(s.get('#rowCount').textContent,'2 dias');
+  s.controller.render('Pausada');let values=cells(s.get('#productTotals').innerHTML);assert.equal(values[1],'5');assert.equal(values[15],'9.00');assert.equal(s.get('#rowCount').textContent,'2 dias');
   s.setSnapshot({...empty(),summary:{metrics:{}}});s.controller.render('Legado','legacy','legacy-id');assert.equal(s.get('#productTotals').innerHTML,'');
   const fresh=[row('2026-10-04',{B:0,C:0,F:0,O:0,P:0})];s.setSnapshot({...empty(),rows:fresh,displayRows:fresh});s.controller.render('Outra','manifest','other-id');
-  assert.equal((s.get('#productTotals').innerHTML.match(/product-zero-value/g)||[]).length,5);values=cells(s.get('#productTotals').innerHTML);assert.equal(values[1],'0');assert.equal(values[14],'0.00');
+  assert.equal((s.get('#productTotals').innerHTML.match(/product-zero-value/g)||[]).length,5);values=cells(s.get('#productTotals').innerHTML);assert.equal(values[1],'0');assert.equal(values[15],'0.00');
   s.setSnapshot(empty());s.controller.render('Vazia');assert.equal(cells(s.get('#productTotals').innerHTML).slice(1).every(value=>value==='—'),true);
 });

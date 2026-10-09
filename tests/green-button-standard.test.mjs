@@ -44,7 +44,7 @@ test('popup migrates only its two green actions and preserves IDs, captures and 
   }
   assert.equal((popup.match(/hub-white-button/g)||[]).length,2);
   assert.ok(popup.includes('href="white-button.css"'),'local Chrome asset, not a remote stylesheet');
-  assert.equal(manifest.version,'1.2.21');
+  assert.equal(manifest.version,'1.2.23');
   assert.deepEqual(manifest.permissions,['scripting','activeTab','clipboardWrite']);
   assert.deepEqual(manifest.host_permissions,['http://127.0.0.1:8765/preparador-MCC/*','http://127.0.0.1:8765/curadoria/clickbank-top-offers/*']);
   assert.ok((await read('build.mjs')).includes('resolve(root, "extensions/mcc-d0-bridge/white-button.css")'));

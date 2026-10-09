@@ -3,7 +3,7 @@
 export const D0_FIELDS = [
   'date', 'campaign', 'account', 'target_geo', 'campaign_state', 'status', 'currency',
   'impressions', 'clicks', 'conversions', 'conversion_value', 'avg_cost', 'abs_top_share',
-  'top_share', 'budget', 'bid_strategy', 'target_cpa', 'cost'
+  'top_share', 'search_impression_share', 'budget', 'bid_strategy', 'target_cpa', 'cost'
 ];
 
 export const REQUIRED_D0_FIELDS = [
@@ -26,6 +26,7 @@ export const HEADER_ALIASES = {
   avg_cost: ['custo medio', 'avg cost', 'average cost', 'custo med'],
   abs_top_share: ['porcentagem de impressao na primeira posicao', 'porcentagem de impressoes na primeira posicao', 'parcela de impr na 1a posicao na rede de pesquisa', 'search abs top is', 'search absolute top impression share', 'parc impr 1a posicao pesq', '% de impr 1a posicao'],
   top_share: ['porcentagem de impressao na parte superior', 'porcentagem de impressoes na parte superior', 'parcela de impr na parte superior da rede de pesquisa', 'search top is', 'search top impression share', 'parc impr parte sup pesq', '% de impr parte sup'],
+  search_impression_share: ['parc de impr da rede de pesquisa', 'parcela de impr da rede de pesquisa', 'parcela de impressoes da rede de pesquisa', 'participacao de impressoes da rede de pesquisa', 'parc impr rede de pesquisa', 'search impression share', 'search impr share', 'search is'],
   budget: ['orcamento', 'orcamento diario', 'budget', 'daily budget', 'budget amount'],
   bid_strategy: ['estrategia de lance', 'estrategia de lances', 'tipo de estrategia de lances', 'bid strategy', 'bid strategy type', 'bidding strategy type'],
   target_cpa: ['cpa desejado', 'target cpa', 'cpa alvo', 'meta de cpa'],

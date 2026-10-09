@@ -8,6 +8,19 @@
     let layoutFrame=null,disposed=false;
     const columnPicker=$('#productColumnPicker'),diaryTable=tableWrap?.querySelector('.product-table');
     let columnController=null,columnLoading=null;
+    // Add the new column to old preferences; write only on an explicit choice.
+    const shareChoiceKey='hub:product-diary:search-share-choice:v1';
+    const columnPreferences=preferences?{
+      getItem(key){
+        const stored=preferences.getItem(key);
+        if(key==='hub:product-diary:visible-columns:v1'&&!preferences.getItem(shareChoiceKey)){
+          try{const keys=JSON.parse(stored);if(Array.isArray(keys)&&!keys.includes('R'))return JSON.stringify([...keys,'R'])}catch{}
+        }
+        return stored;
+      },
+      setItem(key,value){preferences.setItem(key,value);preferences.setItem(shareChoiceKey,'1')},
+      removeItem(key){preferences.removeItem(key)}
+    }:preferences;
     function syncColumnLayout(){
       const empty=$('#productBody td.empty');
       if(empty&&diaryTable?.tHead)empty.colSpan=[...diaryTable.tHead.rows[0].cells].filter(cell=>!cell.hidden).length;
@@ -19,7 +32,7 @@
       if(columnLoading||!columnPicker?.ownerDocument||!diaryTable)return;
       columnLoading=Promise.resolve().then(loadColumnPicker).then(({mountColumnPicker})=>{
         if(disposed)return;
-        columnController=mountColumnPicker({picker:columnPicker,table:diaryTable,columns:productColumns,required:['A'],preferences,preferenceKey:'hub:product-diary:visible-columns:v1'});
+        columnController=mountColumnPicker({picker:columnPicker,table:diaryTable,columns:productColumns,required:['A'],preferences:columnPreferences,preferenceKey:'hub:product-diary:visible-columns:v1'});
         syncColumnLayout();
       }).catch(()=>{if(!disposed)columnPicker.querySelector('[data-column-message]').textContent='Não foi possível carregar o seletor de colunas. Atualize a página para tentar novamente.'}).finally(()=>{columnLoading=null});
     }
@@ -78,9 +91,9 @@
       finally{current.saving=false;input.disabled=false;saveButton.disabled=false;cancelButton.disabled=false}
     };
     function formatExcelDate(serial){const d=excelDate(serial);return new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(d)}
-    function formatProductCell(col,cell){if(!cell||cell.value==null||cell.value==='')return'—';if(col==='A')return typeof cell.value==='number'?formatExcelDate(cell.value):esc(cell.text??cell.value);if(['E','G','K','L'].includes(col)){const v=Number(cell.value);return Number.isFinite(v)?fmtPct(Math.abs(v)<=1?v*100:v):''}if(['I','J','O','P'].includes(col)&&typeof cell.value==='number')return fmtNum(cell.value,2);return esc(cell.text??cell.value)}
+    function formatProductCell(col,cell){if(col==='R'){if(cell?.estado==='invalido'||cell?.value==null||cell.value==='')return'—';if(typeof cell.value==='number')return Number.isFinite(cell.value)?fmtPct(cell.value*100):'—';return esc(cell.text??cell.value)}if(!cell||cell.value==null||cell.value==='')return'—';if(col==='A')return typeof cell.value==='number'?formatExcelDate(cell.value):esc(cell.text??cell.value);if(['E','G','K','L'].includes(col)){const v=Number(cell.value);return Number.isFinite(v)?fmtPct(Math.abs(v)<=1?v*100:v):''}if(['I','J','O','P'].includes(col)&&typeof cell.value==='number')return fmtNum(cell.value,2);return esc(cell.text??cell.value)}
     function productDiaryZeroClass(col,cell){
-      if(!['B','C','D','E','F','G','H','I','J','K','L','O','P'].includes(col))return'';
+      if(!['B','C','D','E','F','G','H','I','J','K','L','R','O','P'].includes(col))return'';
       const value=cell?.value;
       const zero=typeof value==='number'?Number.isFinite(value)&&value===0:typeof value==='string'&&/^[+-]?0+(?:[.,]0+)?\s*%?$/.test(value.trim());
       return zero?' product-zero-value':'';
@@ -144,13 +157,13 @@
         $('#legacySummaryBody').classList.add('hidden');
         $('#legacySummaryBody').innerHTML='';
         $('#productSummary').innerHTML=`<div class="card product-name"><div class="eyebrow">${source==='workbook'?'Histórico':'Campanha ativa'}</div><h2>${esc(sheetName)}</h2><p>${rows.length?'Histórico da base local':'Sem linhas diárias disponíveis'}</p></div><div class="card metric-mini"><span>Investimento total</span><strong>${investment==null?'—':fmtMoney(investment)}</strong></div><div class="card metric-mini"><span>Cliques Google · total</span><strong>${fmtNum(clicks)}</strong></div><div class="card metric-mini"><span>Conversões · total</span><strong>${fmtNum(conversions)}</strong></div>`;
-        $('#productHead').innerHTML='<tr>'+productColumns.map(x=>`<th>${x[1]}</th>`).join('')+'</tr>';
+        $('#productHead').innerHTML='<tr>'+productColumns.map(x=>x[0]==='R'?`<th title="Participação de impressões da rede de pesquisa. Limites como &lt; 10% são preservados; sem captura: —.">${x[1]}</th>`:`<th>${x[1]}</th>`).join('')+'</tr>';
         $('#productBody').innerHTML=diaryRows.length?diaryRows.map(r=>{
           const date=productDiaryRowDate(r),manual=global.ProductDiaryObservations?.observationFor({observacoes_diario:observations},storedCampaignId,date);
           const shown=manual?{...r,cells:{...r.cells,Q:{value:manual.texto}}}:r;
           const edit=storedCampaignId&&date&&typeof actions.saveObservation==='function'?`<a href="#" class="hub-corner-edit" data-edit-observation="${esc(date)}" aria-label="Editar observações de ${esc(saleDate(date))}" aria-haspopup="dialog" aria-controls="productObservationDialog">Editar</a>`:'';
           return `<tr${productDiaryHasSales(r,provisionalSaleDates)?' class="has-sales"':''}>${productColumns.map(([col])=>`<td class="${col==='Q'?'hub-edit-host product-observation-cell':'num'}${productDiaryZeroClass(col,shown.cells[col])}">${col==='Q'?'<div class="product-observation-text">':''}${formatProductDiaryCell(col,shown,manualSalesByDate,pauseConfirmedAt)}${col==='Q'?'</div>'+edit:''}</td>`).join('')}</tr>`;
-        }).join(''):'<tr><td colspan="17" class="empty">Nenhum registro diário encontrado nesta aba.</td></tr>';
+        }).join(''):`<tr><td colspan="${productColumns.length}" class="empty">Nenhum registro diário encontrado nesta aba.</td></tr>`;
         renderTableTotals(diaryRows);
         $('#productCaption').textContent=pauseConfirmedAt?`Histórico da base local encerrado na pausa confirmada em ${pauseConfirmedAt.slice(8,10)}/${pauseConfirmedAt.slice(5,7)}/${pauseConfirmedAt.slice(0,4)}.`:rows.length?'Histórico da base local; vendas manuais provisórias aparecem separadas e aguardam confirmação do MCC D−1':source==='workbook'?'Aba histórica sem linhas diárias reconhecidas':'D−1 e D zero disponíveis no manifesto atual';
         $('#rowCount').textContent=`${diaryRows.length} ${diaryRows.length===1?'dia':'dias'}`;

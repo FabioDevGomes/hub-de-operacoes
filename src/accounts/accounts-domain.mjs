@@ -68,6 +68,21 @@ export function accountCpaCoverage(rows, ranges) {
   })).sort((a, b) => compare(a.name, b.name));
 }
 
+export function accountMccHeaderLabels(rows) {
+  const namesByAccount = new Map();
+  for (const row of rows) {
+    if (!row.account || row.account === 'Sem conta') continue;
+    const names = namesByAccount.get(row.account) || new Set();
+    const name = String(row.mccName ?? '').trim();
+    if (name) names.add(name);
+    namesByAccount.set(row.account, names);
+  }
+  return new Map([...namesByAccount].map(([account, names]) => [
+    account,
+    names.size ? [...names].sort(compare).join(' · ') : 'MCC não identificada'
+  ]));
+}
+
 export function buildAccountReport(allRows, filters) {
   const accountOptions = [...new Set(allRows.map(row => row.account))].sort(compare);
   const productOptions = [...new Set(allRows.map(row => row.product))].sort(compare);
@@ -96,6 +111,7 @@ export function buildAccountReport(allRows, filters) {
     a.name.localeCompare(b.name, 'pt-BR')).slice(0, 8);
   return {
     accountOptions, productOptions, account, product, rows, accounts, products, selected,
+    accountMccLabels:accountMccHeaderLabels(allRows),
     selectedProduct, detail, bars, ranges, coverage, cpaBars:accountProductsByCpaRange(rows),
     missingTotal:coverage.reduce((sum, item) => sum + item.missing.length, 0),
     kpis:{

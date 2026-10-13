@@ -14,15 +14,26 @@ const row=(name,status,investment,extra={})=>({
   roi:null,profit:null,zeroDays:0,...extra
 });
 function setup(rows,preferences){
-  const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active'};
+  const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active',rate:5.1234,exchangeRateQuote:{rate:5.1234,status:'ok',isStale:false,isFallback:false,quoteDate:'2026-10-13'}};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,pausedTodayCampaigns:[],pausedTodayDate:'2026-09-30',referenceDate:'2026-09-30',
     manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:{ecom:{timestamp:'2026-10-05T17:57:00Z',source:'import'},nutra:{timestamp:'2026-10-05T18:40:00Z',source:'import'}},pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
-    actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args])}});
+    actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args]),refreshExchangeRate:()=>calls.push(['refresh-rate'])}});
   return {...dom,state,snapshot,calls,controller};
 }
+test('PTAX control shows the active rate, refreshes on click and marks stale quotes clearly',()=>{
+  const s=setup([row('Campanha','ativa',10)]);
+  s.controller.render();
+  assert.equal(s.get('#usdBrlRateLabel').textContent,'US$ 1 = R$ 5,1234');
+  assert.equal(s.get('#usdBrlRateButton').disabled,false);
+  s.get('#usdBrlRateButton').onclick();assert.deepEqual(s.calls,[['refresh-rate']]);
+  s.state.exchangeRateQuote={rate:5.1,status:'stale',isStale:true,isFallback:false,error:'offline'};s.state.rate=5.1;s.controller.render();
+  assert.equal(s.get('#usdBrlRateLabel').textContent,'US$ 1 = R$ 5,1000');
+  assert.equal(s.get('#usdBrlRateButton').classList.contains('is-stale'),true);
+  assert.match(s.get('#usdBrlRateButton').title,/offline/);
+});
 test('corner test-limit links follow ROI/commission presence, column visibility and period rerenders without mutation',()=>{
   const budget={limit:200,remaining:190,revenue:240,commissionBrl:100,minimumRoi:20,commissionTestPercent:65,cpaMinimumPercent:80};
   const extra=detail=>({budget:{...budget,...detail},testLimit:{value:200},testRemaining:{value:190}});

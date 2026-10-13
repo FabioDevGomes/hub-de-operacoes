@@ -239,6 +239,8 @@
     }
     function renderTotals({tableOnly=false,updateCards=true}={}){
       endResize(true);
+      const rateButton=$('#usdBrlRateButton'),rateLabel=$('#usdBrlRateLabel'),quote=state.exchangeRateQuote||{rate:state.rate,status:'unavailable',isStale:true,isFallback:true};
+      if(rateButton&&rateLabel){const rateText=new Intl.NumberFormat('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4}).format(Number(quote.rate)||0),busy=['loading','refreshing'].includes(quote.status),stale=Boolean(quote.isStale),details=quote.quoteDate?`Cotação PTAX venda de ${quote.quoteDate}. `:'',fallback=quote.isFallback?'Sem cotação válida salva; as novas conversões usam a taxa legada de R$ 5,10. ':'',warning=stale?(quote.error?`Falha na última consulta: ${quote.error}`:'Usando a última cotação válida salva.'):'Clique para consultar novamente.';rateLabel.textContent=`US$ 1 = R$ ${rateText}`;rateButton.disabled=busy;rateButton.classList.toggle('is-stale',stale);rateButton.title=`${quote.source||'Banco Central do Brasil · PTAX venda'}. ${details}${fallback}${warning}`;rateButton.setAttribute('aria-label',`${rateLabel.textContent}. ${busy?'Atualizando cotação.':stale?'Cotação desatualizada; atualizar.':'Atualizar cotação.'}`);rateButton.onclick=()=>{if(!busy)void actions.refreshExchangeRate?.()}}
       const reuse=tableOnly&&presentationSnapshot,snapshot=reuse?presentationSnapshot:getSnapshot(),{dates}=snapshot;
       if(!reuse||renderedFilter!==state.campaignStatusFilter)rowMarkupCache.clear();
       presentationSnapshot=snapshot;renderedFilter=state.campaignStatusFilter;

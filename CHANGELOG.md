@@ -2,6 +2,14 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.11.0] - 2026-10-13
+
+- Adiciona cotação PTAX USD/BRL e preserva taxas por captura
+
+## [1.10.2] - 2026-10-13
+
+- Mostra a MCC no cabeçalho de cada conta
+
 ## [1.10.1] - 2026-10-13
 
 - Corrige a resposta Sim/Não mais recente no histórico do Meu Tempo

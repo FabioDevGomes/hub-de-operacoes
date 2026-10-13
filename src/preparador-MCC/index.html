@@ -383,6 +383,7 @@
   <script src="/overview-domain.js?v=19"></script>
   <script src="/overview/cards-domain.js?v=1"></script>
   <script src="/storage/hub-database.js?v=1"></script>
+  <script src="/usd-brl-rate.js?v=1"></script>
   <script>
   (() => {
     'use strict';
@@ -429,7 +430,14 @@
     const PANEL_BASE_STORE = 'bases';
     const PANEL_EVENT_STORE = 'events';
     const PANEL_BASE_KEY = 'atual';
-    const PANEL_USD_BRL_RATE = 5.10;
+    const panelUsdBrlRateService = globalThis.UsdBrlRateService?.create?.() || {
+      getState:() => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
+      refreshIfDue:async () => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
+      subscribe:() => () => {}, start:() => () => {}
+    };
+    let PANEL_USD_BRL_RATE = panelUsdBrlRateService.getState().rate;
+    panelUsdBrlRateService.subscribe(quote => { PANEL_USD_BRL_RATE = quote.rate; });
+    panelUsdBrlRateService.start();
     const D0_CAPTURE_HISTORY_KEY = 'painel-preparador-mcc-capturas-d0-v1';
     const D0_PAUSED_CAMPAIGN_HISTORY_KEY = 'painel-preparador-mcc-pausas-d0-v1';
     const D0_CAPTURE_HISTORY_LIMIT = 7;
@@ -613,15 +621,16 @@
       return raw.split(/\r?\n+/).map(value => value.trim()).filter(Boolean).join(' · ').replace(/\s+/g, ' ');
     }
 
-    function panelMetricsRow(campaign, metrics, period) {
+    function panelMetricsRow(campaign, metrics, period, fallbackRate=PANEL_USD_BRL_RATE) {
       if (!metrics || metrics.presente === false) return null;
       const usd = panelValue(metrics.moeda) === 'USD';
+      const exchangeRate = Number(metrics.exchange_rate_usd_brl) || fallbackRate;
       const averageCost = Number(panelValue(metrics.custo_medio) || 0);
       const clicks = Number(panelValue(metrics.cliques_google) || 0);
-      const averageCostBrl = usd ? averageCost * PANEL_USD_BRL_RATE : averageCost;
+      const averageCostBrl = usd ? averageCost * exchangeRate : averageCost;
       const impressions = Number(panelValue(metrics.impressoes) || 0);
       const date = panelValue(metrics.data), rawTotal = panelValue(metrics.custo_total);
-      const total = rawTotal == null ? averageCostBrl * clicks : (usd ? Number(rawTotal) * PANEL_USD_BRL_RATE : Number(rawTotal));
+      const total = rawTotal == null ? averageCostBrl * clicks : (usd ? Number(rawTotal) * exchangeRate : Number(rawTotal));
       return { date, period, cells: {
         A:{ value:panelIsoToSerial(panelValue(metrics.data)), text:panelDateLabel(panelValue(metrics.data)) },
         B:{ value:panelValue(metrics.impressoes) }, C:{ value:clicks }, D:{ value:null }, E:{ value:null },
@@ -631,11 +640,33 @@
         L:{ value:panelPctDecimal(metrics.porcentagem_impressao_parte_superior) },
         ...window.CampaignDatabase.searchImpressionShareCells(metrics),
         M:{ value:`${usd ? 'US$' : 'R$'} ${panelNumber(panelValue(metrics.orcamento_diario))}/dia` },
-        N:{ value:panelStrategyLabel(campaign, metrics) }, O:{ value:total }, P:{ value:panelValue(metrics.valor_conversao) == null ? null : (usd ? Number(panelValue(metrics.valor_conversao)) * PANEL_USD_BRL_RATE : Number(panelValue(metrics.valor_conversao))) }, Q:{ value:panelStatusObservation(metrics.status_campanha) }
+        N:{ value:panelStrategyLabel(campaign, metrics) }, O:{ value:total }, P:{ value:panelValue(metrics.valor_conversao) == null ? null : (usd ? Number(panelValue(metrics.valor_conversao)) * exchangeRate : Number(panelValue(metrics.valor_conversao))) }, Q:{ value:panelStatusObservation(metrics.status_campanha) }
       }};
     }
-    function panelManifestRow(campaign) {
-      return [panelMetricsRow(campaign, campaign.metricas_D_menos_1, 'd1'), panelMetricsRow(campaign, campaign.metricas_D_zero, 'd0')].filter(Boolean);
+    function panelManifestRow(campaign, exchangeRate=PANEL_USD_BRL_RATE) {
+      return [panelMetricsRow(campaign, campaign.metricas_D_menos_1, 'd1', exchangeRate), panelMetricsRow(campaign, campaign.metricas_D_zero, 'd0', exchangeRate)].filter(Boolean);
+    }
+
+    function panelManifestWithExchangeRate(manifest, quote) {
+      const stamped = panelClone(manifest), rate = Number(quote?.rate) || PANEL_USD_BRL_RATE;
+      for (const campaign of stamped?.campanhas || []) {
+        for (const field of ['metricas_D_zero', 'metricas_D_menos_1']) {
+          const metrics = campaign?.[field];
+          if (!metrics || metrics.presente === false || String(panelValue(metrics.moeda) || '').toUpperCase() !== 'USD') continue;
+          metrics.exchange_rate_usd_brl = rate;
+          metrics.exchange_rate_usd_brl_source = quote?.source || 'Taxa legada de compatibilidade';
+          metrics.exchange_rate_usd_brl_quote_date = quote?.quoteDate || null;
+          metrics.exchange_rate_usd_brl_retrieved_at = quote?.retrievedAt || null;
+        }
+        const cost = campaign?.custo_D_zero;
+        if (cost && cost.presente !== false && String(panelValue(cost.moeda) || '').toUpperCase() === 'USD') {
+          cost.exchange_rate_usd_brl = rate;
+          cost.exchange_rate_usd_brl_source = quote?.source || 'Taxa legada de compatibilidade';
+          cost.exchange_rate_usd_brl_quote_date = quote?.quoteDate || null;
+          cost.exchange_rate_usd_brl_retrieved_at = quote?.retrievedAt || null;
+        }
+      }
+      return stamped;
     }
 
     function openPanelDatabase() { return HubDatabase.openDatabase(); }
@@ -812,16 +843,18 @@
           const blob = new Blob([JSON.stringify(original)], { type:'application/json' }), url = URL.createObjectURL(blob), link = document.createElement('a');
           link.href = url; link.download = `base-painel-antes-correcao-data-${new Date().toISOString().slice(0,10)}.json`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
-        const importOptions = { source:'preparador_mcc', confirmedDateChanges:dateChanges };
-        const preview = databaseApi.importManifest(original, manifest, panelManifestRow, importOptions);
+        const quote = await panelUsdBrlRateService.refreshIfDue(), exchangeRate = Number(quote?.rate) || PANEL_USD_BRL_RATE, importedManifest = panelManifestWithExchangeRate(manifest, quote);
+        PANEL_USD_BRL_RATE = exchangeRate;
+        const rowFactory = campaign => panelManifestRow(campaign, exchangeRate), importOptions = { source:'preparador_mcc', confirmedDateChanges:dateChanges };
+        const preview = databaseApi.importManifest(original, importedManifest, rowFactory, importOptions);
         const overwrite = preview.conflicts.length > 0;
-        const applied = overwrite ? databaseApi.importManifest(original, manifest, panelManifestRow, { ...importOptions, overwrite:true }) : preview;
+        const applied = overwrite ? databaseApi.importManifest(original, importedManifest, rowFactory, { ...importOptions, overwrite:true }) : preview;
         const base = applied.base;
         delete base.produtos_ocultos;
         delete base.produtos_aliases;
         // The shared importer preserves the latest captures of other MCC accounts.
         base.atualizado_em = new Date().toISOString();
-        base.overview_cards = window.OverviewCardsDomain.create(base, { computedAt:base.atualizado_em });
+        base.overview_cards = window.OverviewCardsDomain.create(base, { exchangeRate, computedAt:base.atualizado_em });
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};

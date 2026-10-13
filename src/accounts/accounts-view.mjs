@@ -1,4 +1,4 @@
-import {createAccountState, buildAccountReport, accountDomainUrl} from './accounts-domain.mjs?v=1';
+import {createAccountState, buildAccountReport, accountDomainUrl} from './accounts-domain.mjs?v=2';
 
 // UI only. The Hub supplies read-only campaign projections and shared formatters.
 export const accountReportTemplate = `<div class="account-summary-row"><div class="account-filters">
@@ -47,9 +47,10 @@ export function mount({root, getSnapshot, format}) {
   }
 
   function renderMatrix(report) {
-    const {accounts,products,selected} = report;
+    const {accounts,products,selected,accountMccLabels} = report;
     by('accountMatrixHead').innerHTML = '<tr><th>Produto</th>' +
-      accounts.map(account => `<th>${esc(account==='Sem conta'?account:`Conta ${account}`)}</th>`).join('') +
+      accounts.map(account => account==='Sem conta' ? `<th>${esc(account)}</th>` :
+        `<th><span class="account-matrix-mcc">${esc(accountMccLabels.get(account)||'MCC não identificada')}</span><span class="account-matrix-account">Conta ${esc(account)}</span></th>`).join('') +
       '<th>Total</th><th>Ativas</th><th>Pausadas</th></tr>';
     by('accountMatrixBody').innerHTML = products.length ? products.map(group => {
       const active = group.rows.filter(row => row.status === 'ativa').length;

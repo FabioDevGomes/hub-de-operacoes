@@ -79,15 +79,15 @@
       // A date supplied by another MCC does not make this campaign's missing period authoritative.
       if(Array.isArray(campaign.datas_coleta)&&!campaign.datas_coleta.some(value=>manifestDate(value)===date))continue;
       dates.add(date);
-      const observed=metrics.presente!==false,retained=period==='d0'&&metrics.retida_no_dia===true,present=observed||retained,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),factor=currency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
+      const observed=metrics.presente!==false,retained=period==='d0'&&metrics.retida_no_dia===true,present=observed||retained,currency=String(manifestValue(metrics.moeda)||'').trim().toUpperCase(),periodRate=numeric(metrics.exchange_rate_usd_brl)??numeric(exchangeRate),factor=currency==='USD'&&periodRate>0?periodRate:1;
       let investment=manifestField(metrics.custo_total),costCurrency=currency;
       if(period==='d0'){
         const cost=campaign.custo_D_zero,rawCost=manifestField(cost?.custo_total_destino_totais_coluna_M);
         if(cost?.presente!==false&&rawCost!=null){investment=rawCost;costCurrency=String(manifestValue(cost.moeda)||currency).trim().toUpperCase()}
       }
-      const costFactor=costCurrency==='USD'&&numeric(exchangeRate)>0?Number(exchangeRate):1;
+      const costRate=period==='d0'?(numeric(campaign.custo_D_zero?.exchange_rate_usd_brl)??periodRate):periodRate,costFactor=costCurrency==='USD'&&costRate>0?costRate:1;
       const commission=manifestField(metrics.valor_conversao)??manifestField(metrics.comissao_recebida);
-      rows.push({campaignName:String(campaign.nome_campanha_exato||''),...(Array.isArray(campaign.datas_coleta)?{scopeDates:[...campaign.datas_coleta]}:{}),period,date,present,observed,retained,captureScope:campaign.captura_D_zero_escopo||null,captureComplete:campaign.captura_D_zero_completa??null,investment:!present||investment==null?null:investment*costFactor,impressions:present?manifestField(metrics.impressoes):null,clicks:present?manifestField(metrics.cliques_google):null,conversions:present?manifestField(metrics.conversoes):null,commission:!present||commission==null?null:commission*factor});
+      rows.push({campaignName:String(campaign.nome_campanha_exato||''),...(Array.isArray(campaign.datas_coleta)?{scopeDates:[...campaign.datas_coleta]}:{}),period,date,present,observed,retained,captureScope:campaign.captura_D_zero_escopo||null,captureComplete:campaign.captura_D_zero_completa??null,exchangeRate:periodRate,investment:!present||investment==null?null:investment*costFactor,impressions:present?manifestField(metrics.impressoes):null,clicks:present?manifestField(metrics.cliques_google):null,conversions:present?manifestField(metrics.conversoes):null,commission:!present||commission==null?null:commission*factor});
     }
     const rowsByCampaignDate=new Map();for(const row of rows){const key=`${row.campaignName.toLocaleLowerCase('pt-BR')}|${row.date}`,previous=rowsByCampaignDate.get(key);if(!previous||row.period==='d1')rowsByCampaignDate.set(key,row)}
     return{dates:[...dates].sort(),rows:[...rowsByCampaignDate.values()].sort((a,b)=>a.date.localeCompare(b.date))};
@@ -114,7 +114,7 @@
   }
   // Shared by the live table and the summary computed only during an MCC application.
   function campaignD0Totals(c,{dates,stored,dailyByCampaign,snapshotsByCampaignName,exchangeRate=5.1}){
-    const valueOf=obj=>obj?.valor??null,m=c.metricas_D_zero||{},date=dates.d0||'',dailyRow=stored&&date?dailyByCampaign.get(stored.id)?.find(row=>row.data===date):null,snapshot=snapshotsByCampaignName.get(String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'))?.find(row=>row.period==='d0'&&row.date===date),cost=valueOf(c.custo_D_zero?.custo_total_destino_totais_coluna_M),direct={present:m.presente!==false,investment:!c.custo_D_zero||c.custo_D_zero.presente===false||cost==null?null:Number(cost)*(valueOf(c.custo_D_zero.moeda)==='USD'?exchangeRate:1),impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:valueOf(m.valor_conversao)??valueOf(m.comissao_recebida)};
+    const valueOf=obj=>obj?.valor??null,m=c.metricas_D_zero||{},periodRate=numeric(m.exchange_rate_usd_brl)??exchangeRate,date=dates.d0||'',dailyRow=stored&&date?dailyByCampaign.get(stored.id)?.find(row=>row.data===date):null,snapshot=snapshotsByCampaignName.get(String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'))?.find(row=>row.period==='d0'&&row.date===date),cost=valueOf(c.custo_D_zero?.custo_total_destino_totais_coluna_M),costRate=numeric(c.custo_D_zero?.exchange_rate_usd_brl)??periodRate,direct={present:m.presente!==false,investment:!c.custo_D_zero||c.custo_D_zero.presente===false||cost==null?null:Number(cost)*(valueOf(c.custo_D_zero.moeda)==='USD'?costRate:1),impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:valueOf(m.valor_conversao)??valueOf(m.comissao_recebida)};
     if(!date)return resolveD0Totals({present:false},null,date);
     if(!snapshot&&valueOf(m.data)!==date&&(Array.isArray(c.datas_coleta)||m.presente===false||valueOf(m.data))){
       const observed=dailyRow?.fontes?.includes('manifesto')&&dailyRow.periodos?.includes('d0')?dailyRow:null;
@@ -125,7 +125,7 @@
   function campaignD1Totals(c,history,{dates,snapshotsByCampaignName,latestSnapshots,exchangeRate=5.1}){
     const valueOf=obj=>obj?.valor??null,name=String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'),snapshot=snapshotsByCampaignName.get(name)?.find(row=>row.period==='d1'&&(!row.scopeDates||row.date===dates.d1));
     if(snapshot)return{investment:snapshot.investment,impressions:snapshot.impressions,clicks:snapshot.clicks,conversions:snapshot.conversions,commission:snapshot.commission,date:snapshot.date};
-    const m=c.metricas_D_menos_1||{},date=Array.isArray(c.datas_coleta)?dates.d1:valueOf(m.data)||dates.d1,factor=String(valueOf(m.moeda)||'').toUpperCase()==='USD'?exchangeRate:1,rawInvestment=valueOf(m.custo_total),rawCommission=valueOf(m.valor_conversao)??valueOf(m.comissao_recebida),direct={investment:rawInvestment==null?null:Number(rawInvestment)*factor,impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:rawCommission==null?null:Number(rawCommission)*factor,date},recorded=date?history?.byDate?.[date]:null;
+    const m=c.metricas_D_menos_1||{},periodRate=numeric(m.exchange_rate_usd_brl)??exchangeRate,date=Array.isArray(c.datas_coleta)?dates.d1:valueOf(m.data)||dates.d1,factor=String(valueOf(m.moeda)||'').toUpperCase()==='USD'&&periodRate>0?periodRate:1,rawInvestment=valueOf(m.custo_total),rawCommission=valueOf(m.valor_conversao)??valueOf(m.comissao_recebida),direct={investment:rawInvestment==null?null:Number(rawInvestment)*factor,impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:rawCommission==null?null:Number(rawCommission)*factor,date},recorded=date?history?.byDate?.[date]:null;
     if(Array.isArray(c.datas_coleta)&&valueOf(m.data)!==date)return resolveD1Totals({investment:null,impressions:null,clicks:null,conversions:null,commission:null,date},recorded);
     return latestSnapshots.dates.includes(date)?direct:resolveD1Totals(direct,recorded);
   }

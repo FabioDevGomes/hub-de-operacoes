@@ -40,13 +40,13 @@ test('Accounts adapter preserves observed history and replaces, not duplicates, 
 
 test('product and account projections preserve exact campaign names, sales adjustments and domain fallbacks',()=>{
   const campaigns=[
-    {nome_campanha_exato:'01/01 - Example 01',_status:'ativa',account:'A',totals:{investment:0,conversions:0,commission:0}},
-    {nome_campanha_exato:'02/01 - Example 02',_status:'pausada',account:'B',totals:{investment:null,conversions:0,commission:0}}
+    {nome_campanha_exato:'01/01 - Example 01',_status:'ativa',account:'A',mcc_id:'manager-1',totals:{investment:0,conversions:0,commission:0}},
+    {nome_campanha_exato:'02/01 - Example 02',_status:'pausada',account:'B',mcc_id:'missing-manager',totals:{investment:null,conversions:0,commission:0}}
   ];
-  const stored=new Map(campaigns.map((campaign,index)=>[campaign.nome_campanha_exato,{id:'synthetic-'+index,nome_exibicao:'Example '+(index+1),conta_dominio:index?'.stored.store':null}]));
+  const stored=new Map(campaigns.map((campaign,index)=>[campaign.nome_campanha_exato,{id:'synthetic-'+index,nome_exibicao:'Example '+(index+1),conta_dominio:index?'.stored.store':null,mcc_id:index?'missing-manager':'stale-manager'}]));
   const contextData={campaigns,latestSnapshots:{dates:[]},snapshotsByCampaignName:new Map(),historyTotals:new Map(),salesAdjustments:new Map([['synthetic-0',{pendingConversions:1,commissionAdjustment:10}]])};
   const context=vm.createContext({
-    derivedContext:()=>contextData,state:{productCatalog:{}},ProductCatalog:{normalize:()=>({aliases:{example:'Example alias'}})},
+    derivedContext:()=>contextData,state:{productCatalog:{},database:{mccs:[{id:'manager-1',nome:'MCC e-com'},{id:'stale-manager',nome:'MCC antiga'}]}},ProductCatalog:{normalize:()=>({aliases:{example:'Example alias'}})},
     accountDomainIndex:()=>new Map([['A','.fallback.shop']]),currentCampaignRows:()=>campaigns,
     databaseCampaign:name=>stored.get(name),testedProductName:campaign=>campaign.nome_exibicao,
     campaignSheet:()=>'',campaignHistoricalTotals:()=>null,d0Totals:campaign=>campaign.totals,
@@ -58,6 +58,7 @@ test('product and account projections preserve exact campaign names, sales adjus
   assert.deepEqual(Array.from(result,row=>row.campaign),campaigns.map(row=>row.nome_campanha_exato));
   assert.deepEqual(Array.from(result,row=>row.domain),['.fallback.shop','.stored.store']);
   assert.deepEqual(Array.from(result,row=>row.product),['Example alias','Example alias']);
+  assert.deepEqual(Array.from(result,row=>row.mccName),['MCC e-com','']);
   assert.deepEqual(Array.from(result,row=>row.status),['ativa','pausada']);
   assert.equal(result[0].totals.conversions,1); assert.equal(result[0].totals.commission,10);
   assert.equal(result[1].totals.investment,null); assert.equal(result[0].totals.investment,0);

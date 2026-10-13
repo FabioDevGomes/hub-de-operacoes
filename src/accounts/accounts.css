@@ -11,6 +11,8 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-report-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:12px;margin-bottom:12px}
 .account-matrix-wrap{overflow:visible;max-height:none}
 .account-matrix th{padding:10px 12px}
+.account-matrix-mcc{display:block;max-width:160px;margin:0 auto 3px;color:#8eb0d3;font-size:.62rem;font-weight:500;line-height:1.2;white-space:normal}
+.account-matrix-account{display:block;white-space:nowrap}
 .account-matrix td{text-align:center}
 .account-matrix td:first-child,.account-matrix th:first-child{text-align:left;position:sticky;left:0;z-index:1;background:#101e32}
 .account-matrix tbody tr{cursor:pointer}

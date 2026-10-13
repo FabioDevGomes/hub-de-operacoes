@@ -70,6 +70,18 @@ test('CPA coverage uses only three labels and prioritizes ranges with active cam
   assert.doesNotMatch(coverage,/Em teste|Não testada/,'no recorte só de pausadas, a faixa utilizada aparece como testada');
 });
 
+test('matrix shows MCC above each account inside one header cell and escapes the label',()=>{
+  const {root}=setup([
+    sample('ativa',{mccName:'MCC e-com'}),
+    sample('ativa',{account:'B',productKey:'other',product:'Other',mccName:'<img src=x>'})
+  ]);
+  const html=root.elements.accountMatrixHead.innerHTML;
+  assert.equal((html.match(/<tr>/g)||[]).length,1,'MCC labels stay inside the existing header row');
+  assert.match(html,/<th><span class="account-matrix-mcc">MCC e-com<\/span><span class="account-matrix-account">Conta A<\/span><\/th>/);
+  assert.match(html,/account-matrix-mcc">&lt;img src=x&gt;/);
+  assert.doesNotMatch(html,/<img/);
+});
+
 test('detail renders eleven aligned columns, safe domain links and missing values',()=>{
   const {root}=setup([sample()]);
   const html=root.elements.accountDetailBody.innerHTML;

@@ -84,6 +84,18 @@ test('coverage counts mixed statuses, commissions only in USD and fractional ran
   assert.deepEqual(product.missing,[90]);
 });
 
+test('account header MCC labels combine explicit names and label missing associations without guessing',()=>{
+  const report=buildAccountReport([
+    row('alpha','111-111-1111','ativa',70,{mccName:'MCC e-com'}),
+    row('beta','111-111-1111','pausada',80,{mccName:'MCC Nutra'}),
+    row('gamma','222-222-2222','ativa',90,{mccName:''}),
+    row('delta','Sem conta','ativa',null,{mccName:'MCC e-com'})
+  ],{...createAccountState(),status:'all'});
+  assert.equal(report.accountMccLabels.get('111-111-1111'),'MCC e-com · MCC Nutra');
+  assert.equal(report.accountMccLabels.get('222-222-2222'),'MCC não identificada');
+  assert.equal(report.accountMccLabels.has('Sem conta'),false);
+});
+
 test('sorting keeps null last in either direction and does not confuse zero', () => {
   const sample = [
     row('missing','A','ativa',70,{totals:{investment:null}}),

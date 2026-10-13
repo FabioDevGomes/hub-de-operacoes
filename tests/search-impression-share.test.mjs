@@ -16,7 +16,8 @@ vm.runInContext(slice('    const ABSENT = new Set(','    const slots =')+
   slice('    function normalize(value)','    function renderSlot(')+
   '\nglobalThis.tools={parseSource,buildManifest,decodeMccGridCapture,decodeMccD1GridCapture};',context);
 const business=context.tools;
-context.PANEL_USD_BRL_RATE=5;
+context.PANEL_USD_BRL_RATE=5.1;
+context.UsdBrlRateService={legacyRate:5.1};
 context.panelValue=field=>field?.estado==='ausente'||field?.estado==='invalido'?null:field?.valor??field;
 context.panelIsoToSerial=iso=>Date.parse(iso+'T00:00:00Z')/86400000+25569;
 vm.runInContext(slice('    const panelPctDecimal =','    function openPanelDatabase()')+
@@ -84,7 +85,7 @@ test('D0/D−1 structural capture reaches manifesto and both actual daily factor
       assert.ok(Math.abs(rows[0].cells.R.value-.2222)<1e-12);assert.equal(rows[1].cells.R.value,'< 10%');
       assert.equal(rows[2].cells.R.value,0);assert.equal(rows[3].cells.R.value,null);
       assert.equal(rows[0].cells.K.value,.25);assert.equal(rows[0].cells.L.value,.5);
-      assert.ok(rows[0].cells.M.value.endsWith('/dia'));assert.equal(rows[0].cells.O.value,10);
+      assert.ok(rows[0].cells.M.value.endsWith('/dia'));assert.equal(rows[0].cells.O.value,10.2,'capturas USD ainda sem taxa registrada usam o fallback compatível de R$ 5,10');
       const applied=db.importManifest(db.create(),manifest,factory,{overwrite:true});
       assert.equal(applied.base.diario.length,4);assert.equal(applied.base.diario[1].celulas.R.value,'< 10%');
       assert.equal(applied.base.diario[0].data,role==='d1'?d1:d0);

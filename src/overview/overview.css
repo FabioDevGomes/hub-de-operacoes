@@ -198,3 +198,8 @@
 #overviewTestRulesDialog .overview-test-rules-section-title{margin:4px 0 0;color:#a9bfd9;font-size:.78rem;font-weight:650}
 #overviewTestRulesDialog .overview-test-rules-roi{row-gap:7px}
 @media(max-width:480px){#overviewTestRulesDialog .overview-test-rules-pair{gap:6px 8px}#overviewTestRulesDialog .overview-roi-form{padding:16px}}
+.overview-fx-rate{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.overview-fx-rate-icon{color:var(--cyan);font-size:1rem;line-height:1}
+.overview-fx-rate.is-stale{border-color:rgba(255,190,80,.58);color:#ffd99e}
+.overview-fx-rate.is-stale .overview-fx-rate-icon{color:#ffd99e}
+.overview-fx-rate:disabled{cursor:wait;opacity:.78}

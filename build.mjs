@@ -52,6 +52,7 @@ await cp(resolve(root, "src/table-columns.css"), resolve(root, "dist/table-colum
 await cp(resolve(root, "src/table-columns.mjs"), resolve(root, "dist/table-columns.mjs"));
 await cp(resolve(root, "src/table-edit-actions.css"), resolve(root, "dist/table-edit-actions.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
+await cp(resolve(root, "src/usd-brl-rate.js"), resolve(root, "dist/usd-brl-rate.js"));
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");

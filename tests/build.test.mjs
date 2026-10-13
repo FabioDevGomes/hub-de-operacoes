@@ -19,6 +19,7 @@ const databaseModule=await readFile(new URL('../dist/database.js',import.meta.ur
 const overviewDomain=await readFile(new URL('../dist/overview-domain.js',import.meta.url),'utf8');
 const overviewView=await readFile(new URL('../dist/overview/view.js',import.meta.url),'utf8');
 const overviewCss=await readFile(new URL('../dist/overview/overview.css',import.meta.url),'utf8');
+const usdBrlRate=await readFile(new URL('../dist/usd-brl-rate.js',import.meta.url),'utf8');
 const columnCss=await readFile(new URL('../dist/table-columns.css',import.meta.url),'utf8');
 assert.equal(columnCss,await readFile(new URL('../src/table-columns.css',import.meta.url),'utf8'));
 assert.equal(await readFile(new URL('../dist/table-columns.mjs',import.meta.url),'utf8'),await readFile(new URL('../src/table-columns.mjs',import.meta.url),'utf8'));
@@ -27,6 +28,9 @@ const diaryView=await readFile(new URL('../dist/product-diary/view.js',import.me
 const diaryDomain=await readFile(new URL('../dist/product-diary/domain.js',import.meta.url),'utf8');
 const diaryCss=await readFile(new URL('../dist/product-diary/product-diary.css',import.meta.url),'utf8');
 const panelSource=html+overviewView+overviewDomain+overviewCss+diaryView+diaryDomain+diaryCss;
+assert.equal(usdBrlRate,await readFile(new URL('../src/usd-brl-rate.js',import.meta.url),'utf8'),'serviço PTAX deve ser publicado exatamente da fonte canônica');
+assert.ok(html.includes('usd-brl-rate.js?v=1')&&html.includes('id="usdBrlRateButton"')&&overviewView.includes('refreshExchangeRate')&&overviewCss.includes('.overview-fx-rate.is-stale'),'cotação PTAX e alerta de taxa desatualizada devem ser publicados e ligados à Visão Geral');
+assert.ok(databaseModule.includes('exchange_rate_usd_brl')&&overviewDomain.includes('metrics.exchange_rate_usd_brl'),'metadado de câmbio por captura deve ser preservado e usado nos cálculos históricos');
 assert.ok(!overviewView.includes('totalsCount')&&!html.includes('id="totalsCount"'),'badge de contagem de campanhas não deve aparecer no cabeçalho da tabela');
 assert.match(overviewCss,/#totalsView \.overview-kpi-profit \.kpi-value\{font-weight:400\}/,'o lucro do dia deve manter a cor de sinal sem negrito');
 assert.ok(overviewCss.includes('.app:has(#totalsView:not(.hidden)) #statusbar .pill{border-color:transparent}'),'chips de status da Visão Geral devem manter o fundo sem contorno visível');
@@ -324,13 +328,13 @@ assert.ok(timeViewModule.includes('Domain.SYMPTOM_SCALE_OPTIONS.map(option=>`<op
 assert.ok(timeCss.includes('.time-daily-summary{display:flex;align-items:end;gap:8px;flex-wrap:nowrap}'),'data e indicadores diários não estão organizados na mesma linha');
 // Accounts is now a separately built UI/domain/CSS module, not inline implementation.
 assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-view.mjs?v=1')") &&
+  html.includes("import('./accounts/accounts-view.mjs?v=2')") &&
   html.includes('getSnapshot:accountReportSnapshot'), 'Mapa por Conta não está conectado ao adaptador do Hub');
 for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts.css']) {
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
-assert.ok(html.includes('accounts/accounts.css?v=1') && accountView.includes('./accounts-domain.mjs?v=1'),'dependências do Mapa por Conta não foram publicadas');
+assert.ok(html.includes('accounts/accounts.css?v=2') && accountView.includes('./accounts-domain.mjs?v=2'),'dependências do Mapa por Conta não foram publicadas');
 assert.ok(!(html+cpaView+cpaDomain+cpaCss).includes('function enhanceAccountReportDetail(') && !(html+cpaView+cpaDomain+cpaCss).includes('function accountCpaCoverage('),'implementações antigas do Mapa por Conta continuam duplicadas no painel');
 assert.ok(html.includes('function accountReportRows()') && html.includes('function accountReportSnapshot()') &&
   html.includes('campaignZeroImpressionDays(campaign)') && html.includes('identity:campaignIdentity(row.campaign),cpa:cpaTitleInfo(row.campaign)'),

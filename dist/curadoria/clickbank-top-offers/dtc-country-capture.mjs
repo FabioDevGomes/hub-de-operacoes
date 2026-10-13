@@ -64,6 +64,15 @@ export function matchDtcCheckoutOffer(productName, offers) {
       && promotionalComparisonName(offer.offerName) === promotionalName;
     if (fullNameMatch || productNameMatch || promotionalNameMatch) matches.set(offer.offerKey, offer);
   }
+  // Alternativa somente quando nenhuma regra anterior encontrou uma oferta.
+  // Retira apenas a quantidade explícita final de frascos, nunca doses ou variantes.
+  const bottlePackage = focusedName.match(/^(.+) [1-9]\d{0,2} bottles?$/);
+  if (!matches.size && bottlePackage && isEligibleProductName(bottlePackage[1])) {
+    for (const offer of offers) {
+      if (!offer || typeof offer.offerKey !== 'string' || typeof offer.offerName !== 'string') continue;
+      if (promotionalComparisonName(offer.offerName) === bottlePackage[1]) matches.set(offer.offerKey, offer);
+    }
+  }
   const result = [...matches.values()];
   return {status:result.length === 1 ? 'unique' : result.length ? 'ambiguous' : 'none', matches:result};
 }

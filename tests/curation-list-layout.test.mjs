@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -11,7 +12,7 @@ test('the six curation lists load the same viewport/footer layout in source and 
   assert.equal(await read('dist/curadoria/curation-list-layout.css'), css);
   for (const path of lists) {
     const source = await read(`src/curadoria/${path}`);
-    assert.equal(await read(`dist/curadoria/${path}`), source, path);
+    assert.equal(await read(`dist/curadoria/${path}`), publishedPage(source), path);
     assert.match(source, /<main(?: id="[^"]*")? class="hub-curation-viewport">/, path);
     assert.equal((source.match(/hub-curation-viewport/g) || []).length, 1, path);
     assert.ok(source.includes('href="/curadoria/curation-list-layout.css?v=2"'), path);

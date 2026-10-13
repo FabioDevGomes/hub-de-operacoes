@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import { readFile } from 'node:fs/promises';
 
 const read = path => readFile(new URL(path, import.meta.url), 'utf8');
@@ -7,7 +8,7 @@ const [source, built, layout] = await Promise.all([
   read('../dist/curadoria/index.html'),
   read('../src/curadoria/curation-list-layout.css'),
 ]);
-assert.equal(built, source, 'o build publica a fonte canônica');
+assert.equal(built, publishedPage(source), 'o build publica a fonte canônica e a versão');
 assert.match(source, /<main class="hub-curation-viewport">/);
 assert.ok(source.includes('/curadoria/curation-list-layout.css?v=2'));
 assert.doesNotMatch(source, /main:has\(#rows\) \.tablewrap\{max-height:calc\(100vh - 290px\)/,

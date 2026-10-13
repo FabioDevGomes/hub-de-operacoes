@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import { readFile } from 'node:fs/promises';
 
 const read = path => readFile(new URL(path, import.meta.url), 'utf8');
@@ -6,7 +7,7 @@ const [source, built] = await Promise.all([
   read('../src/curadoria/index.html'),
   read('../dist/curadoria/index.html'),
 ]);
-assert.equal(built, source, 'o build publica a fonte canônica');
+assert.equal(built, publishedPage(source), 'o build publica a fonte canônica e a versão');
 
 const rowTemplate = source.match(/\$\('#rows'\)\.innerHTML=filtered\.map\([\s\S]*?\.join\(''\);/)?.[0];
 assert.ok(rowTemplate, 'a renderização das linhas do Radar SpyHero continua presente');

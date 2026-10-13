@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import test from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {mountCurationSheetEscape,CURATION_ESCAPE_MESSAGE} from '../src/curadoria/sheet-escape.mjs';
@@ -66,7 +67,7 @@ test('as seis listas e o Glimpse carregam o helper único e o build o publica',a
   for(const page of pages){
     const source=await read('../src/curadoria/'+page),built=await read('../dist/curadoria/'+page);
     assert.match(source,/<script type="module" src="\/curadoria\/sheet-escape\.mjs\?v=1"><\/script>/,page);
-    assert.equal(built,source,page);
+    assert.equal(built,publishedPage(source),page);
   }
   assert.equal(await read('../dist/curadoria/sheet-escape.mjs'),await read('../src/curadoria/sheet-escape.mjs'));
 });

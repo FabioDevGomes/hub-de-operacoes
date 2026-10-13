@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import test from 'node:test';
@@ -154,7 +155,7 @@ test('D−1 rejeitado não exclui D0; controles vazios não montam prévia nem e
 });
 
 test('fonte publicada conserva os controles e o estado de D−1 isolado',async () => {
-  assert.equal(await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8'),html);
+  assert.equal(await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8'),publishedPage(html));
   assert.match(html,/id="d1-only" type="button" disabled/);
   assert.match(html,/id="capture-mode-status" role="status" aria-live="polite"/);
   assert.match(html,/pill.textContent = 'Fora da prévia'/);

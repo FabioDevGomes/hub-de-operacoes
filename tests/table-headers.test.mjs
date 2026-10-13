@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const entryPages = [
-  ['../src/index.template.html', 9],
+  ['../src/index.template.html', 10],
   ['../src/asset-studio/index.html', 9],
   ['../src/curadoria/glimpse/index.html', 9],
   ['../src/preparador-MCC/index.html', 9],

@@ -9,7 +9,7 @@ const source = (await readFile(new URL('../src/curadoria/glimpse/glimpse-page.mj
 const raw = 'Test product\n8K searches past month\nPeople Also Search\ntest product reviews\ntest product price';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=false,failClipboard=false,clipboardText=raw,readClipboard}={}) {
+function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=false,failClipboard=false,clipboardText=raw,readClipboard,storageOverride}={}) {
   const nodes = new Map(),messages = [],stored = [],listeners = new Map();
   const clipboardReads = {count:0};
   function node(selector) {
@@ -29,7 +29,7 @@ function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=f
     location:{origin:'http://localhost',search:'?origin='+origin+'&embedded='+Number(embedded)+'&product=Test%20product&productKey=test-product'+(reference?'&presentation=reference':'')},
     navigator:{clipboard:{readText:async()=>{clipboardReads.count++;if(failClipboard) throw new Error('Denied');return readClipboard?readClipboard():clipboardText}}},
     requestAnimationFrame(){},setTimeout,scrollTo(){},
-    Storage:{openGlimpseDB:async()=>{},getHistoryByProduct:async()=>stored,saveAnalysis:async analysis=>{if(failSave)throw new Error('Storage unavailable');stored.push(analysis)}},
+    Storage:storageOverride||{openGlimpseDB:async()=>{},getHistoryByProduct:async()=>stored,saveAnalysis:async analysis=>{if(failSave)throw new Error('Storage unavailable');stored.push(analysis)}},
     CurationObservability:{recordGlimpse:async()=>{}},
   });
   vm.runInContext(source+'\n globalThis.api={finishAnalysis,pasteAndAnalyze,analyzeInput};',context);
@@ -37,6 +37,17 @@ function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=f
 }
 
 const clipboardOrigins = ['top','manager','smartadv-offers','hot-offers-ms','clickbank-top-offers'];
+test('Curadoria manual reutiliza o fluxo Glimpse mas encaminha chave estável, sem normalizar nome nem registrar observabilidade compartilhada',async()=>{
+  const calls=[],records=[];
+  const storage={openGlimpseDB:async options=>{calls.push(['open',options]);},getHistoryByProduct:async(key,options)=>{calls.push(['history',key,options]);return records;},saveAnalysis:async(value,options)=>{calls.push(['save',options]);records.push(value);}};
+  const h=harness({origin:'manual',storageOverride:storage});await settle();await h.api.pasteAndAnalyze();await settle();
+  assert.equal(records[0].productId,'test-product');assert.equal(records[0].productKey,'test-product','ID com hífen não vira nome normalizado');
+  for(const call of calls)assert.equal(call.at(-1).origin,'manual');
+  assert.equal(calls.find(call=>call[0]==='history')[1],'test-product');
+  assert.equal(h.messages.some(message=>message.type==='hub-glimpse-save-result'&&message.saved===true),true,'autosalvamento manual notifica a lista mesmo sem clicar em Salvar');
+  await h.api.finishAnalysis();assert.equal(records.length,1);assert.equal(h.messages.at(-1).saved,true);
+  h.node('#cancelTop').onclick();await settle();assert.equal(h.messages.at(-1).type,'hub-glimpse-close');
+});
 for (const origin of clipboardOrigins) {
   test(`Colar e analisar lê Ctrl+C somente no clique e analisa em ${origin}`,async()=>{
     let resolveRead;

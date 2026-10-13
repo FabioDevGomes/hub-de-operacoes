@@ -58,6 +58,14 @@
     return{ecom:resolve('MCC Ecom',/\be[\s._-]*com(?:merce)?\b/),nutra:resolve('MCC Nutra',/\bnutra\b/)};
   }
   function sumObservedMetric(rows,field){const entries=Array.isArray(rows)?rows:[];let total=0,observedCount=0;for(const row of entries){const value=numeric(row?.[field]);if(value==null)continue;total+=value;observedCount++}return{value:observedCount?total:null,observedCount,totalCount:entries.length}}
+  // Sum the table's existing projections, not cards, commission or hidden campaigns.
+  function overviewTableTotals(rows){
+    const entries=(Array.isArray(rows)?rows:[]).map(row=>({...row.totals,profit:row.profit}));
+    return Object.fromEntries(['investment','impressions','clicks','conversions','profit'].map(field=>{
+      const total=sumObservedMetric(entries,field);
+      return[field,{...total,value:total.value==null?null:['investment','profit'].includes(field)?money(total.value):total.value}];
+    }));
+  }
   function sumObservedProfit(totalsList){const entries=Array.isArray(totalsList)?totalsList:[];let investment=0,commission=0,observedCount=0;for(const totals of entries){const spent=numeric(totals?.investment),revenue=numeric(totals?.commission);if(spent==null||revenue==null)continue;investment+=spent;commission+=revenue;observedCount++}return{value:observedCount?profitForTotals({investment,commission}):null,observedCount,totalCount:entries.length}}
   function previousIsoDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'';const date=new Date(`${value}T00:00:00.000Z`);if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)return'';date.setUTCDate(date.getUTCDate()-1);return date.toISOString().slice(0,10)}
   function manifestValue(value){if(value&&typeof value==='object'){if(value.estado==='ausente'||value.estado==='invalido')return null;if(Object.prototype.hasOwnProperty.call(value,'valor'))return value.valor;if(Object.prototype.hasOwnProperty.call(value,'value'))return value.value}return value}
@@ -235,5 +243,5 @@
       .filter(Boolean)
       .sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
   }
-  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,manifestCaptureInfo,latestMccImportUpdates,sortRows,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
+  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,manifestCaptureInfo,latestMccImportUpdates,sortRows,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
 })(typeof window==='object'?window:globalThis);

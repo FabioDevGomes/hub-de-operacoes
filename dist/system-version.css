@@ -1,0 +1,15 @@
+/* Informational version label, not a button or a business status. */
+.hub-version-heading { display: inline !important; }
+.hub-system-version {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 10px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel2, #111f34);
+  color: var(--cyan, #35d2d0);
+  font: 600 .75rem/1.3 'Segoe UI', Arial, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 3px 9px rgba(0,0,0,.16);
+}

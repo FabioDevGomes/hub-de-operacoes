@@ -23,7 +23,7 @@ function setup(rows,preferences){
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args])}});
   return {...dom,state,snapshot,calls,controller};
 }
-test('second-line row density follows ROI/commission detail presence, column visibility and period rerenders',()=>{
+test('corner test-limit links follow ROI/commission presence, column visibility and period rerenders without mutation',()=>{
   const budget={limit:200,remaining:190,revenue:240,commissionBrl:100,minimumRoi:20,commissionTestPercent:65,cpaMinimumPercent:80};
   const extra=detail=>({budget:{...budget,...detail},testLimit:{value:200},testRemaining:{value:190}});
   const s=setup([
@@ -35,8 +35,8 @@ test('second-line row density follows ROI/commission detail presence, column vis
   const renderedRow=name=>s.get('#totalsBody').innerHTML.match(new RegExp('<tr[^>]*data-campaign="'+name+'"[^>]*>(.*?)</tr>'))[1];
   for(const mode of ['consolidated','d1','d0']){
     s.state.totalsMode=mode;s.controller.render();
-    assert.match(renderedRow('ROI detail'),/data-column="limit"[^>]*>[^<]*<a class="test-budget-detail test-budget-roi-link"/);
-    assert.match(renderedRow('Commission detail'),/data-column="limit"[^>]*>[^<]*<a class="test-budget-detail test-budget-roi-link test-budget-commission-link"/);
+    assert.match(renderedRow('ROI detail'),/data-column="limit" class="num hub-edit-host"[^>]*><span class="test-budget-value">[^<]*<\/span><a class="test-budget-detail test-budget-roi-link hub-corner-edit"/);
+    assert.match(renderedRow('Commission detail'),/data-column="limit" class="num hub-edit-host"[^>]*><span class="test-budget-value">[^<]*<\/span><a class="test-budget-detail test-budget-roi-link test-budget-commission-link hub-corner-edit"/);
     for(const name of ['No detail','No budget'])assert.doesNotMatch(renderedRow(name),/test-budget-detail/);
   }
   s.setList('[data-column-choice]',[{columnChoice:'limit'}]);s.controller.render();

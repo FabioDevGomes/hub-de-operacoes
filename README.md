@@ -1,5 +1,16 @@
 # Base de Dados Local de Campanhas
 
+<!-- hub-version:start -->
+## Versão atual: v1.10.1
+
+Fonte única: [VERSION](VERSION). Mudanças: [CHANGELOG](CHANGELOG.md).
+A mesma versão aparece junto ao título das telas e no título da aba do navegador.
+<!-- hub-version:end -->
+
+Para preparar a próxima entrega, use `node scripts/set-version.mjs patch "Descrição das mudanças"`.
+Use `minor` para funcionalidades compatíveis e `major` para mudanças incompatíveis.
+Veja [o fluxo de versionamento](docs/versioning.md). O comando não faz stage, commit, tag ou push.
+
 Painel local, sem servidor externo, para consolidar o histórico do Excel com as atualizações diárias do manifesto MCC.
 
 O Hub inteiro é servido por `scripts/serve-panel.ps1`, usando somente o Windows

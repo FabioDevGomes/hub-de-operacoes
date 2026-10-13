@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import {readFile} from 'node:fs/promises';
 
 test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
@@ -27,7 +28,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
     readFile(new URL('../dist/curadoria/glimpse-embed-controls.mjs',import.meta.url),'utf8'),
     readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8')
   ]);
-  assert.equal(distPage,page,'a página Glimpse servida corresponde à fonte atual');
+  assert.equal(distPage,publishedPage(page),'a página Glimpse servida corresponde à fonte atual e à versão');
   assert.equal(distScript,glimpsePage,'o renderizador Glimpse servido corresponde à fonte atual');
   assert.equal(distClipboard,clipboard,'o leitor de área de transferência servido corresponde à fonte');
   assert.equal(distHighlightStyles,peopleAlsoSearchStyles,'os estilos do destaque são publicados pelo build');
@@ -127,7 +128,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(shortcut,/id='topGlimpseTab'/,'E-commerce GM deve incluir Glimpse como aba da ficha');
   assert.match(shortcut,/imagesTab\.before\(button\)/,'a aba Glimpse deve ficar entre Google Trends e Google Imagens');
   assert.match(shortcut,/id='topGlimpseFrame'/,'a tela Glimpse deve abrir dentro da ficha para manter os botões de navegação');
-  assert.match(shortcut,/mountGlimpseReferenceBar\(\{sheet,frame,panel,backButton:sheet\.querySelector\('#closeSheet'\)\}\)/,'E-commerce GM coloca a barra compartilhada no cabeçalho hospedeiro');
+  assert.match(shortcut,/mountGlimpseReferenceBar\(\{sheet,frame,panel,backButton:sheet\.querySelector\('#closeSheet'\),trendsPanel\}\)/,'E-commerce GM coloca a barra compartilhada no cabeçalho hospedeiro');
   assert.match(shortcut,/hub-glimpse-resize/,'E-commerce GM ajusta a altura do iframe à página Glimpse completa');
   assert.match(shortcut,/event\.source!==frame\.contentWindow/,'a mensagem de redimensionamento só pode vir do iframe Glimpse esperado');
   assert.match(shortcut,/url\.searchParams\.set\('embedded','1'\)/,'o Glimpse embutido deve preservar o contexto da oferta');

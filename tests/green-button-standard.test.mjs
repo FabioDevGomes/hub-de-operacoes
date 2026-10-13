@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import test from 'node:test';
 import {readFile} from 'node:fs/promises';
 const read = f => readFile(new URL('../'+f,import.meta.url),'utf8');
@@ -8,12 +9,12 @@ test('green action pages load the shared finish for existing and dynamically ins
   for(const page of pages){
     const source=await read('src/curadoria/'+page+'/index.html');
     assert.match(source, /<body data-hub-green-actions="[a-z]+">/);
-    assert.ok(source.includes('/white-button.css?v='+(['top-performance','clickbank-top-offers','hot-offers-ms','smartadv-offers'].includes(page)?'5':'2')), page);
+    assert.ok(source.includes('/white-button.css?v='+(['gerentes','top-performance','clickbank-top-offers','hot-offers-ms','smartadv-offers'].includes(page)?'5':'2')), page);
     assert.equal((source.match(/white-button\.css/g)||[]).length,1);
-    assert.equal(source,await read('dist/curadoria/'+page+'/index.html'),page+' publication');
+    assert.equal(publishedPage(source),await read('dist/curadoria/'+page+'/index.html'),page+' publication');
   }
   const radar=await read('src/curadoria/index.html');
-  assert.ok(radar.includes('/white-button.css?v=2'));
+  assert.ok(radar.includes('/white-button.css?v=5'));
   assert.ok(!radar.includes('<body data-hub-green-actions'), 'Radar primaries remain blue');
 });
 test('green actions share the approved bevel without targeting semantic colors or layout', async () => {

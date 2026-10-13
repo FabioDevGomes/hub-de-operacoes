@@ -28,7 +28,7 @@
       catch(error){setEditBusy(false);$('#testedEditError').textContent=error.message||'Não foi possível salvar. Seus ajustes ainda estão no formulário.'}
     };
     function manualCell(product,keys,html){return keys.some(key=>(product.manualFields||[]).includes(key))?html.replace('<td','<td data-manual="true" title="Ajuste manual somente em Produtos Testados"'):html}
-    const TESTED_COLUMNS=[['date','Data'],['campaigns','Campanhas'],['sales','Vendas'],['revenue','Total faturado'],['profit','Lucro total'],['period','Período'],['status','Situação'],['related','Campanhas relacionadas'],['actions','Ação']],TESTED_COLUMNS_PREF='painel-produtos-testados-colunas-v1';let hiddenTestedColumns=new Set(),testedSortKey='status',testedSortDir='desc';try{hiddenTestedColumns=new Set(JSON.parse(preferences.getItem(TESTED_COLUMNS_PREF)||'[]').filter(column=>TESTED_COLUMNS.some(([id])=>id===column)))}catch{}
+    const TESTED_COLUMNS=[['date','Data'],['campaigns','Campanhas'],['sales','Vendas'],['revenue','Total faturado'],['profit','Lucro total'],['margin','Margem (%)'],['period','Período'],['status','Situação'],['related','Campanhas relacionadas'],['actions','Ação']],TESTED_COLUMNS_PREF='painel-produtos-testados-colunas-v1';let hiddenTestedColumns=new Set(),testedSortKey='status',testedSortDir='desc';try{hiddenTestedColumns=new Set(JSON.parse(preferences.getItem(TESTED_COLUMNS_PREF)||'[]').filter(column=>TESTED_COLUMNS.some(([id])=>id===column)))}catch{}
     const sortTestedProducts=products=>domain.sortProducts(products,testedSortKey,testedSortDir);
     const normalizeSearch=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
     function searchTestedProducts(products,query){const term=normalizeSearch(query.trim());if(!term)return products;return products.filter(product=>[product.label,...(Array.isArray(product.relatedCampaigns)?product.relatedCampaigns:[]),...(Array.isArray(product.campaigns)?product.campaigns:[])].some(value=>normalizeSearch(value).includes(term)))}
@@ -39,19 +39,20 @@
       const {products,removed}=getSnapshot(),sortedProducts=sortTestedProducts(products),visibleProducts=searchTestedProducts(sortedProducts,$('#testedSearch').value),searchTerm=normalizeSearch($('#testedSearch').value),activeProducts=products.filter(product=>product.active).length;
       $('#testedProductsCount').textContent=`${products.length} ${products.length===1?'produto':'produtos'}`;$('#testedActiveProductsCount').textContent=`${activeProducts} ${activeProducts===1?'com campanha ativa':'com campanhas ativas'}`;$('#restoreProducts').classList.toggle('hidden',!removed);$('#purgeProducts').classList.toggle('hidden',!removed);
       $('#testedProductsBody').innerHTML=visibleProducts.length?visibleProducts.map(p=>{
-        const cells=[
-          manualCell(p,['label'],`<td data-tested-col="product" class="name">${esc(p.label)}${p.manualFields?.length?'<span class="tested-adjustment-badge">Ajuste manual nesta lista</span>':''}</td>`),
+        const margin=domain.profitMarginPercent(p),cells=[
+          manualCell(p,['label'],`<td data-tested-col="product" class="name">${esc(p.label)}</td>`),
           manualCell(p,['startDate'],`<td data-tested-col="date">${p.startDate?dateLabel(p.startDate):'—'}</td>`),
           manualCell(p,['campaignCount'],`<td data-tested-col="campaigns" class="num">${fmtNum(Object.hasOwn(p,'campaignCount')?p.campaignCount:p.campaigns.length)}</td>`),
           manualCell(p,['salesCount'],`<td data-tested-col="sales" class="num">${fmtNum(p.salesCount,Number.isInteger(p.salesCount)?0:2)}</td>`),
           manualCell(p,['totalBilled'],`<td data-tested-col="revenue" class="num">${fmtMoney(p.totalBilled)}</td>`),
           manualCell(p,['totalProfit'],`<td data-tested-col="profit" class="num${Number.isFinite(p.totalProfit)&&p.totalProfit<0?' negative':''}">${fmtMoney(p.totalProfit)}</td>`),
+          manualCell(p,['totalBilled','totalProfit'],`<td data-tested-col="margin" class="num${margin!=null&&margin<0?' negative':''}">${margin==null?'—':fmtNum(margin,2)+'%'}</td>`),
           manualCell(p,['first','last'],`<td data-tested-col="period">${p.first||p.last?`${p.first?dateLabel(p.first):'—'} a ${p.last?dateLabel(p.last):'—'}`:'Sem datas'}</td>`),
           manualCell(p,['active'],`<td data-tested-col="status"><span class="tag tested-status ${p.active?'active':'historical'}">${p.active?'Ativo':'Histórico'}</span></td>`),
           manualCell(p,['relatedCampaigns'],`<td data-tested-col="related" class="campaigns">${esc((p.relatedCampaigns||p.campaigns).join(' · '))}</td>`),
           `<td data-tested-col="actions"><div class="row-actions"><button class="catalog-edit" data-key="${esc(p.key)}" data-product="${esc(p.label)}" type="button">Editar produto</button><button class="catalog-remove" data-key="${esc(p.key)}" data-product="${esc(p.label)}" type="button">Remover</button></div></td>`
         ];return`<tr>${cells.join('')}</tr>`
-      }).join(''):sortedProducts.length&&searchTerm?'<tr><td colspan="10" class="empty">Nenhum produto corresponde à busca.</td></tr>':'<tr><td colspan="10" class="empty">Nenhum produto disponível neste cadastro.</td></tr>';
+      }).join(''):sortedProducts.length&&searchTerm?'<tr><td colspan="11" class="empty">Nenhum produto corresponde à busca.</td></tr>':'<tr><td colspan="11" class="empty">Nenhum produto disponível neste cadastro.</td></tr>';
       renderTestedColumnPicker();bindTestedSorting();
       $$('.catalog-edit').forEach(button=>button.onclick=()=>{const product=getSnapshot().products.find(item=>item.key===button.dataset.key);if(product)openEditor(product,button)});
       $$('.catalog-remove').forEach(button=>button.onclick=async()=>{const name=button.dataset.product;if(!confirm(`Remover “${name}” da lista de produtos testados?\n\nOs dados das campanhas serão preservados.`))return;await actions.hide(button.dataset.key);renderTestedProducts();toast(`${name} foi removido da lista; o histórico foi preservado`)})

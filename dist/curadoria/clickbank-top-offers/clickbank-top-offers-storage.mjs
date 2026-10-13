@@ -1,4 +1,5 @@
 import {isSalesPageType} from './sales-page-type.mjs?v=3';
+import {isBrandBidding,withBrandBidding} from './brand-bidding.mjs?v=1';
 
 export const DB_NAME = 'radar-clickbank-top-offers';
 export const DB_VERSION = 3;
@@ -56,6 +57,7 @@ function validOfferRecord(storeName, record) {
     return Array.isArray(record.manualCountries) && record.manualCountries.length <= 250 &&
       record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
       isSalesPageType(record.salesPageType) &&
+      isBrandBidding(record.brandBidding) &&
       (record.dtcCountryCapture == null || (record.dtcCountryCapture.source === 'clickbank-dtc-checkout' &&
         typeof record.dtcCountryCapture.productName === 'string' && record.dtcCountryCapture.productName.trim().length > 0 &&
         record.dtcCountryCapture.productName.length <= 200 && typeof record.dtcCountryCapture.capturedAt === 'string' &&
@@ -100,6 +102,50 @@ export async function putOfferRecord(storeName, record) {
     tx.oncomplete = () => resolve(record);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
+  });
+}
+
+// Commit the explicit Trends Save and edited classifications atomically.
+export async function saveTrendPage(record,metadataPatch={}) {
+  if(!validOfferRecord(STORES.trends,record)||Object.keys(metadataPatch).some(key=>!['salesPageType','brandBidding'].includes(key))||
+    (Object.hasOwn(metadataPatch,'salesPageType')&&!isSalesPageType(metadataPatch.salesPageType))||
+    (Object.hasOwn(metadataPatch,'brandBidding')&&!isBrandBidding(metadataPatch.brandBidding)))throw new Error('Ficha Trends inválida.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction([STORES.trends,STORES.offerMetadata],'readwrite');
+    let metadata;
+    tx.objectStore(STORES.trends).put(record);
+    if(Object.keys(metadataPatch).length){
+      const store=tx.objectStore(STORES.offerMetadata),request=store.get(record.offerKey);
+      request.onsuccess=()=>{
+        const identity={offerKey:record.offerKey,productKey:record.productKey,offerName:record.offerName,seller:record.seller};
+        metadata={manualCountries:[],...request.result,...identity,...metadataPatch};
+        if(!validOfferRecord(STORES.offerMetadata,metadata)){tx.abort();return;}
+        store.put(metadata);
+      };
+    }
+    tx.oncomplete=()=>resolve({record,metadata});
+    tx.onerror=()=>reject(tx.error||new Error('Falha ao salvar ficha.'));
+    tx.onabort=()=>reject(tx.error||new Error('Gravação da ficha cancelada.'));
+  });
+}
+
+// Patch only the chosen field against the latest stored metadata, not a stale view.
+export async function saveBrandBidding(identity, value) {
+  const initial=withBrandBidding({...identity,manualCountries:[]},identity,value);
+  if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Metadado ClickBank inválido.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
+    let stored;
+    const request=store.get(identity.offerKey);
+    request.onsuccess=()=>{
+      stored=withBrandBidding(request.result || initial,identity,value);
+      store.put(stored);
+    };
+    tx.oncomplete=()=>resolve(stored);
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error);
   });
 }
 

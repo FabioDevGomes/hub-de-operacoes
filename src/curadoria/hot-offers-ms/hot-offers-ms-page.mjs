@@ -1,6 +1,6 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261007-glimpse-reference';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261011-manual-save';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs';
@@ -155,17 +155,20 @@ async function saveDecision(offerKey,status,notes='') {
   view.refreshOffer(item);
 }
 async function saveTrend(offerKey,status,draft = {}) {
-  const item = currentOffer(offerKey); if (!item) return;
-  const old = trendsFor(offerKey), assessment = {
+  const item = currentOffer(offerKey); if (!item) return false;
+  const old = trendsFor(offerKey);
+  if(!status){const stored={...old,offerKey,offerId:item.offerId,productName:item.productName,pageDraft:{...draft,status:''}};await Storage.put(Storage.STORES.trends,stored);trends=[...trends.filter(entry=>entry.offerKey!==offerKey),stored];show();return true;}
+  const assessment = {
     assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries || []).filter(Boolean))].slice(0,5),
     productAge:draft.productAge || null,searchTerm:String(draft.term || item.productName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString(),
   };
-  const stored = {...old,offerKey,offerId:item.offerId,productName:item.productName,assessments:Trends.appendAssessment(old.assessments,assessment)};
+  const stored = {...old,offerKey,offerId:item.offerId,productName:item.productName,pageDraft:null,assessments:Trends.appendAssessment(old.assessments,assessment)};
   await Storage.put(Storage.STORES.trends,stored);
   trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored];
   show(); view.refreshOffer(item,'trends');
   fireObservability(CurationObservability.recordAssessment({origin:'hot-offers-ms',subjectId:subjectId(item),productKey:item.productKey,productName:item.productName,offerRefs:offerRefs(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}}));
   view.showToast('Avaliação de Trends salva.');
+  return true;
 }
 async function addTrendCandidate(offerKey,value) {
   const item = currentOffer(offerKey), term = String(value || '').trim(); if (!item || !term) return;

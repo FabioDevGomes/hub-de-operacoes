@@ -165,6 +165,29 @@ export function captureOfferHistory(capture, olderCaptures = []) {
   return (capture?.offers || []).map(offer => ({...offer, historyState: knownIds.has(offer.offerId) ? 'known' : 'first-seen'}));
 }
 
+// Projeção de leitura: identidade por Offer ID, nunca por nome ou posição da linha.
+export function allCaptureOffers(captures = []) {
+  const time = capture => {
+    if (capture?.captureId === 'smartadv-user-provided-initial') return -Infinity;
+    const timestamp = Date.parse(capture?.capturedAt || '');
+    return Number.isFinite(timestamp) ? timestamp : -Infinity;
+  };
+  const ordered = [...captures].sort((a, b) => time(b) - time(a));
+  const latest = new Map(), appearances = new Map();
+  for (const capture of ordered) {
+    const seen = new Set();
+    for (const offer of capture?.offers || []) {
+      const id = String(offer?.offerId ?? '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      appearances.set(id, (appearances.get(id) || 0) + 1);
+      if (!latest.has(id)) latest.set(id, {...offer});
+    }
+  }
+  return [...latest.entries()].map(([id, offer]) => ({...offer,
+    historyState:appearances.get(id) > 1 ? 'known' : 'first-seen'}));
+}
+
 export function latestCaptureIndex(captures = []) {
   const index = new Map(), timestamps = new Map();
   for (const capture of captures) {

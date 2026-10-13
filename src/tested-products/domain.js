@@ -80,6 +80,14 @@
         return applyManualAdjustments({...x,totalBilled,totalInvestment,totalProfit:!x.profitComplete||totalBilled==null||totalInvestment==null?null:totalBilled-totalInvestment,salesCount:x.salesObserved?x.totalSales:null,label:x.name,startDate,first,last:dates.at(-1)||null},values)
       }).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR',{numeric:true,sensitivity:'base'}));return products
     }
-    function sortProducts(products,testedSortKey='status',testedSortDir='desc'){const value=(product,key)=>key==='product'?product.label:key==='date'?(product.startDate||''):key==='campaigns'?(Object.hasOwn(product,'campaignCount')?product.campaignCount:product.campaigns.length):key==='revenue'?product.totalBilled:key==='profit'?product.totalProfit:key==='sales'?product.salesCount:key==='period'?(product.first||''):key==='status'?(product.active?1:0):key==='related'?(product.relatedCampaigns||product.campaigns).join(' '):'';return[...products].sort((a,b)=>{const left=value(a,testedSortKey),right=value(b,testedSortKey);if((left==null)!==(right==null))return left==null?1:-1;const comparison=typeof left==='number'&&typeof right==='number'?left-right:String(left??'').localeCompare(String(right??''),'pt-BR',{numeric:true,sensitivity:'base'});if(comparison)return testedSortDir==='asc'?comparison:-comparison;return a.label.localeCompare(b.label,'pt-BR',{numeric:true,sensitivity:'base'})})}
-  window.TestedProductsDomain=Object.freeze({buildProducts,sortProducts,normalizeDate,EDIT_FIELDS,editorValues,applyManualAdjustments,prepareEdit,prepareDirectEdit});
+    function sortProducts(products,testedSortKey='status',testedSortDir='desc'){const value=(product,key)=>key==='product'?product.label:key==='date'?(product.startDate||''):key==='campaigns'?(Object.hasOwn(product,'campaignCount')?product.campaignCount:product.campaigns.length):key==='revenue'?product.totalBilled:key==='profit'?product.totalProfit:key==='margin'?profitMarginPercent(product):key==='sales'?product.salesCount:key==='period'?(product.first||''):key==='status'?(product.active?1:0):key==='related'?(product.relatedCampaigns||product.campaigns).join(' '):'';return[...products].sort((a,b)=>{const left=value(a,testedSortKey),right=value(b,testedSortKey);if((left==null)!==(right==null))return left==null?1:-1;const comparison=typeof left==='number'&&typeof right==='number'?left-right:String(left??'').localeCompare(String(right??''),'pt-BR',{numeric:true,sensitivity:'base'});if(comparison)return testedSortDir==='asc'?comparison:-comparison;return a.label.localeCompare(b.label,'pt-BR',{numeric:true,sensitivity:'base'})})}
+  // Margin uses the effective displayed totals, including independent manual overrides.
+  // Missing values and a non-positive denominator are not a zero-percent margin.
+  function profitMarginPercent(product){
+    const billed=product?.totalBilled,profit=product?.totalProfit;
+    if(!Number.isFinite(billed)||billed<=0||!Number.isFinite(profit))return null;
+    const margin=profit/billed*100;
+    return Number.isFinite(margin)?margin:null;
+  }
+  window.TestedProductsDomain=Object.freeze({buildProducts,sortProducts,profitMarginPercent,normalizeDate,EDIT_FIELDS,editorValues,applyManualAdjustments,prepareEdit,prepareDirectEdit});
 })();

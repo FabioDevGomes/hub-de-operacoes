@@ -284,7 +284,7 @@ export function summarizeMonthlyOpenDebts(entries = [], debts = [], cardDebtTota
     }
   }
   for (const code of CURRENCIES) {
-    const cardDebt = cardDebtTotals?.[code]?.cardDebt ?? cardDebtTotals?.[code];
+    const cardDebt = cardDebtTotals?.[code]?.currentCardDebt ?? cardDebtTotals?.[code]?.cardDebt ?? cardDebtTotals?.[code];
     totals[code].cardDebt = amountOrNull(cardDebt, 'Fatura em aberto do cartão') ?? 0;
   }
   for (const debt of debts) {
@@ -306,7 +306,10 @@ export function sumGlobalOpenCommitments(expenseTotals = {}, monthlyOpenDebt = n
   if (monthlyOpenDebt) {
     const currentMonthPlan = amountOrNull(monthlyOpenDebt.currentGlobalPlannedRemaining, 'Saldo planejado do mês') ?? 0;
     const currentMonthDebt = amountOrNull(monthlyOpenDebt.total, 'Dívidas em aberto do mês') ?? 0;
-    return Math.round((Math.max(0, plannedRemaining - currentMonthPlan) + currentMonthDebt + Number.EPSILON) * 100) / 100;
+    const allCardDebt = amountOrNull(expenseTotals.cardDebt, 'Faturas em aberto') ?? 0;
+    const currentCardDebt = amountOrNull(monthlyOpenDebt.cardDebt, 'Fatura do mês') ?? 0;
+    const futureCardDebt = Math.max(0, allCardDebt - currentCardDebt);
+    return Math.round((Math.max(0, plannedRemaining - currentMonthPlan) + currentMonthDebt + futureCardDebt + Number.EPSILON) * 100) / 100;
   }
   const cardDebt = amountOrNull(expenseTotals?.cardDebt, 'Fatura em aberto do cartão') ?? 0;
   return Math.round((plannedRemaining + cardDebt + Number.EPSILON) * 100) / 100;
@@ -326,12 +329,19 @@ function isGlobalExpenseInScope(entry, now) {
 export function createGlobalExpenseTotals(now = new Date()) {
   const totals = Object.fromEntries(CURRENCIES.map(code => [code, { plannedCents:0, actualCents:0, remainingCents:0 }]));
   const cardDebtByCategory = new Map();
+  const futureCardDebtByMonthCategory = new Map();
+  const currentMonthKey = localMonthKey(now);
   const cents = value => Math.round((Number(value) + Number.EPSILON) * 100);
   return {
     add(entry) {
       if (!entry || !CURRENCIES.includes(entry.currency) || !hasMonthlyOccurrence(entry)) return;
       if (isNubankCardCategory(entry)) {
-        if (entry.month_key <= localMonthKey(now)) {
+        if (!isoMonth(entry.month_key)) return;
+        if (entry.month_key > currentMonthKey) {
+          // Faturas de competências futuras são compromissos independentes.
+          futureCardDebtByMonthCategory.set(JSON.stringify([entry.month_key, entry.category_id]), { currency:entry.currency, amount:openCardDebtAmount(entry) });
+        } else {
+          // Preserva o fallback legado: somente o último retrato até o mês atual.
           const previous = cardDebtByCategory.get(entry.category_id);
           if (!previous || previous.month_key < entry.month_key) {
             cardDebtByCategory.set(entry.category_id, { month_key:entry.month_key, currency:entry.currency, amount:openCardDebtAmount(entry) });
@@ -355,12 +365,19 @@ export function createGlobalExpenseTotals(now = new Date()) {
       const result = Object.fromEntries(CURRENCIES.map(code => {
         const planned = totals[code].plannedCents / 100;
         const actual = totals[code].actualCents / 100;
-        return [code, { planned, actual, remaining:totals[code].remainingCents / 100, cardDebt:0 }];
+        return [code, { planned, actual, remaining:totals[code].remainingCents / 100, cardDebt:0, currentCardDebt:0, futureCardDebt:0 }];
       }));
       for (const debt of cardDebtByCategory.values()) {
-        if (debt.amount != null && CURRENCIES.includes(debt.currency)) result[debt.currency].cardDebt += debt.amount;
+        if (debt.amount != null && CURRENCIES.includes(debt.currency)) result[debt.currency].currentCardDebt += debt.amount;
       }
-      for (const code of CURRENCIES) result[code].cardDebt = Math.round((result[code].cardDebt + Number.EPSILON) * 100) / 100;
+      for (const debt of futureCardDebtByMonthCategory.values()) {
+        if (debt.amount != null && CURRENCIES.includes(debt.currency)) result[debt.currency].futureCardDebt += debt.amount;
+      }
+      for (const code of CURRENCIES) {
+        result[code].currentCardDebt = Math.round((result[code].currentCardDebt + Number.EPSILON) * 100) / 100;
+        result[code].futureCardDebt = Math.round((result[code].futureCardDebt + Number.EPSILON) * 100) / 100;
+        result[code].cardDebt = Math.round((result[code].currentCardDebt + result[code].futureCardDebt + Number.EPSILON) * 100) / 100;
+      }
       return result;
     },
   };

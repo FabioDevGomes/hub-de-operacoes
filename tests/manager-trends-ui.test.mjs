@@ -11,7 +11,7 @@ assert.ok(html.includes('managerTrendsCountries.length<5'),'limite de cinco paí
 assert.ok(html.includes('slice(0,5)'),'restauração das avaliações ainda limita os países a menos de cinco');
 assert.ok(html.includes('countries:[...managerTrendsCountries]'),'países não são persistidos com a avaliação');
 assert.ok(trendsUi.includes('Produto novo')&&trendsUi.includes('Produto antigo'),'classificação compartilhada de momento do produto ausente');
-assert.ok(html.includes('productAge:managerTrendsProductAge||null'),'momento do produto não é persistido');
+assert.ok(html.includes('productAge:(draft?.productAge ?? managerTrendsProductAge)||null'),'momento do produto não é persistido');
 assert.ok(html.includes('closeManagerSheet({restoreFocus:false});await refresh()'),'a ficha não fecha e atualiza depois de salvar');
 assert.ok(html.includes("productAgeLabel(latest?.productAge)"),'momento do produto não aparece no selo da listagem');
 assert.ok(html.includes('assessmentCountries(latest)'),'países não aparecem no selo da listagem');

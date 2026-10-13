@@ -1,5 +1,5 @@
 import {normalize} from './glimpse-domain.mjs';
-import {mountGlimpseReferenceBar} from './glimpse-reference-bar.mjs?v=1';
+import {mountGlimpseReferenceBar} from './glimpse-reference-bar.mjs?v=2';
 
 function managerContext(){
   const productName=document.querySelector('#sheetName')?.textContent.trim()||'';
@@ -26,7 +26,7 @@ export function mountGlimpseShortcut(origin){
     overviewTab?.remove();
     const button=document.createElement('button');button.type='button';button.id='topGlimpseTab';button.className=imagesTab.className;button.dataset.tab='glimpse';button.textContent='Glimpse';imagesTab.before(button);
     const panel=document.createElement('section');panel.className='glimpse-embed-panel hidden';panel.dataset.panel='glimpse';panel.id='topGlimpsePanel';const frame=document.createElement('iframe');frame.id='topGlimpseFrame';frame.className='glimpse-embedded-frame';frame.title='Tela do Glimpse';frame.loading='lazy';panel.append(frame);trendsPanel.after(panel);
-    mountGlimpseReferenceBar({sheet,frame,panel,backButton:sheet.querySelector('#closeSheet')});
+    mountGlimpseReferenceBar({sheet,frame,panel,backButton:sheet.querySelector('#closeSheet'),trendsPanel});
     const showTab=name=>{tabs.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab===name));document.querySelectorAll('#offerSheet [data-panel]').forEach(item=>item.classList.toggle('hidden',item.dataset.panel!==name))};
     new MutationObserver(()=>{if(!sheet.classList.contains('hidden')&&!sheet.querySelector('[data-panel="overview"]')?.classList.contains('hidden'))trendsTab.click()}).observe(sheet,{attributes:true,attributeFilter:['class']});
     button.addEventListener('click',()=>{showTab('glimpse');const context=topContext();if(!context.productName)return;const url=new URL(glimpseUrl(origin,context),location.href);url.searchParams.set('embedded','1');if(frame.dataset.url!==url.href){frame.dataset.url=url.href;frame.src=url.href}});

@@ -111,12 +111,17 @@
 #totalsView .totals-table th:first-child .sort-btn{padding-inline:6px}
 /* Mais 10% menos espaço vertical nas campanhas; fonte e padding horizontal preservados. */
 #totalsView .totals-table td{padding:6.48px 10px;border-bottom:1px solid #2a3c54;color:#e0e9f3;line-height:1.35;font-variant-numeric:tabular-nums}
-/* Segunda linha do limite de teste: 15% e mais 10% menos espaço vertical, sem reduzir a fonte. */
+/* O link de canto reserva uma faixa acima do valor, sem sobreposição. */
 #totalsView .totals-table tbody tr:has(td[data-column="limit"] .test-budget-detail)>td{padding-block:4.9572px}
-#totalsView .totals-table td[data-column="limit"] .test-budget-detail{margin-top:1.53px}
+#totalsView .totals-table td[data-column="limit"]{--hub-corner-edit-top:2px;--hub-corner-edit-right:10px}
+#totalsView .totals-table td[data-column="limit"]:has(.test-budget-detail) .test-budget-value{display:block;padding-top:11px}
+#totalsView .totals-table td[data-column="limit"] .test-budget-detail{margin:0;max-width:calc(100% - 20px);white-space:nowrap;text-align:right}
 #totalsView .totals-table td.name{max-width:none;overflow:hidden;color:#f3f7fc;font-weight:550;text-overflow:ellipsis;white-space:normal;overflow-wrap:anywhere}
 #totalsView .totals-table td[data-column="campaign"]{white-space:nowrap;overflow-wrap:normal}
 #totalsView .totals-table td.num,#totalsView .totals-table th .sort-btn.num{text-align:center}
+/* Última linha no fluxo da tabela, compacta e alinhada às colunas escolhidas. */
+#totalsView .totals-table tfoot :is(th,td){position:static;padding:3px 10px;line-height:1.2;font-size:.78rem;font-weight:600;white-space:nowrap;background:var(--panel2);border-top:1px solid var(--line);border-bottom:0;font-variant-numeric:tabular-nums}
+#totalsView .totals-table tfoot th[data-column]{position:static;height:auto;text-align:left;color:var(--muted)}
 #totalsView .totals-table tbody tr.paused-row td,#totalsView .totals-table tbody tr.rejected-row td,#totalsView .totals-table tbody tr.numbering-warning-row td,#totalsView .totals-table tbody tr.policy-limited-row td{color:#d3b8bd}
 #totalsView .totals-table tbody tr.paused-row td.name,#totalsView .totals-table tbody tr.rejected-row td.name,#totalsView .totals-table tbody tr.numbering-warning-row td.name,#totalsView .totals-table tbody tr.policy-limited-row td.name{color:#ffc0c6}
 #totalsView .totals-table .status-tag{border-radius:7px;font-weight:550}
@@ -175,7 +180,6 @@
 #totalsView .totals-table thead th:last-child,#totalsView .totals-table thead th:last-child .sort-btn{border-top-right-radius:10px}
 #totalsView .totals-table th .sort-btn{position:relative;min-height:50px;padding-block:6px;white-space:normal;line-height:1.2}
 #totalsView .totals-table th .sort-arrow{position:absolute;top:50%;right:3px;min-width:0;margin:0;transform:translateY(-50%)}
-#totalsView .totals-table .test-budget-commission-link{white-space:normal;line-height:1.35;overflow-wrap:break-word}
 /* Position/typography shared with diary row editors in table-edit-actions.css. */
 #totalsView{--overview-remaining-yellow:#ffe08a}
 #totalsView .totals-table tbody tr td.remaining-warning{color:var(--overview-remaining-yellow)}

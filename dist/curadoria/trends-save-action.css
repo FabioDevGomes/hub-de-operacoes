@@ -1,0 +1,7 @@
+.trends-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.trends-header-actions>.btn{display:inline-flex;align-items:center;justify-content:center}
+.trends-save-feedback{display:inline-block;min-width:9rem;font-size:.72rem;font-weight:400;color:var(--muted,#91a8c3);text-align:right}
+.trends-save-feedback[data-state="saved"]{color:var(--green,#42d6a0)}
+.trends-save-feedback[data-state="error"]{color:var(--red,#ff7584)}
+.trends-save-feedback:empty{visibility:hidden}
+@media(max-width:600px){.trends-save-feedback{min-width:0;max-width:12rem}}

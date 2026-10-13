@@ -50,9 +50,17 @@ html body table.hub-table-button-behavior :is(button, input[type="button"], inpu
 
 /* Referência: Decisão. Elevação visual por transform não redistribui as células.
    Somente controles elevados no corpo; links sem opt-in, ações discretas e desabilitados ficam fora. */
-html body table.hub-table-button-behavior tbody td :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):not(:disabled, .hub-corner-edit, .hub-discreet-action):is(:hover, :focus-visible) {
+html body table.hub-table-button-behavior tbody td :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):not(:disabled, .hub-corner-edit, .hub-discreet-action):is(:hover, :focus-visible),
+html body .hub-button-hover-effects :is(button, input[type="button"], input[type="submit"], input[type="reset"]):not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible):not(:active) {
   filter: brightness(1.25);
   transform: translateY(-1px);
+}
+
+/* Opt-in somente de efeitos: conserva formato, cores, relevo e foco do consumidor.
+   O escopo inclui controles dinâmicos/modais, mas nunca links ou campos de dados.
+   :active fica com o acabamento original (por exemplo, o bisel do botão branco). */
+html body .hub-button-hover-effects :is(button, input[type="button"], input[type="submit"], input[type="reset"]):not(:disabled, [aria-disabled="true"]) {
+  transition: background .15s ease, box-shadow .15s ease, filter .15s ease, transform .15s ease !important;
 }
 
 /* Retorno de fichas/modais: o helper conserva o pulso da linha e a duração.
@@ -92,6 +100,10 @@ html body .hub-table-toolbar-actions .btn:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   html body .hub-table-toolbar-actions .btn { transition: none !important; }
   .hub-table-button-behavior tbody td :is(button, input[type="button"], input[type="submit"], input[type="reset"], a.hub-table-button-appearance):not(:disabled, .hub-corner-edit, .hub-discreet-action) {
+    transition: none !important;
+    transform: none !important;
+  }
+  html body .hub-button-hover-effects :is(button, input[type="button"], input[type="submit"], input[type="reset"]) {
     transition: none !important;
     transform: none !important;
   }

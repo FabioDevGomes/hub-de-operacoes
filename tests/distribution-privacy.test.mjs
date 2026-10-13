@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { privateDistributionFiles } from '../scripts/distribution-privacy.mjs';
+import { copyReleaseMetadata } from './helpers/published-page.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const run = promisify(execFile);
@@ -20,6 +21,7 @@ test('distribution excludes private inputs and preserves stale payloads outside 
   await cp(join(root, 'src'), join(temporary, 'src'), { recursive:true });
   await cp(join(root, 'build.mjs'), join(temporary, 'build.mjs'));
   await mkdir(join(temporary, 'scripts'));
+  await copyReleaseMetadata(temporary);
   await cp(join(root, 'scripts/distribution-privacy.mjs'), join(temporary, 'scripts/distribution-privacy.mjs'));
   await mkdir(join(temporary, 'data-local'));
   await mkdir(join(temporary, 'dist/billing'), { recursive:true });

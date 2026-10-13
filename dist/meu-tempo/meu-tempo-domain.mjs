@@ -157,14 +157,21 @@ export function valueForEntry(entry){
   return null;
 }
 
+function booleanEntryRevision(entry){
+  const revisions=[entry?.createdAt,entry?.updatedAt].map(value=>Date.parse(value||'')).filter(Number.isFinite);
+  return revisions.length?Math.max(...revisions):Number.NEGATIVE_INFINITY;
+}
+
 export function aggregateDay(entries,date){
-  const rows=entries.filter(entry=>entry.date===date),byItem=new Map();let totalMinutes=0,productiveMinutes=0;
+  const rows=entries.filter(entry=>entry.date===date),byItem=new Map(),latestBooleanEntries=new Map();let totalMinutes=0,productiveMinutes=0;
   for(const entry of rows){
     const current=byItem.get(entry.itemId)||{entries:[],minutes:0,values:[]};current.entries.push(entry);
     if(entry.type==='duration'){const minutes=Number(entry.minutes)||0;current.minutes+=minutes;totalMinutes+=minutes;productiveMinutes+=productiveContributionMinutes(entry)}
+    else if(entry.type==='boolean'){const latest=latestBooleanEntries.get(entry.itemId);if(!latest||booleanEntryRevision(entry)>=booleanEntryRevision(latest))latestBooleanEntries.set(entry.itemId,entry)}
     else current.values.push(entry.value);
     byItem.set(entry.itemId,current);
   }
+  for(const[itemId,entry]of latestBooleanEntries){const current=byItem.get(itemId);if(current)current.values=[entry.value]}
   return{date,entries:rows,byItem,totalMinutes,productiveMinutes,productivePercent:totalMinutes?productiveMinutes/totalMinutes*100:0};
 }
 

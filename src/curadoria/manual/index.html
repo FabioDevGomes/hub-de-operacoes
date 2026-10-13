@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curadoria manual · Hub de Operações</title><link rel="icon" href="/favicon.png">
+  <link rel="stylesheet" href="/theme-colors.css?v=1">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261007-glimpse-borderless-standard-bar">
+  <link rel="stylesheet" href="./manual.css?v=1">
+  <link rel="stylesheet" href="/sidebar-component.css?v=15">
+  <link rel="stylesheet" href="/table-edit-actions.css?v=3"><link rel="stylesheet" href="/table-columns.css?v=2">
+  <link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/table-headers.css?v=9">
+  <link rel="stylesheet" href="../curation-table-filters.css?v=2"><link rel="stylesheet" href="../curation-list-layout.css?v=2">
+  <link rel="stylesheet" href="../analysis-sheet-bar.css?v=3"><link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
+  <link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/white-button.css?v=5">
+<link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"></head>
+<body data-hub-green-actions="manual">
+<div class="shell">
+  <aside>
+    <div class="brand"><div class="logo"><img src="/brand-logo.png" alt=""></div><div><strong>Hub de Operações</strong><span>Campanhas e curadoria</span></div></div>
+    <nav class="sidebar-nav hub-menu" data-hub-sidebar data-hub-sidebar-active="manual" aria-label="Menu principal"></nav>
+    <div data-hub-sidebar-products></div><div class="local"><b>● Dados locais</b><br>Cadastros e análises exclusivos desta tela, neste navegador.</div>
+  </aside>
+  <main id="manualRoot" class="hub-curation-viewport">
+    <header class="top"><div><div class="eyebrow">Curadoria · Cadastro próprio</div><h1>Curadoria manual</h1><div class="sub">Produtos de qualquer rede e tipo. O formato é compartilhado; as análises são independentes.</div></div><div class="actions"><button class="btn" id="exportBackup" type="button">Baixar backup JSON</button><button class="btn" id="restoreButton" type="button">Restaurar backup</button><input type="file" id="restoreFile" accept=".json,application/json" hidden><button class="btn primary" id="newProduct" type="button">Cadastrar produto</button></div></header>
+    <section class="summary" aria-label="Resumo" id="summary"></section>
+    <section class="surface">
+      <div class="filter-grid hub-curation-table-filters">
+        <input class="control hub-search-filter" id="search" type="search" placeholder="Buscar produto, rede ou detalhe" aria-label="Buscar produto, rede ou detalhe">
+        <select class="control hub-table-filter" id="networkFilter" aria-label="Rede"><option value="">Todas as redes</option></select>
+        <select class="control hub-table-filter" id="decisionFilter" aria-label="Decisão"><option value="">Todas as decisões</option></select>
+        <select class="control hub-table-filter" id="visibilityFilter" aria-label="Visibilidade"><option value="visible">Itens visíveis</option><option value="hidden">Itens ocultos</option><option value="all">Todos os itens</option></select>
+        <button class="btn hub-standard-action" type="button" id="clearFilters">Limpar filtros</button>
+        <details class="hub-column-picker" id="columnPicker"><summary class="btn">Colunas</summary><div class="hub-column-menu"><strong>Colunas da Curadoria manual</strong><p>Produto permanece visível. Preferência exclusiva desta tela.</p><div data-column-options></div><button class="btn" data-column-reset type="button">Restaurar padrão</button><p data-column-message role="status"></p></div></details>
+      </div>
+      <div class="tablewrap" data-curation-list-scroll><table class="hub-table-layout hub-table-button-behavior" id="productsTable"><thead id="tableHead"></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Cadastre o primeiro produto para começar.</div></div>
+    </section>
+    <p class="message" id="message" role="status" aria-live="polite"></p>
+
+    <dialog id="productDialog" class="manual-dialog"><form id="productForm">
+      <header class="dialog-head"><div><h2 id="formTitle">Cadastrar produto</h2><p class="sub">Somente o nome é obrigatório. Nenhuma análise de outra tela será vinculada.</p></div><button class="btn" type="button" data-close="productDialog">Fechar</button></header>
+      <div class="form-grid">
+        <label class="full">Nome do produto *<input class="control" name="name" required maxlength="250" autocomplete="off"></label>
+        <label>Rede / plataforma<input class="control" name="network" maxlength="120"></label><label>Tipo de produto<input class="control" name="productType" placeholder="Ex.: e-commerce, suplemento, digital" maxlength="120"></label>
+        <label>ID externo da oferta<input class="control" name="externalId" maxlength="160"></label><label>Países (códigos)<input class="control" name="countries" placeholder="US, DE, BR"></label>
+        <label class="full">URL da oferta<input class="control" name="url" type="url" placeholder="https://"></label>
+        <label>Payout<input class="control" name="payoutValue" inputmode="decimal" placeholder="Ex.: 85,00"></label><label>Moeda<input class="control" name="currency" maxlength="3" placeholder="USD, BRL, EUR"></label>
+        <label class="full">Observações<textarea class="control" name="notes" rows="3"></textarea></label>
+        <p class="full message" id="formMessage" role="status" aria-live="polite"></p>
+      </div><footer class="dialog-foot"><button class="btn" type="button" data-close="productDialog">Cancelar</button><button class="btn primary hub-standard-action" id="saveProduct" type="submit">Salvar produto</button></footer>
+    </form></dialog>
+
+    <dialog id="restoreDialog" class="manual-dialog"><header class="dialog-head"><h2>Restaurar Curadoria manual</h2><button class="btn" type="button" data-close="restoreDialog">Fechar</button></header><div class="dialog-body"><p id="restorePreview"></p><p>Somente registros novos serão acrescentados. Conflitos de IDs mantêm o conteúdo local; nada será apagado ou substituído.</p><p class="message" id="restoreMessage" role="status"></p></div><footer class="dialog-foot"><button class="btn" type="button" data-close="restoreDialog">Cancelar</button><button class="btn primary hub-standard-action" type="button" id="confirmRestore">Confirmar restauração</button></footer></dialog>
+
+    <section id="offerSheet" class="sheet product-sheet hidden" aria-label="Análises do produto">
+      <div class="sheet-inner">
+        <div class="sheet-tab-bar"><div class="tabs" role="tablist" aria-label="Análises"><button class="btn" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button><button class="btn" data-tab="history" type="button">Histórico</button></div><div class="sheet-bar-actions"><button class="btn primary" id="saveSheetButton" type="button">Salvar</button><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></div></div>
+        <header class="sheet-top"><div><div class="eyebrow">Curadoria manual · Análises próprias</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div><a id="offerLink" class="offer-id-link" target="_blank" rel="noopener noreferrer" hidden>Abrir oferta</a></div></header>
+        <p id="sheetMessage" class="message" role="status" aria-live="polite"></p>
+        <section data-panel="trends">
+          <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"></div><div id="trendCandidates"></div></article>
+          <article class="card trends-country-card"><h2>Países</h2><p>Países informados no cadastro; selecione até cinco para esta avaliação. Sem seleção, a análise fica sem GEO atribuído.</p><div id="trendCountries" class="trends-country-actions"></div><div class="manual-country-entry"><label for="manualCountry">Adicionar país (código de duas letras)</label><div><input class="control" id="manualCountry" maxlength="2"><button class="btn primary" id="addCountry" type="button">Adicionar país</button></div></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article>
+          <article class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div></article>
+          <article class="card sheet-history"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
+        </section>
+        <section data-panel="glimpse" class="hidden glimpse-embed-panel"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Glimpse · Curadoria manual" allow="clipboard-read" loading="lazy"></iframe></section>
+        <section data-panel="images" class="hidden"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Observe as primeiras 20 imagens de cada país e registre o resultado.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><p id="imageProgress" class="sub"></p><div id="imageCountries" class="image-country-list"></div><article class="card sheet-history"><h2>Histórico visual</h2><div id="imagesHistory"></div></article></section>
+        <section data-panel="history" class="hidden"><article class="card"><h2>Histórico do produto e das análises</h2><div id="allHistory"></div><p class="sub">O histórico detalhado do Glimpse fica na própria aba Glimpse.</p></article></section>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/sidebar-component.js?v=20261010-gurumedia"></script><script type="module" src="./manual-page.mjs?v=3"></script><script type="module" src="../sheet-escape.mjs?v=1"></script>
+<script type="module" src="/curadoria/column-widths-page.mjs?v=1" data-curation-widths="manual"></script></body></html>

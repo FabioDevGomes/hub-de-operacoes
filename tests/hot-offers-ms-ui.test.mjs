@@ -96,7 +96,7 @@ test('Movimento usa o formato textual da Variação da Top Offers CB', () => {
   assert.match(css,/#hotOffersMsRoot \.tablewrap th\[data-col="payment"\],#hotOffersMsRoot \.tablewrap td\[data-col="payment"\],#hotOffersMsRoot \.tablewrap th\[data-col="movement"\],#hotOffersMsRoot \.tablewrap td\[data-col="movement"\]\{text-align:center!important\}/,'cabeçalhos e células de Pagamento e Movimento ficam centralizados');
   assert.match(view,/if \(key === 'payment'\) return '<td data-col="payment">/,'identifica as células de Pagamento com a mesma chave do cabeçalho');
   assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS atualizado não fica preso no cache anterior');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261007-glimpse-reference/,'a view atualizada não fica presa no cache anterior');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261011-manual-save/,'a view atualizada não fica presa no cache anterior');
 });
 
 test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
@@ -113,7 +113,7 @@ test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-com
   assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261007-glimpse-borderless/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
   assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS local atualizado preserva a centralização de Pagamento e Movimento');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261007-glimpse-reference/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261011-manual-save/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
   assert.match(sharedCurationCss,/button\.decision-badge\{border:0;font-weight:400;cursor:pointer\}/,'o padrão comum usa cápsula sem borda e texto regular');
   assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:var\(--curation-decision-launch-row\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
@@ -165,7 +165,8 @@ test('Glimpse na Hot Offers MS adota a referência compartilhada Top Offers CB',
   assert.match(page,/actionButton:document\.querySelector\('#saveSheetButton'\),finishLabel:'Salvar',showSavedFeedback:true/);
   assert.match(page,/embedded:'1',presentation:'reference'/);
   assert.match(page,/hub-glimpse-save-result[\s\S]*?event\.data\.saved === true[\s\S]*?refresh\(\)\.catch/);
-  assert.match(view,/saveButton\.disabled = tab !== 'glimpse'/);
+  assert.match(view,/saveButton\.disabled = !\['trends','glimpse'\]\.includes\(tab\)/);
+  assert.match(view,/mountHotMsTrendsSave\(/,'Trends possui uma ação real de salvamento');
   assert.match(view,/Use Salvar decisão no Resumo/,'preserva o salvamento específico do Resumo');
   assert.match(barCss,/font-size:\.72rem;font-weight:400/);
 });
@@ -191,7 +192,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/countryChips\.after\(countryEditor,message\)/,'a inclusão manual de país segue o padrão compartilhado da E-commerce GM');
   assert.match(view,/className = 'manual-country-entry'/,'a edição manual de país usa o layout compartilhado');
   assert.match(view,/Países explícitos da oferta/,'o título segue a ficha E-commerce GM');
-  assert.match(view,/Selecione um resultado para salvar a avaliação/,'o resultado usa o cabeçalho compacto comum sem afirmar que a ficha fecha');
+  assert.match(view,/As alterações são gravadas somente ao clicar em Salvar, sem fechar esta tela/,'o resultado usa o cabeçalho compacto comum sem afirmar que a ficha fecha');
   assert.match(sharedCurationCss,/#offerSheet \.trends-search-row\{display:flex;gap:10px;align-items:end\}/,'a busca usa a disposição canônica da E-commerce GM sem dividir espaço com o link');
   assert.match(sharedCurationCss,/#offerSheet \.trends-result-actions\{grid-template-columns:repeat\(7,minmax\(0,1fr\)\);gap:6px\}/,'os resultados usam a mesma grade do E-commerce GM');
   assert.match(sharedCurationCss,/#offerSheet \.trends-country-action\{border:1px solid #40516b;background:#172337/,'os países mantêm o estilo compartilhado');

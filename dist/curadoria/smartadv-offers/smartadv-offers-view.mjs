@@ -1,5 +1,5 @@
-import * as Domain from './smartadv-offers-domain.mjs?v=5';
-import {captureOfferHistory, historyLabel} from './smartadv-offers-domain.mjs?v=5';
+import * as Domain from './smartadv-offers-domain.mjs?v=6';
+import {captureOfferHistory, historyLabel} from './smartadv-offers-domain.mjs?v=6';
 import {lastCollectionCell} from '../last-collection.mjs';
 import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
@@ -9,6 +9,7 @@ import * as Glimpse from '../glimpse-domain.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {mountColumnPicker} from '../../table-columns.mjs?v=1';
+import {trendPageState,mountTrendsSaveAction} from '../trends-save-action.mjs?v=4';
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -28,9 +29,10 @@ const keyFor = item => `smartadv:${item.offerId}`;
 
 export function mountSmartAdvOffersView({root, actions, preferences}) {
   let captures = [], trendRecords = [], imageRecords = [], decisionRecords = [], glimpseAnalyses = [];
-  let selectedCaptureId = '', annotatedOffers = [], latestCaptureByOffer = new Map(), activeOfferId = '', activeTab = 'trends';
+  let selectedCaptureId = 'all', annotatedOffers = [], latestCaptureByOffer = new Map(), activeOfferId = '', activeTab = 'trends';
   const importDialog = $('#importDialog', root), paste = $('#pasteArea', root), confirmButton = $('#confirmImport', root);
   const sheet = $('#offerSheet'), imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
+  let trendsSave = null;
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
   const hiddenOffersPreferenceKey = 'hub:smartadv-offers:hidden-offer-ids:v1';
   let hiddenOfferIds = new Set();
@@ -49,6 +51,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     columns:[['id','ID'],['offer','Oferta'],['trends','Google Trends'],['glimpse','Glimpse'],['images','Google Imagens'],['vertical','Vertical'],['geo','GEO explícito'],['channels','Meios explícitos'],['brand','Brand Bidding'],['history','Histórico local'],['decision','Decisão'],['lastSeen','Última coleta']],
     required:['offer'],preferences,preferenceKey:columnPreferenceKey});
   function showMessage(message, {error = false} = {}) {
+    trendsSave?.report(message,{error});
     for (const element of [$('#message',root),$('#sheetMessage'),$('#trendResultMessage')].filter(Boolean)) {
       element.textContent=message;element.classList.toggle('error',error);
     }
@@ -94,12 +97,14 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     const query = $('#search', root).value.trim().toLocaleLowerCase();
     const vertical = $('#verticalFilter', root).value, geo = $('#geoFilter', root).value;
     const brand = $('#brandFilter', root).value, visibility = $('#visibilityFilter', root).value;
+    const decision = $('#decisionFilter', root).value;
     const offers = annotatedOffers.map(enrich).filter(item => {
       const haystack = `${item.offerId} ${item.offerName} ${item.vertical} ${item.geoTargets.join(' ')} ${item.allowedChannels.join(' ')}`.toLocaleLowerCase();
       const hidden = hiddenOfferIds.has(String(item.offerId));
       const matchesVisibility = visibility === 'all' || (visibility === 'hidden' ? hidden : !hidden);
       return matchesVisibility && (!query || haystack.includes(query)) && (!vertical || item.vertical === vertical) &&
-        (!geo || item.geoTargets.includes(geo)) && (!brand || item.brandBidding === brand);
+        (!geo || item.geoTargets.includes(geo)) && (!brand || item.brandBidding === brand) &&
+        (!decision || DecisionUI.normalizeDecision(decisionFor(item).currentStatus) === decision);
     });
     $('#rows', root).innerHTML = offers.map(item => {const hidden=hiddenOfferIds.has(String(item.offerId));return `<tr data-offer="${escape(item.offerId)}" class="${DecisionUI.rowClass(decisionFor(item).currentStatus)}">
       <td class="number"><a href="${escape(item.offerUrl)}" target="_blank" rel="noopener noreferrer">${escape(item.offerId)}</a></td>
@@ -143,20 +148,23 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     imageRecords = nextState.images || imageRecords;
     decisionRecords = nextState.decisions || decisionRecords;
     glimpseAnalyses = nextState.glimpse || glimpseAnalyses;
-    if (!captures.some(item => item.captureId === selectedCaptureId)) selectedCaptureId = captures[0]?.captureId || '';
+    if (selectedCaptureId !== 'all' && !captures.some(item => item.captureId === selectedCaptureId)) selectedCaptureId = 'all';
+    const allOffers = Domain.allCaptureOffers(captures), allSelected = selectedCaptureId === 'all';
     const select = $('#captureSelect', root);
-    select.innerHTML = captures.map(item => `<option value="${escape(item.captureId)}">${escape(captureLabel(item))} · ${escape(item.offers.length)} ofertas</option>`).join('');
+    select.innerHTML = `<option value="all">Todas as capturas · ${allOffers.length} ofertas únicas</option>` + captures.map(item => `<option value="${escape(item.captureId)}">${escape(captureLabel(item))} · ${escape(item.offers.length)} ofertas</option>`).join('');
     select.value = selectedCaptureId;
-    select.disabled = captures.length < 2;
+    select.disabled = captures.length === 0;
     const selectedIndex = captures.findIndex(item => item.captureId === selectedCaptureId);
     const selected = selectedIndex >= 0 ? captures[selectedIndex] : null;
     const older = selected ? captures.slice(selectedIndex + 1) : [];
-    annotatedOffers = selected ? captureOfferHistory(selected, older) : [];
-    $('#captureInfo', root).textContent = selected
+    annotatedOffers = allSelected ? allOffers : selected ? captureOfferHistory(selected, older) : [];
+    $('#captureInfo', root).textContent = allSelected && captures.length
+      ? 'Últimos dados observados de cada oferta em todas as capturas.' : selected
       ? `${captureLabel(selected)} · ${selected.offers.length} ofertas observadas.`
       : 'Nenhuma captura salva.';
     $('#captureCount', root).textContent = String(captures.length);
-    $('#offerCount', root).textContent = String(selected?.offers.length || 0);
+    $('#offerCountLabel', root).textContent = allSelected ? 'Ofertas no histórico' : 'Ofertas no recorte';
+    $('#offerCount', root).textContent = String(annotatedOffers.length);
     $('#firstSeenCount', root).textContent = String(annotatedOffers.filter(item => item.historyState === 'first-seen').length);
     const allVerticals = [...new Set(annotatedOffers.map(item => item.vertical))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const allGeos = [...new Set(annotatedOffers.flatMap(item => item.geoTargets))].sort();
@@ -169,7 +177,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
 
   function offerById(id) { const item = annotatedOffers.find(entry => String(entry.offerId) === String(id)); return item ? enrich(item) : null; }
   function renderTrendPanel(item) {
-    const record = trendsFor(item), assessments = record.assessments || [], latest = Trends.latestAssessment(assessments), countries = countriesFor(item);
+    const record = trendsFor(item), assessments = record.assessments || [], latest = trendPageState(record,Trends.latestAssessment(assessments)), countries = countriesFor(item);
     $('#trendsTerm').value = latest?.searchTerm || item.productName;
     $('#trendCountries').innerHTML = countries.length ? countries.map(code => `<button type="button" class="trends-country-action ${(latest?.countries || []).includes(code) ? 'selected' : ''}" data-country="${escape(code)}" aria-pressed="${(latest?.countries || []).includes(code)}">${escape(code)}${item.manualCountries.includes(code) ? ' · manual' : ''}</button>`).join('') : '<span class="sub">Nenhum país explícito; informe os países que quer analisar.</span>';
     $('#manualCountryMessage').textContent = '';
@@ -178,23 +186,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
       $$('[data-trends-product-age]', $('#productAgeActions')).forEach(button => { button.classList.toggle('selected', button.dataset.trendsProductAge === value); button.setAttribute('aria-pressed', String(button.dataset.trendsProductAge === value)); });
     });
     $('#productAgeActions').dataset.selectedAge = latest?.productAge || '';
-    TrendsUI.renderResultButtons($('#trendResults'), latest?.status || '', async status => {
-      const selectedCountries = $$('[data-country].selected', $('#trendCountries')).map(button => button.dataset.country).slice(0,5);
-      const buttons=$$('[data-trends-result]',$('#trendResults'));
-      buttons.forEach(button=>{button.disabled=true;});
-      showMessage('Salvando avaliação de Google Trends…');
-      try {
-        const saved=await actions.saveTrend(item, status, {term:$('#trendsTerm').value.trim() || item.productName,countries:selectedCountries,productAge:$('#productAgeActions').dataset.selectedAge || ''});
-        if(saved===false)return;
-        if(activeOfferId===String(item.offerId)&&!sheet.classList.contains('hidden')) {
-          $$('[data-trends-result]',$('#trendResults')).forEach(button=>{
-            const selected=button.dataset.trendsResult===status;
-            button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));
-          });
-        }
-      } catch { showMessage('Não foi possível salvar a avaliação de Google Trends. Tente novamente.',{error:true}); }
-      finally { buttons.forEach(button=>{button.disabled=false;}); }
-    });
+    TrendsUI.renderResultButtons($('#trendResults'),trendsSave?.status(latest?.status||'')||'',status=>trendsSave.select(status));
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates'), {candidates:record.keywordCandidates || [],variant:'positive',searchContext:'Google Trends',onSearch:term => actions.openTrends(term),onRemove:(_candidate,index) => actions.removeTrendCandidate(item,index)});
     $('#trendsHistory').innerHTML = assessments.slice().reverse().map(entry => `<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries || []).join(', '),entry.productAge || ''].filter(Boolean).join(' · '))}</span></div>`).join('') || '<p class="sub">Sem avaliações de Trends.</p>';
   }
@@ -241,7 +233,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     if (await saveImageCandidateChange(item,country,[...current,value],assessment.status)) { input.value=''; input.disabled=false; input.focus(); }
     else input.disabled=false;
   }
-  function renderOffer(item) { renderTrendPanel(item); renderImagePanel(item); $('#glimpseFrame').dataset.productKey=item.productKey; }
+  function renderOffer(item) { renderTrendPanel(item); trendsSave?.restore();renderImagePanel(item); $('#glimpseFrame').dataset.productKey=item.productKey; }
   function switchTab(tab) {
     activeTab=tab;
     $('#sheetMessage').classList.toggle('hidden',tab==='trends');
@@ -249,6 +241,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     $$('[data-panel]',sheet).forEach(panel => panel.classList.toggle('hidden',panel.dataset.panel !== tab));
     const item=offerById(activeOfferId);
     if(tab === 'glimpse' && item) actions.openGlimpse(item);
+    trendsSave?.sync();
   }
   function openOffer(item, tab) {
     activeOfferId=String(item.offerId); activeTab=tab;
@@ -257,7 +250,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     $('#sheetMeta').textContent=`Offer ID ${item.offerId} · ${item.vertical} · ${item.geoTargets.join(', ') || 'GEO não explícito'}`;
     renderOffer(item); switchTab(tab); sheet.classList.remove('hidden'); window.scrollTo(0,0);
   }
-  function closeOffer() { sheet.classList.add('hidden'); imageCandidateDrafts.clear(); imageCandidateEditing.clear(); activeOfferId=''; actions.closeOffer(); }
+  function closeOffer() { trendsSave?.reset();sheet.classList.add('hidden'); imageCandidateDrafts.clear(); imageCandidateEditing.clear(); activeOfferId=''; actions.closeOffer(); }
 
   function showImportPreview({parsed}) {
     $('#previewMetrics', root).innerHTML = [['Ofertas reconhecidas', parsed.parsedCount],['Verticais', new Set(parsed.offers.map(item => item.vertical)).size],['IDs distintos', new Set(parsed.offers.map(item => item.offerId)).size]].map(([label,value]) => `<div><span>${escape(label)}</span><b>${escape(value)}</b></div>`).join('');
@@ -275,7 +268,8 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   confirmButton.onclick=()=>actions.confirmImport(paste.value);
   paste.oninput=()=>{confirmButton.disabled=true;$('#previewStatus',root).textContent='A colagem mudou; valide novamente antes de salvar.'};
   $('#captureSelect',root).onchange=event=>{selectedCaptureId=event.target.value;render()};
-  ['search','visibilityFilter','verticalFilter','geoFilter','brandFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
+  fillFilter('decisionFilter', DecisionUI.DECISION_OPTIONS.map(option => option.value), 'Todas as decisões');
+  ['search','visibilityFilter','verticalFilter','geoFilter','brandFilter','decisionFilter'].forEach(id=>{const element=$(`#${id}`,root);element.addEventListener(id==='search'?'input':'change',renderTable)});
   $('#exportBackup',root).onclick=()=>actions.exportBackup();
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value=''};
   $('#rows',root).addEventListener('click',event=>{
@@ -301,6 +295,21 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
 
   return {
     render,
+    connectTrendsSave(button) {
+      trendsSave=mountTrendsSaveAction({button,scope:$('[data-panel="trends"]'),watch:'#trendsTerm',getContext:()=>{
+        const item=offerById(activeOfferId);
+        return {tab:sheet.classList.contains('hidden')?'':activeTab,offerKey:item?.offerKey,
+          previous:item?Trends.latestAssessment(trendsFor(item).assessments):null,
+          draft:{status:$$('[data-trends-result].selected',$('#trendResults'))[0]?.dataset.trendsResult || '',
+            term:$('#trendsTerm').value.trim() || item?.productName || '',
+            countries:$$('[data-country].selected',$('#trendCountries')).map(button=>button.dataset.country).slice(0,5),
+            productAge:$('#productAgeActions [data-trends-product-age].selected')?.dataset.trendsProductAge || ''}};
+      },persist:(key,status,draft)=>{
+        const item=annotatedOffers.map(enrich).find(item=>item.offerKey===key);
+        return item?actions.saveTrend(item,status,draft):false;
+      },feedback:message=>showMessage(message,{error:/^Não foi possível/.test(message)})});
+      return trendsSave;
+    },
     refreshOffer(item, tab = activeTab) { if(String(item.offerId)===activeOfferId&&!sheet.classList.contains('hidden')){const active=offerById(activeOfferId)||enrich(item);renderOffer(active);switchTab(tab)} },
     returnFromGlimpse() { switchTab('trends'); },
     showImportPreview,

@@ -1,3 +1,4 @@
+import {trendPageState} from '../trends-save-action.mjs?v=4';
 import {lastCollectionCell} from '../last-collection.mjs';
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Trends from '../trends-domain.mjs';
@@ -9,6 +10,7 @@ import * as AutomaticSignal from '../automatic-signal-domain.mjs';
 import * as AutomaticSignalUI from '../automatic-signal-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
+import {mountHotMsTrendsSave} from './hot-offers-ms-trends-save.mjs?v=4';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -47,6 +49,21 @@ export function mountHotOffersMsView({root, actions}) {
   let pendingProductAge = '';
   const imageCandidateDrafts = new Map(), imageCandidateEditing = new Set();
   const sheet = $('#offerSheet'), importDialog = $('#importDialog'), collectionsDialog = $('#collectionsDialog');
+  const trendsSave = mountHotMsTrendsSave({
+    button:$('#saveSheetButton'),scope:$('[data-panel="trends"]'),watch:'#trendsTerm',
+    getContext:() => {
+      const item = offerByKey(activeOfferKey);
+      if(activeTab!=='trends'||!item)return {tab:activeTab,offerKey:item?.offerKey};
+      return {tab:activeTab,offerKey:item?.offerKey,previous:trendsFor(activeOfferKey).assessments.at(-1),draft:{
+        status:$('#trendResults [data-trends-result].selected')?.dataset.trendsResult || '',
+        term:$('#trendsTerm').value.trim() || item?.productName || '',
+        countries:$$('[data-country].selected',$('#trendCountries')).map(button=>button.dataset.country),
+        productAge:$('#productAgeActions [data-trends-product-age].selected')?.dataset.trendsProductAge||'',
+      }};
+    },
+    persist:(...args)=>actions.saveTrend(...args),
+    feedback:message=>{ $('#trendMessage').textContent = message; },
+  });
 
   function recordMap(records) { return new Map(records.map(item => [item.offerKey, item])); }
   function decisionFor(key) { return recordMap(state.decisions).get(key) || {offerKey:key,currentStatus:Decisions.DEFAULT_DECISION,history:[]}; }
@@ -245,7 +262,7 @@ export function mountHotOffersMsView({root, actions}) {
     const resultCard = $('.trends-result-card',sheet), resultTitle = $('h2',resultCard);
     if (resultCard && resultTitle && !$('.trends-result-head',resultCard)) {
       const head = document.createElement('div'), copy = document.createElement('div'), note = document.createElement('p');
-      head.className = 'trends-result-head'; note.textContent = 'Selecione um resultado para salvar a avaliação.';
+      head.className = 'trends-result-head'; note.textContent = 'As alterações são gravadas somente ao clicar em Salvar, sem fechar esta tela.';
       resultTitle.before(head); copy.append(resultTitle,note); head.append(copy);
     }
     $('#trendMessage')?.classList.add('trends-result-message');
@@ -269,17 +286,18 @@ export function mountHotOffersMsView({root, actions}) {
 
   function renderTrends(item, record) {
     prepareTrendEditors(item);
-    const codes = Domain.offerCountryCodes(item), selected = new Set((record.assessments?.at(-1)?.countries || []).slice(0,5));
+    $('#trendMessage').textContent = '';
+    const codes = Domain.offerCountryCodes(item), selected = new Set((trendPageState(record,record.assessments?.at(-1))?.countries || []).slice(0,5));
     renderMediaScalersOfferLink(item);
     $('h2',$('.trends-country-card',sheet)).textContent = 'Países explícitos da oferta';
     $('#trendCountries').innerHTML = codes.length ? codes.map(code => '<button type="button" class="trends-country-action ' + (selected.has(code) ? 'selected' : '') + '" data-country="' + escape(code) + '" aria-pressed="' + selected.has(code) + '">' + escape(code) + (item.manualCountries?.includes(code) ? ' · manual' : '') + '</button>').join('') : '<span class="sub">Nenhum país identificado; adicione um país manualmente abaixo.</span>';
-    pendingProductAge = record.assessments?.at(-1)?.productAge || '';
+    pendingProductAge = trendPageState(record,record.assessments?.at(-1))?.productAge || '';
     TrendsUI.renderProductAgeButtons($('#productAgeActions'),pendingProductAge,value=>{
       pendingProductAge=value;
       $$('[data-trends-product-age]',$('#productAgeActions')).forEach(button=>{button.classList.toggle('selected',button.dataset.trendsProductAge===value);button.setAttribute('aria-pressed',String(button.dataset.trendsProductAge===value))});
     });
-    TrendsUI.renderResultButtons($('#trendResults'),record.assessments?.at(-1)?.status || '',value=>actions.saveTrend(item.offerKey,value,{term:$('#trendsTerm').value.trim() || item.productName,countries:$$('[data-country].selected',$('#trendCountries')).map(button=>button.dataset.country),productAge:pendingProductAge}));
-    $('#trendsTerm').value = record.assessments?.at(-1)?.searchTerm || item.productName;
+    TrendsUI.renderResultButtons($('#trendResults'),trendsSave.status(record.assessments?.at(-1)?.status || ''),value=>trendsSave.select(value));
+    $('#trendsTerm').value = trendPageState(record,record.assessments?.at(-1))?.searchTerm || item.productName;
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates'),{candidates:record.keywordCandidates||[],variant:'positive',searchContext:'Google Trends',onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index)});
     $('#trendsHistory').innerHTML = (record.assessments || []).slice().reverse().map(entry => '<div class="history-row"><span>' + escape(dateTime(entry.capturedAt)) + '</span><b>' + escape(Trends.resultLabel(entry.status)) + '</b><span>' + escape([entry.searchTerm,(entry.countries || []).join(', '),entry.productAge || ''].filter(Boolean).join(' · ')) + '</span></div>').join('') || '<p class="sub">Sem avaliações de Trends.</p>';
   }
@@ -338,9 +356,10 @@ export function mountHotOffersMsView({root, actions}) {
     $$('.tabs [data-tab]',sheet).forEach(button => button.classList.toggle('active',button.dataset.tab === tab));
     $$('[data-panel]',sheet).forEach(panel => panel.classList.toggle('hidden',panel.dataset.panel !== tab));
     const saveButton = $('#saveSheetButton');
-    saveButton.disabled = tab !== 'glimpse';
-    saveButton.title = tab === 'glimpse' ? 'Salvar a análise Glimpse sem fechar a ficha' : tab === 'overview' ? 'Use Salvar decisão no Resumo' : tab === 'history' ? 'Histórico é somente leitura' : 'As avaliações desta aba são salvas a cada ação';
+    saveButton.disabled = !['trends','glimpse'].includes(tab);
+    saveButton.title = tab === 'trends' ? 'Salvar a avaliação de Google Trends sem fechar a ficha' : tab === 'glimpse' ? 'Salvar a análise Glimpse sem fechar a ficha' : tab === 'overview' ? 'Use Salvar decisão no Resumo' : tab === 'history' ? 'Histórico é somente leitura' : 'As avaliações desta aba são salvas a cada ação';
     saveButton.setAttribute('aria-label','Salvar: ' + saveButton.title);
+    trendsSave.restore();trendsSave.sync();
     const item = offerByKey(activeOfferKey);
     if (tab === 'glimpse' && item) actions.openGlimpse(item);
   }
@@ -362,7 +381,7 @@ export function mountHotOffersMsView({root, actions}) {
   $('#importScope').addEventListener('change',invalidateImportPreview);
   $('#completeListConfirm').addEventListener('change',invalidateImportPreview);
   $('#clearFilters').onclick = () => { for (const control of $$('.filter-grid .control')) control.value = control.id === 'visibilityFilter' ? 'visible' : ''; render(); };
-  $('#closeSheet').onclick = () => { sheet.classList.add('hidden'); clearImageCandidateDrafts(); activeOfferKey = null; actions.closeOffer(); };
+  $('#closeSheet').onclick = () => { trendsSave.reset();sheet.classList.add('hidden'); clearImageCandidateDrafts(); activeOfferKey = null; actions.closeOffer(); };
   $('#saveDecision').onclick = () => actions.saveDecision(activeOfferKey,$('#decisionStatus').value,$('#decisionNotes').value);
   $('#openTrends').onclick = () => actions.openTrends($('#trendsTerm').value.trim() || offerByKey(activeOfferKey)?.productName || '');
   async function submitTrendCandidate(input = $('#trendCandidate')) {
@@ -449,7 +468,7 @@ export function mountHotOffersMsView({root, actions}) {
     showImportPreview,
     openOffer(item,tab) { openSheet(item,tab); },
     refreshOffer(item,tab=activeTab) { if (item?.offerKey === activeOfferKey) openSheet(item,tab); render(); },
-    showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'),2400); },
+    showToast(message) { trendsSave?.report(message,{error:/^(?:Não foi possível|Falha)/.test(message)});const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'),2400); },
     close,
     renderCollections,
     renderCollectionDetail,

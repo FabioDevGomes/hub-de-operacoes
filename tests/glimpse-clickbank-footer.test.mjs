@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
@@ -12,7 +13,7 @@ const [page,controller,styles,distPage,distController,distStyles]=await Promise.
 ]);
 
 test('todas as fichas Glimpse usam retorno explícito sem Cancelar no rodapé',()=>{
-  assert.equal(distPage,page,'o HTML servido corresponde à fonte');
+  assert.equal(distPage,publishedPage(page),'o HTML servido corresponde à fonte e à versão');
   assert.equal(distController,controller,'a lógica servida corresponde à fonte');
   assert.equal(distStyles,styles,'os estilos servidos correspondem à fonte');
   assert.doesNotMatch(page,/<footer class="footer">/,'não há um segundo retorno durante a carga da referência');

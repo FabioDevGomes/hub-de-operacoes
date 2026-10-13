@@ -8,6 +8,10 @@ Todos os consumidores Glimpse da Curadoria aplicam a referência: Top Offers CB,
 
 A aba Glimpse da Top Offers CB, aprovada em 07/10/2026, define a composição reutilizável: barra sticky antes do contexto da oferta, Salvar/Voltar à direita, captura compacta, quatro métricas, People Also Search com termos sem negrito, sinal e confiança/alertas. Consulte [Padrão de referência do Glimpse](../../../../docs/curation-analysis-pattern.md#padrão-de-referência-do-glimpse) para medidas, fontes, cores, tamanho/fundo/sombra/borda dos controles, estados, responsividade e arquivos responsáveis. Reutilize `glimpse.css`, `people-also-search.css`, `glimpse-embed-host.css` e `glimpse-embed-controls.mjs`; CSS do host não estiliza o documento do iframe. Esta referência específica substitui E-commerce GM como exemplo de composição completa do Glimpse, sem mudar as referências de Trends/Imagens nem migrar automaticamente os consumidores existentes.
 
+## Divisória de largura manual
+
+As tabelas opt-in das sete listas e auxiliares/Glimpse reutilizam `curadoria/column-widths.css`: área de arraste de 9px na direita do cabeçalho, linha ciano de 2px somente no hover/foco/arraste, sem contorno decorativo. Foco de teclado conserva outline azul; setas ajustam 10px (Shift 30px), arraste não ordena. Cabeçalhos sticky e fundos/divisórias/cores existentes permanecem. Após ajuste, colgroup/layout fixo mantém as vizinhas estáveis e oferece rolagem horizontal em vez de reduzir fontes. Última coleta mantém mínimo 156px. Não copie estilos/handlers nas views; novas tabelas reutilizam o componente. Movimento reduzido desativa a transição. Ver contrato em `docs/maintenance.md` e `tests/curation-column-widths.test.mjs`.
+
 ## Última coleta — catálogos de Curadoria
 
 Use a coluna final da SmartAdv como referência em todas as seis listas. Reutilize `curadoria/last-collection.mjs` e `last-collection.css`: texto regular de `.8rem`, uma linha, números tabulares, alinhamento à esquerda/centro vertical e largura mínima de 156px; sem badge nem formato de botão. Cabeçalho “Última coleta”, depois das demais colunas. Preserve seletores/ordenações e timestamps individuais da origem. Datas sem horário não ganham hora artificial; ausências ficam “—”. O contrato e o mapa de fontes estão em [Manutenção — Última coleta](../../../../docs/maintenance.md#coluna-última-coleta-nas-listas-de-curadoria).
@@ -74,6 +78,10 @@ No **Radar SpyHero**, Decisão manual é um botão nativo que abre o Resumo da f
 ```
 
 Para propagação futura, adicione a classe apenas às tabelas solicitadas e reutilize a folha global; não copie overrides de hover para CSS local. Confira hover, Tab/Shift+Tab (também com mouse sobre o controle), botões de análise/decisão/ações, links, estado desabilitado e cabeçalho. Preserve o fluxo de retorno da Curadoria (`list-focus.mjs`); a aparência do seu pulso segue o contrato abaixo. Regressões: `tests/table-headers.test.mjs` e testes da view adotante.
+
+## Reutilização somente dos efeitos em Meu Tempo
+
+**Reutilização somente dos efeitos em Meu Tempo:** a classe opt-in `hub-button-hover-effects` na raiz `#timeModuleRoot` compartilha a mesma regra de brilho `1.25`/elevação de `1px` em `table-headers.css` (SPA `v=10`), sem adotar formato, dimensões, cores, bordas ou sombras das cápsulas de Curadoria. Abrange abas, navegação, ações e diálogos internos. Links e campos não são botões; desabilitados não recebem o realce, foco de teclado permanece e o estado pressionado conserva o acabamento próprio. Transição `.15s ease`; movimento reduzido remove deslocamento/transição. Não propaga o pulso de retorno nem altera eventos/dados. Contrato e regressões em `docs/maintenance.md` > Meu Tempo e `tests/meu-tempo-button-effects.test.mjs`.
 
 ## Retorno à tabela ao fechar fichas e decisões — sem contorno
 

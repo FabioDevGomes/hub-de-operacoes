@@ -1,3 +1,4 @@
+import {captureHeader} from './gurumedia-scopes.mjs?v=1';
 const BADGE_LINES=/^(?:new|top|best|brand\s*ok)(?:\s*(?:new|top|best|brand\s*ok))*$/i;
 const COUNTRY_LINE=/^([A-Z]{2}(?:\s*,\s*[A-Z]{2})*)(?:\s*\+\s*(\d+))?$/;
 const PAYOUT_LINE=/^\$\s*([\d.,]+)$/;
@@ -8,7 +9,7 @@ const LANGUAGES=['French','German','Italian','Spanish','Portuguese','Swedish','F
 export function normalize(value=''){return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
 export function decodeText(value=''){return String(value).replace(/&#x([0-9a-f]+);/gi,(_,hex)=>String.fromCodePoint(parseInt(hex,16))).replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n))).replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\\_/g,'_').trim()}
 export function badgeFlags(value=''){const folded=normalize(value);return {new:folded.includes('new'),top:folded.includes('top'),best:folded.includes('best'),brandOk:/brand\s*ok/.test(folded)}}
-export function declaredOfferCount(raw=''){const text=String(raw),match=text.match(/eCommerce\s*(\d+)\s*offers/i)||text.match(/Top\s+Performers\s*(\d+)\s*offers/i)||text.match(/(?:^|\n)\s*(\d+)\s+results\s*(?:\n|$)/i)||text.match(/Showing\s+(\d+)\s+of\s+\d+\s+offers/i);return match?Number(match[1]):null}
+export function declaredOfferCount(raw=''){const header=captureHeader(linesFrom(raw));if(header.declaredCount!==null)return header.declaredCount;const text=linesFrom(raw).join('\n'),match=text.match(/(?:^|\n)\s*(\d+)\s+results\s*(?:\n|$)/i)||text.match(/Showing\s+(\d+)\s+of\s+\d+\s+offers/i);return match?Number(match[1]):null}
 export function parseMoney(value){const clean=String(value||'').replace(/[^\d.,-]/g,'');if(!clean)return null;const normalized=clean.includes(',')&&!clean.includes('.')?clean.replace(',','.'):clean.replace(/,/g,'');const number=Number(normalized);return Number.isFinite(number)?number:null}
 function thumbnailFor(block,id){const escaped=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),url=block.match(new RegExp(`https?:\\/\\/[^\\s)\\]]*${escaped}[^\\s)\\]]*`,'i'))?.[0];return url||null}
 function structuredDetails(rawDetails=''){
@@ -16,7 +17,13 @@ function structuredDetails(rawDetails=''){
   const ctc=text.match(/\bCTC\s*((?:AU|CA|US)?\$)\s*([\d.,]+)/i),variant=text.match(/\bV\s*(\d+)\b/i);
   return {rawDetails:text,pageLanguage:language,variant:variant?`V${variant[1]}`:null,ctcValue:ctc?parseMoney(ctc[2]):null,ctcCurrency:ctc?(ctc[1].toUpperCase()==='AU$'?'AUD':'USD'):null,flags:{acceptsPaypal:/accepts paypal/i.test(text),presellPage:/presell page/i.test(text),directCheckout:/direct checkout link/i.test(text),higherCpa:/higher cpa/i.test(text),lowCtc:/\blow(?:er)? ctc\b/i.test(text)}};
 }
-function linesFrom(raw=''){return String(raw).replace(/\r/g,'').split('\n').map(line=>decodeText(line)).map(line=>line.replace(/^[-*]\s+/,'').trim())}
+function linesFrom(raw=''){
+  return String(raw).replace(/\r/g,'').split('\n').map(line=>decodeText(line).replace(/\*\*/g,'').replace(/^#{1,6}\s+|^[-*]\s+/,'').trim()).flatMap(line=>{
+    // Ctrl+A can place GEO and payout in the same line: "FR, BE, CH$60".
+    const compact=line.match(/^([A-Z]{2}(?:\s*,\s*[A-Z]{2})*(?:\s*\+\s*\d+)?)\s*(\$\s*[\d.,]+)$/);
+    return compact?[compact[1],compact[2]]:[line];
+  });
+}
 function offerHubCountries(content=[]){const countries=[],seen=new Set();let additionalCountryCount=0;for(const line of content){const match=line.match(HUB_COUNTRY_LINE);if(match&&!seen.has(match[1])){seen.add(match[1]);countries.push(match[1])}const more=line.match(HUB_MORE_LINE);if(more)additionalCountryCount=Number(more[1])}return {countriesVisible:countries,additionalCountryCount}}
 function parseOfferHub(lines,declaredCount){
   const anchors=[];for(let index=0;index<lines.length;index++){const match=lines[index].match(/^#(\d+)$/);if(match)anchors.push({index,offerId:match[1]})}
@@ -31,11 +38,11 @@ function parseOfferHub(lines,declaredCount){
   return {offers,declaredCount,parsedCount:offers.length,issues,valid:offers.length>0&&declaredCount===offers.length,sourceFormat:'offer-hub'};
 }
 export function parseTopPerformers(raw=''){
-  const lines=linesFrom(raw),declaredCount=declaredOfferCount(raw);if(lines.some(line=>/^#\d+$/.test(line))&&lines.some(line=>/^Full Details\s*→?$/.test(line)))return parseOfferHub(lines,declaredCount);const sourceFormat=/eCommerce\s*\d+\s*offers/i.test(String(raw))?'gurumedia-ecommerce':'top-performers',anchors=[];
+  const lines=linesFrom(raw),declaredCount=declaredOfferCount(raw),header=captureHeader(lines);if(lines.some(line=>/^#\d+$/.test(line))&&lines.some(line=>/^Full Details\s*→?$/.test(line)))return {...parseOfferHub(lines,declaredCount),captureScope:'offer-hub',scopeLabel:'Offer Hub'};const scope=header.scope,sourceFormat=scope?.key==='ecommerce'?'gurumedia-ecommerce':scope?.key==='top-performers'?'top-performers':'gurumedia-category',anchors=[];
   for(let index=0;index<lines.length;index++){const match=lines[index].match(/^(.+?)#(\d+)$/);if(match)anchors.push({index,anchorName:match[1].trim(),offerId:match[2]})}
   const offers=[],issues=[],seen=new Set();
   for(let position=0;position<anchors.length;position++){
-    const anchor=anchors[position],end=anchors[position+1]?.index??lines.length,block=lines.slice(anchor.index,end),previous=lines.slice(Math.max(0,anchor.index-4),anchor.index).filter(Boolean),badgeText=previous.filter(line=>BADGE_LINES.test(line)).join(' '),badges=badgeFlags(badgeText);
+    const anchor=anchors[position],end=anchors[position+1]?.index??lines.length,block=lines.slice(anchor.index,end),previous=lines.slice(0,anchor.index).filter(Boolean).reverse(),badgeLines=[];for(const line of previous){if(!BADGE_LINES.test(line))break;badgeLines.push(line)}const badgeText=badgeLines.join(' '),badges=badgeFlags(badgeText);
     if(seen.has(anchor.offerId)){issues.push({offerId:anchor.offerId,reason:'ID repetido na colagem'});continue}seen.add(anchor.offerId);
     const content=block.slice(1).filter(Boolean),productName=content[0]&&!/^https?:/i.test(content[0])?content[0]:anchor.anchorName;
     const countryIndex=content.findIndex(line=>COUNTRY_LINE.test(line)),payoutIndex=content.findIndex(line=>PAYOUT_LINE.test(line));
@@ -43,10 +50,11 @@ export function parseTopPerformers(raw=''){
     const detailStart=Math.max(0,content.indexOf(productName)+1),detailEnd=Math.min(countryIndex<0?content.length:countryIndex,payoutIndex<0?content.length:payoutIndex),rawDetails=content.slice(detailStart,detailEnd).filter(line=>!/^https?:/i.test(line)).join(' - ').trim(),details=structuredDetails(rawDetails);
     const countriesVisible=countryMatch?countryMatch[1].split(',').map(code=>code.trim()).filter(Boolean):[],additionalCountryCount=countryMatch?.[2]?Number(countryMatch[2]):0,payoutValue=payoutMatch?parseMoney(payoutMatch[1]):null;
     if(!productName)issues.push({offerId:anchor.offerId,reason:'Produto ausente'});if(payoutValue===null)issues.push({offerId:anchor.offerId,reason:'Payout ausente'});
-    offers.push({offerId:anchor.offerId,productName,productKey:normalize(productName),thumbnailUrl:thumbnailFor(block.join('\n'),anchor.offerId),badges,countriesVisible,additionalCountryCount,fullCountries:null,payout:{value:payoutValue,currency:'USD',raw:payoutMatch?.[0]||''},...details,category:sourceFormat==='gurumedia-ecommerce'?'eCommerce':null,sourceFormat,availableFields:{payout:true,rawDetails:true,thumbnailUrl:true,countries:true,badges:true,category:sourceFormat==='gurumedia-ecommerce'},sourceOrder:position+1});
+    offers.push({offerId:anchor.offerId,productName,productKey:normalize(productName),thumbnailUrl:thumbnailFor(block.join('\n'),anchor.offerId),badges,countriesVisible,additionalCountryCount,fullCountries:null,payout:{value:payoutValue,currency:'USD',raw:payoutMatch?.[0]||''},...details,category:scope?.category||null,sourceFormat,availableFields:{payout:true,rawDetails:true,thumbnailUrl:true,countries:true,badges:true,category:!!scope?.category},sourceOrder:position+1});
   }
   if(declaredCount!==null&&declaredCount!==offers.length)issues.unshift({reason:`A fonte declara ${declaredCount} ofertas, mas ${offers.length} foram interpretadas.`});
-  return {offers,declaredCount,parsedCount:offers.length,issues,valid:offers.length>0&&declaredCount===offers.length,sourceFormat};
+  if(!scope)issues.unshift({reason:'Categoria/lista da coleta não reconhecida. Copie também o título e a quantidade de ofertas.'});
+  return {offers,declaredCount,parsedCount:offers.length,issues,valid:!!scope&&offers.length>0&&declaredCount===offers.length,captureScope:scope?.key||null,scopeLabel:scope?.label||null,sourceFormat};
 }
 export function snapshotFromOffer(offer,{collectionId,capturedAt}){return {snapshotId:`${collectionId}::${offer.offerId}`,collectionId,capturedAt,offerId:offer.offerId,sourceOrder:offer.sourceOrder,productName:offer.productName,productKey:offer.productKey,payout:structuredClone(offer.payout),countriesVisible:[...offer.countriesVisible],additionalCountryCount:offer.additionalCountryCount,badges:{...offer.badges},rawDetails:offer.rawDetails,thumbnailUrl:offer.thumbnailUrl,pageLanguage:offer.pageLanguage,variant:offer.variant,ctcValue:offer.ctcValue,ctcCurrency:offer.ctcCurrency,flags:{...offer.flags},category:offer.category||null,sourceFormat:offer.sourceFormat||'top-performers',availableFields:{...(offer.availableFields||{})}}}
 function same(a,b){return JSON.stringify(a)===JSON.stringify(b)}

@@ -4,7 +4,7 @@
 
 Leia [Regras para novas implementações](../../../../docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](../../../../docs/maintenance.md#roteiro-de-execução). Antes de editar, identifique o módulo responsável e registre quais comportamentos devem permanecer. Uma falha de teste após extração de arquivos não autoriza remover um botão ou uma funcionalidade: confira o requisito atual, ajuste a verificação ao novo módulo e proteja o comportamento com regressão.
 
-Ao concluir, confira diff, publicação/cache, testes do domínio e suíte completa, e a UI quando aplicável; atualize os contratos e o mapa de arquivos. Separe falhas preexistentes de regressões e informe verificações não realizadas. Alterações apenas de documentação exigem checagem de caminhos/links e coerência com as fontes, sem rebuild, saves ou acesso aos bancos reais.
+Ao concluir, confira diff, publicação/cache, testes do domínio e suíte completa, e a UI quando aplicável; atualize os contratos e o mapa de arquivos. Separe falhas preexistentes de regressões e informe verificações não realizadas. **Cada alteração entregue deve avançar a versão global, no mínimo um patch, antes da resposta final**, sem adiar para commit/push ou agrupar pedidos já entregues; siga [o contrato de versionamento](../../../../docs/versioning.md#regra-obrigatória-uma-versão-por-alteração-entregue). Alterações apenas de documentação exigem checagem de caminhos/links, coerência com as fontes e rebuild para atualizar os metadados de versão, sem saves ou acesso aos bancos reais.
 
 ## Editar, compilar e testar
 

@@ -41,6 +41,6 @@ test('Meu Tempo shares the cream bevel and Arial bold between Undo and Save day,
   assert.ok(view.includes("button('Desfazer último','id=\"timeUndo\"','hub-white-button')"));
   assert.ok(view.includes('await Storage.undoLast(selectedDate)'));
   assert.ok(view.includes("button('Salvar dia','id=\"saveDay\"','primary hub-white-button')"));
-  assert.ok(view.includes("root.querySelector('#saveDay').onclick=async()=>{await Storage.saveDay("));
+  assert.match(view, /root\.querySelector\('#saveDay'\)\.onclick=\(\)=>runDailyAction\(async\(\)=>\{[^\n]*await Storage\.saveDay\(/);
   assert.ok(!css.includes('body.time-mode #timeUndo.btn{'), 'avoid two independently maintained copies of this design');
 });

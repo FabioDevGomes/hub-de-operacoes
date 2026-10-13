@@ -1,4 +1,4 @@
-import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=27';
+import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=34';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';

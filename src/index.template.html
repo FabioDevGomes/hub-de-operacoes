@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="meu-tempo/meu-tempo.css?v=32">
   <link rel="stylesheet" href="/white-button.css?v=2">
   <link rel="stylesheet" href="presell/presell.css?v=1">
-  <link rel="stylesheet" href="copy-ficha/copy-ficha.css?v=7">
+  <link rel="stylesheet" href="copy-ficha/copy-ficha.css?v=8">
 <link rel="stylesheet" href="copy-ficha/copy-ficha-output.css?v=7">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-pending.css?v=2">
   <link rel="stylesheet" href="copy-ficha/copy-ficha-autofill.css?v=1">
@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="billing/billing.css?v=2">
   <link rel="stylesheet" href="billing/billing-status.css?v=2">
   <link rel="stylesheet" href="billing/billing-shell.css?v=1">
-<link rel="stylesheet" href="personal-finance/personal-finance.css?v=50">
+<link rel="stylesheet" href="personal-finance/personal-finance.css?v=52">
   <style>
     :root{--bg:#07101f;--panel:#0d192b;--panel2:#111f34;--line:#24344d;--text:#f3f7fc;--muted:#92a4bc;--blue:#4fa7ff;--cyan:#35d2d0;--amber:#ffbb54;--red:#ff6f7d;--green:#4ed29a;--shadow:0 18px 50px rgba(0,0,0,.28)}
     *{box-sizing:border-box}html{font-size:16px}body{margin:0;background:radial-gradient(circle at 84% -20%,#18375b 0,transparent 36%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
@@ -60,7 +60,7 @@
     @media(prefers-reduced-motion:reduce){.nav-chevron{transition:none!important}}
   </style>
   <link rel="stylesheet" href="sidebar-component.css?v=15">
-  <link rel="stylesheet" href="/table-headers.css?v=9">
+  <link rel="stylesheet" href="/table-headers.css?v=10">
 
 
 
@@ -78,8 +78,8 @@
 
   <link rel="stylesheet" href="accounts/accounts.css?v=1">
   <link rel="stylesheet" href="cpa/cpa.css?v=2">
-  <link rel="stylesheet" href="tested-products/tested-products.css?v=5">
-  <link rel="stylesheet" href="overview/overview.css?v=50">
+  <link rel="stylesheet" href="tested-products/tested-products.css?v=6">
+  <link rel="stylesheet" href="overview/overview.css?v=52">
   <link rel="stylesheet" href="/table-columns.css?v=2">
   <link rel="stylesheet" href="overview/knowledge-export.css?v=2">
   <link rel="stylesheet" href="product-diary/product-diary.css?v=13">
@@ -136,7 +136,7 @@
       <section id="billingView" class="hidden"><div id="billingRoot"></div></section>
       <section id="personalFinanceView" class="hidden"><div id="personalFinanceRoot"></div></section>
       <section id="controlMacroView" class="hidden">__CONTROL_MACRO_VIEW__</section>
-      <section id="timeView" class="hidden"><div id="timeModuleRoot"><div class="empty">Carregando Meu Tempo...</div></div></section>
+      <section id="timeView" class="hidden"><div id="timeModuleRoot" class="hub-button-hover-effects"><div class="empty">Carregando Meu Tempo...</div></div></section>
       <section id="copyFichaView" class="hidden"><div id="copyFichaModuleRoot"><div class="empty">Carregando Ficha e Presell...</div></div></section>
       <section id="presellView" class="hidden"><span id="presellNav" hidden aria-hidden="true"></span><div id="presellModuleRoot"><div class="empty">Gerador de Presell unificado em Ficha e Presell.</div></div></section>
     </main>
@@ -197,23 +197,23 @@
   <script src="storage/campaign-base-reader.js?v=1"></script>
   <script src="overview/base-load-notice.js?v=1"></script>
   <script src="navigation-controller.js?v=1"></script>
-  <script src="overview-domain.js?v=18"></script>
+  <script src="overview-domain.js?v=19"></script>
   <script src="overview/cards-domain.js?v=1"></script>
   <script src="overview/cards-recovery.js?v=1"></script>
   <script src="overview/sale-roi-domain.js?v=1"></script>
-  <script src="overview/view.js?v=28"></script>
+  <script src="overview/view.js?v=31"></script>
   <script src="overview/knowledge-export-view.js?v=1"></script>
   <script src="product-diary/domain.js?v=5"></script>
   <script src="product-diary/observation-domain.js?v=1"></script>
   <script src="product-diary/observation-storage.js?v=1"></script>
   <script src="product-diary/view.js?v=10"></script>
-  <script src="sidebar-component.js?v=20261008-collapse-icon"></script>
+  <script src="sidebar-component.js?v=20261010-gurumedia"></script>
   <script src="control-macro/domain.js?v=3"></script>
   <script src="control-macro/view.js?v=3"></script>
   <script src="cpa/domain.js?v=1"></script>
   <script src="cpa/view.js?v=1"></script>
-  <script src="tested-products/domain.js?v=8"></script>
-  <script src="tested-products/view.js?v=8"></script>
+  <script src="tested-products/domain.js?v=9"></script>
+  <script src="tested-products/view.js?v=10"></script>
   <script>
     const embeddedManifest = __EMBEDDED_MANIFEST__;
     const initialView=PanelViews.resolveRoute(location.pathname+location.search);
@@ -407,8 +407,8 @@ async function saveDiaryObservation(input){const base=await ProductDiaryObservat
     }
     let timeModulePromise=null,copyFichaModulePromise=null;
     function showObservability(){return navigation.open('observability')}
-    async function renderTime({isCurrent}){try{timeModulePromise=timeModulePromise||import('./meu-tempo/meu-tempo-view.mjs?v=28');const module=await timeModulePromise;if(!isCurrent())return;await module.mount({root:$('#timeModuleRoot'),toast,setBrowserTitle:title=>{if(isCurrent())document.title=title}})}catch(error){$('#timeModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Meu Tempo: ${esc(error.message)}</div>`}}
-    async function renderCopyFicha({isCurrent}){try{copyFichaModulePromise=copyFichaModulePromise||import('./copy-ficha/copy-ficha-view.mjs?v=36');const module=await copyFichaModulePromise;if(!isCurrent())return;await module.mount({root:$('#copyFichaModuleRoot'),toast})}catch(error){$('#copyFichaModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Ficha e Presell: ${esc(error.message)}</div>`}}
+    async function renderTime({isCurrent}){try{timeModulePromise=timeModulePromise||import('./meu-tempo/meu-tempo-view.mjs?v=30');const module=await timeModulePromise;if(!isCurrent())return;await module.mount({root:$('#timeModuleRoot'),toast,setBrowserTitle:title=>{if(isCurrent())document.title=title}})}catch(error){$('#timeModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Meu Tempo: ${esc(error.message)}</div>`}}
+    async function renderCopyFicha({isCurrent}){try{copyFichaModulePromise=copyFichaModulePromise||import('./copy-ficha/copy-ficha-view.mjs?v=37');const module=await copyFichaModulePromise;if(!isCurrent())return;await module.mount({root:$('#copyFichaModuleRoot'),toast})}catch(error){$('#copyFichaModuleRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Ficha e Presell: ${esc(error.message)}</div>`}}
     function showPresell(){return navigation.open('copy')}
     // Import preview reuses the view date formatter; persistence remains in the Hub.
     function macroInputDate(iso){return ControlMacroView.formatDate(iso)}
@@ -424,10 +424,10 @@ async function saveDiaryObservation(input){const base=await ProductDiaryObservat
     async function updateManualSale({sourceSaleId,data,hora,campanha_id,pais_codigo,produto,plataforma,valor_brl}){const before=state.database,sourceSale=before?.vendas_provisorias?.find(item=>String(item.id)===String(sourceSaleId));if(!sourceSale)throw new Error('O lançamento original vinculado não foi encontrado na base.');const rawKey=sourceSale.identificador_mascarado==='chave composta'?`fallback:${data}|${hora||''}|${campanha_id}|${valor_brl}|${produto}`:null,dedupe=rawKey?await sha256(rawKey):sourceSale.chave_duplicidade,updated=CampaignDatabase.updateProvisionalSale(before,{id:sourceSaleId,data,hora,campanha_id,pais_codigo,produto,plataforma,valor_brl,chave_duplicidade:dedupe}),target=updated.sale,impactedIds=new Set([`${sourceSale.campanha_id}|${sourceSale.data}`,`${target.campanha_id}|${target.data}`].map(key=>`mcc-conversion:${key.replace('|',':')}`)),mccCandidates=[...CampaignDatabase.mccBillingSalesFromDiary(updated.base),...CampaignDatabase.mccBillingSalesFromManifest(updated.base)],mccBillingSales=[...new Map(mccCandidates.filter(item=>impactedIds.has(item.sale_id)).map(item=>[item.sale_id,item])).values()];state.database=updated.base;try{await persistLocalBase({updatedProvisionalBillingSales:[target],mccBillingSales})}catch(error){state.database=before;throw error}derivedCache=null;derivedContext();state.controlMacroRows=null;renderStatus();baseChannel?.postMessage({type:'provisional-sale-updated',provisionalSaleIds:[target.id]});return target}
     async function renderBilling({isCurrent}){try{await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling();const module=await import('./billing/billing-view.mjs?v=9');if(!isCurrent())return;await module.mount({root:$('#billingRoot'),toast,onUpdateManualSale:updateManualSale,getManualSaleEditData:()=>({campaigns:(state.database?.campanhas||[]).map(item=>({id:item.id,nome_mcc:item.nome_mcc,nome_exibicao:item.nome_exibicao,conta_id:item.conta_id,conta_sufixo:item.conta_sufixo})),countries:[...countryList,{code:'ZZ',name:'País não identificado'}]})})}catch(error){$('#billingRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Faturamento: ${esc(error.message)}</div>`}}
     let personalFinanceModulePromise=null,personalFinanceController=null,personalFinanceMountPromise=null;
-async function renderPersonalFinance({isCurrent}){try{personalFinanceModulePromise=personalFinanceModulePromise||import('./personal-finance/personal-finance-view.mjs?v=90');const module=await personalFinanceModulePromise;if(!isCurrent())return;if(personalFinanceController)await personalFinanceController.refresh();else{personalFinanceMountPromise=personalFinanceMountPromise||module.mount({root:$('#personalFinanceRoot'),toast});personalFinanceController=await personalFinanceMountPromise}}catch(error){if(!personalFinanceController)personalFinanceMountPromise=null;$('#personalFinanceRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Controle de gastos: ${esc(error.message)}</div>`}}
+async function renderPersonalFinance({isCurrent}){try{personalFinanceModulePromise=personalFinanceModulePromise||import('./personal-finance/personal-finance-view.mjs?v=97');const module=await personalFinanceModulePromise;if(!isCurrent())return;if(personalFinanceController)await personalFinanceController.refresh();else{personalFinanceMountPromise=personalFinanceMountPromise||module.mount({root:$('#personalFinanceRoot'),toast});personalFinanceController=await personalFinanceMountPromise}}catch(error){if(!personalFinanceController)personalFinanceMountPromise=null;$('#personalFinanceRoot').innerHTML=`<div class="notice error-box">Não foi possível abrir Controle de gastos: ${esc(error.message)}</div>`}}
     function render(){renderStatus();return navigation.refresh()}
     for(const selector of['#observabilityProductFilter','#observabilityAccountFilter','#observabilityCampaignFilter','#observabilityTypeFilter'])$(selector).onchange=renderObservability;$('#downloadObservability').onclick=downloadObservabilityAnalysis;
-    let billingStoragePromise=null,personalFinanceStoragePromise=null;function getBillingStorage(){return billingStoragePromise||=import('./billing/billing-storage.mjs?v=7')}function getPersonalFinanceStorage(){return personalFinanceStoragePromise||=import('./personal-finance/personal-finance-storage.mjs?v=22')}
+    let billingStoragePromise=null,personalFinanceStoragePromise=null;function getBillingStorage(){return billingStoragePromise||=import('./billing/billing-storage.mjs?v=7')}function getPersonalFinanceStorage(){return personalFinanceStoragePromise||=import('./personal-finance/personal-finance-storage.mjs?v=23')}
     function openLocalDb(){return HubDatabase.openDatabase()}
     function localBasePayload(){const base=CampaignDatabase.normalize(state.database);delete base.produtos_ocultos;delete base.produtos_aliases;base.manifesto_atual=state.manifest;base.atualizado_em=new Date().toISOString();return base}
     async function persistLocalBase({billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=[],correctedProvisionalBillingSales=[],updatedProvisionalBillingSales=[],mccBillingSales=[]}={}){

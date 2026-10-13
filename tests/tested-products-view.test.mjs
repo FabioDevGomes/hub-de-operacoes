@@ -11,9 +11,9 @@ const domain=ctx.window.TestedProductsDomain;
 const product=(key,active,billed,salesCount=0,profit=billed)=>({key,name:key,label:key,campaigns:[key+' 01'],startDate:'2026-09-01',first:'2026-09-01',last:'2026-09-02',active,totalBilled:billed,totalProfit:profit,salesCount});
 function harness(products,removed=0){
   const h=createRoot(),saved=new Map(),calls=[],messages=[];
-  h.setList('[data-tested-sort]',['product','campaigns','status','revenue','profit','sales'].map(testedSort=>({testedSort})));
-  h.setList('[data-tested-col]',['product','revenue','profit','sales'].map(testedCol=>({testedCol})));
-  h.setList('[data-tested-column]',[{testedColumn:'revenue'},{testedColumn:'profit'},{testedColumn:'sales'}]);
+  h.setList('[data-tested-sort]',['product','campaigns','status','revenue','profit','sales','margin'].map(testedSort=>({testedSort})));
+  h.setList('[data-tested-col]',['product','revenue','profit','sales','margin'].map(testedCol=>({testedCol})));
+  h.setList('[data-tested-column]',[{testedColumn:'revenue'},{testedColumn:'profit'},{testedColumn:'sales'},{testedColumn:'margin'}]);
   h.setList('.catalog-edit',[{key:products[0]?.key||'synthetic',product:products[0]?.label||'Synthetic'}]);
   h.setList('.catalog-remove',[{key:'synthetic',product:'Synthetic'}]);
   const choices={name:null,remove:false},dialogs={prompt:()=>choices.name,confirm:()=>choices.remove};
@@ -55,6 +55,49 @@ test('negative total profit is red without bold and other profit states stay unc
   assert.match(html,/data-tested-col="profit" class="num">BRL 25\.00<\/td>/);
   assert.match(html,/data-tested-col="profit" class="num">—<\/td>/);
   assert.doesNotMatch(html,/<td data-tested-col="profit"[^>]*><strong>/);
+});
+
+test('margin renders between profit and period, with negative, zero and unavailable states',()=>{
+  const rows=[product('Loss',true,100,0,-25),product('Gain',true,300,0,100),product('Zero',false,100,0,0),product('No revenue',false,0,0,0),product('Unknown',false,100,0,null)];
+  const before=structuredClone(rows),h=harness(rows);h.controller.render();
+  const html=h.get('#testedProductsBody').innerHTML;
+  assert.match(html,/data-tested-col="margin" class="num negative">-25\.00%<\/td>/);
+  assert.match(html,/data-tested-col="margin" class="num">33\.33%<\/td>/);
+  assert.match(html,/data-tested-col="margin" class="num">0\.00%<\/td>/);
+  assert.equal((html.match(/data-tested-col="margin" class="num">—<\/td>/g)||[]).length,2);
+  for(const tr of html.matchAll(/<tr>(.*?)<\/tr>/g)){
+    assert.equal((tr[1].match(/<td\b/g)||[]).length,11);
+    assert.ok(tr[1].indexOf('data-tested-col="profit"')<tr[1].indexOf('data-tested-col="margin"'));
+    assert.ok(tr[1].indexOf('data-tested-col="margin"')<tr[1].indexOf('data-tested-col="period"'));
+  }
+  assert.match(h.get('#testedColumnsMenu').innerHTML,/Margem \(%\)/);
+  h.controller.render();assert.deepEqual(h.calls,[]);assert.deepEqual(rows,before);
+});
+
+test('margin supports sorting and persistent visibility without catalog writes',()=>{
+  const h=harness([product('Gain',true,100,0,25),product('Loss',true,100,0,-25)]);h.controller.render();
+  const sort=h.root.querySelectorAll('[data-tested-sort]').find(el=>el.dataset.testedSort==='margin');
+  sort.onclick();assert.ok(h.get('#testedProductsBody').innerHTML.indexOf('>Loss<')<h.get('#testedProductsBody').innerHTML.indexOf('>Gain<'));
+  sort.onclick();assert.ok(h.get('#testedProductsBody').innerHTML.indexOf('>Gain<')<h.get('#testedProductsBody').innerHTML.indexOf('>Loss<'));
+  const input=h.root.querySelectorAll('[data-tested-column]').find(el=>el.dataset.testedColumn==='margin');
+  input.checked=false;input.onchange();h.controller.render();
+  assert.equal(h.saved.get('painel-produtos-testados-colunas-v1'),'["margin"]');
+  assert.equal(h.root.querySelectorAll('[data-tested-col]').find(el=>el.dataset.testedCol==='margin').classList.contains('hidden-column'),true);
+  input.checked=true;input.onchange();
+  assert.equal(h.saved.get('painel-produtos-testados-colunas-v1'),'[]');
+  assert.deepEqual(h.calls,[]);
+});
+
+test('margin reflects manual values and does not add an editor input; empty tables span all columns',()=>{
+  const original=product('Synthetic',true,100,0,25),row=domain.applyManualAdjustments(original,{totalBilled:200,totalProfit:40});
+  const h=harness([row]);h.controller.render();
+  assert.match(h.get('#testedProductsBody').innerHTML,/<td data-manual="true" title="Ajuste manual somente em Produtos Testados" data-tested-col="margin" class="num">20\.00%<\/td>/);
+  assert.equal(domain.EDIT_FIELDS.some(field=>field.key==='margin'),false);
+  h.get('#testedSearch').value='missing';h.get('#testedSearch').oninput();
+  assert.match(h.get('#testedProductsBody').innerHTML,/colspan="11"/);
+  const empty=harness([]);empty.controller.render();
+  assert.match(empty.get('#testedProductsBody').innerHTML,/colspan="11"/);
+  assert.deepEqual(h.calls,[]);
 });
 test('Tested product search filters product and related campaign names without changing totals or source data',()=>{
   const rows=[product('Café Azul',true,100),product('Produto Beta',true,50),product('Histórico',false,20)];
@@ -151,9 +194,9 @@ test('failed persistence leaves draft intact; duplicate submissions and closing 
   assert.match(second.get('#testedEditError').textContent,/catalog failure/);assert.equal(second.get('#tested-edit-salesCount').value,'7');assert.equal(second.get('#testedEditSave').disabled,false);assert.equal(second.get('#testedEditDialog').open,true);
 });
 
-test('manual values keep their text label and tooltip without pencil icons, preserving missing versus zero',()=>{
+test('manual values keep their tooltip without a secondary product label or pencil icons, preserving missing versus zero',()=>{
   const row=domain.applyManualAdjustments(product('Synthetic',true,50,2),{salesCount:0,campaignCount:null,totalProfit:-5,relatedCampaigns:['<manual>']});
   const h=harness([row]);h.controller.render();const html=h.get('#testedProductsBody').innerHTML;
-  assert.match(html,/Ajuste manual nesta lista/);assert.match(html,/data-manual="true"/);assert.match(html,/data-tested-col="campaigns" class="num">—/);assert.match(html,/data-tested-col="sales" class="num">0/);assert.match(html,/&lt;manual&gt;/);assert.equal(domain.editorValues(row).campaignCount,null);
+  assert.doesNotMatch(html,/Ajuste manual nesta lista|tested-adjustment-badge/);assert.match(html,/data-manual="true"/);assert.match(html,/data-tested-col="product" class="name">Synthetic<\/td>/);assert.match(html,/data-tested-col="campaigns" class="num">—/);assert.match(html,/data-tested-col="sales" class="num">0/);assert.match(html,/&lt;manual&gt;/);assert.equal(domain.editorValues(row).campaignCount,null);
   assert.match(html,/title="Ajuste manual somente em Produtos Testados"/);assert.doesNotMatch(html,/tested-manual-marker|✎|✏/);
 });

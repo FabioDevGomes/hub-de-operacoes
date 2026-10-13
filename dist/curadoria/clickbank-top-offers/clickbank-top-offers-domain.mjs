@@ -225,6 +225,29 @@ export function captureOfferVariations(selected, captures = []) {
     !seen.has(item.offerKey) ? {...item, movement:'new', priorRank:null, rankDelta:null} : item);
 }
 
+// Read-only union: retain other pages and compare only the two latest actual observations.
+export function allCaptureOfferVariations(captures = []) {
+  const ordered = [...captures].sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)));
+  const observations = new Map();
+  for (const capture of ordered) {
+    const seenInCapture = new Set();
+    for (const offer of capture.offers) {
+      if (seenInCapture.has(offer.offerKey)) continue;
+      seenInCapture.add(offer.offerKey);
+      const record = observations.get(offer.offerKey);
+      if (!record) observations.set(offer.offerKey, {offer, capture, prior:null});
+      else if (!record.prior) record.prior = {offer, capture};
+    }
+  }
+  return [...observations.values()].map(({offer, capture, prior}) => ({
+    ...(prior ? compareCapturedOffers([offer], [prior.offer])[0] : {...offer, movement:'new', priorRank:null, rankDelta:null}),
+    observedAt:capture.capturedAt,
+    observedCaptureId:capture.captureId,
+    priorObservedAt:prior?.capture.capturedAt ?? null,
+    priorObservedCaptureId:prior?.capture.captureId ?? null,
+  }));
+}
+
 // The draft is not part of saved history; count distinct identities, not source totals.
 export function countNewCapturedOffers(offers = [], captures = []) {
   const seen = new Set(captures.flatMap(capture => capture.offers.map(offer => offer.offerKey)));

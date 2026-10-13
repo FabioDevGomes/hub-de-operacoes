@@ -1,4 +1,4 @@
-import {formatOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=3';
+import {formatOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=4';
 
 // Session-only presentation: never writes a draft or creates a Presell.
 export function readOfferQuestionAnswers(root){

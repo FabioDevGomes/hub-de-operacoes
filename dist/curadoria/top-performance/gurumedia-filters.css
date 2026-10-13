@@ -1,0 +1,12 @@
+/* Add a category/list control without changing the shared table or badges. */
+.filter-grid.hub-curation-table-filters {
+  grid-template-columns: minmax(135px,1.4fr) minmax(150px,1.3fr) minmax(74px,.8fr) minmax(98px,1fr) minmax(84px,.7fr) minmax(84px,.7fr) minmax(110px,1.1fr) minmax(116px,1.15fr) minmax(104px,1fr) minmax(94px,.9fr) max-content max-content;
+}
+.filter-grid #categoryFilter { border: 0; }
+.filter-grid #categoryFilter:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 1200px) {
+  .filter-grid.hub-curation-table-filters { display: flex; flex-wrap: wrap; overflow: visible; }
+  .filter-grid .control { flex: 1 1 140px; width: auto; }
+  .filter-grid .search { flex: 1 1 220px; }
+  .filter-grid .search .control { width: 100%; }
+}

@@ -1,10 +1,12 @@
-import * as Domain from './clickbank-top-offers-domain.mjs?v=4';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=6';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=26';
-import {mountExtensionCapture} from './extension-capture.mjs?v=5';
-import {mergeDtcCountries} from './dtc-country-capture.mjs?v=4';
+import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=8';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=31';
+import {mountExtensionCapture} from './extension-capture.mjs?v=6';
+import {mergeDtcCountries} from './dtc-country-capture.mjs?v=5';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
+import {brandBiddingLabel} from './brand-bidding.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
+import {sameTrendAssessment} from '../trends-save-action.mjs?v=4';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
@@ -18,7 +20,7 @@ let captures = [], offerMetadata = [], trends = [], images = [], decisions = [],
 const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
-  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveImage,saveImageSearchTerm,
+  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveBrandBidding,saveImage,saveImageSearchTerm,
   openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
 }});
 mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true});
@@ -108,7 +110,7 @@ async function confirmImport(raw) {
     root.querySelector('#pasteArea').value = '';
     view.closeImport();
     await refresh();
-    view.selectCapture(capture.captureId);
+    view.selectCapture(capture.captureId,{preserveAll:true});
     view.showMessage('Captura salva localmente. Valores ausentes continuam diferentes de zero.');
   } catch (error) {
     console.error('Não foi possível salvar a captura Top Offers CB.', error);
@@ -122,12 +124,24 @@ function openTrends(term) {
 }
 async function saveTrend(offerKey,status,draft={}) {
   const item = currentOffer(offerKey); if (!item) return false;
-  const old = trendsFor(item), assessment = {
+  const old = trendsFor(item);
+  const {metadataPatch={},...trendDraft}=draft;
+  if(!status){
+    const stored={...old,...baseRecord(item),pageDraft:{...trendDraft,status:''}};
+    const saved=await Storage.saveTrendPage(stored,metadataPatch);
+    if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
+    trends=replaceRecord(trends,stored);show();return true;
+  }
+  const assessment = {
     assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries || []).filter(Boolean))].slice(0,5),
     productAge:draft.productAge || null,searchTerm:String(draft.term || item.offerName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString(),
   };
-  const stored = {...old,...baseRecord(item),assessments:Trends.appendAssessment(old.assessments,assessment)};
-  try { await Storage.putOfferRecord(Storage.STORES.trends,stored); }
+  const assessmentChanged=!sameTrendAssessment(Trends.latestAssessment(old.assessments),{...trendDraft,status});
+  const stored = {...old,...baseRecord(item),pageDraft:null,assessments:assessmentChanged?Trends.appendAssessment(old.assessments,assessment):old.assessments};
+  try {
+    const saved=await Storage.saveTrendPage(stored,metadataPatch);
+    if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
+  }
   catch(error) {
     console.error('Não foi possível salvar a avaliação de Google Trends da ClickBank.',error);
     return false;
@@ -135,7 +149,7 @@ async function saveTrend(offerKey,status,draft={}) {
   trends=replaceRecord(trends,stored);
   try { show(); }
   catch(error) { console.error('A avaliação foi salva, mas a ficha ClickBank não pôde ser atualizada.',error); }
-  try { fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}})); }
+  try { if(assessmentChanged)fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}})); }
   catch(error) { console.error('Não foi possível registrar a observabilidade da avaliação ClickBank.',error); }
   return true;
 }
@@ -191,6 +205,21 @@ async function saveDtcCountries(item,capture) {
   } catch(error) {
     console.error('Não foi possível salvar a lista de países da DTC.',error);
     return {ok:false,message:'Não foi possível salvar a lista de países da DTC. Os países existentes foram preservados.'};
+  } finally {saving=false;}
+}
+async function saveBrandBidding(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)return false;
+  if(saving){view.showMessage('Outra gravação está em andamento. Tente novamente.',{error:true});return false;}
+  saving=true;
+  try {
+    const stored=await Storage.saveBrandBidding(baseRecord(item),value);
+    offerMetadata=replaceRecord(offerMetadata,stored);show();
+    view.showMessage(`Classificação salva: ${brandBiddingLabel(value)}.`,{headerOnly:true});
+    return true;
+  } catch(error) {
+    console.error('Não foi possível salvar a classificação de brand bidding.',error);
+    view.showMessage('Não foi possível salvar brand bidding. A classificação anterior foi preservada; tente novamente.',{error:true});
+    return false;
   } finally {saving=false;}
 }
 async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=false}={}) {

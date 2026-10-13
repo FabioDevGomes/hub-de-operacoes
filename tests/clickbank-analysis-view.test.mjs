@@ -20,11 +20,14 @@ function fixture(offerId=null, preferences) {
   const panels=['trends','glimpse','images','history'].map(panel=>element({panel}));
   const lists=['DE','US'].map(imageCandidateList=>element({imageCandidateList}));
   const resultButtons=['up','stable','down','point_peak','low_volume','no_data','inconclusive'].map(trendsResult=>element({trendsResult}));
+  const brandButtons=['brand_bidding','no_brand_bidding',''].map(brandBidding=>element({brandBidding}));
   node('#trendResults').querySelectorAll=selector=>selector==='[data-trends-result]'?resultButtons:[];
   const sheet=node('#offerSheet');sheet.classList.add('hidden');
   sheet.querySelector=selector=>node(selector);
   sheet.querySelectorAll=selector=>selector==='[data-tab]'?tabs:selector==='[data-panel]'?panels:[];
-  const root={querySelector:node,querySelectorAll:selector=>selector==='[data-image-candidate-list]'?lists:[]};
+  const root={querySelector:selector=>selector==='#trendResults [data-trends-result].selected'?resultButtons.find(button=>button.classList.contains('selected'))||null:node(selector),querySelectorAll:selector=>selector==='[data-image-candidate-list]'?lists:selector==='[data-brand-bidding]'?brandButtons:selector.startsWith('[data-brand-bidding],')?[...brandButtons,node('#manualCountry'),node('#addManualCountry')]:[]};
+  const trendsScope=node('[data-panel="trends"]');trendsScope.querySelector=node;
+  trendsScope.querySelectorAll=selector=>selector.includes('data-trends-result')?resultButtons.filter(button=>!selector.includes('.selected')||button.classList.contains('selected')):[];
   const calls=[],actions={
     openGlimpse:item=>calls.push(['glimpse',item.offerKey]),saveImage:(...args)=>calls.push(['saveImage',...args]),
     saveTrend:async(...args)=>{calls.push(['saveTrend',...args]);return true;},
@@ -37,10 +40,55 @@ function fixture(offerId=null, preferences) {
   view.render(state);
   const open=action=>node('#rows').listeners.click({target:{closest(selector){return selector==='[data-action]'?{dataset:{action,key:'offer'}}:null;}}});
   const clickTab=tab=>node('.tabs').listeners.click({target:{closest(){return {dataset:{tab}};}}});
-  return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,actions,open,clickTab};
+  return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,brandButtons,actions,open,clickTab};
 }
 
 const hiddenKey='hub:clickbank-top-offers:hidden-offer-keys:v1';
+
+test('brand confirmation stays only in the header; other messages and errors remain visible in the sheet',()=>{
+  const f=fixture();f.open('trends');
+  f.view.showMessage('Uma confirmação anterior.');
+  f.view.showMessage('Classificação salva: No brand bidding.',{headerOnly:true});
+  assert.equal(f.node('#sheetMessage').textContent,'','success does not add a line or move the cards');
+  assert.equal(f.node('#message').textContent,'Uma confirmação anterior.','the list message is untouched');
+  f.view.showMessage('Não foi possível salvar.',{headerOnly:true,error:true});
+  assert.equal(f.node('#sheetMessage').textContent,'Não foi possível salvar.');
+  assert.equal(f.node('#sheetMessage').classList.contains('error'),true);
+  f.view.showMessage('Outro recurso salvo.');
+  assert.equal(f.node('#sheetMessage').textContent,'Outro recurso salvo.','only the targeted confirmation is removed');
+});
+
+test('Brand bidding stays pending and is committed only by Save with the current Trends draft',async()=>{
+  const f=fixture();f.open('trends');
+  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="" aria-pressed="true">Não definido/);
+  f.node('#trendsTerm').value='Edited pending term';
+  f.actions.saveTrend=async(key,status,draft)=>{
+    f.calls.push(['saveTrend',key,status,draft]);
+    assert.equal(key,'offer');assert.equal(draft.term,'Edited pending term');
+    assert.equal(draft.metadataPatch.brandBidding,'no_brand_bidding');
+    f.state.offerMetadata[0].brandBidding=draft.metadataPatch.brandBidding;f.view.render(f.state);return true;
+  };
+  await f.brandButtons[1].onclick();
+  assert.equal(f.calls.length,0);
+  assert.equal(f.sheet.classList.contains('hidden'),false);
+  assert.match(f.node('#trendMessage').textContent,/pendentes/);
+  await f.node('#saveSheetButton').listeners.click();
+  assert.equal(f.calls.length,1);
+  f.node('#closeSheet').onclick();f.open('trends');
+  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="no_brand_bidding" aria-pressed="true"/);
+});
+
+test('failed manual Save retains the pending brand selection and permits retry',async()=>{
+  const f=fixture();f.open('trends');
+  f.actions.saveTrend=async()=>false;
+  await f.brandButtons[0].onclick();
+  await f.node('#saveSheetButton').listeners.click();
+  assert.match(f.node('#trendMessage').textContent,/Não foi possível salvar/);
+  assert.equal(f.state.offerMetadata[0].brandBidding,undefined);
+  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="" aria-pressed="true"/);
+  assert.ok(f.brandButtons.every(button=>!button.disabled));
+  assert.equal(f.sheet.classList.contains('hidden'),false);
+});
 
 test('preview replaces source total with the supplied new-product count, including zero',()=>{
   const f=fixture(),parsed={parsedCount:50,page:{total:1238,start:51,end:100},issues:[],valid:true};
@@ -120,28 +168,26 @@ test('preferência indisponível ou inválida mantém ocultação segura na sess
   }
 });
 
-test('Resultado de Trends fica pendente até Salvar e só então confirma a gravação',async()=>{
+test('Resultado de Trends fica pendente até Salvar, mantém ficha aberta e não duplica',async()=>{
   const f=fixture();f.open('trends');
   const save=f.node('#saveSheetButton'),selected=f.resultButtons.find(button=>button.dataset.trendsResult==='up');
-  assert.equal(save.disabled,false,'Salvar permanece ativo mesmo antes de alterar o resultado');
-  selected.onclick();
-  assert.equal(f.calls.length,0,'escolher o resultado não grava automaticamente');
-  assert.equal(save.disabled,false);
-  assert.match(f.node('#trendMessage').textContent,/Clique em Salvar/);
-  await save.onclick();
+  assert.equal(save.disabled,false);await selected.onclick();
+  assert.equal(f.calls.length,0);assert.match(f.node('#trendMessage').textContent,/pendentes/);
+  await save.listeners.click();
   assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
   assert.equal(f.calls.find(call=>call[0]==='saveTrend')[2],'up');
-  assert.equal(save.disabled,false,'Salvar continua ativo depois de gravar');
-  assert.match(f.node('#sheetMessage').textContent,/salva/);
+  assert.equal(f.sheet.classList.contains('hidden'),false);
+  assert.match(f.node('#trendMessage').textContent,/salva/);
+  await save.listeners.click();
+  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1,'mesma avaliação não é salva novamente');
+  assert.equal(save.disabled,false);
 });
 
-test('Salvar ativo orienta a escolher um resultado se a oferta ainda não tiver avaliação',async()=>{
-  const f=fixture();f.open('trends');
-  const save=f.node('#saveSheetButton');
-  assert.equal(save.disabled,false);
-  await save.onclick();
-  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,0,'não grava uma avaliação sem resultado');
-  assert.match(f.node('#trendMessage').textContent,/Selecione um resultado/);
+test('Salvar antes de escolher resultado persiste um rascunho sem classificação artificial',async()=>{
+  const f=fixture();f.open('trends');const save=f.node('#saveSheetButton');
+  assert.equal(save.disabled,false);await save.listeners.click();
+  const call=f.calls.find(call=>call[0]==='saveTrend');assert.equal(call[2],'');
+  assert.equal(call[3].term,'Produto <teste>');assert.match(f.node('#trendMessage').textContent,/Rascunho/);
 });
 
 test('Salvar reutiliza o resultado atual quando a oferta já tem uma avaliação',async()=>{
@@ -150,19 +196,19 @@ test('Salvar reutiliza o resultado atual quando a oferta já tem uma avaliação
   f.view.render(f.state);f.open('trends');
   const save=f.node('#saveSheetButton');
   assert.equal(save.disabled,false);
-  await save.onclick();
+  f.node('#trendsTerm').value='busca editada';await save.listeners.click();
   assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
   const saved=f.calls.find(call=>call[0]==='saveTrend');
   assert.equal(saved[2],'stable','usa o último resultado selecionado');
-  assert.equal(saved[3].term,'busca existente');
+  assert.equal(saved[3].term,'busca editada');
 });
 
 test('falha ao salvar mantém o resultado pendente para nova tentativa',async()=>{
   const f=fixture();f.open('trends');
   f.actions.saveTrend=async()=>false;
-  f.resultButtons.find(button=>button.dataset.trendsResult==='stable').onclick();
+  await f.resultButtons.find(button=>button.dataset.trendsResult==='stable').onclick();
   const save=f.node('#saveSheetButton');
-  await save.onclick();
+  await save.listeners.click();
   assert.equal(save.disabled,false,'a seleção pendente continua disponível para tentar novamente');
   assert.match(f.node('#trendMessage').textContent,/Não foi possível salvar/);
   assert.equal(f.node('#trendMessage').classList.contains('error'),true);
@@ -185,6 +231,7 @@ test('total de resultados vai para a faixa de filtros e não reserva a linha des
   const f=fixture('ENREV'),count=f.node('#captureResultCount');
   f.state.captures[0].page.total=1251;
   f.view.render(f.state);
+  f.view.selectCapture('capture');
   assert.equal(count.textContent,'1.251 resultados · Lista completa');
   assert.equal(count.hidden,false);
   f.state.captures[0].page.total=null;
@@ -192,6 +239,60 @@ test('total de resultados vai para a faixa de filtros e não reserva a linha des
   f.view.render(f.state);
   assert.equal(count.textContent,'');
   assert.equal(count.hidden,true);
+});
+
+test('Todas as capturas reúne faixas sem duplicar, mantém busca/ocultação/ficha e não grava dados',()=>{
+  const writes=[],f=fixture(null,{getItem:()=>null,setItem:(...args)=>writes.push(args)});
+  const offer=f.state.captures[0].offers[0];
+  f.state.captures=[
+    {...f.state.captures[0],captureId:'page2',capturedAt:'2026-01-04T12:00:00Z',page:{start:51,end:100,total:1000},offers:[{...offer,offerKey:'second',offerName:'Second Product',rank:51}]},
+    {...f.state.captures[0],captureId:'recent',capturedAt:'2026-01-03T12:00:00Z',offers:[{...offer,rank:1}]},
+    {...f.state.captures[0],captureId:'old',capturedAt:'2026-01-01T12:00:00Z',offers:[{...offer,rank:5}]},
+  ];
+  const original=JSON.stringify(f.state);f.view.render(f.state);
+  assert.equal(f.node('#captureSelect').value,'__all__');
+  assert.match(f.node('#captureSelect').innerHTML,/Todas as capturas · 2 ofertas únicas/);
+  assert.equal(f.node('#captureSelect').disabled,false);
+  assert.equal(f.node('#offerCountLabel').textContent,'Ofertas no histórico');
+  assert.equal(f.node('#offerCount').textContent,'2');
+  assert.equal(f.node('#movementCount').textContent,'1');
+  assert.equal((f.node('#rows').innerHTML.match(/data-offer="offer"/g)||[]).length,1);
+  assert.match(f.node('#rows').innerHTML,/↑ 4/);
+  assert.match(f.node('#rows').innerHTML,/Duas últimas aparições: #5 em .* → #1 em /);
+  assert.match(f.node('#rows').innerHTML,/Nova/);
+  assert.equal(f.node('#captureResultCount').textContent,'Últimas posições observadas');
+  f.node('#search').value='<teste>';f.node('#search').oninput();
+  assert.match(f.node('#rows').innerHTML,/data-offer="offer"/);
+  assert.doesNotMatch(f.node('#rows').innerHTML,/data-offer="second"/);
+  f.open('images');assert.equal(f.view.getActiveOfferKey(),'offer','atalho de faixa anterior continua abrindo a ficha');
+  f.node('#closeSheet').onclick();
+  f.node('#search').value='';f.node('#search').oninput();
+  assert.equal(writes.length,0,'seleção, busca, render e navegação não escrevem');
+  assert.equal(JSON.stringify(f.state),original);
+  visibilityClick(f);assert.doesNotMatch(f.node('#rows').innerHTML,/data-offer="offer"/);
+  setVisibility(f,'hidden');assert.match(f.node('#rows').innerHTML,/data-offer="offer"/);
+  assert.equal(writes.length,1,'somente Ocultar salva a preferência explícita');
+  assert.equal(JSON.stringify(f.state),original);
+});
+
+test('modo consolidado continua selecionado após captura nova; seleção individual continua disponível',()=>{
+  const f=fixture(),select=f.node('#captureSelect');
+  assert.equal(select.value,'__all__');assert.equal(select.disabled,false,'até uma captura pode alternar para visão individual');
+  f.view.selectCapture('capture',{preserveAll:true});assert.equal(select.value,'__all__');
+  select.onchange({target:{value:'capture'}});
+  assert.equal(select.value,'capture');
+  assert.equal(f.node('#offerCountLabel').textContent,'Ofertas na captura');
+  assert.equal(f.node('#captureResultCount').textContent,'1 resultados · Lista completa');
+  const next={...f.state.captures[0],captureId:'next',capturedAt:'2026-01-04T12:00:00Z'};
+  f.state.captures.push(next);f.view.render(f.state);
+  assert.equal(select.value,'capture','atualizar análises não muda seleção histórica');
+  f.view.selectCapture('next',{preserveAll:true});assert.equal(select.value,'next','salvar captura em modo individual seleciona a nova');
+  select.onchange({target:{value:'__all__'}});
+  assert.match(f.node('#rows').innerHTML,/= 0/);assert.equal(f.node('#offerCount').textContent,'1');
+  f.view.render({captures:[]});
+  assert.equal(select.value,'__all__');assert.equal(select.disabled,true);
+  assert.equal(f.node('#offerCount').textContent,'0');assert.equal(f.node('#rows').innerHTML,'');
+  assert.match(f.node('#empty').textContent,/primeira captura/);
 });
 
 test('a lista extrai nomes atuais e futuros, busca o título original e preserva captura e chaves',()=>{

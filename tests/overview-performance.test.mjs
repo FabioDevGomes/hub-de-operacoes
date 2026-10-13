@@ -46,7 +46,7 @@ test('sorting/search/date/status reuse projection and one sort; cards stay mount
   const s=setup(),before=JSON.stringify(s.snapshot),initial=s.counts();
   s.root.querySelectorAll('.sort-btn')[0].onclick();
   assert.equal(initial.sorts,1,'full render sorts the combined table once');
-  assert.deepEqual(s.counts(),{...initial,formats:initial.formats+1,sorts:initial.sorts+1},'sort only formats the header alert tooltip; rows/cards/projection are reused');
+  assert.deepEqual(s.counts(),{...initial,formats:initial.formats+3,sorts:initial.sorts+1},'sort formats the header tooltip and two monetary footer cells; rows/cards/projection are reused');
   let body=s.get('#totalsBody').innerHTML;
   assert.ok(body.indexOf('data-campaign="Beta"')<body.indexOf('data-campaign="Alfa"'));
   assert.ok(body.indexOf('data-campaign="Alfa"')<body.indexOf('data-campaign="Ausente"'),'missing stays last');

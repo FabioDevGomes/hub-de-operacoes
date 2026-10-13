@@ -48,16 +48,17 @@ function ensureDialog(){
   return dialog;
 }
 
-export function openDecisionPicker({title,currentValue,onSelect}){
+export function openDecisionPicker({title,currentValue,onSelect,onError}){
   const dialog=ensureDialog(),current=normalizeDecision(currentValue),actions=dialog.querySelector('#sharedDecisionActions');
   dialog.querySelector('#sharedDecisionTitle').textContent=title;
+  dialog.querySelector('p').textContent='Escolha uma opção. A decisão será salva imediatamente.';
   actions.innerHTML='';
   for(const option of DECISION_OPTIONS){
     const button=document.createElement('button');
     button.type='button';
     button.className=`decision-option ${option.tone}${option.value===current?' selected':''}`;
     button.textContent=option.value;
-    button.onclick=async()=>{button.disabled=true;try{await onSelect(option.value);dialog.close()}finally{button.disabled=false}};
+    button.onclick=async()=>{button.disabled=true;try{await onSelect(option.value);dialog.close()}catch(error){if(onError){dialog.querySelector('p').textContent=error.message||'Não foi possível salvar. Tente novamente.';onError(error);}else throw error}finally{button.disabled=false}};
     actions.append(button);
   }
   dialog.showModal();

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import {readFile} from 'node:fs/promises';
 const read=f=>readFile(new URL('../'+f,import.meta.url),'utf8');
 test('existing tabbed offer sheets share the documented bar and blue Save finish',async()=>{
@@ -8,7 +9,7 @@ test('existing tabbed offer sheets share the documented bar and blue Save finish
     assert.ok(html.includes('analysis-sheet-bar.css?v=3'),page);
     assert.ok(html.includes('white-button.css?v=5'),page);
     assert.ok(html.includes('trends-sheet.css?v=20261007-glimpse-borderless-standard-bar'),page);
-    assert.equal(html,await read('dist/curadoria/'+page+'/index.html'));
+    assert.equal(publishedPage(html),await read('dist/curadoria/'+page+'/index.html'));
   }
   const css=await read('src/curadoria/analysis-sheet-bar.css');
   assert.equal(css,await read('dist/curadoria/analysis-sheet-bar.css'));
@@ -20,7 +21,7 @@ test('existing tabbed offer sheets share the documented bar and blue Save finish
   assert.ok((await read('docs/curation-analysis-pattern.md')).includes('face sólida'));
   for(const page of ['gerentes','glimpse']){
     const html=await read('src/curadoria/'+page+'/index.html');
-    assert.ok(html.includes('white-button.css?v=2'));
+    assert.ok(html.includes('white-button.css?v='+ (page==='gerentes'?'5':'2')));
     assert.ok(!html.includes('analysis-sheet-bar.css'),'no new tabbed sheet in '+page);
   }
 });

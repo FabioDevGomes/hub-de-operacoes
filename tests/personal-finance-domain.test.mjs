@@ -338,7 +338,7 @@ const globalExpensesAfterFuturePayment = createGlobalExpenseTotals(globalAsOf);
 globalExpensesAfterFuturePayment.add({ month_key:'2026-09', category_id:'das', category_name:'DAS', currency:'BRL', planned_amount:86.05, actual_amount:null });
 globalExpensesAfterFuturePayment.add({ month_key:'2026-10', category_id:'das', category_name:'DAS', currency:'BRL', planned_amount:86.05, actual_amount:86.05 });
 globalExpensesAfterFuturePayment.add({ month_key:'2026-11', category_id:'nubank', category_name:'Cart nubank', currency:'BRL', planned_amount:169, actual_amount:null });
-assert.deepEqual(globalExpensesAfterFuturePayment.result().BRL, { planned:172.1, actual:86.05, remaining:86.05, cardDebt:0 }, 'o consolidado global mantém a fatura especial fora das despesas planejadas e acompanha o saldo aberto separadamente');
+assert.deepEqual(globalExpensesAfterFuturePayment.result().BRL, { planned:172.1, actual:86.05, remaining:86.05, cardDebt:169, currentCardDebt:0, futureCardDebt:169 }, 'o consolidado global mantém a fatura especial fora das despesas planejadas e acompanha o saldo aberto separadamente');
 
 const reserveComparisonForSpend = (actualAmount, { paidBy = 'cash' } = {}) => {
   const totals = createGlobalExpenseTotals(new Date(2026, 9, 2));
@@ -361,8 +361,8 @@ globalOpenExpenses.add({ month_key:'2026-09', category_id:'planned', category_na
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:200 });
 globalOpenExpenses.add({ month_key:'2026-10', category_id:'overpaid', category_name:'Pago acima', currency:'BRL', planned_amount:50, actual_amount:75 });
 globalOpenExpenses.add({ month_key:'2026-09', category_id:'usd', category_name:'Despesa USD', currency:'USD', planned_amount:100, actual_amount:25 });
-assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:900, cardDebt:0 }, 'o saldo global mantém somente os planos ainda não consumidos; gastos sem plano e excedentes não criam saldo planejado negativo');
-assert.deepEqual(globalOpenExpenses.result().USD, { planned:100, actual:25, remaining:75, cardDebt:0 }, 'o saldo global em dólares mantém a moeda separada e subtrai somente o realizado dentro do planejamento daquela linha');
+assert.deepEqual(globalOpenExpenses.result().BRL, { planned:1050, actual:375, remaining:900, cardDebt:0, currentCardDebt:0, futureCardDebt:0 }, 'o saldo global mantém somente os planos ainda não consumidos; gastos sem plano e excedentes não criam saldo planejado negativo');
+assert.deepEqual(globalOpenExpenses.result().USD, { planned:100, actual:25, remaining:75, cardDebt:0, currentCardDebt:0, futureCardDebt:0 }, 'o saldo global em dólares mantém a moeda separada e subtrai somente o realizado dentro do planejamento daquela linha');
 const globalOpenWithUncoveredSpending = createGlobalExpenseTotals(globalAsOf);
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'lunch', category_name:'Almoço', currency:'BRL', planned_amount:100, actual_amount:110 });
 globalOpenWithUncoveredSpending.add({ month_key:'2026-09', category_id:'unplanned', category_name:'Sem plano', currency:'BRL', planned_amount:null, actual_amount:10 });
@@ -376,7 +376,7 @@ for (const [week, actual] of [[1, 700], [2, 299], [3, 784], [4, 410]]) {
 futureOnlyExpenses.add({ month_key:'2026-08', category_id:'past-month', category_name:'Conta passada', currency:'BRL', planned_amount:500, actual_amount:null });
 futureOnlyExpenses.add({ month_key:'2026-09', category_id:'current-month', category_name:'Conta mensal', currency:'BRL', planned_amount:300, actual_amount:200 });
 futureOnlyExpenses.add({ month_key:'2026-10', category_id:'future-week1', category_name:'Lazer semana 1', currency:'BRL', planned_amount:300, actual_amount:null });
-assert.deepEqual(futureOnlyExpenses.result().BRL, { planned:600, actual:200, remaining:400, cardDebt:0 }, 'o total global exclui competências passadas e semanas atuais encerradas, preservando o saldo do mês e as competências futuras');
+assert.deepEqual(futureOnlyExpenses.result().BRL, { planned:600, actual:200, remaining:400, cardDebt:0, currentCardDebt:0, futureCardDebt:0 }, 'o total global exclui competências passadas e semanas atuais encerradas, preservando o saldo do mês e as competências futuras');
 assert.equal(reserveMinusOpenExpenses(45850, 45740), -110, 'com as semanas históricas excluídas, R$ 45.740 de reserva menos R$ 45.850 de despesas futuras resulta em -R$ 110');
 
 const cleanBundle = validateBundle({ schema:'personal_finance_v1', groups, categories, months:[first.month], entries:first.entries, debts:[], funds:[] });

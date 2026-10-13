@@ -1,4 +1,4 @@
-import {parseOfferText,offerEvidenceForDiscount,offerProductPrices} from './copy-ficha-domain.mjs?v=21';
+import {parseOfferText,offerEvidenceForDiscount,offerProductPrices} from './copy-ficha-domain.mjs?v=22';
 
 const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
 const missing='Não identificado no Ctrl+A.';
@@ -75,12 +75,14 @@ export function buildOfferQuestionAnswers(data={}){
   const bonus=bonusAnswer(data.rawText),days=numeric(data.guaranteeDays)??detected.guaranteeDays;
   const guaranteeAnswer=data.guaranteeStatus==='no'?'Não há garantia informada.':days>0?`${days} dias.`:missing;
   const shippingAnswer=data.freeShipping==='confirmed'||data.freeShipping!=='no'&&detected.freeShippingCandidate?'Sim.':data.freeShipping==='no'?'Não exibido na oferta.':missing;
+  const amountCondition=data.discountAmountBasis==='unit'?' por unidade.':data.discountAmountBasis==='package'?' pelo pacote.':'';
+  const priceCondition=data.discountAmountBasis==='unit'?productPriceCondition({basis:data.productPriceBasis,quantity:numeric(data.productPriceQuantity),terms:data.productPriceTerms}):'';
   return [
     {id:'locale',question:'Qual idioma e país você deseja que a copy seja criada?',answer:`Idioma: ${displayName(locale,'language')} · País: ${displayName(country,'region')}`,pending:!locale||!country},
     {id:'product',question:'Qual o nome do produto?',answer:product||missing,pending:!product},
-    {id:'price',question:'Qual o valor do produto? (use a moeda referente ao anúncio)',answer:priceAnswer,pending:price===null||!currency},
+    {id:'price',question:'Qual o valor do produto? (use a moeda referente ao anúncio)',answer:priceAnswer+(priceCondition&&price!==null?` · ${priceCondition}`:''),pending:price===null||!currency},
     {id:'discountPercent',question:'Qual o desconto em porcentagem? (EX: 50%).',answer:discount!==null?`${discount}%`:missing,pending:discount===null},
-    {id:'discountAmount',question:'Qual o desconto em valor? (EX: $50.00).',answer:formatMoney(amount,currency,locale),pending:amount===null||!currency},
+    {id:'discountAmount',question:'Qual o desconto em valor? (EX: $50.00).',answer:formatMoney(amount,currency,locale)+(amount!==null&&currency?amountCondition:''),pending:amount===null||!currency},
     {id:'freeShipping',question:'Tem Frete Grátis? (ex: sim / não)',answer:shippingAnswer,pending:shippingAnswer===missing},
     {id:'bonus',question:'Tem alguma bonificação? (Se sim, descrever qual é).',...bonus},
     {id:'guarantee',question:'Qual a duração da garantia (se houver: ex: 90 dias)?',answer:guaranteeAnswer,pending:guaranteeAnswer===missing}

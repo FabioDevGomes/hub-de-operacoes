@@ -3,7 +3,7 @@ import{readFile}from'node:fs/promises';
 import vm from'node:vm';
 
 const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8'),tableStyles=await readFile(new URL('../dist/curadoria/top-performance/table-standard.css',import.meta.url),'utf8');
-assert.ok(html.includes('E-commerce GM'));
+assert.ok(html.includes('Plataforma Guru Media'));
 assert.ok(html.includes('/white-button.css?v=5'),'E-commerce GM carrega o padrão botão branco compartilhado');
 assert.ok(html.includes('class="btn primary hub-white-button" id="openTrends"')&&html.includes('class="btn primary hub-white-button" id="topManualCountryAdd"'),'somente os dois botões solicitados adotam o padrão branco');
 assert.equal((html.match(/hub-white-button/g)||[]).length,2,'não ampliar o padrão aos demais controles da ficha');
@@ -78,8 +78,8 @@ assert.ok(html.includes('data-open-top-decision')&&html.includes('openTopDecisio
 assert.ok(html.includes('DecisionUI.buttonHtml')&&html.includes('DecisionUI.rowClass'),'badge e destaque da decisão não usam o componente compartilhado');
 assert.ok(html.includes('trends-sheet.css?v=20261007-glimpse-borderless'),'E-commerce GM não carrega os estilos compartilhados de hover e sombra da decisão');
 assert.ok(html.includes("import * as ListFocus from '../list-focus.mjs?v=2'")&&html.includes("mountCurationListFocus('top-performance'"),'E-commerce GM não instala a preservação compartilhada de posição e linha');
-assert.ok(html.includes("highlightOnCapture:false")&&html.includes("function closeOffer({restoreFocus=true}={}){$('#offerSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),'E-commerce GM deve animar apenas após fechar a ficha e retornar à lista');
-assert.match(html,/async function saveTrend\(status\)\{[\s\S]*?closeOffer\(\{restoreFocus:false\}\);await refresh\(\);listFocus\.restore\(\);toast\(/,'salvar Trends precisa restaurar a linha depois que refresh recriar as linhas da lista');
+assert.ok(html.includes("highlightOnCapture:false")&&html.includes("function closeOffer({restoreFocus=true}={}){topTrendsSave.reset();$('#offerSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),'E-commerce GM descarta o rascunho e deve animar apenas após fechar a ficha e retornar à lista');
+assert.match(html,/async function saveTrend\(status,[^\n]+\)\{[\s\S]*?closeOffer\(\{restoreFocus:false\}\);await refresh\(\);listFocus\.restore\(\);toast\(/,'salvar Trends precisa restaurar a linha depois que refresh recriar as linhas da lista');
 assert.ok(html.includes('renderWithGlimpse=render;render=function(){renderWithGlimpse();listFocus.restore()}'),'E-commerce GM não restaura o foco após renderizar a lista carregada');
 const focusModule=await readFile(new URL('../dist/curadoria/list-focus.mjs',import.meta.url),'utf8'),focusStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
 assert.ok(focusStyles.includes('#offerSheet .tabs{position:sticky;top:0;z-index:5;display:flex;gap:5px;align-items:center;flex-wrap:nowrap;')&&focusStyles.includes('border:1px solid var(--line);border-radius:11px')&&focusStyles.includes('#offerSheet .tabs .btn{flex:0 0 auto;border:0;')&&focusStyles.includes('#offerSheet .tabs .btn.active{background:#18304d;color:#fff}'),'abas agrupadas da ficha, sem divisores entre botões, ausentes');

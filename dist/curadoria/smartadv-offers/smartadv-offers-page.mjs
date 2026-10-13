@@ -1,7 +1,7 @@
-import * as Domain from './smartadv-offers-domain.mjs?v=4';
+import * as Domain from './smartadv-offers-domain.mjs?v=6';
 import * as Storage from './smartadv-offers-storage.mjs?v=3';
 import {createInitialCapture} from './smartadv-offers-initial-capture.mjs?v=3';
-import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=14';
+import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=19';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -9,13 +9,14 @@ import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import * as DecisionUI from '../decision-ui.mjs';
-import {mountGlimpseReferenceBar} from '../glimpse-reference-bar.mjs?v=1';
+import {mountGlimpseReferenceBar} from '../glimpse-reference-bar.mjs?v=2';
 
 const root = document.querySelector('#smartAdvOffersRoot');
 let captures = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
 const view = mountSmartAdvOffersView({root,actions:{validateImport,confirmImport,exportBackup,restoreBackup,saveTrend,saveDecision,addTrendCandidate,removeTrendCandidate,addManualCountry,openTrends,saveImage,saveImageSearchTerm,openImages,openImagesExcluding,openGlimpse,closeOffer}});
 const listFocus = mountCurationListFocus('smartadv-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
-mountGlimpseReferenceBar({sheet:document.querySelector('#offerSheet'),frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet')});
+const analysisBar=mountGlimpseReferenceBar({sheet:document.querySelector('#offerSheet'),frame:document.querySelector('#glimpseFrame'),panel:document.querySelector('[data-panel="glimpse"]'),backButton:document.querySelector('#closeSheet'),trendsPanel:document.querySelector('[data-panel="trends"]')});
+view.connectTrendsSave(analysisBar.querySelector('#saveSheetButton'));
 
 function offerContext(item) {
   const productName = Domain.productNameFromOfferName(item.offerName) || item.offerName;
@@ -69,8 +70,10 @@ async function saveDecision(item,status) {
 }
 
 async function saveTrend(item,status,draft={}) {
-  const context=offerContext(item),old=trendFor(item),assessment={assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries||[]).filter(value=>countryCodes(item).includes(value)))].slice(0,5),productAge:draft.productAge||null,searchTerm:String(draft.term||context.productName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString()};
-  const stored={...old,...context,assessments:Trends.appendAssessment(old.assessments,assessment)};
+  const context=offerContext(item),old=trendFor(item);
+  if(!status){const stored={...old,...context,pageDraft:{...draft,status:''}};await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();return true;}
+  const assessment={assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries||[]).filter(value=>countryCodes(item).includes(value)))].slice(0,5),productAge:draft.productAge||null,searchTerm:String(draft.term||context.productName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString()};
+  const stored={...old,...context,pageDraft:null,assessments:Trends.appendAssessment(old.assessments,assessment)};
   try{await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();view.refreshOffer(item,'trends');recordAssessment('trends',item,assessment);view.showMessage('Avaliação de Google Trends salva.');return true}
   catch(error){console.error(error);view.showMessage('Não foi possível salvar a avaliação de Google Trends.',{error:true});return false}
 }

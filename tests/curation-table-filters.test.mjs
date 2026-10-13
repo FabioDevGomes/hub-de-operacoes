@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { publishedPage } from './helpers/published-page.mjs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -17,7 +18,7 @@ test('six curation lists opt into the same compact stylesheet in source and buil
   assert.equal(await read('dist/curadoria/curation-table-filters.css'), source);
   for (const [path, container] of lists) {
     const html = await read(`src/curadoria/${path}`);
-    assert.equal(await read(`dist/curadoria/${path}`), html, path);
+    assert.equal(await read(`dist/curadoria/${path}`), publishedPage(html), path);
     assert.ok(html.includes(`class="${container} hub-curation-table-filters"`), path);
     assert.equal((html.match(/hub-curation-table-filters/g) || []).length, 1, path);
     assert.ok(html.includes('href="/curadoria/curation-table-filters.css?v=2"'), path);

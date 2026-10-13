@@ -13,10 +13,11 @@ const pages = [
   ['Preparador MCC', '../dist/preparador-MCC/index.html', 'data-hub-sidebar-active="preparer"'],
   ['Radar SpyHero', '../dist/curadoria/index.html', 'data-hub-sidebar-active="radar"'],
   ['Lista de Gerente', '../dist/curadoria/gerentes/index.html', 'data-hub-sidebar-active="manager"'],
-  ['E-commerce GM', '../dist/curadoria/top-performance/index.html', 'data-hub-sidebar-active="ecommerce"'],
+  ['Plataforma Guru Media', '../dist/curadoria/top-performance/index.html', 'data-hub-sidebar-active="ecommerce"'],
   ['Top Offers CB', '../dist/curadoria/clickbank-top-offers/index.html', 'data-hub-sidebar-active="clickbank-top-offers"'],
   ['Hot Offers MS', '../dist/curadoria/hot-offers-ms/index.html', 'data-hub-sidebar-active="hot-offers-ms"'],
   ['Ofertas SmartAdv', '../dist/curadoria/smartadv-offers/index.html', 'data-hub-sidebar-active="smartadv-offers"'],
+  ['Curadoria manual', '../dist/curadoria/manual/index.html', 'data-hub-sidebar-active="manual"'],
   ['Asset Studio', '../dist/asset-studio/index.html', 'data-hub-sidebar-active="asset-studio"'],
 ];
 
@@ -26,7 +27,7 @@ for (const [name, path, mode] of pages) {
   assert.ok(html.includes(mode), `${name}: modo ou item ativo não foi configurado`);
   assert.ok(html.includes('sidebar-component.js') && html.includes('sidebar-component.css'), `${name}: dependência compartilhada não foi conectada`);
   assert.ok(html.includes('sidebar-component.css?v=15'), `${name}: cache do CSS compartilhado do menu está desatualizado`);
-  assert.ok(html.includes('sidebar-component.js?v=20261008-collapse-icon'), `${name}: cache do ícone do menu está desatualizado`);
+  assert.ok(html.includes('sidebar-component.js?v=20261010-gurumedia'), `${name}: cache do ícone do menu está desatualizado`);
   assert.ok(html.includes('data-hub-sidebar-products'), `${name}: área Produtos não usa o componente`);
   assert.doesNotMatch(html, /data-sidebar-group="(?:operation|analysis|curation|creation|personal|products)"/, `${name}: grupos continuam copiados na página`);
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
@@ -42,8 +43,8 @@ for (const group of groupOrder) {
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
   'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
-  'E-commerce GM', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
-  'Produtos testados',
+  'Plataforma Guru Media', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
+  'Produtos testados', 'Curadoria manual',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.doesNotMatch(source, /function productsMarkup|data-sidebar-toggle="products"|data-sidebar-group="products"/, 'Produtos testados deve ser um item direto, sem seção expansível Produtos');
 const operationStart = source.indexOf("{ id: 'operation'");

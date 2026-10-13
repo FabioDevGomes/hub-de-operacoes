@@ -280,13 +280,32 @@ function germanPerPackageDiscountCandidates(text){
   }).filter(Boolean);
 }
 
+// Component lists (1x Bottle + 24x Tablets) describe contents, not a new card.
+function quantityCardHeader(line,{anchored=false}={}){
+  if((line.match(/\b\d{1,2}\s*[x×]/gi)||[]).length>1)return null;
+  return line.match(anchored?/^(\d{1,2})\s*[x×]\s*(.{2,60}?)\s*$/i:/(?:^|\b)(\d{1,2})\s*[x×]\s*([^\n]{2,60})/i);
+}
+
+export function calculateDiscountFromFinalPrice(price,{percent:discountPercent,amount:discountAmount,source='percent'}={}){
+  const decimal=value=>{
+    if(typeof value==='number')return Number.isFinite(value)?value:null;
+    return /^\s*\d+(?:[.,]\d+)?\s*$/.test(String(value??''))?number(value):null;
+  };
+  const finalPrice=decimal(price),value=decimal(source==='amount'?discountAmount:discountPercent);
+  if(finalPrice===null||finalPrice<=0||value===null||value<0||!['percent','amount'].includes(source)||source==='percent'&&value>=100)return null;
+  const round=value=>Math.round((value+Number.EPSILON)*100)/100;
+  return source==='amount'
+    ?{percent:round(value/(finalPrice+value)*100),amount:value}
+    :{percent:value,amount:round(finalPrice*value/(100-value))};
+}
+
 function parseQuantityEachPackages(text){
   const lines=String(text||'').split(/\r?\n/).map(normalizePastedLine).filter(Boolean);
   if(!lines.some(line=>/^choose\s+your\s+packages?\b/i.test(line))||
     !lines.some(line=>/\/\s*(?:each|ea)\b/i.test(line)))return null;
   const starts=[];
   lines.forEach((line,index)=>{
-    const match=line.match(/^(\d{1,2})\s*[x×]\s*(.{2,60}?)\s*$/i);
+    const match=quantityCardHeader(line,{anchored:true});
     if(match)starts.push({index,label:line,quantity:Number(match[1])});
   });
   if(starts.length<2)return null;
@@ -322,7 +341,7 @@ function parseQuantityEachPackages(text){
 function discountOfferCandidates(text){
   const lines=String(text||'').split(/\r?\n/).map(normalizePastedLine).filter(Boolean),quantityCards=[],badgeCards=[];
   lines.forEach((line,index)=>{
-    const quantityMatch=line.match(/(?:^|\b)(\d{1,2})\s*[x×]\s*([^\n]{2,60})/i);
+    const quantityMatch=quantityCardHeader(line);
     if(quantityMatch)quantityCards.push({index,quantity:Number(quantityMatch[1]),label:clean(quantityMatch[0])});
     if(packageDiscountBadge([line]).basePercent!==null)badgeCards.push(index);
   });
@@ -373,6 +392,14 @@ export function offerEvidenceForDiscount(raw='',discountPercent=null,discountAmo
   const prices=new Set(priceCandidates.map(item=>`${item.displayedPrice}:${item.priceBasis}:${item.quantity??''}`));
   const price=prices.size===1?priceCandidates.find(item=>item.terms)||priceCandidates[0]:null;
   return {...top,...(price||{}),displayedPrice:price?.displayedPrice??null,ambiguousPrice:prices.size>1};
+}
+
+export function discountEvidenceAtPrice(raw,discountPercent,price){
+  const evidence=offerEvidenceForDiscount(raw,discountPercent);
+  if(!evidence||evidence.amount===null)return null;
+  const sameUnit=evidence.priceBasis==='unit'&&evidence.quantity>0&&number(price)===evidence.displayedPrice;
+  return {amount:sameUnit?Math.round((evidence.amount/evidence.quantity+Number.EPSILON)*100)/100:evidence.amount,
+    basis:sameUnit?'unit':evidence.priceBasis==='unit'?'package':evidence.priceBasis,quantity:evidence.quantity};
 }
 
 function explicitDiscountPercentages(text){

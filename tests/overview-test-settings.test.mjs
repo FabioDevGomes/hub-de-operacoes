@@ -97,10 +97,23 @@ function setup({sales=0,cpa=91,minimum=undefined,yellowMinimum=undefined,remaini
   controller.render();return{...dom,calls,snapshot,state,controller,link,rulesLink};
 }
 
-test('link CPA aparece só sem vendas e mantém ROI mínimo após venda nos três períodos',()=>{
+test('link de canto mostra somente até percentual sem vendas e ROI após venda nos três períodos',()=>{
   const ui=setup();
-  for(const mode of ['consolidated','d1','d0']){ui.state.totalsMode=mode;ui.controller.render();assert.match(ui.get('#totalsBody').innerHTML,/CPA 91% · até 50% \/ comissão/)}
-  const sold=setup({sales:1});assert.match(sold.get('#totalsBody').innerHTML,/ROI mínimo 10% · 1 venda/);assert.doesNotMatch(sold.get('#totalsBody').innerHTML,/teste até .* da comissão/);
+  for(const mode of ['consolidated','d1','d0']){
+    ui.state.totalsMode=mode;ui.controller.render();
+    assert.match(ui.get('#totalsBody').innerHTML,/test-budget-commission-link hub-corner-edit"[^>]*>até 50%<\/a>/);
+    assert.doesNotMatch(ui.get('#totalsBody').innerHTML,/CPA 91% ·|% \/ comissão/);
+    for(const [sales,roi] of [[1,10],[2,20],[4,30]]){
+      const sold=setup({sales});sold.state.totalsMode=mode;sold.controller.render();
+      assert.match(sold.get('#totalsBody').innerHTML,new RegExp('test-budget-roi-link hub-corner-edit"[^>]*>ROI '+roi+'%<\\/a>'));
+      assert.doesNotMatch(sold.get('#totalsBody').innerHTML,/test-budget-commission-link| · [124] vendas?/);
+      assert.deepEqual(sold.calls,[]);
+    }
+  }
+  ui.snapshot.rows[0].budget.commissionTestPercent=37.5;ui.controller.render();
+  assert.match(ui.get('#totalsBody').innerHTML,/data-current-percent="37.5"[^>]*>até 37\.50%<\/a>/);
+  const sold=setup({sales:1});sold.snapshot.rows[0].budget.minimumRoi=-3;sold.controller.render();
+  assert.match(sold.get('#totalsBody').innerHTML,/data-current-roi="-3"[^>]*>ROI -3%<\/a>/);
   assert.doesNotMatch(setup({cpa:85}).get('#totalsBody').innerHTML,/test-budget-commission-link/);
   assert.deepEqual(ui.calls,[],'renderizar não salva');
   assert.match(ui.get('#totalsHead').innerHTML,/data-column="limit"[^]*overview-test-rules-edit hub-corner-edit[^]*Editar/);

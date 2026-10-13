@@ -1,7 +1,7 @@
-import {parseOfferText,dictionaryFor} from './copy-ficha-domain.mjs?v=21';
-import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=3';
-import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=1';
-import {renderTemplate} from './copy-ficha-template.mjs?v=4';
+import {parseOfferText,dictionaryFor,discountEvidenceAtPrice,calculateDiscountFromFinalPrice} from './copy-ficha-domain.mjs?v=22';
+import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=4';
+import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=2';
+import {renderTemplate} from './copy-ficha-template.mjs?v=5';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=1';
@@ -15,7 +15,7 @@ const by=(root,id)=>root.querySelector(`#${id}`);
 function updateProductPriceNote(root){
   const field=by(root,'copyProductPrice'),note=by(root,'copyProductPriceNote');if(!field||!note)return;
   const condition=productPriceCondition({basis:field.dataset.priceBasis,quantity:Number(field.dataset.priceQuantity)||null,terms:field.dataset.priceTerms});
-  note.textContent=!field.value?'Revise ou informe o preço do produto.':field.dataset.autoFilled==='true'?condition||'Menor preço identificado na oferta.':'Preço ajustado manualmente.';
+  note.textContent=!field.value?'Revise ou informe o preço do produto.':field.dataset.autoFilled==='true'?condition||'Menor preço identificado na oferta.':['Preço ajustado manualmente.',condition].filter(Boolean).join(' ');
 }
 
 function clearProductPriceContext(root){
@@ -71,6 +71,9 @@ function payload(root){
     currency:inputValue(root,'copyCurrency').toUpperCase(),
     confirmedDiscountPercent:inputValue(root,'copyDiscount'),
     confirmedDiscountAmount:inputValue(root,'copyDiscountAmount'),
+    discountAmountBasis:by(root,'copyDiscountAmount')?.dataset.amountBasis||'',
+    discountAmountQuantity:by(root,'copyDiscountAmount')?.dataset.amountQuantity||'',
+    discountInputSource:by(root,'copyDiscountAmount')?.dataset.discountSource||'',
     confirmedProductPrice:inputValue(root,'copyProductPrice'),
     productPriceBasis:by(root,'copyProductPrice')?.dataset.priceBasis||'',
     productPriceQuantity:by(root,'copyProductPrice')?.dataset.priceQuantity||'',
@@ -95,6 +98,8 @@ function restoreDraft(root){
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
     if(draft.guaranteeStatus===undefined&&draft.guaranteeDays)by(root,'copyGuaranteeStatus').value='confirmed';
     restoreAutoFilledFieldIds(root.querySelectorAll('input,select,textarea'),draft.autoFilledFields);
+    const amount=by(root,'copyDiscountAmount');
+    amount.dataset.amountBasis=draft.discountAmountBasis||'';amount.dataset.amountQuantity=draft.discountAmountQuantity||'';amount.dataset.discountSource=draft.discountInputSource||'';
     if(draft.confirmedProductPrice!==undefined){
       const price=by(root,'copyProductPrice');price.value=draft.confirmedProductPrice;
       price.dataset.priceBasis=draft.productPriceBasis||'';price.dataset.priceQuantity=draft.productPriceQuantity||'';price.dataset.priceTerms=draft.productPriceTerms||'';
@@ -116,6 +121,9 @@ function resetCollection(root,toast){
   by(root,'copyManualPastePanel').hidden=true;
   setClipboardStatus(root,'Copie o texto visível da oferta (Ctrl+A, Ctrl+C) e clique para capturar e analisar.');
   clearGeneratedOutputs(root);clearProductPriceContext(root);updateProductPriceNote(root);updateDiscountAmountLabel(root);
+  const amount=by(root,'copyDiscountAmount');
+  for(const key of ['amountBasis','amountQuantity','discountSource'])delete amount.dataset[key];
+  updateDiscountNote(root);
   const warnings=by(root,'copyWarnings');
   warnings.className='copy-ficha-note';
   warnings.textContent='Preencha e valide os dados para gerar.';
@@ -142,14 +150,36 @@ function updateDiscountAmountLabel(root){
 function clearAutoDiscountAmount(root){
   const field=by(root,'copyDiscountAmount');
   if(field?.dataset.autoFilled!=='true')return;
-  field.value='';delete field.dataset.autoFilled;delete field.dataset.discountPercent;field.classList.remove('is-autofilled');
+  field.value='';delete field.dataset.autoFilled;delete field.dataset.discountPercent;delete field.dataset.amountBasis;delete field.dataset.amountQuantity;field.classList.remove('is-autofilled');
+  updateDiscountNote(root);
 }
 
-function refreshAutoDiscountAmount(root){
-  const field=by(root,'copyDiscountAmount');
-  if(field?.dataset.autoFilled!=='true')return null;
-  if(field.dataset.discountPercent!==inputValue(root,'copyDiscount'))clearAutoDiscountAmount(root);
-  return null;
+function updateDiscountNote(root){
+  const amount=by(root,'copyDiscountAmount'),note=by(root,'copyDiscountNote');if(!note)return;
+  const basis=amount?.dataset.amountBasis;
+  note.textContent=!amount?.value?'Informe o preço atual e o percentual ou o valor do desconto; o outro campo será calculado.'
+    :basis==='unit'?`Economia por unidade · opção de ${amount.dataset.amountQuantity||'?'} unidades. Preço e desconto usam a mesma base.`
+    :basis==='package'?'Economia pelo pacote. Não compare este valor com um preço por unidade.'
+    :'Economia calculada sobre o preço atual informado, já com desconto.';
+}
+
+// Last explicitly edited discount field drives the other; price edits retain that choice.
+export function syncDiscountFields(root,source){
+  const amount=by(root,'copyDiscountAmount'),percent=by(root,'copyDiscount'),price=by(root,'copyProductPrice');
+  if(source==='price')source=amount.dataset.discountSource||(percent.dataset.autoFilled==='true'&&amount.dataset.autoFilled!=='true'&&amount.value?'amount':'percent');
+  amount.dataset.discountSource=source;
+  const result=calculateDiscountFromFinalPrice(price.value,{percent:percent.value,amount:amount.value,source});
+  const dependent=source==='amount'?percent:amount;
+  if(result){
+    dependent.value=Number(result[source==='amount'?'percent':'amount']).toFixed(2);
+    dependent.dataset.autoFilled='true';dependent.classList.add('is-autofilled');
+    amount.dataset.amountBasis=price.dataset.priceBasis||'product';amount.dataset.amountQuantity=price.dataset.priceQuantity||'';
+  }else if(dependent.dataset.autoFilled==='true'){
+    dependent.value='';delete dependent.dataset.autoFilled;dependent.classList.remove('is-autofilled');
+    if(dependent===amount){delete amount.dataset.amountBasis;delete amount.dataset.amountQuantity}
+  }
+  updateDiscountNote(root);
+  return result;
 }
 
 function useProductSuggestion(root,value){
@@ -193,19 +223,25 @@ function analyze(root){
   if(applyDetected(root,'copyPageTitle',titleCandidate))applied.push('título da página');
   if(result.freeShippingCandidate&&applyDetected(root,'copyFreeShipping','confirmed',{force:inputValue(root,'copyFreeShipping')==='pending'}))applied.push('frete grátis');
   const discountAmountField=by(root,'copyDiscountAmount');
-  if(result.highestSavingsAmount!==null&&result.highestSavingsAmount!==undefined&&applyDetected(root,'copyDiscountAmount',Number(result.highestSavingsAmount).toFixed(2),{force:true})){
+  const evidence=discountEvidenceAtPrice(rawText,result.highestPercent,inputValue(root,'copyProductPrice'));
+  const detectedAmount=evidence?.amount??result.highestSavingsAmount;
+  if(detectedAmount!==null&&detectedAmount!==undefined&&(applyDetected(root,'copyDiscountAmount',Number(detectedAmount).toFixed(2),{force:true})||inputValue(root,'copyDiscountAmount')===Number(detectedAmount).toFixed(2))){
     discountAmountField.dataset.discountPercent=String(result.highestPercent??'');
+    discountAmountField.dataset.amountBasis=evidence?.basis||'package';
+    discountAmountField.dataset.amountQuantity=String(evidence?.quantity??'');
+    discountAmountField.dataset.discountSource='percent';
     applied.push('valor associado ao maior desconto');
   }
   else if(result.highestPercent&&discountAmountField){
     discountAmountField.value='';delete discountAmountField.dataset.autoFilled;discountAmountField.classList.remove('is-autofilled');
   }
+  updateDiscountNote(root);
   const chips=[];
   if(result.productCandidate)chips.push(`${result.productCandidateNeedsReview?productSuggestionLabel:'Produto'}: ${result.productCandidate}`);
   if(result.countryCode)chips.push(`País: ${result.countryCode}`);
   if(result.htmlLanguage)chips.push(`Idioma: ${result.htmlLanguage}`);
   if(result.highestPercent)chips.push(`Maior percentual detectado: ${result.highestPercent}%`);
-  if(result.highestSavingsAmount!==null&&result.highestSavingsAmount!==undefined)chips.push(`Valor associado ao maior desconto: ${inputValue(root,'copyCurrency')||'USD'} ${Number(result.highestSavingsAmount).toFixed(2)}`);
+  if(result.highestSavingsAmount!==null&&result.highestSavingsAmount!==undefined)chips.push(`Valor associado ao maior desconto${evidence?.quantity>1?' (pelo pacote)':''}: ${inputValue(root,'copyCurrency')||'USD'} ${Number(result.highestSavingsAmount).toFixed(2)}`);
   if(result.guaranteeDays)chips.push(`Garantia candidata: ${result.guaranteeDays} dias`);
   if(result.freeShippingCandidate)chips.push('Candidato: frete grátis');
   const detected=by(root,'copyDetected');
@@ -367,7 +403,7 @@ export async function mount({root,toast}={}){
   if(!root)return;
   if(!mounted){
     root.innerHTML=renderTemplate();
-    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);renderOfferQuestions(root);
+    restoreDraft(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);updateDiscountNote(root);renderOfferQuestions(root);
     by(root,'copyAnalyze').onclick=()=>analyzeClipboard(root);
     by(root,'copyAnalyzeManual').onclick=()=>analyzeManualText(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
@@ -393,8 +429,9 @@ export async function mount({root,toast}={}){
         updateDiscountAmountLabel(root);
       }
       if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
-      if(event.target.id==='copyDiscount')refreshAutoDiscountAmount(root);
-      if(event.target.id==='copyProductPrice'){clearProductPriceContext(root);updateProductPriceNote(root)}
+      if(event.target.id==='copyDiscount')syncDiscountFields(root,'percent');
+      if(event.target.id==='copyDiscountAmount')syncDiscountFields(root,'amount');
+      if(event.target.id==='copyProductPrice'){updateProductPriceNote(root);syncDiscountFields(root,'price')}
       if(['copyAffiliateUrl','copyDestination','copyAssetFolder','copyPageTitle'].includes(event.target.id))return;
       if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise e valide novamente a ficha.');
     };

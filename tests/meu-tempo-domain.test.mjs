@@ -84,6 +84,14 @@ assert.equal(matrix.foot[1].productiveMinutes,0,'snapshot antigo não muda com a
 assert.equal(matrix.averages.productiveMinutes,52.5,'a média produtiva inclui dias sem tempo produtivo');
 assert.equal(matrix.averages.totalMinutes,92.5,'a média total inclui todos os dias do período');
 assert.deepEqual(comparisonMatrix([],[],[]).averages,{productiveMinutes:null,totalMinutes:null});
+const correctedBooleanEntries=[
+  {id:'answer-no',date:'2026-10-12',itemId:'item-alcool',type:'boolean',value:false,createdAt:'2026-10-12T08:00:00.000Z',updatedAt:'2026-10-12T11:00:00.000Z'},
+  {id:'answer-yes',date:'2026-10-12',itemId:'item-alcool',type:'boolean',value:true,createdAt:'2026-10-12T10:00:00.000Z',updatedAt:'2026-10-12T10:00:00.000Z'}
+];
+const correctedBooleanMatrix=comparisonMatrix([{id:'item-alcool',name:'Bebida alcoólica',type:'boolean'}],correctedBooleanEntries,['2026-10-12']);
+assert.deepEqual(correctedBooleanMatrix.rows[0].cells[0].values,[false],'a comparação usa a resposta booleana atualizada mais recentemente, ainda que a linha tenha criação anterior');
+assert.equal(booleanHistoryValue({id:'item-alcool',type:'boolean'},correctedBooleanMatrix.rows[0].cells[0].values[0]),'Não','uma correção de Sim para Não deve prevalecer no Histórico');
+assert.equal(correctedBooleanMatrix.rows[0].cells[0].entries.length,2,'a leitura preserva os eventos originais para auditoria/detalhamento');
 assert.equal(PARTIALLY_PRODUCTIVE_ITEM_ID,'item-kakashi');
 assert.equal(PARTIAL_PRODUCTIVE_RATE,.1);
 assert.deepEqual(PRE_WORK_ITEM_IDS,['item-cama-acordar','item-preparo-levantar','item-cafe','item-kakashi'],'o intervalo pré-trabalho soma apenas as quatro atividades destacadas');

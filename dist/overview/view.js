@@ -178,10 +178,10 @@
         manualSales=adjustment?.manualSales??sales?.manualSales??0,
         saleLabel=manualSales?`${manualSales===1?'1 venda provisória':`${manualSales} vendas provisórias`}`:'',
         statusTitle=numberReuse?`A numeração ${numberReuse.group} já apareceu em outra campanha. Use um novo número antes da próxima coleta.`:paused?(pauseConfirmedAt?`Campanha pausada na data ${dateLabel(pauseConfirmedAt)}`:c._lastSeen?`Última aparição em ${dateLabel(c._lastSeen)}`:'Última aparição'):rejected?'A MCC informou reprovação ou não qualificação':statusLabel,
-        commissionCaption=budget?.salesCount===0&&budget.cpaPercent>=budget.cpaMinimumPercent?`CPA ${fmtNum(budget.cpaPercent,budget.cpaPercent%1?2:0)}% · até ${fmtNum(budget.commissionTestPercent,budget.commissionTestPercent%1?2:0)}% / comissão`:'',
-        budgetCaption=budget?.salesCount?`ROI mínimo ${fmtPct(budget.minimumRoi)} · ${fmtNum(budget.salesCount)} venda${budget.salesCount===1?'':'s'}`:commissionCaption,
-        limitLink=commissionCaption?`<a class="test-budget-detail test-budget-roi-link test-budget-commission-link" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-percent="${budget.commissionTestPercent}" data-current-limit="${budget.limit}" data-commission-brl="${budget.commissionBrl}" aria-label="Editar percentual da comissão e limite inicial de teste" aria-haspopup="dialog" aria-controls="commissionTestDialog" title="Editar percentual da comissão e limite inicial de teste">${esc(commissionCaption)}</a>`:budgetCaption?`<a class="test-budget-detail test-budget-roi-link" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-roi="${budget.minimumRoi}" data-current-limit="${budget.limit}" data-total-revenue="${budget.revenue}" aria-label="Editar ROI mínimo e limite de teste" title="Editar ROI mínimo e limite de teste">${esc(budgetCaption)}</a>`:'',
-        limitContent=budget?`${fmtMoney(testLimit.value)}${limitLink}`:displayCell(testLimit),
+        commissionCaption=budget?.salesCount===0&&budget.cpaPercent>=budget.cpaMinimumPercent?`até ${fmtNum(budget.commissionTestPercent,budget.commissionTestPercent%1?2:0)}%`:'',
+        budgetCaption=budget?.salesCount?`ROI ${fmtPct(budget.minimumRoi)}`:commissionCaption,
+        limitLink=commissionCaption?`<a class="test-budget-detail test-budget-roi-link test-budget-commission-link hub-corner-edit" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-percent="${budget.commissionTestPercent}" data-current-limit="${budget.limit}" data-commission-brl="${budget.commissionBrl}" aria-label="Editar percentual da comissão e limite inicial de teste" aria-haspopup="dialog" aria-controls="commissionTestDialog" title="Editar percentual da comissão e limite inicial de teste">${esc(commissionCaption)}</a>`:budgetCaption?`<a class="test-budget-detail test-budget-roi-link hub-corner-edit" href="#" data-campaign-id="${esc(campaignId||0)}" data-current-roi="${budget.minimumRoi}" data-current-limit="${budget.limit}" data-total-revenue="${budget.revenue}" aria-label="Editar ROI mínimo e limite de teste" aria-haspopup="dialog" aria-controls="minimumRoiDialog" title="Editar ROI mínimo e limite de teste">${esc(budgetCaption)}</a>`:'',
+        limitContent=budget?`<span class="test-budget-value">${fmtMoney(testLimit.value)}</span>${limitLink}`:displayCell(testLimit),
         remainingTitle=budget?(budget.remaining>=0?'Investimento ainda permitido até o limite.':`Limite de teste excedido em ${fmtMoney(Math.abs(budget.remaining))}.`):'',
         remainingValue=budget?.remaining??sortCell(testRemaining),
         remainingTone=OverviewDomain.remainingAlertTone(remainingValue,remainingMinimum,remainingYellowMinimum),
@@ -199,10 +199,23 @@
         saleRoiSecond:saleRoiCell(saleHistory[1]),
         profit:`<td class="num ${profitClass}">${profit==null?'—':fmtMoney(profit)}</td>`,
         account:`<td class="num">${account?esc(account):'—'}</td>`,
-        limit:`<td class="num" title="${esc(budgetCaption)}">${limitContent}</td>`,
+        limit:`<td class="num hub-edit-host" title="${esc(budgetCaption)}">${limitContent}</td>`,
         remaining:`<td class="num ${remainingTone}" title="${esc(remainingTitle)}" data-remaining-value="${typeof remainingValue==='number'&&Number.isFinite(remainingValue)?remainingValue:''}">${budget?fmtMoney(testRemaining.value):displayCell(testRemaining)}</td>`,
         status:`<td><span class="status-tag ${statusClass}" title="${esc(statusTitle)}">${esc(statusLabel)}</span>${saleLabel?`<span class="status-tag sale-tag">${esc(saleLabel)}</span>`:''}${policyLimitation?`<span class="status-tag policy-limited" title="${esc(policyLimitation+'. Consulte “Detalhes da política” na tabela Anúncios para identificar a regra e o alcance da restrição.')}">Limitada pela política</span>`:''}</td>`};
       return`<tr class="${rowClass}${policyLimitation?' policy-limited-row':''}${OverviewDomain.rowVisible({c,pausedAt},state.campaignStatusFilter,referenceDate)?'':' hidden'}" data-campaign="${esc(diaryName||c.nome_campanha_exato)}" data-source="${diarySource||(paused?'workbook':'manifest')}" data-campaign-id="${esc(campaignId||'')}">${headers.map(([key])=>cells[key].replace('<td',`<td data-column="${key}"`)).join('')}</tr>`
+    }
+    function renderTableFooter(rows,headers,referenceDate){
+      const visibleRows=rows.filter(row=>OverviewDomain.rowVisible(row,state.campaignStatusFilter,referenceDate));
+      const totals=OverviewDomain.overviewTableTotals(visibleRows);
+      const fields={current:'investment',imp:'impressions',clicks:'clicks',conv:'conversions',profit:'profit'};
+      $('#totalsFoot').innerHTML='<tr>'+headers.map(([key])=>{
+        if(key==='campaign')return'<th scope="row" data-column="campaign">Totais</th>';
+        const field=fields[key],total=totals[field],value=total?.value;
+        const tone=key==='profit'&&value!=null?(value<0?' negative':value>0?' positive':''):'';
+        const title=total?`Soma das campanhas filtradas: ${total.observedCount} de ${total.totalCount} com valor observado.`:'';
+        const text=field?(['investment','profit'].includes(field)?fmtMoney(value):fmtNum(value,field==='conversions'&&value%1?2:0)):'—';
+        return`<td data-column="${key}" class="num${tone}"${title?` title="${esc(title)}"`:''}>${text}</td>`;
+      }).join('')+'</tr>';
     }
     // Preserve mounted cards and controls, patching only changed text/attributes.
     function updateCardMarkup(markup){
@@ -260,6 +273,7 @@ $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="$
       const tableRows=presentationRows;
       const matchingRows=OverviewDomain.searchRows(OverviewDomain.campaignRowsOnStartDate(OverviewDomain.sortRows(tableRows,state,sortCell),selectedCampaignDate),$('#search').value);
       $('#totalsBody').innerHTML=matchingRows.map(row=>{if(!rowMarkupCache.has(row))rowMarkupCache.set(row,renderRow(row,headers,snapshot.referenceDate,remainingMinimum,remainingYellowMinimum));return rowMarkupCache.get(row)}).join('')||`<tr><td colspan="${headers.length}" class="empty">Nenhuma campanha encontrada.</td></tr>`;
+      renderTableFooter(matchingRows,headers,snapshot.referenceDate);
       $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}renderTable()});
       $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();if(link.classList.contains('overview-remaining-edit'))showRemainingDialog();else if(link.classList.contains('overview-test-rules-edit'))showTestRulesDialog();else if(link.classList.contains('test-budget-commission-link'))showCommissionDialog(link.dataset);else showRoiDialog(link.dataset.campaignId,link.dataset.currentRoi,link.dataset.currentLimit,link.dataset.totalRevenue)};link.ondblclick=event=>event.stopPropagation()});
       $$('.overview-kpi-fractional-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();showFractionalDialog()};link.ondblclick=event=>event.stopPropagation()});

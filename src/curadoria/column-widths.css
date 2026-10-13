@@ -1,0 +1,19 @@
+/* Same discrete divider/keyboard behavior as Visão Geral, opt-in tables only. */
+.hub-widths-table th.hub-widths-heading { position: relative; box-sizing: border-box; padding-right: 12px; }
+/* Preserve existing sticky positioning (including auxiliary tables). */
+.hub-widths-table thead th.hub-widths-heading { position: sticky; top: 0; z-index: 4; }
+.hub-widths-table .hub-column-resizer { position:absolute; right:0; top:0; bottom:0; width:9px; z-index:5; cursor:col-resize; touch-action:none; user-select:none; }
+.hub-widths-table .hub-column-resizer::after { content:''; position:absolute; right:0; top:7px; bottom:7px; width:2px; background:var(--cyan,#25d4df); opacity:0; transition:opacity .12s; }
+.hub-widths-table th:hover .hub-column-resizer::after,
+.hub-widths-table .hub-column-resizer:focus-visible::after,
+.hub-widths-table .hub-column-resizer.is-resizing::after { opacity:1; }
+.hub-widths-table .hub-column-resizer:focus-visible { outline:2px solid var(--blue,#4fa7ff); outline-offset:-2px; }
+.hub-widths-table.hub-widths-custom { table-layout:fixed; }
+.hub-widths-table.hub-widths-custom :is(th,td) { width:auto !important; min-width:0 !important; max-width:none !important; box-sizing:border-box; overflow-wrap:anywhere; }
+.hub-widths-table.hub-widths-custom td { white-space:normal; }
+.hub-widths-table.hub-widths-custom :is(.product-cell,.product-copy) { min-width:0 !important; }
+.hub-widths-table.hub-widths-custom td :is(button,.hub-table-button-appearance,.pill,.status) { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.hub-widths-table.hub-widths-resizing,
+.hub-widths-table.hub-widths-resizing * { cursor:col-resize !important; user-select:none !important; }
+.hub-widths-message { color:var(--amber,#ffc667); font-size:.75rem; margin:6px 12px; }
+@media (prefers-reduced-motion:reduce) { .hub-widths-table .hub-column-resizer::after { transition:none; } }

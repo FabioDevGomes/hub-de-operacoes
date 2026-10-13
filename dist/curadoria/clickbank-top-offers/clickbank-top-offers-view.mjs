@@ -1,4 +1,5 @@
-import {clickBankOfferDetailsUrl, compareCapturedOffers, captureOfferVariations, movementLabel} from './clickbank-top-offers-domain.mjs?v=4';
+import {mountTrendsSaveAction,trendPageState,sameTrendAssessment} from '../trends-save-action.mjs?v=4';
+import {clickBankOfferDetailsUrl, compareCapturedOffers, captureOfferVariations, allCaptureOfferVariations, movementLabel} from './clickbank-top-offers-domain.mjs?v=5';
 import {lastCollectionCell, latestCollectionIndex, collectionTime} from '../last-collection.mjs';
 import {mountCurationColumns} from '../curation-columns.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
@@ -9,6 +10,7 @@ import * as Glimpse from '../glimpse-domain.mjs';
 import * as DecisionUI from '../decision-ui.mjs';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
+import {BRAND_BIDDING_TYPES,brandBiddingLabel} from './brand-bidding.mjs?v=1';
 import {productNameFromOfferTitle} from './product-name.mjs?v=1';
 
 const $ = (selector, root) => root.querySelector(selector);
@@ -19,11 +21,13 @@ const dateTime = value => {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-BR', {dateStyle:'short', timeStyle:'short'}).format(date);
 };
 const HIDDEN_OFFERS_KEY = 'hub:clickbank-top-offers:hidden-offer-keys:v1';
+const ALL_CAPTURES = '__all__';
 
 export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
   let latestCaptureByOffer = new Map();
-  let selectedCaptureId = '', sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false;
+  let allCaptures = null;
+  let selectedCaptureId = ALL_CAPTURES, sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false;
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
   let hiddenOffers = new Set();
@@ -33,7 +37,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   } catch {}
   const columns = mountCurationColumns({root, screen:'clickbank', preferences});
 
-  function selectedCapture() { return state.captures.find(item => item.captureId === selectedCaptureId) || state.captures[0] || null; }
+  function selectedCapture() { return selectedCaptureId === ALL_CAPTURES ? allCaptures : state.captures.find(item => item.captureId === selectedCaptureId) || null; }
   function previousCapture(selected) {
     const index = state.captures.findIndex(item => item.captureId === selected?.captureId);
     return index >= 0 ? state.captures.slice(index + 1).find(item => item.listName === selected.listName) || null : null;
@@ -67,20 +71,14 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     };
     const [description,label]=reasons[activeTab]||reasons.history;
     button.hidden=false;
-    button.disabled=activeTab==='trends'?savingTrend:activeTab!=='glimpse';
+    button.disabled=activeTab==='trends'?(savingTrend||button.dataset.trendsSaving==='true'):activeTab!=='glimpse';
     button.title=description;
     button.setAttribute('aria-label',label);
   }
+  let trendsSave;
+  let pendingMetadata={};
   function renderTrendResultButtons(item, latest) {
-    TrendsUI.renderResultButtons($('#trendResults',root),pendingTrendStatus||latest?.status||'',status=>{
-      pendingTrendStatus=status;
-      $('#trendMessage',root).textContent='Resultado selecionado. Clique em Salvar para registrar.';
-      $('#trendMessage',root).classList.remove('error');
-      $('#sheetMessage',root).textContent='';
-      $('#sheetMessage',root).classList.remove('error');
-      updateSheetSaveButton();
-      renderTrendResultButtons(item,latest);
-    });
+    TrendsUI.renderResultButtons($('#trendResults',root),trendsSave?.status(pendingTrendStatus||latest?.status||'')||'',status=>trendsSave.select(status));
   }
   function imageProgress(item) { return Images.progress(imagesFor(item).assessments,metadataFor(item).manualCountries || []); }
   function trendRank(item) { return ({up:7,stable:6,down:5,low_volume:4,point_peak:3,inconclusive:2,no_data:1})[trendLatest(item)?.status] || 0; }
@@ -109,7 +107,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   function renderTable(selected, previous) {
     const query=$('#search',root).value.trim().toLocaleLowerCase();
     const visibility=$('#visibilityFilter',root).value || 'visible';
-    let offers=captureOfferVariations(selected,state.captures).map(item=>({...item,displayName:productNameFromOfferTitle(item.offerName,item.seller)}));
+    let offers=(selected?.all ? selected.offers : captureOfferVariations(selected,state.captures)).map(item=>({...item,displayName:productNameFromOfferTitle(item.offerName,item.seller)}));
     offers=offers.filter(item=>!query||`${item.displayName} ${item.offerName} ${item.seller}`.toLocaleLowerCase().includes(query));
     offers=offers.filter(item=>visibility==='all'||(visibility==='hidden')===hiddenOffers.has(item.offerKey));
     offers.sort((a,b)=>{
@@ -130,7 +128,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       <td class="number">${escape(metricText(item.average))}</td><td class="number">${escape(metricText(item.initial))}</td>
       <td class="page-type-cell">${escape(pageTypeText(item))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
-      <td class="number ${movementClass(item)}" title="${escape(item.movement==='new'?'Primeira aparição desta oferta no histórico até esta captura.':item.movement==='uncompared'?'Oferta já observada no histórico; sem posição na captura anterior comparável.':'Variação de posição em relação à captura anterior comparável.')}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
+      <td class="number ${movementClass(item)}" title="${escape(selected?.all ? item.movement==='new'?'Primeira e única aparição desta oferta no histórico salvo; não indica lançamento recente.':`Duas últimas aparições: #${item.priorRank} em ${dateTime(item.priorObservedAt)} → #${item.rank} em ${dateTime(item.observedAt)}. Última posição observada; recortes posteriores não indicam saída.` : item.movement==='new'?'Primeira aparição desta oferta no histórico até esta captura.':item.movement==='uncompared'?'Oferta já observada no histórico; sem posição na captura anterior comparável.':'Variação de posição em relação à captura anterior comparável.')}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
     columns.apply();
     $('#empty',root).classList.toggle('hidden',offers.length>0);
     $('#empty',root).textContent=selected?'Nenhuma oferta corresponde aos filtros.':'Cole a primeira captura Top Offers da ClickBank para começar.';
@@ -142,7 +140,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   }
 
   function renderTrends(item) {
-    const record=trendsFor(item),latest=Trends.latestAssessment(record.assessments),metadata=metadataFor(item),countries=metadata.manualCountries||[],selected=new Set(latest?.countries||[]);
+    const record=trendsFor(item),latest=trendPageState(record,Trends.latestAssessment(record.assessments)),metadata=metadataFor(item),countries=metadata.manualCountries||[],selected=new Set(latest?.countries||[]);
     const dtcCountries=new Set(metadata.dtcCountryCapture?.countries||[]);
     const offerLink=$('#openClickBankOffer',root),offerUnavailable=$('#clickBankOfferUnavailable',root),offerUrl=clickBankOfferDetailsUrl(item.offerId);
     if(offerUrl){offerLink.href=offerUrl;offerLink.setAttribute('aria-label',`Abrir detalhes ClickBank para ${item.offerName}`);offerLink.classList.remove('hidden');offerUnavailable.classList.add('hidden');}
@@ -154,17 +152,27 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       pendingProductAge=value;
       $$ (root,'[data-trends-product-age]').forEach(button=>{button.classList.toggle('selected',button.dataset.trendsProductAge===value);button.setAttribute('aria-pressed',String(button.dataset.trendsProductAge===value))});
     });
-    const salesPageType=metadata.salesPageType||null,salesPageTypeActions=$('#salesPageTypeActions',root);
+    const salesPageType=(Object.hasOwn(pendingMetadata,'salesPageType')?pendingMetadata.salesPageType:metadata.salesPageType)||null,salesPageTypeActions=$('#salesPageTypeActions',root);
     salesPageTypeActions.innerHTML=[...SALES_PAGE_TYPES.map(value=>({value,label:value.toUpperCase()})),{value:'',label:'Não definido'}].map(({value,label})=>
       `<button type="button" class="trends-country-action ${salesPageType===value||(!salesPageType&&!value)?'selected':''}" data-sales-page-type="${value}" aria-pressed="${salesPageType===value||(!salesPageType&&!value)}">${label}</button>`
     ).join('');
+    function selectMetadata(attr,field,value) {
+      pendingMetadata[field]=value;
+      $$ (root,'['+attr+']').forEach(control=>{
+        const selected=(control.getAttribute(attr)||null)===value;
+        control.classList.toggle('selected',selected);control.setAttribute('aria-pressed',String(selected));
+      });
+      trendsSave.schedule();
+    }
     $$ (root,'[data-sales-page-type]').forEach(button=>{
-      button.onclick=()=>{
-        const controls=$$ (root,'[data-sales-page-type]');controls.forEach(control=>control.disabled=true);
-        Promise.resolve(actions.saveSalesPageType(item.offerKey,button.dataset.salesPageType||null)).then(saved=>{
-          if(!saved)controls.forEach(control=>control.disabled=false);
-        }).catch(()=>controls.forEach(control=>control.disabled=false));
-      };
+      button.onclick=()=>selectMetadata('data-sales-page-type','salesPageType',button.dataset.salesPageType||null);
+    });
+    const brandBidding=(Object.hasOwn(pendingMetadata,'brandBidding')?pendingMetadata.brandBidding:metadata.brandBidding)||null;
+    $('#brandBiddingActions',root).innerHTML=[...BRAND_BIDDING_TYPES,null].map(value=>
+      `<button type="button" class="trends-country-action ${brandBidding===value?'selected':''}" data-brand-bidding="${value || ''}" aria-pressed="${brandBidding===value}">${brandBiddingLabel(value)}</button>`
+    ).join('');
+    $$ (root,'[data-brand-bidding]').forEach(button=>{
+      button.onclick=()=>selectMetadata('data-brand-bidding','brandBidding',button.dataset.brandBidding||null);
     });
     renderTrendResultButtons(item,latest);
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates',root),{
@@ -211,32 +219,35 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     $('#allTrendsHistory',root).innerHTML=$('#trendsHistory',root).innerHTML;
     $('#allImagesHistory',root).innerHTML=$('#imagesHistory',root).innerHTML;
     if(activeTab==='glimpse')actions.openGlimpse(item);
-    updateSheetSaveButton();
+    trendsSave?.restore();updateSheetSaveButton();trendsSave?.sync();
   }
   function openSheet(item,tab='trends') {
-    activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;
+    trendsSave?.reset();pendingMetadata={};activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;
     $('#trendMessage',root).textContent='';$('#trendMessage',root).classList.remove('error');
     sheet.classList.remove('hidden');renderSheet();
     sheet.scrollTop=0;
     $('#sheetMessage',root).textContent='';$('#sheetMessage',root).classList.remove('error');
   }
-  function closeSheet() { sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }
+  function closeSheet() { trendsSave.reset();pendingMetadata={};sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }
   function switchTab(tab) { activeTab=tab;renderSheet(); }
 
   function render(nextState=state) {
     state={...state,...nextState};
     latestCaptureByOffer=latestCollectionIndex(state.captures,item=>item.offerKey);
     state.captures=[...state.captures].sort((a,b)=>String(b.capturedAt).localeCompare(String(a.capturedAt)));
-    if(!state.captures.some(item=>item.captureId===selectedCaptureId))selectedCaptureId=state.captures[0]?.captureId||'';
+    allCaptures=state.captures.length ? {captureId:ALL_CAPTURES,all:true,offers:allCaptureOfferVariations(state.captures)} : null;
+    if(selectedCaptureId!==ALL_CAPTURES&&!state.captures.some(item=>item.captureId===selectedCaptureId))selectedCaptureId=ALL_CAPTURES;
     const selected=selectedCapture(),previous=previousCapture(selected);
-    $('#captureSelect',root).innerHTML=state.captures.map(item=>`<option value="${escape(item.captureId)}">${escape(dateTime(item.capturedAt))} · ${escape(item.offers.length)} ofertas · posições ${escape(item.page.start??'—')}–${escape(item.page.end??'—')}</option>`).join('');
-    $('#captureSelect',root).value=selectedCaptureId;$('#captureSelect',root).disabled=state.captures.length<2;
-    const resultCount=$('#captureResultCount',root),hasResultCount=selected?.page.total!=null;
-    resultCount.textContent=hasResultCount?`${new Intl.NumberFormat('pt-BR').format(Number(selected.page.total))} resultados${selected.page.completeUniverse?' · Lista completa':''}`:'';
-    resultCount.hidden=!hasResultCount;
+    $('#captureSelect',root).innerHTML=`<option value="${ALL_CAPTURES}">Todas as capturas · ${allCaptures?.offers.length||0} ofertas únicas</option>`+state.captures.map(item=>`<option value="${escape(item.captureId)}">${escape(dateTime(item.capturedAt))} · ${escape(item.offers.length)} ofertas · posições ${escape(item.page.start??'—')}–${escape(item.page.end??'—')}</option>`).join('');
+    $('#captureSelect',root).value=selectedCaptureId;$('#captureSelect',root).disabled=state.captures.length===0;
+    const resultCount=$('#captureResultCount',root),hasResultCount=selected?.page?.total!=null;
+    resultCount.textContent=selected?.all?'Últimas posições observadas':hasResultCount?`${new Intl.NumberFormat('pt-BR').format(Number(selected.page.total))} resultados${selected.page.completeUniverse?' · Lista completa':''}`:'';
+    resultCount.title=selected?.all?'Uma linha por oferta. Variação entre as duas últimas aparições; capturas de outras faixas não removem ofertas.':'';
+    resultCount.hidden=!selected?.all&&!hasResultCount;
+    $('#offerCountLabel',root).textContent=selectedCaptureId===ALL_CAPTURES?'Ofertas no histórico':'Ofertas na captura';
     $('#captureCount',root).textContent=String(state.captures.length);$('#offerCount',root).textContent=String(selected?.offers.length||0);
-    const compared=selected&&previous?compareCapturedOffers(selected.offers,previous.offers):[],moved=compared.filter(item=>item.movement==='up'||item.movement==='down').length;
-    $('#movementCount',root).textContent=previous?String(moved):'—';renderTable(selected,previous);
+    const compared=selected?.all?selected.offers:selected&&previous?compareCapturedOffers(selected.offers,previous.offers):[],moved=compared.filter(item=>item.movement==='up'||item.movement==='down').length;
+    $('#movementCount',root).textContent=selected?.all||previous?String(moved):'—';renderTable(selected,previous);
     if(!sheet.classList.contains('hidden'))renderSheet();
   }
 
@@ -262,31 +273,19 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value='';};
   importDialog.addEventListener('close',()=>importDialog.classList.add('hidden'));
   $('#closeSheet',root).onclick=closeSheet;
-  $('#saveSheetButton',root).onclick=async()=>{
-    const item=activeOffer();
-    if(!item||savingTrend||activeTab!=='trends')return;
-    const status=pendingTrendStatus||trendLatest(item)?.status;
-    if(!status){$('#trendMessage',root).textContent='Selecione um resultado da análise antes de salvar.';$('#trendMessage',root).classList.remove('error');return;}
-    savingTrend=true;updateSheetSaveButton();
-    const chosen=$$ (root,'#trendCountries [data-country].selected').map(button=>button.dataset.country);
-    try {
-      const saved=await actions.saveTrend(item.offerKey,status,{term:$('#trendsTerm',root).value.trim()||item.offerName,countries:chosen,productAge:pendingProductAge});
-      if(saved){
-        pendingTrendStatus='';
-        const fresh=activeOffer();
-        if(fresh)renderTrendResultButtons(fresh,trendLatest(fresh));
-        $('#trendMessage',root).textContent='';
-        $('#sheetMessage',root).textContent='Avaliação de Google Trends salva.';
-        $('#sheetMessage',root).classList.remove('error');
-      } else {
-        $('#trendMessage',root).textContent='Não foi possível salvar a avaliação. Tente novamente.';
-        $('#trendMessage',root).classList.add('error');
-      }
-    } catch {
-      $('#trendMessage',root).textContent='Não foi possível salvar a avaliação. Tente novamente.';
-      $('#trendMessage',root).classList.add('error');
-    } finally { savingTrend=false;updateSheetSaveButton(); }
-  };
+  trendsSave=mountTrendsSaveAction({
+    button:$('#saveSheetButton',root),scope:$('[data-panel="trends"]',root),watch:'#trendsTerm',clickWatch:'[data-country],[data-trends-product-age],[data-sales-page-type],[data-brand-bidding]',
+    getContext:()=>{const item=activeOffer();return {
+      tab:sheet.classList.contains('hidden')?'':activeTab,offerKey:item?.offerKey,
+      previous:item?trendLatest(item):null,
+      draft:{status:$('#trendResults [data-trends-result].selected',root)?.dataset.trendsResult||(item?trendLatest(item)?.status:'')||'',
+        term:$('#trendsTerm',root).value.trim()||item?.offerName||'',
+        countries:$$ (root,'#trendCountries [data-country].selected').map(button=>button.dataset.country),
+        productAge:$('#productAgeActions [data-trends-product-age].selected',root)?.dataset.trendsProductAge||'',metadataPatch:{...pendingMetadata}}};},
+    isUnchanged:context=>sameTrendAssessment(context.previous,context.draft)&&Object.entries(context.draft.metadataPatch).every(([field,value])=>(metadataFor(activeOffer())[field]||null)===value),
+    persist:(key,status,draft)=>actions.saveTrend(key,status,draft),
+    feedback:message=>{const node=$('#trendMessage',root);node.textContent=message;node.classList.toggle('error',/^Não foi possível/.test(message));}
+  });
   $('.tabs',sheet).addEventListener('click',event=>{const button=event.target.closest('[data-tab]');if(button)switchTab(button.dataset.tab);});
   $('#rows',root).addEventListener('click',event=>{
     const visibilityButton=event.target.closest('[data-offer-visibility]');
@@ -318,7 +317,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     const button=event.target.closest('[data-country]');if(!button)return;
     const selected=$$ (root,'#trendCountries [data-country].selected');
     if(!button.classList.contains('selected')&&selected.length>=5){$('#trendMessage',root).textContent='É possível registrar até cinco países por avaliação.';return;}
-    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));$('#trendMessage',root).textContent=pendingTrendStatus?'Resultado selecionado. Clique em Salvar para registrar.':'';
+    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));$('#trendMessage',root).textContent='Alterações pendentes…';
   });
   async function submitManualCountry() {
     const input=$('#manualCountry',root),item=activeOffer();if(!item)return;
@@ -334,11 +333,15 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
 
   return {
     render,
-    selectCapture(captureId){selectedCaptureId=captureId;render();},
+    selectCapture(captureId,{preserveAll=false}={}){if(!preserveAll||selectedCaptureId!==ALL_CAPTURES)selectedCaptureId=captureId;render();},
     showImportPreview,
     prepareImport(raw) { paste.value=raw;if(!importDialog.open)openImport();else paste.focus(); },
     closeImport,
-    showMessage(message,{error=false}={}){for(const id of ['message','sheetMessage']){const element=$('#'+id,root);element.textContent=message;element.classList.toggle('error',error);}},
+    showMessage(message,{error=false,headerOnly=false}={}){
+      trendsSave?.report(message,{error});
+      if(headerOnly&&!error){const element=$('#sheetMessage',root);element.textContent='';element.classList.remove('error');return;}
+      for(const id of ['message','sheetMessage']){const element=$('#'+id,root);element.textContent=message;element.classList.toggle('error',error);}
+    },
     returnFromGlimpse(){if(activeOfferKey)switchTab('trends');},
     getActiveOfferKey(){return activeOfferKey;},
   };

@@ -6,7 +6,7 @@ assert.ok(html.includes("import * as KeywordCandidatesUI from './keyword-candida
 assert.ok(html.includes("import {mountCurationListFocus} from './list-focus.mjs?v=2'"));
 assert.ok(html.includes("mountCurationListFocus('radar-spyhero',{blockingSelector:'#productSheet:not(.hidden)',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true})"),
   'Radar pulsa somente ao fechar explicitamente a ficha, nunca ao abrir ou retornar de outra janela');
-assert.ok(html.includes("function closeProductSheet({restoreFocus=true}={}){$('#productSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),
+assert.ok(html.includes("function closeProductSheet({restoreFocus=true}={}){radarTrendsSave.reset();$('#productSheet').classList.add('hidden');document.body.style.overflow='';if(restoreFocus)listFocus.restore()}"),
   'o retorno explícito restaura somente após ocultar a ficha');
 assert.ok(html.includes('data-curation-focus="trends"') && html.includes('data-curation-focus="clickbank"') && html.includes('data-curation-focus="landing"'));
 assert.ok(html.includes('data-product="${safe(x.id)}"'), 'cada linha Radar expõe chave estável para restaurar o foco');
@@ -19,8 +19,8 @@ assert.ok(html.includes('TrendsDomain.exploreUrl(term),\'google-trends-radar\'')
 assert.ok(html.includes('variant:\'positive\''));
 assert.ok(html.includes('trendsKeywordCandidates:old?.trendsKeywordCandidates||[]'), 'reimport must preserve candidate words');
 
-const persist = html.match(/async function persistRadarTrendKeywordCandidates\(record,candidates\)\{([^}]+)\}/)?.[1] || '';
-assert.ok(persist.includes('record.trendsKeywordCandidates=candidates') && persist.includes('await putMany([record])'));
+const persist = html.match(/async function persistRadarTrendKeywordCandidates\(record,candidates\)\{([^\n]+)\}/)?.[1] || '';
+assert.ok(persist.includes('records.find(entry=>entry.id===record.id)')&&persist.includes('stored={...current,trendsKeywordCandidates:candidates}')&&persist.includes('await putMany([stored])'),'candidatas preservam a avaliação atual, não a cópia antiga da abertura');
 assert.doesNotMatch(persist, /trendsAssessments|trendsCollections|history/, 'candidate maintenance must not create a Trends assessment/history entry');
 assert.ok(!html.includes('Google Imagens · Radar SpyHero'), 'SpyHero candidate feature is Trends-only');
 console.log('radar SpyHero Trends candidate UI ok');

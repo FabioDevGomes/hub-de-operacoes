@@ -22,7 +22,9 @@ assert.match(page, /class="filter-grid hub-curation-table-filters"[\s\S]*?id="ca
 assert.match(page, /<select class="control" id="captureSelect"/, 'o seletor usa a superfície compartilhada de controles');
 assert.match(css, /#clickbankTopOffersRoot #captureSelect:focus-visible,#clickbankTopOffersRoot #search:focus-visible\{outline:2px solid var\(--cb-blue\);outline-offset:2px\}/, 'os dois controles preservam foco de teclado visível');
 assert.match(page, /trends-sheet\.css\?v=20261007-glimpse-borderless/, 'a página carrega a versão atual do CSS compartilhado da ficha ClickBank');
-assert.match(page, /clickbank-top-offers\.css\?v=25/, 'a folha alterada invalida o cache');
+assert.match(page, /clickbank-top-offers\.css\?v=27/, 'a folha alterada invalida o cache');
+assert.match(css, /\.tablewrap th\{position:sticky;top:0;background:#[0-9a-f]{6};/, 'o cabeçalho permanece fixo no scroll interno com fundo opaco');
+assert.match(css, /#clickbankTopOffersRoot \.tablewrap thead th\{z-index:2\}/, 'todos os cabeçalhos ficam acima das células posicionadas, Ocultar e pulsos de retorno (z-index 1)');
 assert.match(page, /href="\/table-edit-actions\.css\?v=3"/, 'a ocultação reutiliza a aparência discreta compartilhada');
 assert.match(page, /id="visibilityFilter"[\s\S]*?value="visible"[\s\S]*?value="hidden"[\s\S]*?value="all"/, 'ocultar deve oferecer um caminho explícito para reexibir');
 assert.match(css, /#clickbankTopOffersRoot \.tablewrap td\.offer-name\.hub-edit-host\{padding-right:54px\}/, 'o nome não sobrepõe Ocultar/Reexibir');
@@ -33,7 +35,7 @@ assert.match(css, /\.import-dialog \.btn\.primary\{background:var\(--curation-he
 assert.match(css, /\.import-dialog \.btn:hover:not\(:disabled\)\{box-shadow:0 5px 12px rgba\(0,0,0,\.65\)\}/, 'a sombra escurece discretamente no hover');
 assert.equal((page.match(/data-close-dialog="importDialog"/g)||[]).length,2,'Fechar e Cancelar continuam presentes no diálogo');
 assert.equal(publishedCss,css,'a folha publicada corresponde à fonte canônica');
-assert.ok(publishedPage.includes('clickbank-top-offers.css?v=25'),'a página publicada carrega a versão atualizada da folha');
+assert.ok(publishedPage.includes('clickbank-top-offers.css?v=27'),'a página publicada carrega a versão atualizada da folha');
 assert.match(css, /\.tablewrap \[data-column="rank"\]\{text-align:center!important\}/, 'cabeçalho e conteúdo da coluna Posição ficam centralizados sem depender da ordem visual das colunas');
 
 for (const id of ['clickbankTopOffersRoot','openImport','captureSelect','captureResultCount','search','rows','importDialog','pasteArea','validateImport','confirmImport','exportBackup','restoreBackup','offerSheet','trendCountries','openClickBankOffer','clickBankOfferUnavailable','trendCandidate','trendResults','saveSheetButton','closeSheet','imageCountries','salesPageTypeActions','glimpseFrame']) {
@@ -52,13 +54,13 @@ assert.match(controller,/finishLabel:'Salvar',showSavedFeedback:true/,'Glimpse o
 assert.match(controller,/glimpse-embed-controls\.mjs\?v=4/,'o helper compartilhado invalida o cache');
 assert.match(controller,/actionButton:root\.querySelector\('#saveSheetButton'\)/,'Glimpse usa o botão único da barra em vez de criar outro botão no cabeçalho');
 assert.match(controller, /\.\/clickbank-top-offers-view\.mjs\?v=\d+/);
-assert.ok(controller.includes('./clickbank-top-offers-domain.mjs?v=4'));
-assert.ok(view.includes('./clickbank-top-offers-domain.mjs?v=4'));
+assert.ok(controller.includes('./clickbank-top-offers-domain.mjs?v=5'));
+assert.ok(view.includes('./clickbank-top-offers-domain.mjs?v=5'));
 assert.ok(controller.includes('Domain.countNewCapturedOffers(parsed.offers, captures)') && controller.includes('view.showImportPreview({parsed,compared,newProductCount})'),'prévia conta novos contra todo o histórico salvo, não apenas a captura anterior');
 assert.ok(controller.includes("mountCurationListFocus('clickbank-top-offers'")&&controller.includes("blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]'")&&controller.includes('highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true'),'Top Offers CB pisca ao fechar a ficha/modal, não apenas ao trocar de janela');
 assert.ok(controller.includes('list-focus.mjs?v=3'),'Top Offers CB carrega a versão atualizada do helper compartilhado');
-assert.ok(controller.includes('restoreListFocus:()=>listFocus.restore()')&&view.includes("function closeSheet() { sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }"),'Voltar à lista restaura e pisca depois de ocultar a ficha');
-assert.match(controller,/clickbank-top-offers-view\.mjs\?v=26/,'a view alterada invalida o cache');
+assert.ok(controller.includes('restoreListFocus:()=>listFocus.restore()')&&view.includes("function closeSheet() { trendsSave.reset();pendingMetadata={};sheet.classList.add('hidden');activeOfferKey='';actions.restoreListFocus?.(); }"),'Voltar à lista descarta o rascunho e restaura o foco depois de ocultar a ficha');
+assert.match(controller,/clickbank-top-offers-view\.mjs\?v=31/,'a view alterada invalida o cache');
 assert.match(page,/<button class="btn primary" id="saveSheetButton" type="button">Salvar<\/button>/,'a barra mantém um único botão Salvar compartilhado por todas as abas');
 assert.match(view, /const \$ = \(selector,\s*root\) => root\.querySelector\(selector\);/, 'a busca singular recebe o seletor antes da raiz, como fazem os consumidores da view');
 const rootStart = page.indexOf('<main id="clickbankTopOffersRoot">'), rootEnd = page.indexOf('</main>');
@@ -72,12 +74,12 @@ const offerSheetStart=page.indexOf('id="offerSheet"'),sheetBarIndex=page.indexOf
 assert.ok(sheetBarIndex>offerSheetStart&&sheetBarIndex<sheetTitleIndex,'a barra abre no topo da ficha, antes do título da oferta');
 assert.match(sheetBarCss, /#offerSheet \.sheet-tab-bar\{position:sticky;top:0;[^}]*width:100%;margin:0 0 14px;[^}]*border:0/, 'a barra compartilhada nasce no topo e acompanha a rolagem, sem contorno externo');
 assert.match(page,/analysis-sheet-bar\.css\?v=3/,'ClickBank usa a mesma barra da Hot Offers MS');
-assert.match(view, /Resultado selecionado\. Clique em Salvar para registrar\./, 'a escolha do resultado fica pendente e instrui a confirmar');
-assert.match(view, /const saved=await actions\.saveTrend\(/, 'a gravação de Trends ocorre pelo botão Salvar');
-assert.match(page, /clickbank-top-offers-page\.mjs\?v=32/, 'a página alterada invalida o cache');
+assert.match(view, /status=>trendsSave\.select\(status\)/, 'a escolha permanece pendente até clicar em Salvar');
+assert.match(view, /persist:\(key,status,draft\)=>actions\.saveTrend\(key,status,draft\)/, 'Salvar reutiliza o armazenamento próprio');
+assert.match(page, /clickbank-top-offers-page\.mjs\?v=38/, 'a página alterada invalida o cache');
 assert.match(controller, /hub-glimpse-save-result'\)\{if\(event\.data\.saved===true\)void refreshAfterGlimpseSave\(\);return;\}/, 'o salvamento confirmado atualiza a lista sem fechar a ficha');
 assert.match(controller, /async function refreshAfterGlimpseSave\(\)[\s\S]*?await refresh\(\)/, 'o host recarrega o snapshot Glimpse persistido');
-assert.match(page, /clickbank-top-offers\.css\?v=25/, 'a barra sticky invalida o cache do CSS desta tela sem mudar outras fichas');
+assert.match(page, /clickbank-top-offers\.css\?v=27/, 'o cabeçalho sticky invalida o cache do CSS desta tela sem mudar outras fichas');
 assert.match(view, /if\(item\)openSheet\(item,button\.dataset\.action\)/, 'cada atalho abre diretamente sua aba na ficha');
 assert.ok(view.includes('replace(/[&<>"\']/g'), 'texto importado deve ser escapado antes de gerar HTML');
 assert.ok(view.includes('compareCapturedOffers') && view.includes('selected.page.total'));
@@ -97,7 +99,7 @@ assert.ok(controller.includes('Decisão salva somente em Top Offers CB'), 'a int
 assert.ok(view.includes('renderResultButtons') && view.includes('renderProductAgeButtons') && view.includes('renderImageResultButtons'), 'reutiliza os componentes compartilhados de Trends e Imagens');
 assert.ok(page.includes('class="trends-analysis-meta"') && page.includes('Momento do produto') && page.includes('Tipo de página de venda'), 'o tipo da página divide a faixa marcada com o momento do produto');
 assert.ok(page.includes('Classificação manual do tipo de página de venda') && page.includes('Classificação manual desta oferta.'), 'o controle informa que a classificação é manual e por oferta');
-assert.ok(view.includes('SALES_PAGE_TYPES') && view.includes('data-sales-page-type') && view.includes('actions.saveSalesPageType(item.offerKey'), 'DTC/VSL/TSL/Quiz e limpeza salvam a escolha para a oferta ativa');
+assert.ok(view.includes('SALES_PAGE_TYPES') && view.includes('data-sales-page-type') && view.includes("selectMetadata('data-sales-page-type','salesPageType'"), 'DTC/VSL/TSL/Quiz e limpeza ficam pendentes para a oferta ativa');
 assert.ok(controller.includes('async function saveSalesPageType(offerKey,value)') && controller.includes('Storage.STORES.offerMetadata'), 'a classificação fica na store de metadados, separada da captura original');
 assert.match(page, /data-sort="future" type="button">PAG\.<\/button>/, 'a coluna que ocupava Future $ é identificada como PAG.');
 assert.doesNotMatch(page, />Future \$</, 'Future $ deixa de aparecer como coluna na tabela');
@@ -118,6 +120,12 @@ assert.ok(css.includes('.top h1{') && css.includes('overflow-x') || css.includes
 assert.ok(page.includes(' nada é salvo antes de você confirmar') || page.includes('Nada é salvo antes de você confirmar'));
 
 console.log('clickbank top offers ui ok');
+
+assert.match(page,/id="brandBiddingActions" role="group" aria-label="Classificação manual de brand bidding"/);
+assert.match(view,/BRAND_BIDDING_TYPES,brandBiddingLabel/);
+assert.match(controller,/Storage\.saveBrandBidding\(baseRecord\(item\),value\)/);
+assert.match(css,/#offerSheet \.trends-analysis-meta\{[^}]*grid-template-columns:minmax\(0,\.85fr\) minmax\(0,1\.15fr\) minmax\(0,1fr\)/);
+assert.match(css,/@media\(max-width:760px\)\{#offerSheet \.trends-analysis-meta\{grid-template-columns:1fr/);
 
 assert.match(page, /data-panel="glimpse"><iframe id="glimpseFrame"/, 'Glimpse acompanha GM sem cartão externo redundante');
 assert.match(controller, /event.origin!==location.origin\|\|event.source!==frame.contentWindow/, 'resize/retorno do iframe têm origem e janela validadas');

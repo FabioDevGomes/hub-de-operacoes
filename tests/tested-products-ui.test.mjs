@@ -5,11 +5,12 @@ const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8')+
 assert.equal((html.match(/id="downloadCatalog"/g)||[]).length,0,'exportação independente do catálogo não deve mais ser apresentada');
 assert.ok(html.includes('Baixar backup completo JSON'),'o botão único de backup completo está ausente');
 assert.ok(html.includes('payload.catalogo_produtos=ProductCatalog.normalize(state.productCatalog)'),'backup completo não inclui os ajustes do catálogo');
-assert.ok(html.includes('tested-products/view.js?v=8')&&html.includes('tested-products/domain.js?v=8'),'módulos de Produtos Testados não invalidam o cache das correções');
-assert.ok(html.includes('tested-products/tested-products.css?v=5')&&html.includes('.catalog-edit,.catalog-remove{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:500}')&&html.includes('.catalog-table tbody td{padding-block:5px}'),'ações devem usar peso normal e as linhas devem ficar cerca de 20% mais compactas');
+assert.ok(html.includes('tested-products/view.js?v=10')&&html.includes('tested-products/domain.js?v=9'),'módulos de Produtos Testados não invalidam o cache das correções');
+assert.ok(html.includes('tested-products/tested-products.css?v=6')&&html.includes('.catalog-edit,.catalog-remove{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:500}')&&html.includes('.catalog-table tbody td{padding-block:5px}'),'ações devem usar peso normal e as linhas devem ficar cerca de 20% mais compactas');
 assert.ok(html.includes('id="testedEditDialog"')&&html.includes('id="testedEditForm"')&&html.includes('Restaurar todos os calculados'),'formulário do sistema e restauração de valores ausentes');
 assert.ok(html.includes('ProductCatalog.setTestedAdjustments')&&html.includes('await persistProductCatalog(next)'),'edição manual não está restrita ao catálogo');
-assert.ok(html.includes('ajustes_testados')&&html.includes('Ajuste manual nesta lista'),'ajustes manuais precisam de persistência e indicação visível');
+assert.ok(html.includes('ajustes_testados')&&html.includes('title="Ajuste manual somente em Produtos Testados"'),'ajustes manuais precisam preservar persistência e tooltip nas células ajustadas');
+assert.ok(!html.includes('Ajuste manual nesta lista')&&!html.includes('tested-adjustment-badge'),'texto secundário removido não deve voltar à coluna Produto');
 assert.ok(html.includes('id="testedActiveProductsCount"'),'indicador de produtos com campanhas ativas ausente');
 assert.ok(html.includes('id="testedSearch" class="search hub-search-filter" type="search" placeholder="Buscar produto ou campanha"'),'busca compartilhada de produto/campanha ausente em Produtos Testados');
 assert.ok(!html.includes('O backup completo JSON no topo reúne campanhas'),'texto explicativo sinalizado ainda aparece em Produtos Testados');
@@ -21,6 +22,10 @@ assert.ok(html.includes('preferences.setItem(TESTED_COLUMNS_PREF'),'preferência
 assert.ok(html.includes('data-tested-col="related"')&&html.includes('data-tested-col="actions"'),'colunas da tabela não estão identificadas para ocultação');
 assert.ok(html.includes('data-tested-col="revenue"')&&html.includes('data-tested-sort="revenue"'),'coluna Total faturado ausente ou não ordenável');
 assert.ok(html.includes('data-tested-col="profit"')&&html.includes('data-tested-sort="profit"'),'coluna Lucro total ausente ou não ordenável');
+assert.ok(html.includes('data-tested-col="margin"')&&html.includes('data-tested-sort="margin"')&&html.includes("['margin','Margem (%)']"),'Margem (%) precisa estar na tabela, ordenação e seletor Colunas');
+assert.ok(html.includes('domain.profitMarginPercent(p)')&&html.includes('Margem = lucro total ÷ total faturado × 100.'),'margem deve usar a fórmula compartilhada no domínio e explicar o denominador no cabeçalho');
+const testedTemplate=await readFile(new URL('../src/tested-products/template.html',import.meta.url),'utf8');
+assert.ok(testedTemplate.indexOf('data-tested-col="profit"')<testedTemplate.indexOf('data-tested-col="margin"')&&testedTemplate.indexOf('data-tested-col="margin"')<testedTemplate.indexOf('data-tested-col="period"'),'Margem (%) deve ficar após Lucro total e antes de Período');
 assert.ok(html.includes("Number.isFinite(p.totalProfit)&&p.totalProfit<0?' negative':''")&&html.includes('.negative{color:var(--red)}'),'lucro total negativo deve ficar vermelho apenas quando estiver abaixo de zero');
 assert.ok(html.includes('data-tested-col="sales"')&&html.includes('data-tested-sort="sales"')&&html.includes('>Vendas<span'),'coluna Vendas ausente ou não ordenável');
 assert.ok(html.includes('.catalog-table th:not(:first-child),.catalog-table td:not(:first-child){text-align:center}')&&html.includes('.catalog-table th:not(:first-child) .sort-btn{text-align:center}'),'alinhamento centralizado das demais colunas de Produtos Testados ausente');

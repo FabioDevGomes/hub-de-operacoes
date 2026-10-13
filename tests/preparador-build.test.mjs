@@ -7,12 +7,13 @@ import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 import vm from 'node:vm';
 import {test} from 'node:test';
+import { publishedPage, copyReleaseMetadata } from './helpers/published-page.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url)),run=promisify(execFile);
 const canonical=join(root,'src/preparador-MCC/index.html');
 test('Preparador published page matches canonical source and preserves executable contracts',async()=>{
   const source=await readFile(canonical),published=await readFile(join(root,'dist/preparador-MCC/index.html'));
-  assert.deepEqual(published,source,'run node build.mjs: Preparador must come from src, without transformations');
+  assert.equal(published.toString('utf8'),publishedPage(source),'Preparador must come from canonical src plus shared version metadata');
   const html=source.toString('utf8');
   const d1Panel=html.indexOf('id="d1-changes-panel"');
   const reportsPanel=html.indexOf('<section class="panel" aria-labelledby="step1-title">');
@@ -61,6 +62,7 @@ test('clean isolated build creates Preparador and rebuilds from src without publ
   });
   await cp(join(root,'build.mjs'),join(temporary,'build.mjs'));
   await mkdir(join(temporary,'scripts'));
+  await copyReleaseMetadata(temporary);
   await cp(join(root,'scripts/distribution-privacy.mjs'),join(temporary,'scripts/distribution-privacy.mjs'));
   await cp(join(root,'src'),join(temporary,'src'),{recursive:true});
   // Local backups are deliberately not canonical inputs or distribution files.
@@ -69,15 +71,19 @@ test('clean isolated build creates Preparador and rebuilds from src without publ
   const build=()=>run(process.execPath,[join(temporary,'build.mjs')],{cwd:temporary,windowsHide:true,maxBuffer:1024*1024});
   await build();
   const output=join(temporary,'dist/preparador-MCC/index.html');
-  assert.deepEqual(await readFile(output),source);
+  assert.equal(await readFile(output,'utf8'),publishedPage(source));
   assert.deepEqual(await readdir(join(temporary,'dist/preparador-MCC')),['index.html']);
   // Corrupt only the disposable generated fixture, never the real dist or base.
   await writeFile(output,'synthetic stale output','utf8');
   await build();
-  assert.deepEqual(await readFile(output),source,'rebuild must restore the canonical page');
+  assert.equal(await readFile(output,'utf8'),publishedPage(source),'rebuild must restore the canonical page and version');
   const changed=Buffer.concat([source,Buffer.from('\n<!-- synthetic build marker -->\n')]);
   await writeFile(join(temporary,'src/preparador-MCC/index.html'),changed);
   await build();
-  assert.deepEqual(await readFile(output),changed,'source changes must propagate on build');
+  assert.equal(await readFile(output,'utf8'),publishedPage(changed),'source changes must propagate on build');
   assert.deepEqual(await readFile(canonical),source,'test must not alter the real source');
+  const lastPublished=await readFile(output,'utf8');
+  await writeFile(join(temporary,'VERSION'),'99.0.0\n');
+  await assert.rejects(build(),/README não corresponde a VERSION/);
+  assert.equal(await readFile(output,'utf8'),lastPublished,'release inconsistency must fail before replacing published pages');
 });

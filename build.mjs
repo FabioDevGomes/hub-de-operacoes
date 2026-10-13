@@ -1,9 +1,11 @@
 import { cp, readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { copyPublicDirectory, isolatePrivateDistributionFiles } from './scripts/distribution-privacy.mjs';
+import { readRelease, versionPage, versionPublicPages } from './scripts/system-version.mjs';
 
 const root = resolve(import.meta.dirname);
 if (process.argv.length > 2) throw new Error('O build compartilhável não aceita dados operacionais. Carregue os dados pelo sistema no banco local do usuário.');
+const { version } = await readRelease(root);
 
 const emptyManifest = { schema: "manifesto_mcc_v1", separacao_temporal: { D_menos_1: { datas_detectadas: [] }, D_zero: { datas_detectadas: [] } }, campanhas: [] };
 const [template, databaseModule, productCatalogModule, viewRegistryModule] = await Promise.all([
@@ -25,7 +27,10 @@ output = output.replace("__PRODUCT_DIARY_VIEW__", await readFile(resolve(root, "
 const faviconBase64 = template.match(/<link rel="icon" type="image\/png" href="data:image\/png;base64,([^"]+)"/)?.[1];
 if (!faviconBase64) throw new Error("Favicon do painel não encontrado no template.");
 await mkdir(resolve(root, "dist"), { recursive: true });
-await writeFile(resolve(root, "dist/index.html"), output, "utf8");
+await writeFile(resolve(root, "dist/index.html"), versionPage(output, version), "utf8");
+for (const file of ['system-version.js', 'system-version.css']) {
+  await cp(resolve(root, 'src', file), resolve(root, 'dist', file));
+}
 await writeFile(resolve(root, "dist/database.js"), databaseModule, "utf8");
 await writeFile(resolve(root, "dist/favicon.png"), Buffer.from(faviconBase64, "base64"));
 await cp(resolve(root, "src/brand-logo.png"), resolve(root, "dist/brand-logo.png"));
@@ -49,9 +54,10 @@ await cp(resolve(root, "src/table-edit-actions.css"), resolve(root, "dist/table-
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
-await cp(resolve(root, "src/preparador-MCC/index.html"), resolve(root, "dist/preparador-MCC/index.html"));
+await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");
 for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance']) {
   await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
+  await versionPublicPages(resolve(root, 'src', directory), resolve(root, 'dist', directory), version);
 }
 await cp(resolve(root, "src/legacy-totais-migration.mjs"), resolve(root, "dist/legacy-totais-migration.mjs"));
 // Old builds may have left private payloads behind. Preserve those copies outside

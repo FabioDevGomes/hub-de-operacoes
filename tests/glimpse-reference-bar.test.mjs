@@ -36,3 +36,23 @@ test('barra comum preserva abas/retorno, salva só Glimpse e valida confirmaçã
     panel.classes.add('hidden');observers.forEach(fn=>fn());assert.equal(save.disabled,true);assert.equal(status.hidden,true);
   } finally {for(const [key,descriptor] of Object.entries(original)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 });
+
+test('shared bar enables Trends without sending iframe saves or weakening Glimpse/readonly states',()=>{
+  const original=Object.fromEntries(['document','window','location','MutationObserver'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
+  const sheet=new Element(),header=new Element('sheet-top'),tabs=new Element('tabs'),back=new Element(),panel=new Element(),trendsPanel=new Element();
+  header.append(back);sheet.append(header,tabs);panel.classes.add('hidden');
+  const messages=[],observers=[];const frame={contentWindow:{postMessage:(...args)=>messages.push(args)}};
+  globalThis.document={createElement:()=>new Element()};globalThis.window={addEventListener(){}};
+  globalThis.location={origin:'http://localhost'};globalThis.MutationObserver=class{constructor(handler){observers.push(handler)}observe(){}};
+  try{
+    const bar=mountGlimpseReferenceBar({sheet,frame,panel,backButton:back,trendsPanel});
+    const save=bar.querySelector('.sheet-bar-actions').children.find(item=>item.textContent==='Salvar');save.dataset={};
+    assert.equal(save.disabled,false);assert.equal(save.id,'saveSheetButton');assert.match(save.attributes['aria-label'],/Google Trends/);
+    save.listeners.get('click')();assert.equal(messages.length,0,'Trends is not an iframe save');
+    save.dataset.trendsSaving='true';observers.forEach(fn=>fn());assert.equal(save.disabled,true);
+    save.dataset.trendsSaving='false';observers.forEach(fn=>fn());assert.equal(save.disabled,false);
+    trendsPanel.classes.add('hidden');observers.forEach(fn=>fn());assert.equal(save.disabled,true);
+    panel.classes.delete('hidden');observers.forEach(fn=>fn());assert.equal(save.disabled,false);
+    save.listeners.get('click')();assert.equal(messages.length,1);assert.equal(save.disabled,true,'Glimpse retains its own in-flight guard');
+  }finally{for(const [key,descriptor] of Object.entries(original)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}}
+});

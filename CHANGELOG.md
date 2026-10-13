@@ -2,6 +2,10 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.12.0] - 2026-10-13
+
+- Força cotação PTAX antes de cada importação MCC
+
 ## [1.11.0] - 2026-10-13
 
 - Adiciona cotação PTAX USD/BRL e preserva taxas por captura

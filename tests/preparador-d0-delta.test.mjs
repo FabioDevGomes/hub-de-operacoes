@@ -190,7 +190,8 @@ assert.ok(html.includes('id="apply-feedback" role="status" aria-live="polite"'),
 assert.ok(html.indexOf('id="apply-feedback"')<html.indexOf('id="apply-manifest"'),'status deve ficar no espaço entre o título e o botão');
 assert.ok(!html.includes('id="apply-panel"')&&!html.includes('Status da atualização'),'seção 3 de status da atualização deve ser removida');
 assert.ok(html.includes('<h2 id="step3-title">Prévia do manifesto</h2>'),'prévia deve assumir o número 3 após a remoção da antiga seção');
-assert.ok(html.includes("feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s) · ${formatPanelUpdateTime(applied.base.atualizado_em)} (Brasília).`"),'o cabeçalho deve informar quando a atualização terminar com sucesso e o horário salvo na base');
+assert.ok(html.includes("feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s) · ${formatPanelUpdateTime(applied.base.atualizado_em)} (Brasília).${exchangeRateLabel ? ` ${exchangeRateLabel}` : ''}`"),'o cabeçalho deve informar sucesso, horário salvo e o estado da cotação aplicada');
+assert.ok(html.includes("applied.exchangeRateQuote?.isStale ? 'apply-feedback warning' : 'apply-feedback success'")&&html.includes('.apply-feedback.warning { background: var(--amber-soft); color: var(--amber); }'),'cotação indisponível deve ser distinguida visualmente sem invalidar a atualização da base');
 assert.ok(html.includes('feedback.textContent = `Falha ao atualizar a base · ${reason}`'),'o cabeçalho deve informar falhas ao atualizar a base');
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim())new vm.Script(match[1]);
 console.log('comparação de deltas D0 ok');

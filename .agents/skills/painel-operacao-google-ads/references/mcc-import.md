@@ -21,6 +21,10 @@
 - GEO só é preservado se a fonte trouxer um campo explicitamente mapeado para alvo geográfico; não deduzir países pelo nome da oferta/campanha.
 - Estado `ausente`, zero confirmado e `invalido` permanecem distintos.
 
+### Cotação USD/BRL na confirmação
+
+O clique explícito em **Atualizar base** força uma consulta à cotação PTAX de venda do BCB, mesmo quando o cache tem menos de 30 minutos. A consulta é aguardada antes de carimbar `exchange_rate_usd_brl`, converter campos USD, calcular `overview_cards` e iniciar a gravação. A mesma cotação é usada nos períodos recebidos e no custo dedicado de D0; a Visão Geral recebe o novo valor pelo mecanismo de armazenamento entre abas e pelo evento da base. Se a consulta falhar, o serviço retorna a última taxa válida marcada como desatualizada ou o fallback legado de R$ 5,10; a importação MCC continua e o feedback âmbar deve identificar a taxa utilizada. A falha de rede não bloqueia nem reporta erro de persistência. Capturas já gravadas não são recalculadas; não há alteração de schema. Regressões: `tests/overview-cards-persistence.test.mjs`, `tests/preparador-d0.test.mjs` e `tests/preparador-update-feedback.test.mjs`.
+
 ### Apresentação compacta das capturas
 
 Depois de receber D−1 ou D0, o cartão apresenta os metadados em uma grade compacta (origem, campanhas, data e moedas). Os cartões de captura vazios mostram apenas o estado aguardando; não oferecem área de texto nem seletor de arquivo. Para substituir dados, faça uma nova captura na extensão.

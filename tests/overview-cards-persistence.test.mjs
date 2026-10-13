@@ -71,25 +71,31 @@ test('table-only adapter skips card projections and the MCC apply saves summary 
   const sandbox=vm.createContext({OverviewDomain:{manifestCaptureInfo:forbidden},state:{database:{}},campaignRows:()=>[],derivedContext:()=>({salesAdjustments:new Map()}),manifestDates:()=>({}),activeCampaignRows:forbidden,currentCampaignRows:()=>[],localBaseUpdateLabel:()=>'',overviewRowsForMode:()=>[]});
   vm.runInContext(line,sandbox);assert.equal(sandbox.overviewSnapshot({includeCards:false}).pendingSaleCount,null);
   const html=await readFile(new URL('../src/preparador-MCC/index.html',import.meta.url),'utf8'),start=html.indexOf('    async function applyManifestToPanel('),end=html.indexOf('\n    }',start)+6;
-  let persisted=fixture(),writes=0,notifications=0,closed=0,fail=false;
+  let persisted=fixture(),writes=0,notifications=0,closed=0,fail=false,quoteCalls=0,quoteReady=false;
   const quote={rate:6.7,quoteDate:'2026-10-13',retrievedAt:timestamp,source:'Banco Central do Brasil · PTAX venda'};
+  let nextQuote=quote;
   const applyContext=vm.createContext({
     window:{CampaignDatabase:{...database,importManifest(...args){const result=database.importManifest(...args);result.mccBillingSales=[];result.reconciledSales=[];return result}},OverviewCardsDomain:cards},
     location:{hostname:'127.0.0.1',port:'8765'},PANEL_USD_BRL_RATE:5.1,
-    panelUsdBrlRateService:{refreshIfDue:async()=>quote},
-    panelManifestWithExchangeRate:(manifest,currentQuote)=>({
-      ...structuredClone(manifest),
-      campanhas:manifest.campanhas.map(item=>({...structuredClone(item),metricas_D_zero:{...structuredClone(item.metricas_D_zero),exchange_rate_usd_brl:currentQuote.rate}}))}),
+    panelUsdBrlRateService:{refresh:async options=>{quoteCalls++;assert.equal(options.force,true);quoteReady=true;return nextQuote}},
+    panelManifestWithExchangeRate:(manifest,currentQuote)=>{
+      assert.equal(quoteReady,true,'the latest quote must be resolved before preparing calculations');
+      return {...structuredClone(manifest),
+      campanhas:manifest.campanhas.map(item=>({...structuredClone(item),metricas_D_zero:{...structuredClone(item.metricas_D_zero),exchange_rate_usd_brl:currentQuote.rate}}))};
+    },
     openPanelDatabase:async()=>({close(){closed++}}),readPanelBase:async()=>persisted,panelManifestRow:rowFactory,
     writePanelBase:async(_db,base)=>{writes++;assert.equal(cards.read(base).version,1);assert.equal(cards.read(base).computedAt,base.atualizado_em);if(fail)throw new Error('write failed');persisted=json(base)},
     BroadcastChannel:class{postMessage(){notifications++}close(){}}
   });
   vm.runInContext(html.slice(start,end),applyContext);
   await applyContext.applyManifestToPanel(capture(0,'d0',50));
-  assert.equal(persisted.overview_cards.summary.d0.investment.value,61);assert.equal(persisted.overview_cards.exchangeRate,quote.rate);assert.equal(persisted.manifesto_atual.campanhas[0].metricas_D_zero.exchange_rate_usd_brl,quote.rate);assert.equal(writes,1);assert.equal(notifications,1);
+  assert.equal(persisted.overview_cards.summary.d0.investment.value,61);assert.equal(persisted.overview_cards.exchangeRate,quote.rate);assert.equal(persisted.manifesto_atual.campanhas[0].metricas_D_zero.exchange_rate_usd_brl,quote.rate);assert.equal(writes,1);assert.equal(notifications,1);assert.equal(quoteCalls,1);
+  nextQuote={...quote,rate:5.1,isStale:true,isFallback:true,error:'BCB indisponível'};
+  const staleApplied=await applyContext.applyManifestToPanel(capture(0,'d0',50));
+  assert.equal(staleApplied.exchangeRateQuote.isFallback,true);assert.equal(persisted.overview_cards.exchangeRate,5.1);assert.equal(quoteCalls,2);assert.equal(writes,2);assert.equal(notifications,2,'fallback permite concluir a atualização MCC');
   const before=JSON.stringify(persisted);fail=true;
   await assert.rejects(applyContext.applyManifestToPanel(capture(0,'d0',90)),/write failed/);
-  assert.equal(JSON.stringify(persisted),before);assert.equal(notifications,1);assert.equal(closed,2);
+  assert.equal(JSON.stringify(persisted),before);assert.equal(notifications,2);assert.equal(closed,3);assert.equal(quoteCalls,3);
 });
 
 test('the real MCC write includes base and summary in one transaction, no separate cache store or write',async()=>{

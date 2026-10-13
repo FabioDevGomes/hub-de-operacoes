@@ -27,6 +27,9 @@ assert.ok(html.includes('eventStore.add(event)'),'Preparador MCC não persiste e
 assert.ok(html.includes("source:'preparador_mcc'"),'importação do Preparador MCC não identifica a origem dos eventos');
 const applyFlow=html.match(/async function applyManifestToPanel\(manifest\) \{[\s\S]*?\n    \}/)?.[0]||'';
 assert.ok(applyFlow.includes('const databaseApi = window.CampaignDatabase;'),'aplicação D0/D-1 deve usar o módulo central, não uma implementação paralela');
+assert.ok(applyFlow.includes('panelUsdBrlRateService.refresh({force:true})'),'cada confirmação MCC deve forçar a consulta PTAX antes de preparar conversões');
+assert.ok(applyFlow.indexOf('panelUsdBrlRateService.refresh({force:true})')<applyFlow.indexOf('panelManifestWithExchangeRate(manifest, quote)')&&applyFlow.indexOf('panelManifestWithExchangeRate(manifest, quote)')<applyFlow.indexOf('OverviewCardsDomain.create(base'),'cotação atual deve ser resolvida antes das conversões e do resumo da Visão Geral');
+assert.ok(applyFlow.includes('exchangeRateQuote:quote'),'a taxa (inclusive estado stale/fallback) deve chegar ao feedback de importação');
 assert.ok(applyFlow.includes('${item.shortName}: ${item.oldDate} → ${item.newDate}'),'confirmação de mudança de data deve mostrar somente a campanha curta e as datas antes/depois');
 assert.ok(!applyFlow.includes('${item.oldName} → ${item.newName}'),'confirmação não deve repetir os nomes completos da campanha');
 assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"),'Preparador deve bloquear atualização se o módulo central não estiver disponível');

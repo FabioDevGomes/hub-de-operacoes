@@ -198,6 +198,7 @@
     .apply-feedback { flex: 1 1 0; min-width: 0; margin: 0 auto 0 8px; padding: 6px 10px; border-radius: 8px; font-size: .76rem; font-weight: 700; line-height: 1.35; text-align: center; }
     .apply-feedback.progress { background: var(--surface-soft); color: var(--muted); }
     .apply-feedback.success { background: var(--green-soft); color: var(--green); }
+    .apply-feedback.warning { background: var(--amber-soft); color: var(--amber); }
     .apply-feedback.error { background: var(--red-soft); color: var(--red); }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .empty-copy { margin: 0; color: var(--muted); text-align: center; padding: 12px; }
@@ -432,6 +433,7 @@
     const PANEL_BASE_KEY = 'atual';
     const panelUsdBrlRateService = globalThis.UsdBrlRateService?.create?.() || {
       getState:() => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
+      refresh:async () => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
       refreshIfDue:async () => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
       subscribe:() => () => {}, start:() => () => {}
     };
@@ -826,6 +828,18 @@
         : 'horário indisponível';
     }
 
+    function formatPanelExchangeRate(quote) {
+      const rate = Number(quote?.rate);
+      if (!Number.isFinite(rate) || rate <= 0) return '';
+      const rateText = new Intl.NumberFormat('pt-BR', { minimumFractionDigits:4, maximumFractionDigits:4 }).format(rate);
+      const quoteDateValue = typeof quote.quoteDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(quote.quoteDate) ? new Date(`${quote.quoteDate}T00:00:00Z`) : null;
+      const quoteDate = quoteDateValue && Number.isFinite(quoteDateValue.getTime()) ? new Intl.DateTimeFormat('pt-BR', { timeZone:'UTC' }).format(quoteDateValue) : '';
+      const details = `US$ 1 = R$ ${rateText}${quoteDate ? ` (${quoteDate})` : ''}.`;
+      if (!quote.isStale) return `PTAX venda consultada: ${details}`;
+      const source = quote.isFallback ? 'a taxa legada de compatibilidade' : 'a última cotação válida salva';
+      return `Aviso: a PTAX não foi confirmada; usada ${source}: ${details}`;
+    }
+
     async function applyManifestToPanel(manifest) {
       if (location.hostname !== '127.0.0.1' || location.port !== '8765') throw new Error('Abra o Preparador em http://127.0.0.1:8765 pelo Hub. O endereço localhost usa outra base local e não atualiza a Visão Geral.');
       if (!Array.isArray(manifest?.campanhas) || !manifest?.separacao_temporal) throw new Error('O manifesto não contém a estrutura esperada.');
@@ -843,7 +857,7 @@
           const blob = new Blob([JSON.stringify(original)], { type:'application/json' }), url = URL.createObjectURL(blob), link = document.createElement('a');
           link.href = url; link.download = `base-painel-antes-correcao-data-${new Date().toISOString().slice(0,10)}.json`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
-        const quote = await panelUsdBrlRateService.refreshIfDue(), exchangeRate = Number(quote?.rate) || PANEL_USD_BRL_RATE, importedManifest = panelManifestWithExchangeRate(manifest, quote);
+        const quote = await panelUsdBrlRateService.refresh({force:true}), exchangeRate = Number(quote?.rate) || PANEL_USD_BRL_RATE, importedManifest = panelManifestWithExchangeRate(manifest, quote);
         PANEL_USD_BRL_RATE = exchangeRate;
         const rowFactory = campaign => panelManifestRow(campaign, exchangeRate), importOptions = { source:'preparador_mcc', confirmedDateChanges:dateChanges };
         const preview = databaseApi.importManifest(original, importedManifest, rowFactory, importOptions);
@@ -861,7 +875,7 @@
         const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=7'):null;
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em, provisionalSaleIds:linkedSales.map(sale=>String(sale.id)) }); channel.close(); }
-        return { base, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };
+        return { base, exchangeRateQuote:quote, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };
       } finally {
         db.close();
       }
@@ -2090,12 +2104,14 @@
     q('#apply-manifest').addEventListener('click', async () => {
       if (!currentResult?.manifest) return;
       const button = q('#apply-manifest'), feedback = q('#apply-feedback');
-      feedback.className = 'apply-feedback progress'; feedback.textContent = 'Atualizando a base…'; feedback.hidden = false;
+      feedback.className = 'apply-feedback progress'; feedback.textContent = 'Consultando a PTAX e atualizando a base…'; feedback.hidden = false;
       button.disabled = true; button.textContent = 'Atualizando…';
       try {
         const applied = await applyManifestToPanel(currentResult.manifest);
         const count = currentResult.manifest.campanhas.length;
-        feedback.className = 'apply-feedback success'; feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s) · ${formatPanelUpdateTime(applied.base.atualizado_em)} (Brasília).`; feedback.hidden = false;
+        const exchangeRateLabel = formatPanelExchangeRate(applied.exchangeRateQuote);
+        feedback.className = applied.exchangeRateQuote?.isStale ? 'apply-feedback warning' : 'apply-feedback success';
+        feedback.textContent = `Base atualizada com sucesso · ${count} campanha(s) · ${formatPanelUpdateTime(applied.base.atualizado_em)} (Brasília).${exchangeRateLabel ? ` ${exchangeRateLabel}` : ''}`; feedback.hidden = false;
         q('#announcer').textContent = feedback.textContent;
         button.textContent = 'Atualizada ✓';
       } catch (error) {

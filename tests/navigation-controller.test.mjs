@@ -11,7 +11,7 @@ vm.runInContext(registrySource,context);
 vm.runInContext(source,context);
 const registry=context.window.PanelViews;
 const routes=registry.enabledViews().filter(view=>view.id!=='presell');
-const groups={totals:'operation',tested:'products',macro:'finance',billing:'finance',cpa:'analysis',accounts:'analysis',observability:'analysis','curation-observability':'analysis',time:'personal','personal-finance':'personal',copy:'creation'};
+const groups={totals:'operation',tested:'products',tracking:'operation',macro:'finance',billing:'finance',cpa:'analysis',accounts:'analysis',observability:'analysis','curation-observability':'analysis',time:'personal','personal-finance':'personal',copy:'creation'};
 function element(group){
   const classes=new Set(['hidden']);
   return {textContent:'',dataset:{sidebarGroup:group},onclick:null,
@@ -51,7 +51,7 @@ function assertFrame(h,id){
   assert.equal(h.historyWrites.at(-1),registry.urlFor(id,'/'));
 }
 
-test('all 144 transitions leave exactly one section, one menu and the correct body mode',()=>{
+test('all registered transitions leave exactly one section, one menu and the correct body mode',()=>{
   const ids=[...routes.map(view=>view.id),'product'],h=harness(),database=h.state.database;
   for(const from of ids)for(const to of ids){
     h.controller.open(from);h.controller.open(to);assertFrame(h,to);

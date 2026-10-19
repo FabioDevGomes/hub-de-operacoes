@@ -384,6 +384,7 @@
   <script src="/overview-domain.js?v=19"></script>
   <script src="/overview/cards-domain.js?v=1"></script>
   <script src="/storage/hub-database.js?v=1"></script>
+  <script src="/overview/base-session-cache.js?v=1"></script>
   <script src="/usd-brl-rate.js?v=1"></script>
   <script>
   (() => {
@@ -837,7 +838,7 @@
       const details = `US$ 1 = R$ ${rateText}${quoteDate ? ` (${quoteDate})` : ''}.`;
       if (!quote.isStale) return `PTAX venda consultada: ${details}`;
       const source = quote.isFallback ? 'a taxa legada de compatibilidade' : 'a última cotação válida salva';
-      return `Aviso: a PTAX não foi confirmada; usada ${source}: ${details}`;
+      return `Aviso: a cotação não foi confirmada; usada ${source}: ${details}`;
     }
 
     async function applyManifestToPanel(manifest) {
@@ -872,8 +873,10 @@
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
-        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=7'):null;
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=9'):null;
+        window.OverviewBaseSessionCache?.invalidate();
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
+        window.OverviewBaseSessionCache?.invalidate();
         if (typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel('painel-campanhas'); channel.postMessage({ type:'base-updated', atualizado_em:base.atualizado_em, provisionalSaleIds:linkedSales.map(sale=>String(sale.id)) }); channel.close(); }
         return { base, exchangeRateQuote:quote, conflicts:preview.conflicts, overwritten:overwrite, movimentos:applied.movimentos || preview.movimentos || null, billingSalesSynced:linkedSales.length, mccSalesSynced:mccSales.length };
       } finally {
@@ -956,10 +959,13 @@
     }
 
     const MCC_OPERATIONAL_TIME_ZONE = 'America/Sao_Paulo';
-    function expectedMccD1ReportDate(now = new Date()) {
+    function expectedMccD0ReportDate(now = new Date()) {
       const parts = new Intl.DateTimeFormat('en-CA', { timeZone:MCC_OPERATIONAL_TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(now);
       const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-      return new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)) - 86400000).toISOString().slice(0, 10);
+      return `${values.year}-${values.month}-${values.day}`;
+    }
+    function expectedMccD1ReportDate(now = new Date()) {
+      return addIsoDay(expectedMccD0ReportDate(now), -1);
     }
     function addIsoDay(value, amount = 1) {
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
@@ -1092,7 +1098,7 @@
 
     function csvCell(value) { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
 
-    async function decodeMccGridCapture(capture) {
+    async function decodeMccGridCapture(capture, { validateD0Date = true, now = new Date() } = {}) {
       if (!capture || capture.schema !== 'mcc-d0-grid-v3' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem ou versão da captura MCC incompatível. Atualize a extensão Hub MCC D0 para a versão mais recente e tente novamente.');
       if (!canonicalAccountId(capture.managerAccountId) || !/^MCC(?:\s+.+)?$/i.test(String(capture.managerAccountName || '').trim())) throw new Error('A captura não trouxe uma identificação válida da MCC. Atualize a extensão e faça uma nova captura no contexto da MCC desejada.');
       if (!Array.isArray(capture.records) || capture.records.length !== capture.campaignCount || !capture.records.length) throw new Error('A contagem de campanhas da captura não confere.');
@@ -1101,6 +1107,12 @@
       const unavailableFields = requiredFields.filter(fieldName => !capture.fields?.[fieldName]?.found || capture.fields?.[fieldName]?.hidden || capture.fields?.[fieldName]?.ambiguous);
       if (unavailableFields.length) throw new Error(`Cabeçalho D0 obrigatório ausente ou ambíguo: ${unavailableFields.join(', ')}.`);
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(capture.reportDate || '') || extractDates(capture.reportDate).length !== 1) throw new Error('A data do relatório D0 precisa ser uma única data explícita da MCC.');
+      if (validateD0Date) {
+        const captureInstant = new Date(capture.capturedAt);
+        const comparisonDate = Number.isNaN(captureInstant.getTime()) ? now : captureInstant;
+        const expectedDate = expectedMccD0ReportDate(comparisonDate);
+        if (capture.reportDate !== expectedDate) throw new Error(`A data capturada foi ${capture.reportDate}, mas D0 precisa corresponder a hoje (${expectedDate}, ${MCC_OPERATIONAL_TIME_ZONE}). Selecione a data de hoje; a captura não foi instalada.`);
+      }
       const names = capture.records.map(record => String(record.campaign || '').trim());
       if (names.some(name => !name) || new Set(names).size !== names.length) throw new Error('Há nome de campanha vazio ou duplicado; não associei linhas arbitrariamente.');
       const accountMissing = capture.records.filter(record => !String(record.account || '').trim());
@@ -1134,8 +1146,8 @@
       if (!capture || capture.schema !== 'mcc-d1-grid-v3' || capture.periodRole !== 'd1' || capture.source !== 'mcc_chrome_extension') throw new Error('Origem, papel ou versão da captura MCC D−1 incompatível. Atualize a extensão Hub MCC D0 para a versão mais recente e tente novamente.');
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(capture.reportDate || '') || extractDates(capture.reportDate).length !== 1) throw new Error('D−1 precisa conter uma única data explícita da MCC.');
       const expectedDate = expectedMccD1ReportDate();
-      if (capture.reportDate !== expectedDate) throw new Error(`A data capturada foi ${capture.reportDate}, mas D−1 esperado para hoje é ${expectedDate} (${MCC_OPERATIONAL_TIME_ZONE}). A captura não foi instalada.`);
-      const decoded = await decodeMccGridCapture({ ...capture, schema:'mcc-d0-grid-v3' });
+      if (capture.reportDate > expectedDate) throw new Error(`A data capturada foi ${capture.reportDate}, depois do D−1 esperado para hoje (${expectedDate}, ${MCC_OPERATIONAL_TIME_ZONE}). Selecione D−1 ou uma data anterior. A captura não foi instalada.`);
+      const decoded = await decodeMccGridCapture({ ...capture, schema:'mcc-d0-grid-v3' }, { validateD0Date:false });
       const text = decoded.text.replace(/^Relatório D0:/, 'Relatório D−1:');
       const bytes = new TextEncoder().encode(text);
       const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -1471,6 +1483,9 @@
       const previousMccCampaigns = previousCampaigns.filter(belongsToCurrentManager);
       const knownMccCampaigns = managerId ? baseCampaigns.filter(campaign => canonicalAccountId(campaign?.mcc_id) === managerId) : [];
       const knownCampaigns = managerId ? [...knownMccCampaigns, ...previousMccCampaigns] : previousCampaigns;
+      // Sem D0 da mesma data, o próprio relatório atual já é o acumulado do dia:
+      // a primeira captura deve cobrir a virada (00:00) até o horário desta leitura,
+      // sem subtrair D−1 nem um D0 de outra data.
       const comparableDate = Boolean(date && previousDate === date && (!managerId || previousMccCampaigns.length > 0));
       const numeric = field => {
         if (!field || field.estado === 'ausente' || field.estado === 'invalido' || field.valor == null) return null;
@@ -1550,6 +1565,8 @@
       const date = source?.dates?.length === 1 ? source.dates[0] : null;
       const previousManifest = base?.manifesto_atual;
       const previousDate = previousManifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
+      // O fechamento só pode usar como corte um D0 da própria data D−1.
+      // Um D0 do dia seguinte contém tráfego posterior à virada e nunca entra aqui.
       const comparableDate = Boolean(date && previousDate === date);
       const previousCampaigns = previousManifest?.campanhas || [];
       const aliases = new Map((dateChanges || []).map(item => [String(item.newName || '').trim(), String(item.oldName || '').trim()]));

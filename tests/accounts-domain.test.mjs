@@ -96,6 +96,33 @@ test('account header MCC labels combine explicit names and label missing associa
   assert.equal(report.accountMccLabels.has('Sem conta'),false);
 });
 
+test('account columns and filter options prioritize e-com, place Nutra last, and sort new accounts automatically',()=>{
+  const sample = [
+    row('product','104','ativa',70,{mccName:'MCC Nutra'}),
+    row('product','202','ativa',70,{mccName:'MCC E-commerce'}),
+    row('product','802','ativa',70,{mccName:'MCC Ads'}),
+    row('product','Sem conta','ativa',70,{mccName:''}),
+    row('product','102','ativa',70,{mccName:'MCC NUTRA'}),
+    row('product','201','ativa',70,{mccName:'MCC e-com'}),
+    row('product','150','ativa',70,{mccName:''}),
+    row('product','999','ativa',70,{mccName:'MCC e-com'}),
+    row('product','999','ativa',70,{mccName:'MCC Nutra'})
+  ];
+  const filters = {...createAccountState(),status:'all'};
+  const report = buildAccountReport(sample,filters);
+  const expected = ['201','202','150','802','102','104','999','Sem conta'];
+  assert.deepEqual(report.accounts,expected);
+  assert.deepEqual(report.accountOptions,expected);
+
+  const withNewNutraAccount = buildAccountReport([
+    ...sample,
+    row('new product','103','ativa',70,{mccName:'MCC Nutra'})
+  ],filters);
+  assert.deepEqual(withNewNutraAccount.accounts,
+    ['201','202','150','802','102','103','104','999','Sem conta']);
+  assert.deepEqual(withNewNutraAccount.accountOptions,withNewNutraAccount.accounts);
+});
+
 test('sorting keeps null last in either direction and does not confuse zero', () => {
   const sample = [
     row('missing','A','ativa',70,{totals:{investment:null}}),

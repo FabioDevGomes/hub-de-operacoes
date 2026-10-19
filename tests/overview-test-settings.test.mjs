@@ -252,6 +252,7 @@ test('adaptador grava explicitamente e restaura estado anterior em falha sem toc
   const base=database.create();base.campanhas=[{id:'a',nome_mcc:'Produto exemplo 91%'}];
   let fail=false,writes=0,renders=0,notifications=0;const messages=[];
   const adapter={state:{database:base},CampaignDatabase:database,derivedCache:{},persistLocalBase:async()=>{writes++;if(fail)throw Error('Não salvou');},renderTotals:()=>{renders++;},announceBaseUpdated:()=>{notifications++;},toast:()=>{},fmtPct:format.pct,fmtMoney:format.money,baseChannel:{postMessage:message=>messages.push(json(message))},getOverviewAlertStorage:async()=>({saveRemainingAlerts:async values=>{if(fail)throw Error('Não salvou');return values}})};
+  adapter.overviewBaseSessionCache={invalidate(){}};
   vm.runInNewContext(functions+'\nglobalThis.editCommission=editCommissionTestPercent;globalThis.editAlert=editRemainingAlert;',adapter);
   await adapter.editCommission('a',35);assert.equal(adapter.state.database.campanhas[0].limite_teste_comissao_pct,35);assert.equal(writes,1);assert.equal(renders,1);
   const cache=adapter.derivedCache,savedAt=adapter.state.database.atualizado_em;
@@ -264,6 +265,7 @@ test('salvar regras do limite não usa atualização operacional e propaga somen
   const source=panel.match(/    async function editTestLimitSettings\([^\n]+/)[0],base=database.create(),settings={cpaMinimumPercent:85,commissionPercent:45,roiBySales:{1:5,2:15,3:25,4:35}};
   base.atualizado_em='2026-10-06T10:00:00Z';let renders=0;const messages=[];
   const adapter={state:{database:base},derivedCache:{},renderTotals:()=>renders++,baseChannel:{postMessage:message=>messages.push(json(message))},getOverviewTestRuleStorage:async()=>({saveTestLimitSettings:async()=>settings})};
+  adapter.overviewBaseSessionCache={invalidate(){}};
   vm.runInNewContext(source+'\nglobalThis.editRules=editTestLimitSettings;',adapter);
   const result=await adapter.editRules(settings);
   assert.deepEqual(json(result),settings);assert.deepEqual(json(adapter.state.database.regras_limite_teste),settings);assert.equal(adapter.state.database.atualizado_em,'2026-10-06T10:00:00Z');assert.equal(adapter.derivedCache,null);assert.equal(renders,1);assert.deepEqual(messages,[{type:'overview-test-rules-updated'}]);

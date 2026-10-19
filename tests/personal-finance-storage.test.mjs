@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ensurePersonalFinanceStores, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
+import { ensurePersonalFinanceStores, recordReserveMovement, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
 
 class NameList {
   constructor() { this.values = new Set(); }
@@ -44,6 +44,9 @@ assert.equal(counts.groups, 1);
 assert.equal(db.stores.get(STORES.groups).rows.has('obsolete'), false, 'restauração substitui somente quando há bundle validado');
 assert.equal(db.stores.get(STORES.entries).rows.get('2026-09:c1').actual_amount, null, 'valor realizado em branco permanece em branco no backup');
 assert.equal(db.stores.get(STORES.months).rows.get('2026-09').daily_actual_targets_applied_on, '2026-09-06', 'a restauração mantém o marcador que protege edições manuais durante o dia');
+const movement = { movement_id:'withdraw-1', type:'withdrawal', amount:500, currency:'BRL', created_at:'2026-10-18T12:00:00.000Z' };
+writeBundleToTransaction(transaction, { ...bundle, months:[...bundle.months, { month_key:'2026-10' }], funds:[{ snapshot_id:'2026-10:cdi', item_id:'cdi', month_key:'2026-10', name:'CDI', amount:16254, currency:'BRL', type:'reserve', reserve_movements:[movement] }] });
+assert.deepEqual(db.stores.get(STORES.funds).rows.get('2026-10:cdi').reserve_movements, [movement], 'exportação/restauração do backup preserva o histórico dos resgates/impostos');
 
 const source = await readFile(new URL('../src/personal-finance/personal-finance-storage.mjs', import.meta.url), 'utf8');
 const readMonthBlock = source.match(/export async function readMonth\([\s\S]*?\n\}/)?.[0] || '';
@@ -64,6 +67,51 @@ assert.match(deleteReserveBlock, /index\('item_id'\)\.openCursor\(only\(itemId\)
 assert.match(source, /export async function countData\(\)[\s\S]*?\.count\(\)/, 'a confirmação de sobrescrita usa contagens e não leitura integral');
 assert.match(source, /export async function exportBundle\(\)[\s\S]*?\.getAll\(\)/, 'leitura integral fica restrita à exportação explícita de backup');
 assert.doesNotMatch(source, /mergeExpensesBundle/, 'o fluxo de importação de despesas da planilha foi removido');
+const originalIndexedDB = globalThis.indexedDB, originalIDBKeyRange = globalThis.IDBKeyRange;
+const reserveRows = new Map([
+  ['2026-08:cdi', { snapshot_id:'2026-08:cdi', item_id:'cdi', month_key:'2026-08', name:'CDI', amount:16254, currency:'BRL', type:'reserve' }],
+  ['2026-09:cdi', { snapshot_id:'2026-09:cdi', item_id:'cdi', month_key:'2026-09', name:'CDI', amount:16254, currency:'BRL', type:'reserve' }],
+]);
+const reserveStore = {
+  index() { return { openCursor(range) {
+    const request = {}, matching = [...reserveRows.values()].filter(row => row.item_id === range.value).sort((a, b) => a.snapshot_id.localeCompare(b.snapshot_id));
+    let index = 0;
+    const next = () => queueMicrotask(() => {
+      if (activeTransaction.aborted) return;
+      const row = matching[index];
+      request.result = row ? { value:row, continue() { index += 1; next(); } } : null;
+      request.onsuccess?.();
+      if (!row) queueMicrotask(() => { if (!activeTransaction.aborted) activeTransaction.oncomplete?.(); });
+    });
+    next();
+    return request;
+  } }; },
+  put(row) { reserveRows.set(row.snapshot_id, row); },
+};
+let activeTransaction;
+const fakeFinanceDb = {
+  close() {},
+  transaction() {
+    activeTransaction = { aborted:false, objectStore() { return reserveStore; }, abort() { this.aborted = true; queueMicrotask(() => this.onabort?.()); } };
+    return activeTransaction;
+  },
+};
+globalThis.IDBKeyRange = { only:value => ({ value }) };
+globalThis.indexedDB = { open() { const request = {}; queueMicrotask(() => { request.result = fakeFinanceDb; request.onsuccess?.(); }); return request; } };
+try {
+  await recordReserveMovement('cdi', 'withdrawal', 500, '2026-10-18T12:00:00.000Z');
+  await recordReserveMovement('cdi', 'tax', 100, '2026-10-18T12:30:00.000Z');
+  const latestCdi = reserveRows.get('2026-09:cdi');
+  assert.deepEqual(latestCdi.reserve_movements.map(movement => movement.type), ['withdrawal', 'tax'], 'resgates e impostos são anexados ao snapshot mais recente como histórico');
+  const { summarizeGlobalReserve } = await import('../src/personal-finance/personal-finance-domain.mjs');
+  const reserveSummary = summarizeGlobalReserve([], [...reserveRows.values()], '2026-09');
+  assert.equal(reserveSummary.balances.BRL, 15654, 'os movimentos persistidos diminuem a reserva geral sem duplicar snapshots');
+  await assert.rejects(recordReserveMovement('cdi', 'withdrawal', 20000, '2026-10-18T13:00:00.000Z'), /excede o saldo disponível/);
+  assert.equal(reserveRows.get('2026-09:cdi').reserve_movements.length, 2, 'uma tentativa acima do saldo aborta sem registrar histórico parcial');
+} finally {
+  if (originalIndexedDB === undefined) delete globalThis.indexedDB; else globalThis.indexedDB = originalIndexedDB;
+  if (originalIDBKeyRange === undefined) delete globalThis.IDBKeyRange; else globalThis.IDBKeyRange = originalIDBKeyRange;
+}
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /HubDatabase\.openDatabase\(\)/, 'a tela usa o acesso compartilhado sem schema duplicado');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'personal_finance'\)/, 'backup legado sem o domínio pessoal preserva as stores locais');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-import { showCaptureStatus, showCaptureError } from '../extensions/mcc-d0-bridge/capture-status-view.mjs';
+import { showCaptureStatus, showCaptureWarning, showCaptureError } from '../extensions/mcc-d0-bridge/capture-status-view.mjs';
 
 const root = new URL('../', import.meta.url);
 const extension = new URL('extensions/mcc-d0-bridge/', root);
@@ -12,7 +12,7 @@ const [manifestText, popup, script] = await Promise.all([
 ]);
 const manifest = JSON.parse(manifestText);
 
-assert.equal(manifest.version, '1.2.23', 'alterações na extensão incrementam pelo menos o patch');
+assert.equal(manifest.version, '1.2.25', 'alterações na extensão incrementam pelo menos o patch');
 assert.match(manifest.description, /Captura MCC D0\/D−1/);
 assert.ok(popup.includes('id="capture-title"') && popup.includes('id="vsl-title"'), 'os títulos das seções permanecem visíveis');
 assert.doesNotMatch(popup, /Na MCC, selecione um único dia, use o botão discreto abaixo/);
@@ -26,10 +26,12 @@ assert.doesNotMatch(popup, /No checkout DTC, capture|Mantenha Top Offers CB aber
 assert.match(popup, /class="clickbank-actions"[^>]*>[\s\S]*?id="capture-dtc-countries" class="secondary compact-action"[^>]*>[\s\S]*?<\/div>/, 'captura DTC compartilha o grupo e o tamanho compacto das ações ClickBank');
 assert.match(manifest.description, /países comuns ClickBank/);
 assert.ok(popup.includes('id="capture-d0"') && popup.includes('id="capture-d1"'), 'capturas diretas D0/D−1 permanecem disponíveis');
+assert.ok(popup.includes('Capturar (ou data anterior) D−1 da MCC'), 'o botão informa que aceita uma data anterior');
 assert.ok(popup.includes('class="capture-actions" role="group" aria-label="Ações de captura MCC"'), 'botões D0 e D−1 ficam em um grupo horizontal');
 assert.ok(popup.includes('class="clickbank-actions" role="group" aria-label="Ações ClickBank"'), 'ações ClickBank ficam em um grupo horizontal');
 assert.match(popup, /\.capture-actions,\s*\.clickbank-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'cada par usa duas colunas flexíveis');
 assert.match(popup, /button\.compact-action\s*\{[^}]*font-size:\s*12px[^}]*white-space:\s*nowrap/, 'botões em par são compactos e mantêm os rótulos em uma linha');
+assert.match(popup, /#capture-d1\s*\{\s*white-space:\s*normal/, 'o rótulo maior de D−1 pode quebrar linha sem estourar o botão');
 assert.ok(popup.includes('id="scroll-to-bottom"'), 'popup oferece rolagem automática antes das capturas');
 assert.ok(popup.indexOf('id="scroll-to-bottom"') < popup.indexOf('id="capture-d1"'), 'rolagem fica acima dos botões de captura');
 assert.match(popup, /button\.scroll-page[^}]*font-size:\s*11px/, 'botão de rolagem usa apresentação compacta e discreta');
@@ -43,15 +45,18 @@ assert.ok(script.includes("type: 'CAPTURE_AND_FORWARD_MCC_D0'") && script.includ
 assert.ok(script.includes("type: 'SCROLL_ACTIVE_MCC_TO_BOTTOM'"));
 
 assert.match(popup, /\.status\.error/);
+assert.match(popup, /\.status\.warning[^}]*#fbbf24/, 'captura anterior usa aviso amarelo, não bloqueio vermelho');
 assert.match(popup, /aria-atomic="true"/);
 const background = await readFile(new URL('background.js', extension), 'utf8');
+assert.ok(background.includes('forwardD1Grid(validation.capture, { activate: !validation.earlierThanD1 })'), 'o Preparador fica em segundo plano para permitir ler o aviso no popup');
 assert.equal((background.match(/errors: error\?\.errors/g) || []).length, 2, 'D0 e D−1 preservam erros estruturados até o popup');
+assert.ok(background.includes('expectedD1Date: validation.expectedDate') && background.includes('earlierThanD1: validation.earlierThanD1'), 'D−1 envia metadados do aviso somente no retorno ao popup');
 
 class Element {
   constructor(tag, doc) {
     this.tag = tag; this.ownerDocument = doc; this.children = []; this.value = '';
     this.classes = new Set(); this.disabled = false;
-    this.classList = { add:name => this.classes.add(name), remove:name => this.classes.delete(name) };
+    this.classList = { add:(...names) => names.forEach(name => this.classes.add(name)), remove:(...names) => names.forEach(name => this.classes.delete(name)) };
   }
   set textContent(value) { this.value = value; this.children = []; }
   get textContent() { return this.value + this.children.map(child => child.textContent).join('\n'); }
@@ -73,8 +78,14 @@ assert.match(status.textContent, /Lista parcial/);
 showCaptureError(status, { message:'Data incorreta.' });
 assert.equal(status.children[0].textContent, 'Captura bloqueada');
 assert.match(status.textContent, /Data incorreta/);
+showCaptureWarning(status, 'A captura se refere a 2026-10-16, anterior ao D−1 esperado (2026-10-17).');
+assert.equal(status.children[0].textContent, 'Captura referente a data anterior a D−1');
+assert.ok(status.classes.has('warning'));
+assert.ok(!status.classes.has('error'));
+assert.match(status.textContent, /anterior ao D−1 esperado/);
 showCaptureStatus(status, 'Validando…');
 assert.ok(!status.classes.has('error'));
+assert.ok(!status.classes.has('warning'));
 assert.equal(status.textContent, 'Validando…');
 
 // Exercita os dois cliques, sem Chrome real nem escrita no Preparador.
@@ -87,7 +98,7 @@ let response = failure;
 const requests = [];
 const context = vm.createContext({
   document:{ querySelector:selector => nodes[selector] },
-  showCaptureStatus, showCaptureError, mountClickBankCapture:()=>{}, mountClickBankDtcCountries:()=>{}, mountVslSpeed:()=>{}, navigator:{clipboard:{}},
+  showCaptureStatus, showCaptureWarning, showCaptureError, mountClickBankCapture:()=>{}, mountClickBankDtcCountries:()=>{}, mountVslSpeed:()=>{}, navigator:{clipboard:{}},
   chrome:{ runtime:{ sendMessage:async request => { requests.push(request.type); return response; } } }
 });
 vm.runInContext(script.replace(/^import .*?;\s*/gm, ''), context);
@@ -107,10 +118,15 @@ for (const button of [d0, d1]) {
   assert.equal(status.children[0].textContent, 'Captura bloqueada: campanha duplicada');
 }
 assert.deepEqual(requests, ['SCROLL_ACTIVE_MCC_TO_BOTTOM', 'CAPTURE_AND_FORWARD_MCC_D0', 'CAPTURE_AND_FORWARD_MCC_D1']);
-response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-01', previewReady:true, waitingForD0:false } };
+response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-01', expectedD1Date:'2026-10-17', earlierThanD1:true, previewReady:true, waitingForD0:false } };
 await d1.click();
 assert.ok(!status.classes.has('error'));
+assert.ok(status.classes.has('warning'), 'data anterior à esperada é apresentada como alerta, não como bloqueio');
+assert.match(status.textContent, /2026-10-01, anterior ao D−1 esperado \(2026-10-17\)/);
 assert.match(status.textContent, /D−1 validado e prévia pronta/);
+response = { ok:true, result:{ campaignCount:2, reportDate:'2026-10-17', expectedD1Date:'2026-10-17', earlierThanD1:false, previewReady:true, waitingForD0:false } };
+await d1.click();
+assert.ok(!status.classes.has('warning'), 'captura na data normal de D−1 não recebe alerta de data anterior');
 
 // O service worker restringe a rolagem à aba ativa do Google Ads e injeta
 // somente o helper geométrico, sem invocar o leitor da grade.
@@ -140,4 +156,4 @@ injected = null;
 const rejected = await requestScroll();
 assert.equal(rejected.ok, false);
 assert.equal(injected, null, 'nenhum script é injetado fora da MCC');
-console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, bloqueios e roteamento seguro; version 1.2.23');
+console.log('MCC extension popup: rolagem discreta, ações em linha, D0/D−1, alerta para data anterior e roteamento seguro; version 1.2.25');

@@ -10,6 +10,7 @@ assert.ok(html.includes("'D0_metricas_parciais'"),'D0 ainda não é classificado
 assert.ok(html.includes('metricas_D_zero:metrics0'),'manifesto não contém as métricas completas de D0');
 assert.ok(html.includes('totais_controle_D_zero'),'totais de validação de D0 ausentes');
 assert.ok(html.includes("originDetail.textContent = 'Grade da MCC · extensão'"),'D0 deve identificar a captura recebida da MCC');
+assert.ok(html.includes('D0 precisa corresponder a hoje'),'o receptor MCC bloqueia D0 quando a data do relatório não é hoje');
 assert.ok(html.includes("metaLine('Campanhas válidas'")&&html.includes("metaLine('Data detectada'")&&html.includes("metaLine('Moedas'")&&!html.includes("metaLine('Tipo de captura'")&&!html.includes("metaLine('Consumo acumulado do dia'"),'D0 mantém MCC, campanhas, data e moedas sem os dois campos removidos');
 assert.ok(!html.includes("metaLine('Impressões'")&&!html.includes("metaLine('Cliques'")&&!html.includes("metaLine('Arquivo'")&&!html.includes('decodeFile')&&!html.includes('decodePastedText'),'resumo da captura não deve parecer um arquivo nem manter recursos de entrada manual');
 assert.ok(html.includes("campaign.metricas_D_zero, 'd0'"),'aplicação direta não grava a linha diária de D0');
@@ -36,7 +37,7 @@ assert.ok(applyFlow.includes("typeof databaseApi?.importManifest !== 'function'"
 assert.ok(applyFlow.includes('applied.reconciledSales'),'o Preparador envia apenas as vendas manuais cujo estado mudou na importação');
 assert.ok(!applyFlow.includes('.filter(sale=>sale.billing_sale_id)'),'o Preparador não deve descartar lançamentos legados sem o vínculo novo do Faturamento');
 assert.ok(applyFlow.includes('provisionalSaleIds:linkedSales.map(sale=>String(sale.id))'),'o Preparador deve avisar a tela aberta quais vendas manuais foram conciliadas');
-assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=7')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
+assert.ok(applyFlow.includes("import('../billing/billing-storage.mjs?v=9')"),'o Preparador compartilha o serviço atualizado de persistência do Faturamento');
 assert.ok(html.includes('billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales)'),'base MCC e conciliação financeira são gravadas na mesma transação local');
 assert.ok(html.includes('billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales)'),'agregados D0/D−1 do MCC também são gravados atomicamente no Faturamento');
 assert.ok(!applyFlow.includes('fallbackPanelDatabase'),'Preparador não pode atualizar silenciosamente sem Event Log');

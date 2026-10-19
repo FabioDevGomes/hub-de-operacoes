@@ -2,6 +2,242 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.22.4] - 2026-10-18
+
+- Documenta consolidação do Faturamento no Controle Macro
+
+## [1.22.3] - 2026-10-18
+
+- Evita dupla contagem de BRL e USD no faturamento
+
+## [1.22.2] - 2026-10-18
+
+- Linha de totais no Controle Macro
+
+## [1.22.1] - 2026-10-18
+
+- Alinha receita do Controle Macro ao Faturamento
+
+## [1.22.0] - 2026-10-18
+
+- Converte o gráfico mensal de Faturamento para BRL
+
+## [1.21.4] - 2026-10-18
+
+- Simplifica observações de vendas no Controle Macro
+
+## [1.21.3] - 2026-10-18
+
+- Corrige conciliação de vendas mistas do Faturamento no Controle Macro
+
+## [1.21.2] - 2026-10-18
+
+- Concilia Controle Macro com vendas do Faturamento
+
+## [1.21.1] - 2026-10-18
+
+- Inclui todos os lançamentos no gráfico mensal do Faturamento
+
+## [1.21.0] - 2026-10-18
+
+- Cache por aba da base da Visão Geral com invalidação de gravações
+
+## [1.20.2] - 2026-10-18
+
+- simplifica nomes de produtos na exibição do Faturamento
+
+## [1.20.1] - 2026-10-18
+
+- Valida a data da captura D0 contra hoje em São Paulo
+
+## [1.20.0] - 2026-10-18
+
+- Add ClickBank INS v8 sales report and manual conversion CSV
+
+## [1.19.1] - 2026-10-18
+
+- Reposiciona ações do servidor no Tracking ClickBank
+
+## [1.19.0] - 2026-10-18
+
+- Lembra token do Tracking neste navegador
+
+## [1.18.0] - 2026-10-18
+
+- Permite corrigir valores de conversão no Faturamento
+
+## [1.17.16] - 2026-10-18
+
+- Permite capturar data MCC anterior a D−1
+
+## [1.17.15] - 2026-10-18
+
+- Adicionar histórico de resgates e deduções de impostos na reserva global
+
+## [1.17.14] - 2026-10-18
+
+- Remover média diária redundante do tooltip mensal
+
+## [1.17.13] - 2026-10-16
+
+- Mostrar resultado do Google Imagens na tabela Guru Media
+
+## [1.17.12] - 2026-10-16
+
+- Remove o rótulo Google Trends do aviso de última busca
+
+## [1.17.11] - 2026-10-16
+
+- Replica o padrão verde plano das candidatas do Google Trends em todas as telas de Curadoria
+
+## [1.17.10] - 2026-10-16
+
+- Alinha borda do botão Pesquisar de Trends ao padrão de Controle de gastos
+
+## [1.17.9] - 2026-10-16
+
+- Remove negrito das candidatas à palavra-chave
+
+## [1.17.8] - 2026-10-16
+
+- Refina contorno dos botões de busca do Trends
+
+## [1.17.7] - 2026-10-16
+
+- Padroniza botões de busca das candidatas do Trends
+
+## [1.17.6] - 2026-10-16
+
+- Alinha Nova coleta antes de Analisar oferta
+
+## [1.17.5] - 2026-10-16
+
+- Exibe a última busca do Google Trends na Plataforma Guru Media
+
+## [1.17.4] - 2026-10-16
+
+- Move o atalho da oferta no card de países da GuruMedia
+
+## [1.17.3] - 2026-10-16
+
+- Padroniza a largura dos botões de decisão na Top Offers CB
+
+## [1.17.2] - 2026-10-15
+
+- Refina as cores das datas do Histórico de Meu Tempo
+
+## [1.17.1] - 2026-10-15
+
+- Mantém opções do modal de decisão em uma linha
+
+## [1.17.0] - 2026-10-15
+
+- Adiciona Solicitação Enviada às decisões de Top Offers CB
+
+## [1.16.1] - 2026-10-15
+
+- Restringe os cabeçalhos vermelhos do Histórico ao consumo de bebida alcoólica
+
+## [1.16.0] - 2026-10-15
+
+- Destaca automaticamente em verde as datas sem alertas no Histórico do Meu Tempo
+
+## [1.15.0] - 2026-10-15
+
+- Integra Tracking ClickBank ao servidor com API protegida
+
+## [1.14.0] - 2026-10-15
+
+- Adiciona sessão local de Tracking ClickBank
+
+## [1.13.1] - 2026-10-15
+
+- Reposiciona e compacta o botão Parar em Meu Tempo
+
+## [1.13.0] - 2026-10-15
+
+- Adiciona pausa diária ao contador de tempo pré-trabalho
+
+## [1.12.20] - 2026-10-15
+
+- Reposiciona o botão Abrir oferta no cabeçalho de Países
+
+## [1.12.19] - 2026-10-14
+
+- Padroniza a ficha da Lista de Gerente e incorpora a aba Glimpse
+
+## [1.12.18] - 2026-10-14
+
+- Ajusta rótulo e largura do campo Google Trends da Lista de Gerente
+
+## [1.12.17] - 2026-10-14
+
+- Centraliza colunas da Lista de Gerente
+
+## [1.12.16] - 2026-10-14
+
+- Padroniza o botão Colunas da Lista de Gerente
+
+## [1.12.15] - 2026-10-14
+
+- Aceita URLs de afiliado escapadas no HTML
+
+## [1.12.14] - 2026-10-14
+
+- Normaliza o peso das candidatas de Google Imagens
+
+## [1.12.13] - 2026-10-14
+
+- Remove aviso de GEO da ficha Top Offers CB
+
+## [1.12.12] - 2026-10-14
+
+- Corrige a ordenação da coluna Decisão em Top Offers CB
+
+## [1.12.11] - 2026-10-14
+
+- Adiciona visão consolidada de todas as listas da Lista de Gerente
+
+## [1.12.10] - 2026-10-14
+
+- Preserva várias coletas da Lista de Gerente no mesmo dia
+
+## [1.12.9] - 2026-10-14
+
+- Observações de decisão nas tabelas da Curadoria
+
+## [1.12.8] - 2026-10-14
+
+- Reposiciona a lista de países junto ao botão na Top Offers CB
+
+## [1.12.7] - 2026-10-14
+
+- Remove o estado vazio de candidatas na Top Offers CB
+
+## [1.12.6] - 2026-10-14
+
+- Observação da decisão na Top Offers CB
+
+## [1.12.5] - 2026-10-14
+
+- Salva link de afiliado em Top Offers CB
+
+## [1.12.4] - 2026-10-14
+
+- Centraliza cabeçalhos e valores das colunas de análise no Top Offers CB
+
+## [1.12.3] - 2026-10-14
+
+- Exibe dias com resposta Sim na comparação de Meu Tempo
+
+## [1.12.2] - 2026-10-13
+
+- Ordena contas por MCC no Mapa por Conta
+
+## [1.12.1] - 2026-10-13
+
+- Ajusta aviso de cotação no Preparador MCC
+
 ## [1.12.0] - 2026-10-13
 
 - Força cotação PTAX antes de cada importação MCC

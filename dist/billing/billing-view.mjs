@@ -1,5 +1,5 @@
-import * as Domain from './billing-domain.mjs?v=4';
-import * as Storage from './billing-storage.mjs?v=7';
+import * as Domain from './billing-domain.mjs?v=7';
+import * as Storage from './billing-storage.mjs?v=9';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;
@@ -19,10 +19,19 @@ const parseAmount = value => {
   return number;
 };
 
-export async function mount({ root, toast = () => {}, onUpdateManualSale = null, getManualSaleEditData = null }) {
+export async function mount({ root, toast = () => {}, onUpdateManualSale = null, onUpdateMccConversionValues = null, getManualSaleEditData = null, exchangeRate = null, exchangeRateQuote = null }) {
   if (!root) return;
   root.__updateManualSale = onUpdateManualSale;
+  root.__updateMccConversionValues = onUpdateMccConversionValues;
   root.__getManualSaleEditData = getManualSaleEditData;
+  root.__billingExchangeRate = Number.isFinite(Number(exchangeRate)) && Number(exchangeRate) > 0 ? Number(exchangeRate) : null;
+  root.__billingExchangeRateQuote = exchangeRateQuote;
+  root.__setBillingExchangeRate = (rate, quote) => {
+    const parsedRate = Number(rate);
+    root.__billingExchangeRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : null;
+    root.__billingExchangeRateQuote = quote || null;
+    if (root.__billing) void renderMonthlyChart(root);
+  };
   if (!mounted.has(root)) {
     root.innerHTML = markup();
     bind(root, toast);
@@ -51,7 +60,7 @@ function markup() {
       <button class="btn primary" type="button" id="billingNewSale">Adicionar venda</button>
     </div>
     <div id="billingLoadStatus" class="billing-load-status" role="status" aria-live="polite"></div>
-    <div class="billing-notice">Valores em R$ e US$ são apresentados separadamente, sem conversão. Linhas MCC mostram o valor de conversão atribuído, não um recebimento confirmado. Pagamentos sem data não entram em um período de Caixa. Asterisco indica cobertura incompleta por valor ausente na origem.</div>
+    <div class="billing-notice">Vendas, movimentos, indicadores e tabelas mantêm R$ e US$ separados; no gráfico mensal, cada registro usa R$ quando disponível e converte US$ somente se R$ estiver ausente, sem somar as duas moedas nem alterar lançamentos. Linhas MCC mostram o valor de conversão atribuído, não um recebimento confirmado. Pagamentos sem data não entram em Caixa.</div>
     <div id="billingKpis" class="billing-kpis"></div>
     <div class="billing-filters">
       <label>Plataforma<select id="billingPlatform" class="search hub-table-filter"><option value="all">Todas</option></select></label>
@@ -63,14 +72,14 @@ function markup() {
     </div>
     <section class="card panel billing-aggregate-panel"><div class="panel-head"><div><h2 id="billingAggregateTitle">Faturamento por mês</h2><p>Totais do recorte e filtros selecionados.</p></div><div class="panel-controls"><label>Agregar por <select id="billingDimension" class="search hub-table-filter" style="width:auto"><option value="month">Mês</option><option value="product">Produto</option><option value="platform">Plataforma</option><option value="account">Conta</option></select></label></div></div><div class="billing-table-wrap"><table class="hub-table-layout"><thead id="billingAggregateHead"></thead><tbody id="billingAggregateBody"></tbody></table></div></section>
     <section class="card panel billing-detail-panel"><div class="panel-head"><div><h2 id="billingDetailTitle">Vendas por competência</h2><p id="billingCaption"></p></div><span id="billingCount" class="tag"></span></div><div class="billing-table-wrap"><table><thead id="billingSalesHead"></thead><tbody id="billingSalesBody"></tbody></table></div><div class="billing-pagination"><span id="billingPageSummary"></span><div><button id="billingPreviousPage" class="btn" type="button">Anterior</button><button id="billingNextPage" class="btn" type="button">Próxima</button><select id="billingPageSize" class="search" aria-label="Linhas por página"><option>25</option><option selected>50</option><option>100</option></select></div></div></section>
-    <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses até o mês selecionado · filtros atuais.</p></div><button class="btn billing-legacy-cleanup hidden" id="billingLegacyCleanupButton" type="button">Remover carga antiga e recalcular</button></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
+    <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses · o gráfico não herda os filtros da tabela.</p></div><button class="btn billing-legacy-cleanup hidden" id="billingLegacyCleanupButton" type="button">Remover carga antiga e recalcular</button></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
     <dialog id="billingLegacyCleanupDialog" class="billing-payment-dialog billing-legacy-cleanup-dialog" aria-labelledby="billingLegacyCleanupTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Revisar carga antiga</span><h2 id="billingLegacyCleanupTitle">Remover dados importados</h2><p>Esta carga veio de uma versão antiga do Hub e pode estar elevando o faturamento e o gráfico neste navegador.</p></div><button class="billing-payment-dialog-close" type="button" data-close-legacy-cleanup aria-label="Fechar">×</button></div><div class="billing-legacy-cleanup-counts"><div><span>Vendas antigas</span><strong id="billingLegacyCleanupSales">0</strong></div><div><span>Pagamentos e reembolsos vinculados</span><strong id="billingLegacyCleanupMovements">0</strong></div><div><span>Auditorias dessas vendas</span><strong id="billingLegacyCleanupAudit">0</strong></div></div><p class="billing-payment-dialog-note">Ao confirmar, serão removidos somente os registros dessa carga e seus movimentos e auditorias associados. Vendas de outras origens, campanhas e demais dados do Hub serão preservados. Depois, o faturamento e o gráfico serão recalculados. A remoção não pode ser desfeita.</p><div class="billing-legacy-cleanup-actions"><button class="btn" type="button" data-close-legacy-cleanup>Cancelar</button><button class="btn billing-legacy-cleanup-confirm" id="billingLegacyCleanupConfirm" type="button">Remover e recalcular</button></div></dialog>
     <dialog id="billingPaymentStatusDialog" class="billing-payment-dialog" aria-labelledby="billingPaymentStatusTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Status do pagamento</span><h2 id="billingPaymentStatusTitle"></h2><p id="billingPaymentStatusCurrent"></p></div><button class="billing-payment-dialog-close" type="button" data-close-payment-status aria-label="Fechar">×</button></div><div id="billingPaymentStatusOptions" class="billing-payment-dialog-options"></div><p class="billing-payment-dialog-note">“Pagamento recebido” atualiza o status, mas não cria um lançamento de caixa nem informa uma data. Para isso, registre um recebimento.</p></dialog>
-    <div id="billingModal" class="billing-modal hidden" role="dialog" aria-modal="true" aria-labelledby="billingModalTitle"><form id="billingForm" class="billing-modal-card"><div class="panel-head"><h2 id="billingModalTitle">Nova venda</h2><button class="btn" type="button" data-close-modal>Fechar</button></div><p id="billingSourceCorrectionNotice" class="billing-notice hidden">Este lançamento está vinculado à venda provisória da base de campanhas. Data, produto, plataforma, campanha, país, hora e valor serão sincronizados com os cálculos. Data e campanha também definem a conciliação MCC e o diário associado. Recebimentos e reembolsos registrados permanecem preservados.</p><input type="hidden" name="sale_id"><div class="billing-form-grid">
+    <div id="billingModal" class="billing-modal hidden" role="dialog" aria-modal="true" aria-labelledby="billingModalTitle"><form id="billingForm" class="billing-modal-card"><div class="panel-head"><h2 id="billingModalTitle">Nova venda</h2><button class="btn" type="button" data-close-modal>Fechar</button></div><p id="billingSourceCorrectionNotice" class="billing-notice hidden">Este lançamento está vinculado à venda provisória da base de campanhas. Data, produto, plataforma, campanha, país, hora e valor serão sincronizados com os cálculos. Data e campanha também definem a conciliação MCC e o diário associado. Recebimentos e reembolsos registrados permanecem preservados.</p><p id="billingMccCorrectionNotice" class="billing-notice hidden">Corrija o valor da conversão na moeda original. A quantidade e a confirmação continuam vinculadas à captura MCC; esse ajuste manual será preservado em novas sincronizações e registrado no Histórico.</p><input type="hidden" name="sale_id"><div class="billing-form-grid">
       <label>Data da venda <input name="sale_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
       <label>Produto <input name="product" required></label><label>Plataforma <input name="platform" required></label><label>Tipo de comissão <input name="commission_type" placeholder="Comissão"></label><label>Conta <input name="account"></label>
       <label id="billingSourceCampaignField" class="hidden">Campanha associada<select name="source_campaign_id"></select></label><label id="billingSourceCountryField" class="hidden">País da venda<select name="source_country_code"></select></label><label id="billingSourceTimeField" class="hidden">Hora da venda <input name="source_sale_time" type="text" inputmode="numeric" placeholder="HH:MM"></label>
-      <label>Comissão (R$) <input name="value_brl" inputmode="decimal" placeholder="0,00"></label><label>Comissão (US$) <input name="value_usd" inputmode="decimal" placeholder="0,00"></label>
+      <label id="billingValueBrlField"><span id="billingValueBrlLabel">Comissão (R$)</span> <input name="value_brl" inputmode="decimal" placeholder="0,00"></label><label id="billingValueUsdField"><span id="billingValueUsdLabel">Comissão (US$)</span> <input name="value_usd" inputmode="decimal" placeholder="0,00"></label>
       <label>Status observado <select name="payment_status"><option value="unknown">Não informado</option><option value="pending">Pendente</option><option value="issued">Pagamento emitido</option><option value="partially_paid">Parcialmente paga</option><option value="paid">Pagamento recebido</option></select></label>
       <label>Data de pagamento, se conhecida <input name="payment_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa"></label>
       <label class="billing-form-wide">Observação <textarea name="notes" rows="3"></textarea></label>
@@ -381,27 +390,18 @@ async function renderMonthlyChart(root) {
   const chartStart = new Date(`${endMonth}-01T00:00:00Z`);
   chartStart.setUTCMonth(chartStart.getUTCMonth() - 11);
   const chartRange = { start: chartStart.toISOString().slice(0, 10), end: context.range.end };
+  const rateNote = chartRateNote(root);
   root.querySelector('#billingMonthlyChartCaption').textContent = cash
-    ? `Caixa líquido dos últimos 12 meses até ${displayDate(chartRange.end)} · filtros atuais.`
-    : `Faturamento bruto por competência nos últimos 12 meses até ${displayDate(chartRange.end)} · filtros atuais.`;
+    ? `Caixa líquido dos últimos 12 meses até ${displayDate(chartRange.end)} · ${rateNote} · todos os movimentos, sem os filtros da tabela.`
+    : `Faturamento bruto por competência nos últimos 12 meses até ${displayDate(chartRange.end)} · ${rateNote} · todas as vendas ativas, sem os filtros da tabela.`;
   let series;
   try {
-    const filters = getFilters(root);
     if (cash) {
       const rawMovements = await Storage.queryMovementsByDate(chartRange.start, chartRange.end);
-      const chartSales = await Storage.salesByIds([...new Set(rawMovements.map(move => move.sale_id))]);
-      const salesById = new Map(chartSales.map(sale => [sale.sale_id, sale]));
-      const rows = rawMovements.map(movement => ({ ...movement, sale: salesById.get(movement.sale_id) || null }));
-      const visibleRows = Domain.filterRows(rows, filters).filter(row => filters.recordState === 'all' || (filters.recordState === 'cancelled' ? row.sale?.active === false : row.sale?.active !== false));
-      const visibleMovements = visibleRows;
-      const visibleSalesById = new Map(visibleRows.map(row => row.sale).filter(Boolean).map(sale => [sale.sale_id, sale]));
-      series = Domain.monthlyFinancialSeries({ movements: visibleMovements, salesById: visibleSalesById, ...chartRange, mode: 'cash' });
+      series = Domain.monthlyFinancialSeries({ movements:rawMovements, ...chartRange, mode:'cash', exchangeRate:root.__billingExchangeRate });
     } else {
       const rawSales = await Storage.querySalesByDate(chartRange.start, chartRange.end);
-      const visibleSales = Domain.filterRows(rawSales.map(sale => ({ sale })), filters)
-        .map(row => row.sale)
-        .filter(sale => filters.recordState === 'all' || (filters.recordState === 'cancelled' ? sale.active === false : sale.active !== false));
-      series = Domain.monthlyFinancialSeries({ sales: visibleSales, movements: [], ...chartRange, mode: 'competence' });
+      series = Domain.monthlyFinancialSeries({ sales:rawSales, ...chartRange, mode:'competence', exchangeRate:root.__billingExchangeRate });
     }
   } catch {
     if (requestId !== chartRenderSequence) return;
@@ -418,11 +418,21 @@ async function renderMonthlyChart(root) {
   chartHost.innerHTML = buildMonthlyChartSvg(series, title, chartHost.clientWidth);
 }
 
+function chartRateNote(root) {
+  const rate = root.__billingExchangeRate;
+  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) return 'USD sem conversão: taxa operacional indisponível';
+  const formattedRate = new Intl.NumberFormat('pt-BR', { minimumFractionDigits:4, maximumFractionDigits:4 }).format(rate);
+  const quote = root.__billingExchangeRateQuote || {};
+  const source = quote.isFallback ? 'taxa legada' : quote.quoteDate ? `PTAX venda de ${displayDate(quote.quoteDate)}` : 'taxa operacional';
+  const stale = quote.isStale && !quote.isFallback ? ' · cotação desatualizada' : '';
+  return `USD convertido a R$ ${formattedRate}/US$ 1 · ${source}${stale}`;
+}
+
 function buildMonthlyChartSvg(series, title, availableWidth = 720) {
   if (!series.length) return '<p class="billing-chart-empty">Não há dados para o período selecionado.</p>';
   const width = Math.max(360, availableWidth || 720, series.length * 82);
   const height = 310;
-  const left = 62, right = 18, top = 44, bottom = 48;
+  const left = 88, right = 18, top = 44, bottom = 48;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   const values = series.map(item => item.value).filter(value => typeof value === 'number' && Number.isFinite(value));
@@ -432,7 +442,7 @@ function buildMonthlyChartSvg(series, title, availableWidth = 720) {
   const zeroY = y(0);
   const slot = plotWidth / series.length;
   const barWidth = Math.min(56, Math.max(8, slot * .62));
-  const axis = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
+  const axis = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 });
   const amount = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
   const month = key => new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(`${key}-01T00:00:00Z`)).replace('.', '');
   const ticks = Array.from({ length: 5 }, (_, index) => min + (max - min) * index / 4);
@@ -445,8 +455,8 @@ function buildMonthlyChartSvg(series, title, availableWidth = 720) {
     const label = month(item.key);
     const valueLabel = item.value == null ? '—' : `${amount.format(item.value)}${item.complete ? '' : '*'}`;
     const totalTooltip = item.value == null
-      ? `${label}: valor em R$ indisponível${item.records ? ` (${item.records} registros)` : ''}`
-      : `${label}: R$ ${amount.format(item.value)}${item.complete ? '' : ' (parcial; valor ausente em pelo menos um registro)'}`;
+      ? `${label}: equivalente em R$ indisponível${item.records ? ` (${item.records} registros); verifique valores de origem e a taxa USD/BRL` : ''}`
+      : `${label}: R$ ${amount.format(item.value)}${item.complete ? '' : ` (parcial; ${item.missingAmounts} registro(s) sem valor conversível)`}`;
     const manualTooltip = item.manualBrl?.records
       ? item.manualBrl.amount == null
         ? `${item.manualBrl.records} lançamento(s) manual(is) incluído(s); valor manual ausente em ${item.manualBrl.missing} registro(s)`
@@ -495,8 +505,7 @@ function saleRow(sale, movements, index) {
   const refundBrl = Domain.sumCurrency(refunds, 'value_brl'), refundUsd = Domain.sumCurrency(refunds, 'value_usd');
   const isMccAggregate = sale.source === 'mcc_conversion_aggregate';
   const sourceLinked = sale.source === 'hub_manual_capture' && sale.source_ref;
-  const canEdit = !isMccAggregate && (sale.active !== false || !sourceLinked);
-  const actions = `<div class="billing-action-buttons">${canEdit ? `<button class="btn" data-billing-action="edit" data-sale-id="${esc(sale.sale_id)}">Editar</button>` : ''}${sale.active === false ? '' : `<button class="btn" data-billing-action="receipt" data-sale-id="${esc(sale.sale_id)}">Recebimento</button><button class="btn" data-billing-action="refund" data-sale-id="${esc(sale.sale_id)}">Reembolso</button>`}<button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button>${isMccAggregate || sale.active === false ? '' : `<button class="btn billing-danger" data-billing-action="cancel" data-sale-id="${esc(sale.sale_id)}">Cancelar</button>`}</div>`;
+  const actions = `<div class="billing-action-buttons"><button class="btn" data-billing-action="edit" data-sale-id="${esc(sale.sale_id)}">Editar</button>${sale.active === false ? '' : `<button class="btn" data-billing-action="receipt" data-sale-id="${esc(sale.sale_id)}">Recebimento</button><button class="btn" data-billing-action="refund" data-sale-id="${esc(sale.sale_id)}">Reembolso</button>`}<button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button>${isMccAggregate || sale.active === false ? '' : `<button class="btn billing-danger" data-billing-action="cancel" data-sale-id="${esc(sale.sale_id)}">Cancelar</button>`}</div>`;
   const confirmation = sale.confirmation_status === 'confirmed'
     ? `<span class="billing-confirmation billing-confirmation-confirmed" title="Confirmada pela importação ${esc(sale.confirmation_source || 'MCC D−1')}">Confirmada · ${esc(sale.confirmation_source || 'MCC D−1')}</span>`
     : sale.confirmation_status === 'manual'
@@ -510,14 +519,16 @@ function saleRow(sale, movements, index) {
       : '—';
   const count = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:2 }).format(Number(sale.conversion_count ?? 1));
   const paymentStatus = Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown;
+  const productLabel = Domain.displayProductName(sale.product);
   const paymentStatusButton = `<button class="billing-status billing-status-button billing-status-${esc(sale.payment_status)}" data-billing-action="payment-status" data-sale-id="${esc(sale.sale_id)}" type="button" title="Alterar status do pagamento" aria-label="Alterar status do pagamento de ${esc(sale.product)}. Atual: ${esc(paymentStatus)}">${esc(paymentStatus)}</button>`;
-  return `<tr class="${sale.active === false ? 'billing-cancelled' : ''}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(sale.product)}"><span>${esc(sale.product)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${money(sale.value_usd, 'USD')}</td><td class="num">${money(sale.value_brl, 'BRL')}</td><td>${paymentStatusButton}</td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
+  return `<tr class="${sale.active === false ? 'billing-cancelled' : ''}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(productLabel)}"><span>${esc(productLabel)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${money(sale.value_usd, 'USD')}</td><td class="num">${money(sale.value_brl, 'BRL')}</td><td>${paymentStatusButton}</td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
 }
 
 function movementRow(movement) {
   const sale = movement.sale || {};
   const product=sale.product||'Venda indisponível';
-  return `<tr data-billing-row="${esc(movement.movement_id)}"><td>${displayDate(movement.effective_date)}</td><td class="billing-product-cell" title="${esc(product)}"><span>${esc(product)}</span></td><td>${esc(sale.platform)}</td><td><span class="billing-status billing-status-${movement.type === 'refund' ? 'pending' : 'paid'}">${movement.type === 'refund' ? 'Reembolso' : 'Recebimento'}</span></td><td>${esc(sale.account)}</td><td class="num">${money(movement.value_usd, 'USD')}</td><td class="num">${money(movement.value_brl, 'BRL')}</td><td>${esc(Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown)}</td><td>${esc(movement.source)}</td><td>${esc(movement.notes || sale.notes || '—')}</td><td class="billing-actions-cell"><button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button><div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
+  const productLabel = Domain.displayProductName(product);
+  return `<tr data-billing-row="${esc(movement.movement_id)}"><td>${displayDate(movement.effective_date)}</td><td class="billing-product-cell" title="${esc(productLabel)}"><span>${esc(productLabel)}</span></td><td>${esc(sale.platform)}</td><td><span class="billing-status billing-status-${movement.type === 'refund' ? 'pending' : 'paid'}">${movement.type === 'refund' ? 'Reembolso' : 'Recebimento'}</span></td><td>${esc(sale.account)}</td><td class="num">${money(movement.value_usd, 'USD')}</td><td class="num">${money(movement.value_brl, 'BRL')}</td><td>${esc(Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown)}</td><td>${esc(movement.source)}</td><td>${esc(movement.notes || sale.notes || '—')}</td><td class="billing-actions-cell"><button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button><div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
 }
 
 async function handleAction(button, root, toast) {
@@ -588,9 +599,15 @@ function openSaleModal(root, sale = null) {
   const modal = root.querySelector('#billingModal'), form = root.querySelector('#billingForm');
   form.reset();
   form.dataset.sourceSaleRef = '';
+  form.dataset.mccAggregateCorrection = '';
+  form.classList.remove('billing-mcc-correction');
+  root.querySelector('#billingValueBrlLabel').textContent = 'Comissão (R$)';
+  root.querySelector('#billingValueUsdLabel').textContent = 'Comissão (US$)';
   for (const field of form.querySelectorAll('input, textarea, select')) field.disabled = false;
   const sourceLinked = sale?.source === 'hub_manual_capture' && sale.source_ref;
+  const mccAggregate = sale?.source === 'mcc_conversion_aggregate';
   root.querySelector('#billingSourceCorrectionNotice').classList.toggle('hidden', !sourceLinked);
+  root.querySelector('#billingMccCorrectionNotice').classList.toggle('hidden', !mccAggregate);
   for (const id of ['billingSourceCampaignField','billingSourceCountryField','billingSourceTimeField']) root.querySelector(`#${id}`).classList.toggle('hidden', !sourceLinked);
   if (sourceLinked) {
     form.dataset.sourceSaleRef = sale.source_ref;
@@ -613,6 +630,21 @@ function openSaleModal(root, sale = null) {
     form.elements.source_country_code.required = false;
     form.elements.account.readOnly = false;
   }
+  if (mccAggregate) {
+    form.dataset.mccAggregateCorrection = 'true';
+    form.classList.add('billing-mcc-correction');
+    root.querySelector('#billingValueBrlLabel').textContent = 'Valor da conversão (R$)';
+    root.querySelector('#billingValueUsdLabel').textContent = 'Valor da conversão (US$)';
+    for (const field of form.querySelectorAll('input, textarea, select')) field.disabled = true;
+    const originalCurrency = sale.value_brl != null && sale.value_usd == null ? 'BRL'
+      : sale.value_usd != null && sale.value_brl == null ? 'USD' : 'unknown';
+    form.dataset.mccCorrectionCurrency = originalCurrency;
+    form.dataset.mccCampaignId = sale.campaign_id || '';
+    form.dataset.mccSourceDate = sale.sale_date || '';
+    form.dataset.mccSourcePeriod = sale.source_period || '';
+    form.elements.value_brl.disabled = originalCurrency === 'USD';
+    form.elements.value_usd.disabled = originalCurrency === 'BRL';
+  }
   form.elements.sale_id.value = sale?.sale_id || '';
   form.elements.sale_date.value = displayDate(sale?.sale_date || today());
   for (const field of ['product', 'platform', 'commission_type', 'account', 'notes']) form.elements[field].value = sale?.[field] || '';
@@ -631,8 +663,8 @@ function openSaleModal(root, sale = null) {
   form.elements.value_usd.value = sale?.value_usd ?? '';
   form.elements.payment_status.value = sale?.payment_status || 'unknown';
   form.elements.payment_date.value = '';
-  root.querySelector('#billingModalTitle').textContent = sale ? `${sourceLinked ? 'Editar lançamento provisório' : 'Editar venda'} · ${sale.product}` : 'Nova venda';
-  form.querySelector('[type="submit"]').textContent = sourceLinked ? 'Salvar lançamento' : 'Salvar venda';
+  root.querySelector('#billingModalTitle').textContent = sale ? `${mccAggregate ? 'Corrigir valor da conversão' : sourceLinked ? 'Editar lançamento provisório' : 'Editar venda'} · ${sale.product}` : 'Nova venda';
+  form.querySelector('[type="submit"]').textContent = mccAggregate ? 'Salvar correção' : sourceLinked ? 'Salvar lançamento' : 'Salvar venda';
   modal.classList.remove('hidden');
   form.elements.sale_date.focus();
 }
@@ -658,6 +690,25 @@ async function saveSaleForm(event, root, toast) {
   event.preventDefault();
   const form = event.currentTarget;
   try {
+    if (form.dataset.mccAggregateCorrection === 'true') {
+      const values = {};
+      if (!form.elements.value_brl.disabled) values.value_brl = parseAmount(form.elements.value_brl.value);
+      if (!form.elements.value_usd.disabled) values.value_usd = parseAmount(form.elements.value_usd.value);
+      const hasBrl = typeof values.value_brl === 'number', hasUsd = typeof values.value_usd === 'number';
+      if (!hasBrl && !hasUsd) throw new Error('Informe o valor corrigido na moeda original.');
+      if (form.dataset.mccCorrectionCurrency === 'unknown' && hasBrl && hasUsd) {
+        throw new Error('Como a moeda original não está identificada, informe o valor em apenas uma moeda.');
+      }
+      const update = root.__updateMccConversionValues;
+      if (typeof update === 'function') {
+        await update({saleId:form.elements.sale_id.value, campaignId:form.dataset.mccCampaignId, date:form.dataset.mccSourceDate, period:form.dataset.mccSourcePeriod, originalCurrency:form.dataset.mccCorrectionCurrency, values});
+      } else await Storage.updateMccConversionValues(form.elements.sale_id.value, values);
+      closeSaleModal(root);
+      invalidateMonthNavigation(root);
+      toast('Valor da conversão corrigido no Faturamento e na base compartilhada; Visão Geral, Controle Macro, relatórios e páginas de produto foram atualizados.');
+      await refresh(root);
+      return;
+    }
     const sourceSaleRef = form.dataset.sourceSaleRef;
     if (sourceSaleRef) {
       const saleDate = Domain.parseBrazilianDate(form.elements.sale_date.value);

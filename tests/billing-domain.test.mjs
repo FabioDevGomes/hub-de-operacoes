@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  aggregateBy, aggregateCashBy, BILLING_MANUAL_STATUS_OPTIONS, BILLING_STATUSES, compareRows, dateRangeFor, dateRangeForMonth, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
+  aggregateBillingRevenueByDate, aggregateBy, aggregateCashBy, BILLING_MANUAL_STATUS_OPTIONS, BILLING_STATUSES, compareRows, dateRangeFor, dateRangeForMonth, displayProductName, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
   normalizeMovement, normalizeSale, paginate, parseBrazilianDate, provisionalSaleToBilling, summarizeCash, summarizeCompetence, totalSalesCount,
 } from '../src/billing/billing-domain.mjs';
 
@@ -15,6 +15,16 @@ const movements = [
   normalizeMovement({ movement_id:'m2', sale_id:'s1', type:'refund', effective_date:'2026-09-22', value_brl:10, value_usd:null }),
   normalizeMovement({ movement_id:'m3', sale_id:'s4', type:'receipt', effective_date:null, value_brl:25, value_usd:null }),
 ];
+
+assert.equal(displayProductName('20/09 - Total-Control 04 (CB-BB-US) 85% - US$ 45'), 'Total-Control', 'rótulo MCC remove data e metadados de campanha/preço preservando hífen do nome');
+assert.equal(displayProductName('16/09 - NebuEaser 08 (GM-BB-US/CA) 85% - US$ 45'), 'NebuEaser', 'rótulo MCC remove o identificador numérico da campanha');
+assert.equal(displayProductName('ResQVac - CTC $49.99 - Presell Page - Accepts PayPal - Direct Checkout'), 'ResQVac', 'detalhes de checkout e pagamento não entram no rótulo');
+assert.equal(displayProductName('Slimqa Slim Coffee Booster - German Page - (New)'), 'Slimqa Slim Coffee Booster', 'detalhes de página de venda são omitidos');
+assert.equal(displayProductName('The Brain Song - Killer NEW Memory Offer'), 'The Brain Song - Killer NEW Memory Offer', 'hífens sem marcador conhecido de metadados permanecem intactos');
+assert.equal(displayProductName('Produto simples'), 'Produto simples', 'produto sem detalhes mantém o nome original');
+assert.equal(displayProductName(''), '', 'rótulo vazio continua vazio');
+const detailedName = '20/09 - Total-Control 04 (CB-BB-US) 85% - US$ 45';
+assert.equal(normalizeSale({ sale_id:'display-only', sale_date:'2026-09-20', product:detailedName, platform:'ClickBank' }).product, detailedName, 'o nome bruto continua intacto no registro persistido');
 
 const competence = summarizeCompetence(sales, movements);
 assert.equal(competence.salesCount, 3, 'cancelada não compõe KPIs por padrão');
@@ -84,19 +94,44 @@ assert.equal(cashByMonth[0].key, '2026-09');
 const chartSales = [...sales, normalizeSale({ sale_id:'s5', sale_date:'2026-09-25', product:'Produto D', platform:'Hotmart', value_brl:null, value_usd:10 })];
 const chartManualSale = provisionalSaleToBilling({id:'sale-chart',billing_sale_id:'manual-sale:cmp-chart',campanha_id:'cmp-chart',data:'2026-09-29',produto:'Produto E',plataforma:'FlowTracking',valor_brl:235.12,status:'provisoria'});
 const chartConfirmedManualSale = provisionalSaleToBilling({id:'sale-chart-confirmed',billing_sale_id:'manual-sale:cmp-chart-confirmed',campanha_id:'cmp-chart',data:'2026-09-30',produto:'Produto F',plataforma:'FlowTracking',valor_brl:20,status:'conciliada'});
-const monthlyCompetence = monthlyFinancialSeries({ sales:[...chartSales, chartManualSale, chartConfirmedManualSale], movements, start:'2026-08-20', end:'2026-10-02' });
+const monthlyCompetence = monthlyFinancialSeries({ sales:[...chartSales, chartManualSale, chartConfirmedManualSale], movements, start:'2026-08-20', end:'2026-10-02', exchangeRate:5.1 });
 assert.deepEqual(monthlyCompetence.map(({ key, value, records, complete }) => ({ key, value, records, complete })), [
   { key:'2026-08', value:0, records:0, complete:true },
-  { key:'2026-09', value:430.12, records:6, complete:false },
+  { key:'2026-09', value:481.12, records:6, complete:true },
   { key:'2026-10', value:0, records:0, complete:true },
-], 'série mensal inclui meses sem venda como zero e preserva mês com valores ausentes como parcial');
+], 'série mensal usa BRL quando disponível, converte USD apenas como alternativa, preserva meses vazios como zero e não marca USD como valor ausente');
+const dailyRevenue=aggregateBillingRevenueByDate([...chartSales,chartManualSale,chartConfirmedManualSale],5.1);
+assert.equal([...dailyRevenue.values()].reduce((total,day)=>total+(day.amount||0),0),monthlyCompetence[1].value,'as receitas diárias que alimentam o Controle Macro usam exatamente a mesma regra/cotação da série mensal do Faturamento');
+assert.equal(dailyRevenue.get('2026-09-25').amount,51,'receita diária converte valores USD em BRL pela cotação atual');
 assert.deepEqual(monthlyCompetence[1].manualBrl, { amount:255.12, records:2, missing:0 }, 'o subtotal manual, inclusive os lançamentos já conciliados, aparece separado no tooltip e já está incluído uma única vez no total mensal');
+const dualCurrencySale = normalizeSale({ sale_id:'s-dual-currency', sale_date:'2026-10-13', product:'Produto em duas moedas', platform:'ClickBank', value_brl:125, value_usd:24.5 });
+const dualCurrencyMonth = monthlyFinancialSeries({ sales:[dualCurrencySale], start:'2026-10-01', end:'2026-10-31', exchangeRate:5.1 });
+const dualCurrencyDay = aggregateBillingRevenueByDate([dualCurrencySale],5.1).get('2026-10-13');
+assert.equal(dualCurrencyMonth[0].value,125,'com BRL e USD no mesmo lançamento, o gráfico contabiliza o valor em BRL uma única vez');
+assert.deepEqual({ amount:dualCurrencyDay.amount, known:dualCurrencyDay.knownAmounts, sale:dualCurrencyDay.saleAmounts.get('s-dual-currency') },{ amount:125, known:1, sale:125 },'Controle Macro usa a mesma precedência por lançamento que o gráfico de Faturamento');
+const zeroBrlDualCurrency = monthlyFinancialSeries({ sales:[normalizeSale({ sale_id:'s-zero-brl-dual', sale_date:'2026-10-14', product:'Produto zero BRL', platform:'ClickBank', value_brl:0, value_usd:10 })], start:'2026-10-01', end:'2026-10-31', exchangeRate:5.1 });
+assert.deepEqual({ value:zeroBrlDualCurrency[0].value, complete:zeroBrlDualCurrency[0].complete },{ value:0, complete:true },'BRL zero explícito prevalece sobre USD e não é tratado como valor ausente');
 const missingBrlMovement = normalizeMovement({ movement_id:'m4', sale_id:'s1', type:'receipt', effective_date:'2026-09-20', value_brl:null, value_usd:10 });
-const monthlyCash = monthlyFinancialSeries({ movements:[...movements.filter(move => move.effective_date), missingBrlMovement], salesById:new Map(sales.map(sale => [sale.sale_id, sale])), start:'2026-09-01', end:'2026-10-01', mode:'cash' });
+const monthlyCash = monthlyFinancialSeries({ movements:[...movements.filter(move => move.effective_date), missingBrlMovement], salesById:new Map(sales.map(sale => [sale.sale_id, sale])), start:'2026-09-01', end:'2026-10-01', mode:'cash', exchangeRate:5.1 });
 assert.deepEqual(monthlyCash.map(({ key, value, complete }) => ({ key, value, complete })), [
-  { key:'2026-09', value:90, complete:false },
+  { key:'2026-09', value:141, complete:true },
   { key:'2026-10', value:0, complete:true },
-], 'série de caixa agrupa recebimentos líquidos de reembolsos e mantém incompletude monetária');
+], 'série de caixa usa BRL por movimento quando presente, converte USD apenas quando falta BRL e preserva os sinais líquidos');
+const missingValueSale = normalizeSale({ sale_id:'s-missing-chart', sale_date:'2026-10-10', product:'Produto sem valor', platform:'ClickBank', value_brl:null, value_usd:null });
+const partialChart = monthlyFinancialSeries({ sales:[missingValueSale], start:'2026-10-01', end:'2026-10-31', exchangeRate:5.1 });
+assert.deepEqual(partialChart.map(({ value, complete, missingAmounts }) => ({ value, complete, missingAmounts })), [
+  { value:null, complete:false, missingAmounts:1 },
+], 'série mensal continua incompleta quando falta valor em ambas as moedas');
+const noRateChart = monthlyFinancialSeries({ sales:[normalizeSale({ sale_id:'s-usd-no-rate', sale_date:'2026-10-11', product:'Produto USD', platform:'ClickBank', value_usd:10 })], start:'2026-10-01', end:'2026-10-31' });
+assert.deepEqual(noRateChart.map(({ value, complete, missingAmounts }) => ({ value, complete, missingAmounts })), [
+  { value:null, complete:false, missingAmounts:1 },
+], 'sem taxa válida o valor USD não vira zero nem é somado como BRL');
+const noRateByDate=aggregateBillingRevenueByDate([normalizeSale({sale_id:'s-usd-no-rate-daily',sale_date:'2026-10-11',product:'Produto USD',platform:'ClickBank',value_usd:10})]);
+assert.deepEqual({amount:noRateByDate.get('2026-10-11').amount,complete:noRateByDate.get('2026-10-11').complete},{amount:null,complete:false},'a fonte diária do Macro mantém a mesma lacuna quando não existe cotação USD válida');
+const zeroUsdChart = monthlyFinancialSeries({ sales:[normalizeSale({ sale_id:'s-usd-zero', sale_date:'2026-10-12', product:'Produto USD zero', platform:'ClickBank', value_usd:0 })], start:'2026-10-01', end:'2026-10-31' });
+assert.deepEqual(zeroUsdChart.map(({ value, complete }) => ({ value, complete })), [
+  { value:0, complete:true },
+], 'zero em USD permanece um valor observado mesmo sem cotação');
 assert.deepEqual(monthlyFinancialSeries({ sales, start:'2026-10-02', end:'2026-10-01' }), [], 'intervalo inválido não gera categorias');
 assert.equal(compareRows({ sale:{product:'Alfa'} }, { sale:{product:'Beta'} }, 'product', 'asc') < 0, true);
 assert.deepEqual(paginate(Array.from({ length:51 }, (_, index) => index), 2, 50), { page:2, pageSize:50, pages:2, total:51, rows:[50] });

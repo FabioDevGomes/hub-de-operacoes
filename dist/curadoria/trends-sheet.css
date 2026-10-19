@@ -20,9 +20,18 @@
 @media(max-width:560px){.sheet-summary{grid-template-columns:1fr}.sheet-tabs{width:100%;flex-wrap:wrap}.sheet-tabs button{flex:1}.trends-preview-grid,.lp-import-summary,.trends-result-actions{grid-template-columns:1fr}.trends-search-row,.trends-result-head{align-items:stretch;flex-direction:column}.history-row{grid-template-columns:1fr;gap:3px}}
 @media(max-width:700px){.trends-result-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.decision-dialog-actions{grid-template-columns:1fr 1fr}.decision-dialog-actions .decision-option:first-child{grid-column:1/-1}}
+.decision-dialog-notes[hidden]{display:none}.decision-dialog-notes{display:grid;gap:7px;padding:16px 21px 0}.decision-dialog-notes label{color:var(--muted);font-size:.82rem;font-weight:700}.decision-dialog-notes textarea{width:100%;min-height:88px;padding:10px 12px;resize:vertical;border:1px solid var(--line);border-radius:9px;background:#071222;color:var(--text);font:inherit;font-size:.88rem;line-height:1.45}.decision-dialog-notes textarea::placeholder{color:var(--muted)}.decision-dialog-notes textarea:focus-visible{outline:2px solid rgba(90,177,255,.72);outline-offset:2px}.decision-dialog-notes textarea:disabled{opacity:.7}.decision-dialog-notes:not([hidden])+#sharedDecisionActions{padding-top:14px}
 @media(max-width:760px){.image-country-head,.image-mixed-copy{align-items:stretch;flex-direction:column}.image-search-button{width:100%}.image-result-actions{grid-template-columns:repeat(6,minmax(96px,1fr));overflow-x:auto;padding:2px 2px 7px}.image-mixed-copy span{text-align:left}.image-candidate-entry{grid-template-columns:minmax(0,1fr)}.image-candidate-entry [data-manager-image-save-mixed]{grid-column:1/-1}}
 
-.trends-keyword-candidate{font-size:.9rem}.image-candidate{font-size:.9rem;font-weight:750}.image-candidate.saved{font-size:.9rem}
+/* Candidatas positivas do Google Trends: texto regular e pesquisa compacta no padrão verde plano. */
+.keyword-candidate.trends-keyword-candidate,
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-text{font-weight:400}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-search{appearance:none;-webkit-appearance:none;border:1px solid rgba(53,198,145,.42);border-style:solid;border-radius:7px;background:rgba(5,34,24,.38);background-clip:padding-box;box-shadow:none;color:#83e5bb;padding:3.19px 5.95px;font-family:inherit;font-size:.578rem;font-weight:400;line-height:normal;white-space:nowrap;text-shadow:none;transition:none}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-search:hover{border-color:#35c691;background:rgba(20,76,59,.3);color:#eafff5}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-search:hover:not(:focus-visible){outline:none;outline-offset:0}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-search:focus-visible{outline:2px solid rgba(53,198,145,.75);outline-offset:2px}
+
+.trends-keyword-candidate{font-size:.9rem}.image-candidate{font-size:.9rem;font-weight:400}.image-candidate.saved{font-size:.9rem}
 
 /* Padrão semântico único da coluna Decisão em todas as listas de Curadoria. */
 :root{

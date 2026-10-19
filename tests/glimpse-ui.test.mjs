@@ -41,8 +41,8 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.ok(clickbankPage.includes('../glimpse/glimpse-embed-host.css?v=1')&&smartadvPage.includes('../glimpse/glimpse-embed-host.css?v=1'),'Top Offers CB e SmartAdv importam o mesmo CSS de integração');
   assert.match(clickbankPage,/<section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'ClickBank mantém o iframe como filho direto do painel compartilhado');
   assert.match(smartadvPage,/<section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame"/,'SmartAdv usa o mesmo painel direto, sem cartão hospedeiro');
-  assert.match(embedHostCss,/#offerSheet \.glimpse-embed-panel>\.glimpse-embedded-frame\{[^}]*max-height:none[^}]*border:0[^}]*background:transparent\}/,'o CSS compartilhado remove recorte, borda e fundo do iframe');
-  assert.match(embedHostCss,/#offerSheet:has\(\.glimpse-embed-panel:not\(\.hidden\)\)\{[^}]*overflow:visible\}/,'o host expande o painel Glimpse para o fluxo da página');
+  assert.match(embedHostCss,/#offerSheet \.glimpse-embed-panel>\.glimpse-embedded-frame,#productSheet \.glimpse-embed-panel>\.glimpse-embedded-frame\{[^}]*max-height:none[^}]*border:0[^}]*background:transparent\}/,'o CSS compartilhado remove recorte, borda e fundo do iframe');
+  assert.match(embedHostCss,/#offerSheet:has\(\.glimpse-embed-panel:not\(\.hidden\)\),#productSheet:has\(\.glimpse-embed-panel:not\(\.hidden\)\)\{[^}]*overflow:visible\}/,'o host expande o painel Glimpse para o fluxo da página');
   assert.equal(distHeaderControls,headerControls,'o controle compartilhado do cabeçalho é publicado pelo build');
   assert.equal(distSharedStyles,styles,'os estilos dos cabeçalhos hospedeiros correspondem à fonte');
   assert.match(manager,/data-sort="glimpse"/);
@@ -120,6 +120,12 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(styles,/\.glimpse-badge:is\(:hover,:focus-visible\)/,'o hover e foco do badge seguem os seletores compartilhados atuais');
   assert.match(styles,/filter:brightness\(1\.25\)/);
   assert.match(manager,/glimpse-shortcut\.mjs\?v=\d+" data-origin="manager"/);
+  assert.match(manager,/id="managerGlimpseTab"[^>]*data-tab="glimpse"/,'a ficha Lista de Gerente oferece uma aba Glimpse própria');
+  assert.match(manager,/id="managerGlimpseFrame" class="glimpse-embedded-frame"/,'a Lista de Gerente incorpora a página Glimpse compartilhada');
+  assert.match(manager,/origin:'manager',[\s\S]*?embedded:'1'/,'a incorporação preserva a origem de Lista de Gerente');
+  assert.match(manager,/mountGlimpseHeaderAction\(\{frame:managerGlimpseFrame,panel:managerGlimpsePanel,[\s\S]*?finishLabel:'Salvar',showSavedFeedback:true\}\)/,'a ficha usa o Salvar/Salvo compartilhado');
+  assert.match(manager,/event\.origin!==location\.origin\|\|event\.source!==managerGlimpseFrame\.contentWindow/,'mensagens do iframe da Lista de Gerente validam origem e janela');
+  assert.match(manager,/link\.closest\('\[data-product\]'\)\?\.dataset\.product;if\(productKey\)openSheet\(productKey,'glimpse'\)/,'o atalho Glimpse abre a ficha na aba incorporada');
   assert.match(top,/glimpse-shortcut\.mjs\?v=\d+" data-origin="top"/);
   assert.match(shortcut,/Abrir Glimpse/);
   assert.match(shortcut,/origin==='top'\?topContext\(\):managerContext\(\)/);

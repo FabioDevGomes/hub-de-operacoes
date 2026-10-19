@@ -14,9 +14,12 @@ const [top,manager] = await Promise.all([
 ]);
 const ui = await readFile(new URL('../src/curadoria/gurumedia-offer-links-ui.mjs',import.meta.url),'utf8');
 const sharedCss = await readFile(new URL('../src/curadoria/trends-sheet.css',import.meta.url),'utf8');
-assert.ok(top.includes('gurumedia-offer-links-ui.mjs?view=top'),'botão de oferta GuruMedia não está conectado ao E-commerce GM');
+assert.ok(top.includes('gurumedia-offer-links-ui.mjs?view=top&v=20261016-offer-action'),'botão de oferta GuruMedia não está conectado com cache atualizado ao E-commerce GM');
 assert.ok(manager.includes('gurumedia-offer-links-ui.mjs?view=manager'),'botão de oferta GuruMedia não está conectado à Lista de Gerente');
 assert.ok(top.includes('id="topProductAgeActions"')&&manager.includes('id="managerProductAgeActions"'),'ponto de inserção abaixo de Produto novo/Produto antigo não está presente');
+assert.ok(ui.includes('function ensureTopOfferActionTarget()')&&ui.includes("sheet?.querySelector('.trends-country-card')")&&ui.includes("headingRow.append(target)"),'o link não é movido para o canto direito do cabeçalho de países da ficha GuruMedia');
+assert.ok(ui.includes('Oferta(s) específica(s) na GuruMedia</span>${target ? \'\' : linksHtml}')&&ui.includes('const targetHtml = ids.length && target ? linksHtml : \'\';'),'somente o botão muda de posição: o rótulo permanece no grupo abaixo de Momento do produto');
+assert.ok(ui.includes('style[data-gurumedia-offer-action]')&&ui.includes('#offerSheet .trends-country-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}'),'o alinhamento do novo destino é limitado à ficha GuruMedia e mantém a ação à direita');
 assert.ok(ui.includes("document.querySelector('#sheetTitle')")&&ui.includes("document.querySelectorAll('#variantRows tr td:first-child')"),'IDs das ofertas não são lidos do contexto correto em cada tela');
 assert.ok(ui.includes('target="_blank" rel="noopener noreferrer"')&&ui.includes('guruMediaOfferUrl(id)'),'atalho não abre a oferta correta em nova aba com proteção de navegação');
 assert.ok(ui.includes("const rows = document.querySelector('#rows')")&&ui.includes("row.querySelector('td[data-col=\"id\"]')")&&ui.includes('link.href = url')&&ui.includes('link.textContent = id')&&ui.includes("link.addEventListener('click', event => event.stopPropagation())")&&ui.includes('new MutationObserver(linkTopTableOfferIds).observe(topOfferRows, {childList:true})'),'E-commerce GM deve converter IDs da tabela em links após atualizações da lista sem acionar abertura da ficha');

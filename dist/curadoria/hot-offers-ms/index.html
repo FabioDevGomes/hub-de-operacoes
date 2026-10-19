@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hub v1.12.0 · Hot Offers MS · Curadoria</title>
+  <title>Hub v1.22.4 · Hot Offers MS · Curadoria</title>
   <link rel="icon" href="/favicon.png">
-  <link rel="stylesheet" href="../trends-sheet.css?v=20261007-glimpse-borderless-standard-bar">
+  <link rel="stylesheet" href="../trends-sheet.css?v=20261016-trends-keyword-candidates-flat">
   <link rel="stylesheet" href="./hot-offers-ms.css?v=20261007-discreet-hide">
   <link rel="stylesheet" href="/table-headers.css?v=9">
   <link rel="stylesheet" href="/table-edit-actions.css?v=3">
@@ -32,10 +32,10 @@
   </style>
   <link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
   <link rel="stylesheet" href="../analysis-sheet-bar.css?v=3">
-<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/white-button.css?v=5"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"><!-- hub-system-version:start -->
-<meta name="hub-system-version" content="1.12.0">
-<link rel="stylesheet" href="/system-version.css?v=1.12.0">
-<script defer src="/system-version.js?v=1.12.0"></script>
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/white-button.css?v=6"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"><!-- hub-system-version:start -->
+<meta name="hub-system-version" content="1.22.4">
+<link rel="stylesheet" href="/system-version.css?v=1.22.4">
+<script defer src="/system-version.js?v=1.22.4"></script>
 <!-- hub-system-version:end -->
 </head>
 <body data-hub-green-actions="mediascalers">
@@ -76,6 +76,6 @@
   <section class="sheet hidden" id="offerSheet"><div class="sheet-inner"><div class="sheet-tab-bar"><div class="tabs"><button class="btn active" data-tab="overview" type="button">Resumo</button><button class="btn" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button><button class="btn" data-tab="history" type="button">Histórico</button></div><div class="sheet-bar-actions"><button class="btn primary" id="saveSheetButton" type="button" disabled>Salvar</button><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></div></div><header class="sheet-top"><div><div class="eyebrow">Hot Offers MS · Oferta</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div></header><section data-panel="overview"><div class="panel-grid" id="offerMetrics"></div><article class="card"><h2>Decisão de curadoria</h2><div class="decision-grid"><label><span>Status</span><select class="control" id="decisionStatus"><option>Não definido</option><option>Subir campanha</option><option>Campanha no ar</option><option>Revisar</option><option>Ocultar</option></select></label><label><span>Observação e próxima ação</span><textarea class="control" id="decisionNotes"></textarea></label><button class="btn primary" id="saveDecision" type="button">Salvar decisão</button></div><div id="decisionHistory"></div></article><article class="card"><h2>Dados da oferta</h2><div id="offerDetails"></div></article></section><section class="hidden" data-panel="trends"><article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Candidata à palavra-chave"><button class="btn" id="addTrendCandidate" type="button">Adicionar</button></div><div id="trendCandidates"></div></article><article class="card trends-country-card"><h2>Países explícitos</h2><p>Os países visíveis e os incluídos manualmente ficam separados. Códigos ocultos/faltantes não são presumidos.</p><div id="trendCountries" class="trends-country-actions"></div><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div></article><section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><div id="trendMessage" class="sub" aria-live="polite"></div></section><article class="card"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article></section><section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país e registre o resultado visual.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><section id="imageCountries" class="image-country-list"></section><article class="card"><h2>Histórico visual</h2><div id="imagesHistory"></div></article></section><section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></section><section class="hidden" data-panel="history"><article class="card"><h2>Evolução da oferta</h2><div id="offerHistory"></div></article></section></div></section>
 
   <script src="/sidebar-component.js?v=20261010-gurumedia"></script>
-  <script type="module" src="./hot-offers-ms-page.mjs?v=25"></script>
+  <script type="module" src="./hot-offers-ms-page.mjs?v=26"></script>
 <script type="module" src="/curadoria/sheet-escape.mjs?v=1"></script><script type="module" src="/curadoria/column-widths-page.mjs?v=1" data-curation-widths="hot-offers-ms"></script></body>
 </html>

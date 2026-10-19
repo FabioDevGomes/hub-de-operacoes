@@ -1,5 +1,5 @@
-import * as Domain from './personal-finance-domain.mjs?v=34';
-import * as Storage from './personal-finance-storage.mjs?v=23';
+import * as Domain from './personal-finance-domain.mjs?v=35';
+import * as Storage from './personal-finance-storage.mjs?v=24';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
@@ -251,7 +251,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         ? ({ missing:'Sem realizado', unplanned:'Sem planejamento', under:'Dentro do ritmo', near:'Perto do limite diário', overspent:'Acima do ritmo' })[status]
         : ({ missing:'Sem realizado', unplanned:'Sem planejamento', under:'Dentro do planejado', near:'Perto do limite', overspent:'Acima do planejado' })[status];
       const diff = Domain.monthlyAmountRemaining(planned, actual);
-      const paceInfoText = pace ? `Limite ${money(pace.dailyBudget, row.currency)}/dia${pace.actualDailyAverage == null ? '' : ` · média gasta ${money(pace.actualDailyAverage, row.currency)}/dia`}` : '';
+      const paceInfoText = pace ? `Limite ${money(pace.dailyBudget, row.currency)}/dia` : '';
       const paceNote = paceInfoText ? `<button class="pf-budget-info" type="button" title="${esc(paceInfoText)}" aria-label="Informações: ${esc(paceInfoText)}"><span aria-hidden="true">i</span></button>` : '';
       const dueDay = monthlyDueDays.get(normalizeExpenseCategoryName(row.category_name));
       const dueDateNote = dueDay == null ? '' : `<span class="pf-due-date" title="Vencimento mensal: dia ${dueDay}">Vence dia ${dueDay}</span>`;
@@ -423,7 +423,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const availableRows = state.funds.filter(item => item.type === 'available');
     const reserveBalance = Domain.CURRENCIES.map(code => {
       const summary = state.reserveSummary;
-      return `<div class="pf-reserve-balance"><b>${code}</b><span>Reserva acumulada ${money(summary?.balances?.[code] || 0, code)}</span><small>Aportes ${money(summary?.contributed?.[code] || 0, code)} · gastos realizados ${money(summary?.spent?.[code] || 0, code)}</small></div>`;
+      return `<div class="pf-reserve-balance"><b>${code}</b><span>Reserva acumulada ${money(summary?.balances?.[code] || 0, code)}</span><small>Aportes brutos ${money(summary?.contributed?.[code] || 0, code)} · resgates ${money(summary?.withdrawals?.[code] || 0, code)} · impostos ${money(summary?.taxes?.[code] || 0, code)}</small><small>Gastos realizados ${money(summary?.spent?.[code] || 0, code)}</small></div>`;
     }).join('');
     const categoryGroups = state.groups.length
       ? state.groups.map(group => `<div class="pf-catalog-row"><div><strong>${esc(group.name)}</strong><small>${state.categories.filter(category => category.group_id === group.group_id).length} categoria(s) vinculada(s)${group.active ? '' : ' · inativo'}</small></div><div class="pf-actions"><button class="pf-icon-button" type="button" data-action="edit-group" data-id="${esc(group.group_id)}">Editar</button><button class="pf-icon-button" type="button" data-action="toggle-group" data-id="${esc(group.group_id)}">${group.active ? 'Inativar' : 'Ativar'}</button></div></div>`).join('')
@@ -443,7 +443,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     return `<div class="pf-position-list${isReserve ? ' pf-reserve-list' : ''}">${items.map(item => `<div class="pf-position-row"><div><strong>${esc(item.name)}</strong>${isReserve ? '' : `<small>${kind === 'debt' ? item.status === 'paid' ? 'Paga' : 'Em aberto' : 'Disponível'} · ${item.currency}${item.notes ? ` · ${esc(item.notes)}` : ''}</small>`}</div><b>${money(item.amount, item.currency)}</b><div class="pf-actions"><button class="pf-icon-button" type="button" data-action="${editAction}" data-id="${esc(item.item_id)}">Editar</button><button class="pf-icon-button danger" type="button" data-action="${deleteAction}" data-id="${esc(deleteId(item))}">${isReserve ? 'Remover aporte global' : 'Remover deste mês'}</button></div></div>`).join('')}</div>`;
   }
   function modalMarkup() {
-    return state.modal ? `<div class="pf-modal-backdrop" data-action="close-modal"><section class="pf-modal" role="dialog" aria-modal="true" aria-labelledby="pfModalTitle"><div class="pf-modal-head"><h2 id="pfModalTitle">${esc(state.modal.title)}</h2><button class="pf-icon-button" type="button" aria-label="Fechar" data-action="close-modal">×</button></div><form data-form="${esc(state.modal.type)}" data-id="${esc(state.modal.id || '')}">${state.modal.body}<div class="pf-actions pf-modal-actions"><button class="btn" type="button" data-action="close-modal">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></section></div>` : '';
+    return state.modal ? `<div class="pf-modal-backdrop" data-action="close-modal"><section class="pf-modal${state.modal.type === 'reserve' ? ' pf-reserve-modal' : ''}" role="dialog" aria-modal="true" aria-labelledby="pfModalTitle"><div class="pf-modal-head"><h2 id="pfModalTitle">${esc(state.modal.title)}</h2><button class="pf-icon-button" type="button" aria-label="Fechar" data-action="close-modal">×</button></div><form data-form="${esc(state.modal.type)}" data-id="${esc(state.modal.id || '')}">${state.modal.body}<div class="pf-actions pf-modal-actions"><button class="btn" type="button" data-action="close-modal">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></section></div>` : '';
   }
   function render() {
     renderedDailyPaceDay = localDayKey(new Date());
@@ -479,6 +479,8 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const panelActions = `<div class="pf-main-controls">${monthCountControl}${monthNavigation}${monthlyActions}</div>`;
     root.innerHTML = `<section class="pf-shell"><header class="pf-page-head pf-page-head-actions-only"><div class="pf-header-actions">${viewToggle}</div></header><section class="pf-kpis" aria-label="Resumo por moeda e diferença">${isPeriodView ? renderPeriodKpis(period, { compareReserve:isConsolidated }) : renderKpis(summary)}${renderReserveDifferenceCard()}</section><section class="card panel pf-main-panel"><div class="panel-head"><div><h2>${isPeriodView ? `Despesas por ${esc(period.label)}` : 'Planejado × realizado'}</h2>${helpText ? `<p>${helpText}</p>` : ''}</div>${panelActions}</div>${isMonth ? `<div class="pf-create-month ${state.createMonthOpen ? '' : 'hidden'}"><label for="pfPlanSource">Plano para ${esc(monthName(state.monthKey))}</label><select id="pfPlanSource" class="search"><option value="previous">Copiar somente o planejado do mês anterior</option><option value="defaults">Usar os valores padrão das categorias</option></select><span>Realizados ficam em branco. Dívidas em aberto, disponibilidade e reservas são trazidas como ponto de partida mensal, sem alterar o mês anterior.</span><button class="btn primary" type="button" data-action="create-month">Criar mês</button><button class="btn" type="button" data-action="toggle-create-month">Cancelar</button></div>` : ''}${mainTable}</section>${isPeriodView ? '' : managementMarkup()}${modalMarkup()}<p class="pf-footnote">Dados armazenados localmente neste navegador. Valores de BRL e USD são calculados em separado; a moeda do lançamento mensal preserva a fonte.</p></section>`;
     root.innerHTML = root.innerHTML.replace('Realizados ficam em branco. Dívidas em aberto, disponibilidade e reservas são trazidas como ponto de partida mensal, sem alterar o mês anterior.', 'Realizados ficam em branco. Dívidas em aberto e saldos disponíveis são trazidos; a reserva global permanece igual à soma dos aportes, e os gastos são acompanhados nas despesas.');
+    const createMonthNote = root.querySelector('.pf-create-month span');
+    if (createMonthNote) createMonthNote.textContent = 'Realizados ficam em branco. Dívidas e saldos são trazidos; a reserva global considera aportes menos resgates e impostos registrados, sem abatimento automático de gastos.';
     root.querySelector('.pf-kpis')?.insertAdjacentHTML('afterend', renderGlobalReserveSummary());
     const periodLengthField = root.querySelector('.pf-period-length');
     if (periodLengthField) periodLengthField.insertAdjacentHTML('afterend', `<span class="pf-period-adjust"><button class="pf-period-adjust-button" type="button" data-action="adjust-period-length" data-delta="1" aria-label="Aumentar em um mês" title="Adicionar um mês" ${state.periodMonthCount >= monthCountLimit ? 'disabled' : ''}>↑</button><button class="pf-period-adjust-button" type="button" data-action="adjust-period-length" data-delta="-1" aria-label="Diminuir em um mês" title="Remover um mês" ${state.periodMonthCount <= Domain.MIN_CONSOLIDATED_MONTH_COUNT ? 'disabled' : ''}>↓</button></span>`);
@@ -539,10 +541,19 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         ? item ? 'Editar dívida do mês' : 'Adicionar dívida'
         : type === 'reserve' ? item ? 'Editar aporte da reserva global' : 'Adicionar à reserva global'
           : item ? 'Editar saldo disponível do mês' : 'Adicionar saldo disponível';
-      state.modal.body = `<label>Nome<input name="name" required maxlength="100" value="${esc(item?.name || '')}"></label><div class="pf-form-row"><label>Valor<input name="amount" inputmode="decimal" required value="${item ? amount(item.amount) : ''}"></label><label>Moeda<select name="currency"><option value="BRL" ${item?.currency !== 'USD' ? 'selected' : ''}>BRL · Real</option><option value="USD" ${item?.currency === 'USD' ? 'selected' : ''}>USD · Dólar</option></select></label></div>${type === 'debt' ? `<label>Situação<select name="status"><option value="open" ${item?.status !== 'paid' ? 'selected' : ''}>Em aberto</option><option value="paid" ${item?.status === 'paid' ? 'selected' : ''}>Paga</option></select></label>` : type === 'reserve' ? '<p class="pf-form-note">O aporte aumenta a disponibilidade global. Gastos realizados não são descontados da reserva; eles reduzem as despesas previstas em aberto na tabela.</p>' : '<input type="hidden" name="type" value="available">'}<label>Observações<textarea name="notes" rows="2" maxlength="300">${esc(item?.notes || '')}</textarea></label>`;
+      const reserveOperations = type === 'reserve' && item ? reserveOperationsMarkup(item) : '';
+      const currencyLocked = type === 'reserve' && item?.reserve_movements?.length;
+      state.modal.body = `<label>Nome<input name="name" required maxlength="100" value="${esc(item?.name || '')}"></label><div class="pf-form-row"><label>Valor<input name="amount" inputmode="decimal" required value="${item ? amount(item.amount) : ''}"></label><label>Moeda<select name="currency" ${currencyLocked ? 'disabled title="A moeda não pode ser alterada depois de registrar movimentações."' : ''}><option value="BRL" ${item?.currency !== 'USD' ? 'selected' : ''}>BRL · Real</option><option value="USD" ${item?.currency === 'USD' ? 'selected' : ''}>USD · Dólar</option></select></label></div>${type === 'debt' ? `<label>Situação<select name="status"><option value="open" ${item?.status !== 'paid' ? 'selected' : ''}>Em aberto</option><option value="paid" ${item?.status === 'paid' ? 'selected' : ''}>Paga</option></select></label>` : type === 'reserve' ? `<p class="pf-form-note">Aportes aumentam a reserva global. Resgates e impostos registrados aqui são descontados do saldo; gastos comuns não são abatidos automaticamente.</p>${reserveOperations}${currencyLocked ? '<p class="pf-form-note">A moeda fica bloqueada porque já existem movimentações neste histórico.</p>' : ''}` : '<input type="hidden" name="type" value="available">'}<label>Observações<textarea name="notes" rows="2" maxlength="300">${esc(item?.notes || '')}</textarea></label>`;
     }
     render();
     root.querySelector('.pf-modal input')?.focus();
+  }
+  function reserveOperationsMarkup(item) {
+    const movements = [...(item.reserve_movements || [])].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.movement_id.localeCompare(a.movement_id));
+    const history = movements.length
+      ? `<ol class="pf-reserve-history-list">${movements.map(movement => `<li><span>${movement.type === 'withdrawal' ? 'Resgate' : 'Prejuízo: imposto menos lucro'}</span><strong>${money(movement.amount, movement.currency)}</strong><time datetime="${esc(movement.created_at)}">${esc(new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(movement.created_at)))}</time></li>`).join('')}</ol>`
+      : '<p class="pf-empty-inline">Nenhum resgate ou imposto registrado.</p>';
+    return `<section class="pf-reserve-operations" aria-label="Resgates e impostos desta reserva"><h3>Resgates e impostos</h3><div class="pf-reserve-operation-row"><label>Valor do resgate<input name="withdrawal_amount" data-reserve-field="withdrawal" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-withdraw" data-id="${esc(item.item_id)}">Resgatar</button></div><div class="pf-reserve-operation-row"><label>Prejuízo: imposto menos lucro<input name="tax_amount" data-reserve-field="tax" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-deduct-tax" data-id="${esc(item.item_id)}">Deduzir impostos</button></div><div class="pf-reserve-history"><h4>Histórico</h4>${history}</div></section>`;
   }
   state.modal = null;
 
@@ -560,6 +571,38 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
     for (let position = 0; position < ordered.length; position += 1) await Storage.saveCategory({ ...ordered[position], sort_order: position });
     await loadMonth();
+  }
+
+  async function recordReserveMovementFromModal(button, itemId, type) {
+    const form = button.closest('form[data-form="reserve"]');
+    if (!form) throw new Error('Abra uma contribuição da reserva antes de registrar a movimentação.');
+    if (form.dataset.reserveBusy === 'true') return;
+    const input = form.querySelector(`[data-reserve-field="${type}"]`);
+    const value = parseAmount(input?.value);
+    if (value == null || value <= 0) throw new Error('Informe um valor maior que zero.');
+    const existing = state.funds.find(item => item.item_id === itemId && item.type === 'reserve');
+    if (!existing) throw new Error('A contribuição global da reserva não foi encontrada.');
+    const selectedCurrency = form.elements.namedItem('currency')?.value || existing.currency;
+    if (selectedCurrency !== existing.currency) throw new Error('Salve a alteração de moeda antes de registrar uma movimentação.');
+    form.dataset.reserveBusy = 'true';
+    form.querySelectorAll('.pf-reserve-action').forEach(actionButton => { actionButton.disabled = true; });
+    let recorded = false;
+    try {
+      await Storage.recordReserveMovement(itemId, type, value);
+      recorded = true;
+      await loadMonth();
+      openModal('reserve', itemId);
+      root.querySelector(`[data-reserve-field="${type}"]`)?.focus();
+      toast(type === 'withdrawal' ? `${money(value, existing.currency)} resgatados da reserva ${existing.name}.` : `${money(value, existing.currency)} em impostos deduzidos da reserva ${existing.name}.`);
+    } catch (error) {
+      if (recorded) {
+        toast('A movimentação foi gravada, mas a tela não atualizou. Recarregue a página para conferir o saldo e o histórico.', true);
+        return;
+      }
+      form.dataset.reserveBusy = 'false';
+      form.querySelectorAll('.pf-reserve-action').forEach(actionButton => { actionButton.disabled = false; });
+      throw error;
+    }
   }
 
   root.addEventListener('click', async event => {
@@ -589,6 +632,8 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         await loadMonth();
         toast(`${entry.category_name}: ${money(entry.planned_amount, entry.currency)} lançado como pago e considerado no orçamento e na reserva global.`);
       }
+      else if (action === 'reserve-withdraw') await recordReserveMovementFromModal(button, id, 'withdrawal');
+      else if (action === 'reserve-deduct-tax') await recordReserveMovementFromModal(button, id, 'tax');
       else if (action === 'new-category') openModal('category');
       else if (action === 'edit-category') openModal('category', id);
       else if (action === 'new-group') openModal('group');
@@ -683,7 +728,12 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         if (existing) await Storage.saveFund(fund); else await Storage.createFund(fund);
       } else if (type === 'reserve') {
         const existing = state.funds.find(item => item.item_id === id && item.type === 'reserve'), itemId = existing?.item_id || newId('fund');
-        const fund = { snapshot_id: existing?.snapshot_id || `${state.monthKey}:${itemId}`, month_key: existing?.month_key || state.monthKey, item_id: itemId, name: values.name, amount: parseAmount(values.amount), currency: values.currency, type:'reserve', notes: values.notes };
+        const currency = values.currency || existing?.currency || 'BRL';
+        if (existing?.reserve_movements?.length && currency !== existing.currency) throw new Error('A moeda não pode ser alterada depois de registrar movimentações na reserva.');
+        const displayedAmount = parseAmount(values.amount);
+        const deductions = (existing?.reserve_movements || []).filter(movement => movement.currency === currency).reduce((total, movement) => total + movement.amount, 0);
+        const amount = existing ? Math.round(((displayedAmount ?? 0) + deductions + Number.EPSILON) * 100) / 100 : displayedAmount;
+        const fund = { snapshot_id: existing?.snapshot_id || `${state.monthKey}:${itemId}`, month_key: existing?.month_key || state.monthKey, item_id: itemId, name: values.name, amount, currency, type:'reserve', notes: values.notes };
         if (existing) await Storage.saveReserveContribution(fund); else await Storage.createFund(fund);
       } else throw new Error('Formulário de lançamento não reconhecido.');
       state.modal = null;

@@ -54,4 +54,48 @@ export function compareProductLists(currentOffers=[],previousOffers=[]){
   const notRepeated=previous.filter(product=>!currentKeys.has(product.key)).map(product=>({...product,movement:'nao_repetido'}));
   return {current:currentWithMovement,notRepeated,counts:{new:currentWithMovement.filter(x=>x.movement==='novo').length,remained:currentWithMovement.filter(x=>x.movement==='permaneceu').length,notRepeated:notRepeated.length}};
 }
+export function collectionIdentity(collection){
+  const id=String(collection?.collectionId||'').trim();
+  return id||`legacy:${String(collection?.date||'')}`;
+}
+export const ALL_COLLECTIONS_SELECTION='__all_collections__';
+function collectionTimestamp(collection){
+  const importedAt=Date.parse(collection?.importedAt||'');
+  if(Number.isFinite(importedAt))return importedAt;
+  const date=Date.parse(`${String(collection?.date||'')}T00:00:00.000Z`);
+  return Number.isFinite(date)?date:0;
+}
+export function orderCollections(collections=[]){
+  return [...collections].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||collectionTimestamp(a)-collectionTimestamp(b)||collectionIdentity(a).localeCompare(collectionIdentity(b)));
+}
+function collectionOffers(collection,offers){
+  if(!collection)return [];
+  if(Array.isArray(collection.offers)&&collection.offers.length)return collection.offers;
+  const ids=new Set((collection.offerIds||[]).map(String));
+  return offers.filter(offer=>ids.has(String(offer.id)));
+}
+function uniqueOffers(collections,offers){
+  const byId=new Map();
+  for(const collection of collections)for(const offer of collectionOffers(collection,offers)){
+    const id=String(offer.id||`${offer.productKey||''}\u0000${offer.offerTitle||offer.variant||''}`);
+    byId.set(id,offer);
+  }
+  return [...byId.values()];
+}
+export function projectAllCollections(collections=[],offers=[]){
+  const ordered=orderCollections(collections),current=ordered.at(-1)||null,previous=ordered.at(-2)||null;
+  const currentOffers=collectionOffers(current,offers),previousOffers=collectionOffers(previous,offers),allOffers=uniqueOffers(ordered,offers);
+  const comparison=compareProductLists(currentOffers,previousOffers),currentByKey=new Map(comparison.current.map(product=>[product.key,product]));
+  const allProducts=groupProducts(allOffers).map(product=>({...product,movement:currentByKey.get(product.key)?.movement||'nao_repetido'}));
+  comparison.notRepeated=allProducts.filter(product=>product.movement==='nao_repetido');
+  comparison.counts.notRepeated=comparison.notRepeated.length;
+  return {ordered,current,previous,selectedCollectionId:ALL_COLLECTIONS_SELECTION,allCollections:true,currentOffers,previousOffers,allOffers,allProducts,comparison};
+}
+export function projectCollectionView(collections=[],offers=[],selectionId=''){
+  const ordered=orderCollections(collections);
+  if(selectionId===ALL_COLLECTIONS_SELECTION||!ordered.length)return projectAllCollections(ordered,offers);
+  const selected=ordered.some(item=>collectionIdentity(item)===selectionId)?selectionId:collectionIdentity(ordered.at(-1)),index=ordered.findIndex(item=>collectionIdentity(item)===selected),current=index>=0?ordered[index]:null,previous=index>0?ordered[index-1]:null;
+  const currentOffers=collectionOffers(current,offers),previousOffers=collectionOffers(previous,offers);
+  return {ordered,current,previous,selectedCollectionId:current?selected:'',currentOffers,previousOffers,comparison:compareProductLists(currentOffers,previousOffers)};
+}
 export function upsertObservation(history=[],entry){const list=[...history],index=list.findIndex(x=>x.date===entry.date);if(index>=0)list[index]=entry;else list.push(entry);return list.sort((a,b)=>a.date.localeCompare(b.date))}

@@ -18,5 +18,5 @@ test('Lançamento rápido compacta somente corpo/controles da tabela sem reduzir
   assert.ok(css.includes('.time-history-table-wrap .time-table td{padding:2px 6px}'));
   assert.ok(css.includes('button[data-until]:disabled{opacity:.45'));
   assert.ok((await read('src/table-headers.css')).includes('font-size: .73rem !important'));
-  assert.ok((await read('dist/index.html')).includes('meu-tempo/meu-tempo.css?v=32'));
+  assert.ok((await read('dist/index.html')).includes('meu-tempo/meu-tempo.css?v=36'));
 });

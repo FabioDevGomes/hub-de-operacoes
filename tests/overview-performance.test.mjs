@@ -104,6 +104,6 @@ test('card revision comes from the saved MCC summary, never initial restoration 
   assert.match(source,/postMessage\(\{type:'base-updated',source:'panel'/);
   assert.match(source,/const fromMcc=event\.data\?\.type==='base-updated'&&event\.data\?\.source!=='panel'/);
   const receiver=source.slice(source.indexOf('const fromMcc=event.data'),source.indexOf('const accountScrollMain='));
-  assert.match(receiver,/restoreLocalBase\(\{persist:false,renderPage:false\}\)\.then\(async\(\)=>\{/);
+  assert.match(receiver,/restoreLocalBase\(\{persist:false,renderPage:false,includeCatalog:true\}\)\.then\(async\(\)=>\{/);
   assert.ok(!receiver.includes('OverviewCardsDomain.create'), 'receiving notifications only reads the saved summary');
 });

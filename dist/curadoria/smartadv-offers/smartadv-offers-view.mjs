@@ -6,7 +6,7 @@ import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as DecisionUI from '../decision-ui.mjs';
+import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {mountColumnPicker} from '../../table-columns.mjs?v=1';
 import {trendPageState,mountTrendsSaveAction} from '../trends-save-action.mjs?v=4';
@@ -276,7 +276,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     const visibilityButton=event.target.closest('[data-toggle-smartadv-visibility]');
     if(visibilityButton){event.preventDefault();event.stopPropagation();setOfferHidden(visibilityButton.dataset.toggleSmartadvVisibility,visibilityButton.dataset.hidden!=='true');return;}
     const decisionButton=event.target.closest('[data-decision-key]');
-    if(decisionButton){const item=annotatedOffers.map(enrich).find(offer=>keyFor(offer)===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.productName,currentValue:current.currentStatus,onSelect:status=>actions.saveDecision(item,status)});return;}
+    if(decisionButton){const item=annotatedOffers.map(enrich).find(offer=>keyFor(offer)===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.productName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',onSelect:(status,notes)=>actions.saveDecision(item,status,notes)});return;}
     const button=event.target.closest('[data-action]');if(!button)return;const item=offerById(button.dataset.key);if(item)openOffer(item,button.dataset.action)
   });
   $('#closeSheet').onclick=closeOffer;

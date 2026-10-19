@@ -1,4 +1,4 @@
-import { showCaptureStatus, showCaptureError } from './capture-status-view.mjs';
+import { showCaptureStatus, showCaptureWarning, showCaptureError } from './capture-status-view.mjs';
 import { mountClickBankCapture } from './clickbank-popup.mjs';
 import { mountClickBankDtcCountries } from './clickbank-dtc-popup.mjs';
 import { mountVslSpeed } from './vsl-popup.mjs';
@@ -54,7 +54,7 @@ captureButton.addEventListener('click', async () => {
 
 captureD1Button.addEventListener('click', async () => {
   setActionsDisabled(true);
-  showCaptureStatus(captureStatus, 'Validando a data de ontem e capturando a grade D−1 da aba ativa…');
+  showCaptureStatus(captureStatus, 'Validando a data selecionada e capturando a grade D−1 da aba ativa…');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'CAPTURE_AND_FORWARD_MCC_D1' });
     if (!response?.ok) throw response || new Error('Não foi possível preparar a captura D−1.');
@@ -64,7 +64,12 @@ captureD1Button.addEventListener('click', async () => {
       : result.previewReady
         ? 'D−1 validado e prévia pronta. A base só muda se você clicar em “Atualizar base”.'
         : 'Revise a prévia; a base só muda se você clicar em “Atualizar base”.';
-    showCaptureStatus(captureStatus, `D−1 (${result.reportDate}) · ${result.campaignCount} campanhas. ${nextStep}`);
+    const status = `D−1 (${result.reportDate}) · ${result.campaignCount} campanhas. ${nextStep}`;
+    if (result.earlierThanD1) {
+      showCaptureWarning(captureStatus, `A captura se refere a ${result.reportDate}, anterior ao D−1 esperado (${result.expectedD1Date}). O Preparador ficou em segundo plano para manter este aviso visível; alterne para a aba e revise a prévia. ${status}`);
+    } else {
+      showCaptureStatus(captureStatus, status);
+    }
   } catch (error) {
     showCaptureError(captureStatus, error);
   } finally {

@@ -1,9 +1,9 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261011-manual-save';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261014-decision-notes';
 import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
-import * as Decisions from '../decision-ui.mjs';
+import * as Decisions from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
@@ -141,7 +141,7 @@ function closeOffer() { listFocus.restore(); }
 async function saveDecision(offerKey,status,notes='') {
   const item = currentOffer(offerKey); if (!item) return;
   const previous = decisionFor(offerKey), capturedAt = new Date().toISOString();
-  const stored = Domain.appendDecision(previous,Decisions.normalizeDecision(status),String(notes || '').trim(),capturedAt);
+  const stored = Domain.appendDecision(previous,Decisions.normalizeDecision(status),String(notes ?? '').trim().slice(0,5000),capturedAt);
   await Storage.put(Storage.STORES.decisions,stored);
   decisions = [...decisions.filter(entry => entry.offerKey !== offerKey),stored];
   show();

@@ -8,6 +8,29 @@ export const BILLING_STATUSES = Object.freeze({
 
 export const BILLING_MANUAL_STATUS_OPTIONS = Object.freeze(['pending', 'issued', 'paid']);
 
+// Product labels are simplified only at render time. The original value stays
+// intact for filtering, editing, audit history, and persistence.
+export function displayProductName(value) {
+  const original = String(value ?? '').trim();
+  if (!original) return '';
+
+  let label = original
+    .replace(/^(?:\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?|\d{4}-\d{2}-\d{2})\s*[-–—]\s*/, '')
+    .trim();
+
+  // Campaign titles often end with an internal sequence and an explicit
+  // network/brand-bidding code, e.g. "NebuEaser 08 (GM-BB-US/CA)".
+  const campaign = label.match(/^(.+?)(?:\s+\d{1,3})?\s+\((?:CB|GM)-BB-[^)]+\)/i);
+  if (campaign?.[1]?.trim()) return campaign[1].trim();
+
+  // Trim only recognized offer/page/payment metadata, not ordinary hyphenated
+  // product names such as "Total-Control".
+  const details = label.search(/\s+[-–—]\s+(?=(?:CTC\b|(?:pre[- ]?sell|landing)\s+page\b|(?:German|English|Spanish|French|Italian|Dutch|Portuguese|US|UK|CA|AU|DE|FR|ES|IT|NL)\s+page\b|accepts?\s+PayPal\b|PayPal\b|direct(?:\s+checkout)?\b|checkout\b|VSL\b|TSL\b|(?:US\$|CA\$|AU\$|NZ\$|\$|€|£)\s*\d))/i);
+  if (details >= 0) label = label.slice(0, details).trim();
+
+  return label || original;
+}
+
 export const BILLING_DIMENSIONS = Object.freeze({
   month: 'Mês', product: 'Produto', platform: 'Plataforma', account: 'Conta',
 });
@@ -61,6 +84,7 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     source: text(input.source) || 'manual',
     source_ref: text(input.source_ref) || null,
     source_period: ['d0', 'd1'].includes(input.source_period) ? input.source_period : null,
+    manual_value_override: input.manual_value_override === true,
     external_id: text(input.external_id) || null,
     active: input.active !== false,
     cancelled_at: input.cancelled_at || null,
@@ -268,12 +292,76 @@ export function aggregateCashBy(movements, salesById, dimension = 'month') {
   }).sort((a, b) => validDimension === 'month' ? b.key.localeCompare(a.key) : a.key.localeCompare(b.key));
 }
 
-export function monthlyFinancialSeries({ sales = [], movements = [], salesById = new Map(), start, end, mode = 'competence' } = {}) {
+function sumChartAmountsInBrl(rows, exchangeRate, signForRow = () => 1) {
+  const rate = typeof exchangeRate === 'number' && Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : null;
+  let amount = 0;
+  let known = 0;
+  let missing = 0;
+  for (const row of rows) {
+    const brl = typeof row?.value_brl === 'number' && Number.isFinite(row.value_brl) ? row.value_brl : null;
+    const usd = typeof row?.value_usd === 'number' && Number.isFinite(row.value_usd) ? row.value_usd : null;
+    const sign = signForRow(row);
+    if (brl != null) {
+      amount += brl * sign;
+      known += 1;
+      continue;
+    }
+    if (usd != null) {
+      if (rate != null) {
+        amount += usd * rate * sign;
+        known += 1;
+      } else if (usd === 0) known += 1;
+      else missing += 1;
+    }
+    else missing += 1;
+  }
+  return { amount:known ? amount : null, known, missing, complete:missing === 0 };
+}
+
+export function aggregateBillingRevenueByDate(sales = [], exchangeRate = null) {
+  const rowsByDate = new Map();
+  for (const sale of sales || []) {
+    if (!sale || sale.active === false) continue;
+    const date = sale.sale_date;
+    if (!isIsoDate(date)) continue;
+    if (!rowsByDate.has(date)) rowsByDate.set(date, []);
+    rowsByDate.get(date).push(sale);
+  }
+
+  return new Map([...rowsByDate].map(([date, rows]) => {
+    const total = sumChartAmountsInBrl(rows, exchangeRate);
+    const saleAmounts = new Map(rows.map((sale, index) => {
+      const saleTotal = sumChartAmountsInBrl([sale], exchangeRate);
+      return [String(sale.sale_id || `registro-${index + 1}`), saleTotal.amount];
+    }));
+    return [date, {
+      date,
+      amount:total.amount,
+      complete:total.complete,
+      knownAmounts:total.known,
+      missingAmounts:total.missing,
+      records:rows.length,
+      conversions:rows.reduce((sum, sale) => sum + Math.max(0, sale.conversion_count == null ? 1 : Number.isFinite(Number(sale.conversion_count)) ? Number(sale.conversion_count) : 1), 0),
+      saleAmounts,
+    }];
+  }));
+}
+
+export function monthlyFinancialSeries({ sales = [], movements = [], salesById = new Map(), start, end, mode = 'competence', exchangeRate = null } = {}) {
   if (!isIsoDate(start) || !isIsoDate(end) || start > end) return [];
   const aggregates = mode === 'cash'
     ? aggregateCashBy(movements, salesById, 'month')
     : aggregateBy(sales, movements, 'month');
   const byMonth = new Map(aggregates.map(item => [item.key, item]));
+  const rowsByMonth = new Map();
+  const chartRows = mode === 'cash' ? movements : sales.filter(sale => sale.active !== false);
+  for (const row of chartRows) {
+    const date = mode === 'cash' ? row.effective_date : row.sale_date;
+    if (!isIsoDate(date)) continue;
+    const key = date.slice(0, 7);
+    if (!rowsByMonth.has(key)) rowsByMonth.set(key, []);
+    rowsByMonth.get(key).push(row);
+  }
   const manualByMonth = new Map();
   if (mode !== 'cash') {
     for (const sale of sales) {
@@ -294,11 +382,15 @@ export function monthlyFinancialSeries({ sales = [], movements = [], salesById =
     const key = cursor.toISOString().slice(0, 7);
     const item = byMonth.get(key);
     const manual = manualByMonth.get(key);
-    const amount = mode === 'cash' ? item?.netBrl : item?.grossBrl;
+    const monthlyRows = rowsByMonth.get(key) || [];
+    const converted = item
+      ? sumChartAmountsInBrl(monthlyRows, exchangeRate, mode === 'cash' ? row => row.type === 'refund' ? -1 : 1 : undefined)
+      : { amount:0, missing:0, complete:true };
     series.push({
       key,
-      value: item ? amount?.amount ?? null : 0,
-      complete: item ? amount?.complete ?? false : true,
+      value: item ? converted.amount : 0,
+      complete: item ? converted.complete : true,
+      missingAmounts: item ? converted.missing : 0,
       records: mode === 'cash' ? item?.movements ?? 0 : item?.sales ?? 0,
       manualBrl: manual ? { amount:manual.records > manual.missing ? manual.amount : null, records:manual.records, missing:manual.missing } : null,
     });

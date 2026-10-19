@@ -8,7 +8,14 @@ assert.deepEqual(Object.values(Storage.STORES), ['captures','offerMetadata','tre
 assert.equal(Storage.BACKUP_FORMAT, 'radar-clickbank-top-offers-backup-v3');
 assert.equal(Storage.LEGACY_BACKUP_V2_FORMAT, 'radar-clickbank-top-offers-backup-v2');
 assert.equal(Storage.LEGACY_BACKUP_FORMAT, 'radar-clickbank-top-offers-backup-v1');
+assert.equal(Storage.normalizeAffiliateLink('  https://aff.example/path?click=abc  '),'https://aff.example/path?click=abc','o link é salvo sem espaços laterais e preserva parâmetros de rastreamento');
+assert.equal(Storage.normalizeAffiliateLink('http://aff.example/path'),'http://aff.example/path','links HTTP legados continuam aceitos');
+assert.equal(Storage.normalizeAffiliateLink('javascript:alert(1)'),null,'protocolos executáveis não são aceitos como links');
+assert.equal(Storage.normalizeAffiliateLink('https://usuario:senha@aff.example/path'),null,'URLs com credenciais embutidas são rejeitadas');
+assert.equal(Storage.normalizeAffiliateLink('aff.example/path'),null,'o link precisa ser uma URL absoluta');
+assert.equal(Storage.normalizeAffiliateLink('https://'+'a'.repeat(4100)+'.example'),null,'links acima do limite de tamanho são rejeitados');
 const source = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs', import.meta.url), 'utf8');
+assert.match(source, /DECISION_VALUES = new Set\(\[[^\]]*'Solicitação Enviada'/, 'a store e a validação de backups aceitam a decisão exclusiva desta tela');
 assert.match(source, /createObjectStore\(STORES\.captures,\s*\{keyPath:\s*'captureId'\}\)/);
 assert.match(source, /for \(const name of \[STORES\.offerMetadata, STORES\.trends, STORES\.images\]\)/, 'a migração adiciona stores de análise sem recriar capturas');
 assert.match(source, /createObjectStore\(STORES\.decisions,\s*\{keyPath:\s*'offerKey'\}\)/, 'a migração cria decisões por oferta sem recriar capturas');
@@ -18,6 +25,10 @@ assert.match(source, /offer\.offerId == null \|\|/, 'Offer ID é opcional, prese
 assert.match(source, /record\.dtcCountryCapture\.source === 'clickbank-dtc-checkout'/, 'a origem DTC/hora e países capturados têm validação opcional, sem migração da store');
 assert.ok(source.includes("record.dtcCountryCapture.countries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code))"), 'códigos DTC são validados como ISO de duas letras');
 assert.ok(source.includes('isSalesPageType(record.salesPageType)'), 'metadado manual de página aceita DTC, VSL, TSL, Quiz ou ausente');
+assert.ok(source.includes('(record.affiliateLink == null || normalizeAffiliateLink(record.affiliateLink) === record.affiliateLink)'), 'metadado de afiliado é opcional e URL inválida também é rejeitada na validação/backup');
+assert.match(source,/export async function saveAffiliateLink\(identity,\s*value\)/,'link usa uma operação de persistência própria');
+assert.match(source,/stored=\{manualCountries:\[\],\.\.\.request\.result,\.\.\.identity,affiliateLink\}/,'salvar o link atualiza somente o campo e preserva os demais metadados locais');
+assert.match(source,/offerMetadata: await getAll\(STORES\.offerMetadata\)/,'o link entra no backup completo existente sem uma nova store');
 assert.ok(source.includes("import {isSalesPageType} from './sales-page-type.mjs?v=3'"), 'validação reutiliza o contrato compartilhado sem nova store ou migração');
 assert.match(source, /tx\.objectStore\(STORES\.captures\)\.add\(capture\)/, 'capturas são acrescentadas sem substituir a coleção anterior');
 assert.match(source, /export async function exportBackup\(\)/);

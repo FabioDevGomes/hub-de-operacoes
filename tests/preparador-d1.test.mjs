@@ -10,8 +10,9 @@ const timezoneStart = html.indexOf("    const MCC_OPERATIONAL_TIME_ZONE = 'Ameri
 const timezoneEnd = html.indexOf('    function parseNumber(raw)', timezoneStart);
 assert.ok(timezoneStart >= 0 && timezoneEnd > timezoneStart, 'helpers de data operacional não encontrados');
 const dateContext = vm.createContext({});
-vm.runInContext(`${html.slice(timezoneStart, timezoneEnd)}\nglobalThis.__dateTools = { expectedMccD1ReportDate, reportDatePairIssue };`, dateContext);
+vm.runInContext(`${html.slice(timezoneStart, timezoneEnd)}\nglobalThis.__dateTools = { expectedMccD0ReportDate, expectedMccD1ReportDate, reportDatePairIssue };`, dateContext);
 const dateTools = dateContext.__dateTools;
+assert.equal(dateTools.expectedMccD0ReportDate(new Date('2026-09-24T02:30:00.000Z')), '2026-09-23', 'D0 usa o dia atual no fuso operacional');
 assert.equal(dateTools.expectedMccD1ReportDate(new Date('2026-09-24T02:30:00.000Z')), '2026-09-22');
 assert.equal(dateTools.reportDatePairIssue({ dates:['2026-09-23'] }, { dates:['2026-09-24'] }), null);
 assert.match(dateTools.reportDatePairIssue({ dates:['2026-09-23'] }, { dates:['2026-09-25'] }), /não são consecutivas/);
@@ -50,7 +51,11 @@ assert.match(decoded.text, /^Relatório D−1:/);
 assert.match(decoded.text, /"0"/);
 assert.match(decoded.text, /"—"/);
 assert.equal(decoded.hash.length, 64);
-await assert.rejects(decoderContext.__decodeD1({ ...capture, reportDate:'2026-01-01' }), /D−1 esperado para hoje/);
+const previousDate = new Date(Date.parse(`${captureDate}T00:00:00.000Z`) - 86400000).toISOString().slice(0, 10);
+const decodedPreviousDate = await decoderContext.__decodeD1({ ...capture, reportDate:previousDate });
+assert.equal(decodedPreviousDate.name, `captura_mcc_d1_${previousDate}.csv`, 'o Preparador recebe a captura para data anterior');
+const laterDate = new Date(Date.parse(`${captureDate}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+await assert.rejects(decoderContext.__decodeD1({ ...capture, reportDate:laterDate }), /depois do D−1 esperado/);
 
 const constantsStart = html.indexOf("    const ABSENT = new Set(");
 const constantsEnd = html.indexOf('    const slots =', constantsStart);

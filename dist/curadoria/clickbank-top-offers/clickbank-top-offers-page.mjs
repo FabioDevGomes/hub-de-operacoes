@@ -1,6 +1,6 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=8';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=31';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=10';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=36';
 import {mountExtensionCapture} from './extension-capture.mjs?v=6';
 import {mergeDtcCountries} from './dtc-country-capture.mjs?v=5';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
@@ -11,7 +11,7 @@ import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
-import * as DecisionUI from '../decision-ui.mjs';
+import * as TopOffersDecision from './clickbank-top-offers-decision.mjs?v=1';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=4';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
 
@@ -20,7 +20,7 @@ let captures = [], offerMetadata = [], trends = [], images = [], decisions = [],
 const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
-  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveBrandBidding,saveImage,saveImageSearchTerm,
+  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveBrandBidding,saveAffiliateLink,saveImage,saveImageSearchTerm,
   openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
 }});
 mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true});
@@ -64,13 +64,13 @@ async function refreshAfterGlimpseSave() {
   }
 }
 function fireObservability(promise) { Promise.resolve(promise).catch(error => console.warn('Não foi possível registrar a observabilidade da Curadoria.',error)); }
-async function saveDecision(offerKey,status) {
+async function saveDecision(offerKey,status,notes='') {
   const item=currentOffer(offerKey);if(!item)return;
-  const previous=decisions.find(record=>record.offerKey===offerKey)||{offerKey,currentStatus:DecisionUI.DEFAULT_DECISION,notes:'',history:[]};
-  const normalized=DecisionUI.normalizeDecision(status),capturedAt=new Date().toISOString();
-  const stored={...previous,offerKey,currentStatus:normalized,notes:previous.notes||'',updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,capturedAt}]};
+  const previous=decisions.find(record=>record.offerKey===offerKey)||{offerKey,currentStatus:TopOffersDecision.DEFAULT_DECISION,notes:'',history:[]};
+  const normalized=TopOffersDecision.normalizeDecision(status),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').slice(0,5000);
+  const stored={...previous,offerKey,currentStatus:normalized,notes:decisionNotes,updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,capturedAt,notes:decisionNotes}]};
   try{await Storage.putDecision(stored);decisions=[...decisions.filter(record=>record.offerKey!==offerKey),stored];show();view.showMessage(`Decisão salva somente em Top Offers CB: ${normalized}.`)}
-  catch(error){console.error('Não foi possível salvar a decisão Top Offers CB.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true})}
+  catch(error){console.error('Não foi possível salvar a decisão Top Offers CB.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true});throw error}
 }
 function observabilityContext(item) {
   return {origin:'clickbank-top-offers',subjectId:`clickbank-top-offers:${item.offerKey}`,productKey:Glimpse.normalize(item.offerName),productName:item.offerName,offerRefs:[{origin:'clickbank-top-offers',offerKey:item.offerKey,seller:item.seller}]};
@@ -191,6 +191,14 @@ async function saveSalesPageType(offerKey,value) {
     view.showMessage('Não foi possível salvar a classificação. Os dados existentes foram preservados.',{error:true});
     return false;
   } finally {saving=false;}
+}
+async function saveAffiliateLink(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)return false;
+  const link=Storage.normalizeAffiliateLink(value);
+  if(!link)throw new Error('Informe uma URL HTTP ou HTTPS válida para o link de afiliado.');
+  const stored=await Storage.saveAffiliateLink(baseRecord(item),link);
+  offerMetadata=replaceRecord(offerMetadata,stored);show();
+  return true;
 }
 async function saveDtcCountries(item,capture) {
   if(saving)return {ok:false,message:'O Hub está ocupado com outra gravação. Tente novamente.'};

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { aggregateBillingRevenueByDate } from '../src/billing/billing-domain.mjs';
 
 const require = createRequire(import.meta.url);
 const domain = require('../src/control-macro/domain.js');
@@ -27,7 +28,7 @@ const adjustments = new Map([
 ]);
 const mcc = domain.aggregateMccDaily(mccRows, adjustments, { campaignProducts: new Map([['campaign-1', 'Wego6']]) });
 assert.deepEqual(mcc, [
-  { date: '2026-09-18', hasMccData: true, source: 'mcc', investment: 100, revenue: 335, profit: 235, roi: 235, clicks: 20, sales: 3, officialSales: 2, pendingSales: 1, pendingRevenue: 85, clicksPerSale: 20 / 3, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }, { product: 'Wego6', sales: 1, amount: 85, provisional: true }] },
+  { date: '2026-09-18', hasMccData: true, source: 'mcc', investment: 100, revenue: 335, profit: 235, roi: 235, clicks: 20, sales: 3, officialSales: 2, pendingSales: 1, pendingRevenue: 85, clicksPerSale: 20 / 3, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false, campaignSales:[{campaignId:'campaign-1',sales:2,amount:250}] }, { product: 'Wego6', sales: 1, amount: 85, provisional: true, campaignSales:[{campaignId:'campaign-1',sales:1,amount:85}] }] },
   { date: '2026-09-19', hasMccData: true, source: 'mcc', investment: 0, revenue: 0, profit: 0, roi: null, clicks: 0, sales: 0, officialSales: 0, pendingSales: 0, pendingRevenue: 0, clicksPerSale: null, productSales: [] },
 ]);
 const compactProvisional = domain.aggregateMccDaily(
@@ -35,7 +36,7 @@ const compactProvisional = domain.aggregateMccDaily(
   new Map([['campaign-long',{byDate:{'2026-09-20':{pendingConversions:1,commissionAdjustment:312.62,productSales:[{product:'ResQVac - CTC $49.99 - Presell Page - Accepts Paypal',sales:1,amount:312.62}]}}}]]),
   {campaignProducts:new Map([['campaign-long','ResQVac']])}
 );
-assert.deepEqual(compactProvisional[0].productSales,[{product:'ResQVac',sales:1,amount:312.62,provisional:true}], 'venda provisória usa o rótulo curto da identidade do produto da campanha');
+assert.deepEqual(compactProvisional[0].productSales,[{product:'ResQVac',sales:1,amount:312.62,provisional:true,campaignSales:[{campaignId:'campaign-long',sales:1,amount:312.62}]}], 'venda provisória usa o rótulo curto da identidade do produto da campanha');
 
 const workbook = {
   sheets: [
@@ -81,7 +82,7 @@ assert.equal(combined.find(row => row.date === '2026-09-18').clicks, 30);
 assert.equal(combined.find(row => row.date === '2026-09-18').observation, 'Dia forte');
 assert.deepEqual(combined.find(row => row.date === '2026-09-18').productSales, [
   { product: null, sales: 3, amount: null, provisional: false },
-  { product: 'Wego6', sales: 1, amount: 85, provisional: true },
+  { product: 'Wego6', sales: 1, amount: 85, provisional: true, campaignSales:[{campaignId:'campaign-1',sales:1,amount:85}] },
 ], 'a planilha preserva vendas agregadas sem inventar produto; vendas provisórias continuam identificadas');
 const matchingHistory = domain.combineDailyRows([
   { date: '2026-09-20', officialSales: 2, pendingSales: 0, productSales: [{ product: 'Wego6', sales: 2, amount: 250, provisional: false }] },
@@ -141,6 +142,93 @@ const monthlyClicksPerSale = domain.monthlyTrendBuckets([
   { date: '2026-04-02', clicks: 10, sales: 1, pendingSales: 0 }
 ], { startMonth: '2026-04', throughDate: '2026-04-30' });
 assert.equal(monthlyClicksPerSale[0].clicksPerSale, 10, 'razão mensal é ponderada pelos totais e contabiliza vendas provisórias já incluídas em sales');
+const billingSales=[
+  {sale_id:'mcc-1',sale_date:'2026-10-16',source:'mcc_conversion_aggregate',conversion_count:1,value_brl:300,product:'Total-Control'},
+  {sale_id:'manual-1',sale_date:'2026-10-16',source:'manual',confirmation_status:'manual',conversion_count:1,value_brl:225.5,product:'Nebula'},
+  {sale_id:'cancelled-1',sale_date:'2026-10-16',source:'manual',active:false,conversion_count:1,value_brl:999,product:'Cancelada'},
+];
+const billingReconciliation=domain.reconcileBillingSales([
+  {date:'2026-10-16',source:'mcc',investment:57.79,revenue:300,profit:242.21,roi:419.1,clicks:6,sales:1,officialSales:1,pendingSales:0,pendingRevenue:0,clicksPerSale:6,productSales:[{product:'Total-Control',sales:1,amount:300,provisional:false}]},
+],billingSales,aggregateBillingRevenueByDate(billingSales,5.1));
+const reconciledSaleDay=billingReconciliation.rows[0];
+assert.equal(reconciledSaleDay.sales,2,'usa conversões ativas do Faturamento e não duplica a conversão MCC já presente no Macro');
+assert.equal(reconciledSaleDay.billingSales,1,'a venda adicional fica separada da origem oficial MCC');
+assert.equal(reconciledSaleDay.revenue,525.5,'usa o total consolidado do Faturamento mesmo quando a MCC já contém a conversão');
+assert.equal(reconciledSaleDay.profit,467.71);
+assert.deepEqual(reconciledSaleDay.productSales.at(-1),{product:'Nebula',sales:1,amount:225.5,provisional:false,billing:true});
+assert.equal(billingReconciliation.check.activeRecords,2,'venda cancelada não participa da conferência');
+assert.equal(billingReconciliation.check.billingConversions,2);
+assert.equal(billingReconciliation.check.appliedSales,1);
+assert.equal(billingReconciliation.check.appliedRevenue,225.5);
+const repeatedBillingReconciliation=domain.reconcileBillingSales(billingReconciliation.rows,billingSales,aggregateBillingRevenueByDate(billingSales,5.1));
+assert.equal(repeatedBillingReconciliation.rows[0].sales,2,'renderizar novamente a reconciliação não soma a venda outra vez');
+assert.equal(repeatedBillingReconciliation.rows[0].revenue,525.5);
+assert.equal(repeatedBillingReconciliation.check.appliedSales,0);
+const incompleteBillingSales=[
+  {sale_id:'mcc-usd-day',sale_date:'2026-10-17',source:'mcc_conversion_aggregate',conversion_count:1,value_brl:100,product:'Existing BRL'},
+  {sale_id:'usd-manual',sale_date:'2026-10-17',source:'manual',conversion_count:1,value_usd:40,product:'USD offer'},
+];
+const billingIncomplete=domain.reconcileBillingSales([
+  {date:'2026-10-17',source:'mcc',investment:20,revenue:100,sales:1,officialSales:1,pendingSales:0,productSales:[]},
+],incompleteBillingSales,aggregateBillingRevenueByDate(incompleteBillingSales,5));
+assert.equal(billingIncomplete.rows[0].sales,2,'contagem pode ser conciliada mesmo se a moeda não for BRL');
+assert.equal(billingIncomplete.rows[0].revenue,300,'USD é convertido com a mesma cotação operacional do gráfico de Faturamento');
+assert.equal(billingIncomplete.check.incompleteRevenueDates,0);
+const macroHigherSales=[{sale_id:'less',sale_date:'2026-10-18',conversion_count:1,value_brl:200}];
+const macroHigher=domain.reconcileBillingSales([{date:'2026-10-18',revenue:400,sales:2,officialSales:2,pendingSales:0}],macroHigherSales,aggregateBillingRevenueByDate(macroHigherSales,5.1));
+assert.equal(macroHigher.rows[0].sales,2,'a conferência é não destrutiva e preserva um total histórico maior no Macro');
+assert.equal(macroHigher.rows[0].revenue,200,'receita histórica maior é alinhada à fonte Faturamento');
+assert.equal(macroHigher.check.macroAheadSalesDates,1);
+assert.equal(macroHigher.check.macroAheadRevenueDates,1);
+const mixedBillingSales=[
+  {sale_id:'confirmed-alpha',sale_date:'2026-10-19',source:'hub_manual_capture',confirmation_status:'confirmed',campaign_id:'campaign-alpha',conversion_count:1,value_brl:22,product:'Alpha — nome completo'},
+  {sale_id:'usd-beta',sale_date:'2026-10-19',source:'mcc_conversion_aggregate',campaign_id:'campaign-beta',conversion_count:1,value_usd:60,product:'Beta'},
+  {sale_id:'manual-alpha',sale_date:'2026-10-19',source:'manual',confirmation_status:'manual',conversion_count:1,value_brl:25,product:'Alpha'},
+];
+const mixedBillingDay=domain.reconcileBillingSales([
+  {date:'2026-10-19',source:'mcc',revenue:50,sales:2,officialSales:2,pendingSales:0,productSales:[
+    {product:'Alpha',sales:1,amount:20,provisional:false,campaignSales:[{campaignId:'campaign-alpha',sales:1,amount:20}]},
+    {product:'Beta',sales:1,amount:30,provisional:false,campaignSales:[{campaignId:'campaign-beta',sales:1,amount:30}]},
+  ]},
+],mixedBillingSales,aggregateBillingRevenueByDate(mixedBillingSales,5));
+assert.equal(mixedBillingDay.rows[0].sales,3,'conta a venda manual adicional sem duplicar as conversões MCC já representadas');
+assert.equal(mixedBillingDay.rows[0].revenue,347,'usa o total do Faturamento incluindo USD convertido a BRL');
+assert.equal(mixedBillingDay.rows[0].billingRevenueDelta,297);
+assert.equal(mixedBillingDay.rows[0].productSales.find(item=>item.campaignSales?.[0]?.campaignId==='campaign-alpha').campaignSales[0].amount,22,'a confirmação vinculada corrige o detalhe MCC pela identidade estável da campanha');
+assert.equal(mixedBillingDay.rows[0].productSales.at(-1).amount,25);
+assert.equal(mixedBillingDay.check.appliedRevenue,297);
+assert.equal(mixedBillingDay.check.incompleteRevenueDates,0);
+const repeatedMixedSales=[
+  {sale_id:'confirmed-alpha',sale_date:'2026-10-19',source:'hub_manual_capture',confirmation_status:'confirmed',campaign_id:'campaign-alpha',conversion_count:1,value_brl:22,product:'Alpha — nome completo'},
+  {sale_id:'usd-beta',sale_date:'2026-10-19',source:'mcc_conversion_aggregate',campaign_id:'campaign-beta',conversion_count:1,value_usd:60,product:'Beta'},
+  {sale_id:'manual-alpha',sale_date:'2026-10-19',source:'manual',confirmation_status:'manual',conversion_count:1,value_brl:25,product:'Alpha'},
+];
+const repeatedMixedBillingDay=domain.reconcileBillingSales(mixedBillingDay.rows,repeatedMixedSales,aggregateBillingRevenueByDate(repeatedMixedSales,5));
+assert.equal(repeatedMixedBillingDay.rows[0].sales,3);
+assert.equal(repeatedMixedBillingDay.rows[0].revenue,347,'repetir a conciliação preserva o total consolidado');
+assert.equal(repeatedMixedBillingDay.check.appliedRevenue,0);
+
+const billingSourceSales=[
+  {sale_id:'sep-brl',sale_date:'2026-09-03',value_brl:100,conversion_count:1},
+  {sale_id:'sep-usd',sale_date:'2026-09-03',value_usd:10,conversion_count:1},
+  {sale_id:'cancelled-sep',sale_date:'2026-09-03',value_brl:999,active:false,conversion_count:1},
+  {sale_id:'missing-sep',sale_date:'2026-09-04',value_brl:null,value_usd:null,conversion_count:1},
+];
+const billingRevenueByDate=aggregateBillingRevenueByDate(billingSourceSales,5.1);
+const macroSourceRows=domain.reconcileBillingSales([
+  {date:'2026-09-03',source:'mcc',investment:50,revenue:500,sales:2,officialSales:2,pendingSales:0},
+  {date:'2026-09-04',source:'planilha',investment:30,revenue:75,sales:1,officialSales:1,pendingSales:0},
+],billingSourceSales,billingRevenueByDate);
+assert.equal(macroSourceRows.rows.find(row=>row.date==='2026-09-03').revenue,151,'o Macro usa a mesma conversão USD→BRL do gráfico e ignora cancelamentos');
+assert.equal(macroSourceRows.rows.find(row=>row.date==='2026-09-04').revenue,null,'dia sem valor monetário conhecido permanece incompleto');
+assert.equal(macroSourceRows.rows.find(row=>row.date==='2026-09-03').profit,101,'lucro continua sendo faturamento menos investimento MCC');
+assert.equal(macroSourceRows.check.incompleteRevenueDates,1);
+assert.equal(domain.billingRevenueForRange(billingRevenueByDate,'2026-09-01','2026-09-30'),151,'o KPI mensal usa diretamente a soma diária consolidada do Faturamento');
+assert.equal(domain.monthlyTrendBuckets(macroSourceRows.rows,{startMonth:'2026-09',throughDate:'2026-09-04'},billingRevenueByDate)[0].revenue,151,'o gráfico mensal preserva o total observado do Faturamento mesmo com lacuna de valor em outro dia');
+const dailyBillingBuckets=domain.dailyTrendBuckets(macroSourceRows.rows,'2026-09','2026-09-04',billingRevenueByDate);
+assert.equal(dailyBillingBuckets.find(bucket=>bucket.key==='2026-09-02').revenue,0,'dia sem lançamento no Faturamento é zero observado no gráfico diário');
+assert.equal(dailyBillingBuckets.find(bucket=>bucket.key==='2026-09-04').revenue,null,'dia com lançamento sem valor segue como lacuna, não zero');
+assert.equal(domain.billingRevenueForRange(new Map(),'2026-09-01','2026-09-30'),0,'mês sem lançamentos no Faturamento é zero, não valor ausente');
 const dailyTrend = domain.dailyTrendBuckets(trendRows, '2026-04', '2026-04-03');
 assert.equal(dailyTrend.length, 3);
 assert.equal(dailyTrend[1].investment, 50);
@@ -184,13 +272,16 @@ const styles = await readFile(new URL('../src/control-macro/control-macro.css', 
 assert.match(template, /Number\(row\.sales\)>0\?'macro-sales-row':''/);
 assert.match(template, /isSuspensionDate\(row\.date\)\?'macro-suspension-row'/);
 assert.match(template, /id="macroKpis" class="macro-kpis"/);
+assert.match(template, /id="macroDailyFoot" aria-label="Totais do mês"/);
 assert.doesNotMatch(template, /macroLifetimeKpis|macro-lifetime-summary/);
 assert.match(template, /lifetimeSummary\(all\)/);
 assert.match(template, /macroKpi\('Lucro total'.*Histórico completo/);
+assert.match(template,/id="macroBillingStatus"/);
 assert.doesNotMatch(template, /macroKpi\('Faturamento total'/);
 assert.match(styles, /\.macro-kpis\{display:grid;grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
 assert.match(styles, /\.macro-kpi\{min-width:0;padding:8px 9px/);
 assert.match(styles, /\.macro-table tr\.macro-sales-row td\{background:rgba\(52,211,153,.075\)\}/);
+assert.match(styles, /\.macro-table tfoot th,\.macro-table tfoot td\{position:static;padding:6px 9px/);
 assert.match(styles, /\.macro-table tr\.macro-suspension-row td\{background:rgba\(248,113,113,.075\)\}/);
 
 console.log('control macro domain ok');

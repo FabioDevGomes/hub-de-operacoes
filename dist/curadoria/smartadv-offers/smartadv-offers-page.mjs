@@ -8,7 +8,7 @@ import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
-import * as DecisionUI from '../decision-ui.mjs';
+import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-notes-2';
 import {mountGlimpseReferenceBar} from '../glimpse-reference-bar.mjs?v=2';
 
 const root = document.querySelector('#smartAdvOffersRoot');
@@ -61,12 +61,12 @@ async function restoreBackup(file) {
   catch(error){console.warn('Backup SmartAdv rejeitado.',error);view.showMessage(error instanceof SyntaxError?'O arquivo selecionado não contém JSON válido.':error?.message||'Não foi possível restaurar o backup.',{error:true})}
 }
 
-async function saveDecision(item,status) {
+async function saveDecision(item,status,notes='') {
   const context=offerContext(item),old=decisions.find(record=>record.offerKey===context.offerKey)||{offerKey:context.offerKey,currentStatus:DecisionUI.DEFAULT_DECISION,notes:'',history:[]};
-  const normalized=DecisionUI.normalizeDecision(status),capturedAt=new Date().toISOString();
-  const stored={...old,...context,currentStatus:normalized,notes:old.notes||'',updatedAt:capturedAt,history:[...(old.history||[]),{status:normalized,capturedAt}]};
+  const normalized=DecisionUI.normalizeDecision(status),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').trim().slice(0,5000);
+  const stored={...old,...context,currentStatus:normalized,notes:decisionNotes,updatedAt:capturedAt,history:[...(old.history||[]),{status:normalized,capturedAt,notes:decisionNotes}]};
   try{await Storage.putDecision(stored);decisions=[...decisions.filter(record=>record.offerKey!==stored.offerKey),stored];show();view.showMessage(`Decisão salva somente em Ofertas SmartAdv: ${normalized}.`)}
-  catch(error){console.error('Não foi possível salvar a decisão SmartAdv.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true})}
+  catch(error){console.error('Não foi possível salvar a decisão SmartAdv.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true});throw error}
 }
 
 async function saveTrend(item,status,draft={}) {

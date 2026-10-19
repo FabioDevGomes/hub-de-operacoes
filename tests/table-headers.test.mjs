@@ -22,7 +22,7 @@ for (const file of [
   '../src/curadoria/clickbank-top-offers/index.html',
 ]) {
   const html = await readFile(new URL(file, import.meta.url), 'utf8');
-  const version = '20261007-glimpse-borderless';
+  const version = '20261016-trends-keyword-candidates-flat';
   assert.match(html, new RegExp(`trends-sheet\\.css\\?v=${version}`), `${file} não carrega a folha compartilhada de curadoria atualizada`);
 }
 const curationStyles = await readFile(new URL('../src/curadoria/trends-sheet.css', import.meta.url), 'utf8');

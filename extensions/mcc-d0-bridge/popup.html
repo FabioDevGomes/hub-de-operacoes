@@ -23,6 +23,9 @@
     .status.error p { margin: 8px 0 0; color: inherit; white-space: pre-line; }
     .status.error ul { margin: 8px 0 12px; padding-left: 18px; }
     .status.error li + li { margin-top: 6px; }
+    .status.warning { padding: 12px; border: 1px solid #fbbf24; border-left: 4px solid #fbbf24; border-radius: 8px; background: #332816; color: #fde68a; overflow-wrap: anywhere; }
+    .status.warning strong { display: block; color: #fcd34d; font-size: 13px; }
+    .status.warning p { margin: 8px 0 0; color: inherit; white-space: pre-line; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
     .vsl-speeds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -31,6 +34,7 @@
     .clickbank-actions button { min-height: 33px; }
     #clickbank-status:empty, #dtc-countries-status:empty { display: none; }
     button.compact-action { min-width: 0; padding: 8px 5px; font-size: 12px; line-height: 1.25; white-space: nowrap; }
+    #capture-d1 { white-space: normal; }
     .vsl-speeds button[aria-pressed="true"] { background: #38bdf8; color: #061327; border-color: transparent; }
     button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
     #clickbank-manual { margin-top: 12px; }
@@ -45,7 +49,7 @@
     <h2 id="capture-title">Captura direta · D0 e D−1</h2>
     <button id="scroll-to-bottom" class="secondary scroll-page" type="button">Rolar MCC até o final</button>
     <div class="capture-actions" role="group" aria-label="Ações de captura MCC">
-      <button id="capture-d1" class="secondary compact-action" type="button">Capturar D−1 da MCC</button>
+      <button id="capture-d1" class="secondary compact-action" type="button">Capturar (ou data anterior) D−1 da MCC</button>
       <button id="capture-d0" class="compact-action btn hub-white-button" type="button">Capturar D0 da MCC</button>
     </div>
     <div id="capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>

@@ -1,11 +1,11 @@
 import {mountTrendsSaveAction,trendPageState} from '../trends-save-action.mjs?v=4';
-import * as Domain from './manual-domain.mjs?v=1';
+import * as Domain from './manual-domain.mjs?v=2';
 import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as DecisionUI from '../decision-ui.mjs?v=2';
+import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as SignalUI from '../automatic-signal-ui.mjs';
 import * as Candidates from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {mountColumnPicker} from '../../table-columns.mjs';
@@ -61,8 +61,8 @@ export function mountManualView({root,actions,preferences}) {
     if(activeTab==='glimpse')return; // Shared iframe helper owns its pending state.
     button.disabled=busy||button.dataset.trendsSaving==='true'||activeTab!=='trends';button.title=activeTab==='trends'?'Salvar a avaliação de Google Trends':activeTab==='images'?'Cada classificação e candidata é salva imediatamente.':'Histórico somente de leitura.';
   }
-  function historyHtml(entries,label){return entries.slice().reverse().map(entry=>`<div class="history-row"><time>${escape(formatLastCollection(entry.capturedAt||entry.changedAt))}</time><b>${escape(label(entry))}</b><span>${escape([entry.productName,entry.searchTerm,entry.countries?.join(', '),entry.country,entry.negativeKeywordCandidates?.length?'Negativas: '+entry.negativeKeywordCandidates.join(', '):''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Nenhum registro.</p>';}
-  function history(){const row=snapshot();if(!row)return;$('#trendsHistory').innerHTML=historyHtml(row.trends.assessments,entry=>Trends.resultLabel(entry.status));$('#imagesHistory').innerHTML=historyHtml(row.images.assessments,entry=>Images.resultLabel(entry.status));$('#allHistory').innerHTML='<h3>Cadastro</h3>'+historyHtml(row.product.history,entry=>entry.values.name)+'<h3>Decisões</h3>'+historyHtml(row.decision.history,entry=>entry.status)+'<h3>Trends</h3>'+$('#trendsHistory').innerHTML+'<h3>Imagens</h3>'+$('#imagesHistory').innerHTML;}
+  function historyHtml(entries,label,{includeNotes=false}={}){return entries.slice().reverse().map(entry=>`<div class="history-row"><time>${escape(formatLastCollection(entry.capturedAt||entry.changedAt))}</time><b>${escape(label(entry))}</b><span>${escape([entry.productName,entry.searchTerm,entry.countries?.join(', '),entry.country,entry.negativeKeywordCandidates?.length?'Negativas: '+entry.negativeKeywordCandidates.join(', '):'',includeNotes&&entry.notes?`Observação: ${entry.notes}`:''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Nenhum registro.</p>';}
+  function history(){const row=snapshot();if(!row)return;$('#trendsHistory').innerHTML=historyHtml(row.trends.assessments,entry=>Trends.resultLabel(entry.status));$('#imagesHistory').innerHTML=historyHtml(row.images.assessments,entry=>Images.resultLabel(entry.status));$('#allHistory').innerHTML='<h3>Cadastro</h3>'+historyHtml(row.product.history,entry=>entry.values.name)+'<h3>Decisões</h3>'+historyHtml(row.decision.history,entry=>entry.status,{includeNotes:true})+'<h3>Trends</h3>'+$('#trendsHistory').innerHTML+'<h3>Imagens</h3>'+$('#imagesHistory').innerHTML;}
   function renderCandidates(){const row=snapshot();if(!row)return;const id=activeId;
     Candidates.renderKeywordCandidates($('#trendCandidates'),{candidates:row.trends.keywordCandidates,variant:'positive',saved:true,showRemoveForSaved:true,onSearch:term=>actions.openTrends(term),onRemove:term=>run(()=>actions.changeTrendCandidates(id,values=>values.filter(value=>value!==term)),{after:()=>{if(activeId===id)renderCandidates();}})});
   }
@@ -106,7 +106,7 @@ export function mountManualView({root,actions,preferences}) {
   $('#rows').onclick=event=>{
     const edit=event.target.closest('[data-edit]');if(edit){openForm(state.products.find(p=>p.productId===edit.dataset.edit));return;}
     const hide=event.target.closest('[data-hide]');if(hide){const p=state.products.find(p=>p.productId===hide.dataset.hide);run(()=>actions.setHidden(p.productId,!p.hidden),{target:'#message'});return;}
-    const decision=event.target.closest('[data-decision]');if(decision){const p=state.products.find(p=>p.productId===decision.dataset.decision),row=Domain.productSnapshot(p,state);DecisionUI.openDecisionPicker({title:p.name,currentValue:row.decision.currentStatus,onSelect:status=>actions.saveDecision(p.productId,status),onError:error=>notice(error.message,true)});return;}
+    const decision=event.target.closest('[data-decision]');if(decision){const p=state.products.find(p=>p.productId===decision.dataset.decision),row=Domain.productSnapshot(p,state);DecisionUI.openDecisionPicker({title:p.name,currentValue:row.decision.currentStatus,allowNotes:true,notes:row.decision.notes||'',onSelect:(status,notes)=>actions.saveDecision(p.productId,status,notes),onError:error=>notice(error.message,true)});return;}
     const analysis=event.target.closest('[data-analysis]');if(analysis)openSheet(analysis.dataset.id,analysis.dataset.analysis);
   };
   $('#tableHead').onclick=event=>{const button=event.target.closest('[data-sort]');if(!button)return;direction=sort===button.dataset.sort?-direction:1;sort=button.dataset.sort;renderTable();};

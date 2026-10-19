@@ -53,7 +53,9 @@ test('GM clear and columns actions reuse the Hub shadow, with keyboard and disab
   assert.match(css, /:not\(:disabled,\[aria-disabled="true"\]\):is\(:hover,:focus-visible\)/);
   assert.match(css, /outline:\s*2px solid var\(--hub-control-focus/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  for (const [path] of lists.filter(([path]) => path !== 'top-performance/index.html')) {
+  const manager = await read('src/curadoria/gerentes/index.html');
+  assert.match(manager, /<summary class="btn hub-table-toolbar-action">Colunas<\/summary>/);
+  for (const [path] of lists.filter(([path]) => !['top-performance/index.html', 'gerentes/index.html'].includes(path))) {
     assert.doesNotMatch(await read(`src/curadoria/${path}`), /hub-table-toolbar-action/);
   }
 });

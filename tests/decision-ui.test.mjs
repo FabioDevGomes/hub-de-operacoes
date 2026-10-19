@@ -10,6 +10,7 @@ assert.equal(normalizeDecision('Novo sinal'),'Não definido');
 assert.equal(normalizeDecision('Investigar oferta'),'Revisar');
 assert.equal(normalizeDecision('Aprovada para teste'),'Subir campanha');
 assert.equal(normalizeDecision('Arquivada'),'Ocultar');
+assert.equal(normalizeDecision('Solicitação Enviada'),DEFAULT_DECISION,'a decisão exclusiva de Top Offers CB não entra no catálogo global');
 assert.equal(normalizeDecision('valor desconhecido'),'Não definido');
 assert.equal(decisionTone('Subir campanha'),'launch');
 assert.equal(rowClass('Subir campanha'),'decision-row-launch');
@@ -33,6 +34,6 @@ assert.ok(styles.includes('#rows tr.decision-row-launch:hover>td{background:var(
 const curatedListPages=['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html'];
 for(const pagePath of curatedListPages){
   const page=await readFile(new URL('../src/curadoria/'+pagePath,import.meta.url),'utf8');
-  assert.ok(page.includes('trends-sheet.css?v=20261007-glimpse-borderless'),`${pagePath} precisa carregar o padrão compartilhado atualizado`);
+  assert.ok(page.includes('trends-sheet.css?v=20261016-trends-keyword-candidates-flat'),`${pagePath} precisa carregar o padrão compartilhado atualizado`);
 }
 console.log('decision ui ok');

@@ -47,9 +47,9 @@ assert.deepEqual(JSON.parse(JSON.stringify(result.rows)),[
 const renamed=context.buildD0DeltaRows(manifest,{...previous,manifesto_atual:{...previous.manifesto_atual,campanhas:[campaign('30/09 - Produto A',{impressions:100,clicks:5,cost:40})]}},[{oldName:'30/09 - Produto A',newName:'01/10 - Produto A'}]);
 assert.deepEqual(JSON.parse(JSON.stringify(renamed.rows[0])),{campaign:'01/10 - Produto A',currency:'BRL',impressions:10,clicks:1,cost:10,status:null},'campanha com prefixo de data alterado deve continuar comparável pelo pareamento validado');
 
-const newDay=context.buildD0DeltaRows(manifest,{manifesto_atual:{separacao_temporal:{D_zero:{datas_detectadas:['2026-10-01']}},campanhas:[]}});
+const newDay=context.buildD0DeltaRows(manifest,{manifesto_atual:{separacao_temporal:{D_zero:{datas_detectadas:['2026-10-01']}},campanhas:[campaign('01/10 - Produto A',{impressions:90,clicks:8,cost:45})]}});
 assert.equal(newDay.comparableDate,false);
-assert.equal(newDay.rows[0].impressions,110,'sem captura D0 anterior na mesma data, a primeira captura começa em zero');
+assert.deepEqual(JSON.parse(JSON.stringify(newDay.rows.find(row=>row.campaign==='01/10 - Produto A'))),{campaign:'01/10 - Produto A',currency:'BRL',impressions:110,clicks:6,cost:50,status:null},'a primeira captura D0 usa o acumulado desde 00:00 até a leitura, sem subtrair o D0 do dia anterior');
 assert.ok(newDay.rows.some(row=>row.campaign==='01/10 - Produto pausado'&&row.status==='Pausada'),'status pausada explícito é listado mesmo sem base comparável');
 
 const pauseManager='777-111-2222',pauseAccount='222-333-4444',pauseName='04/10 - Campanha em pausa';

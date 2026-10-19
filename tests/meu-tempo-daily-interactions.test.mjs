@@ -57,6 +57,7 @@ function harness(){
     async snapshot(){reads++;return structuredClone(store)},
     async saveEntry(row){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;store.entries.push({...row,id:`new-${writes}`,createdAt:new Clock().toISOString()})},
     async saveDay(row){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;const index=store.days.findIndex(x=>x.date===row.date);if(index<0)store.days.push(structuredClone(row));else store.days[index]=structuredClone(row)},
+    async saveSetting(key,value){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;store.settings[key]=structuredClone(value)},
     async removeDuration(day,id,minutes){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;const plan=Domain.planDurationRemoval(store.entries.filter(x=>x.date===day&&x.itemId===id),minutes);store.entries=store.entries.filter(x=>!plan.deleteIds.includes(x.id)).map(x=>({...x,...plan.updates.find(u=>u.id===x.id)}));return plan},
   };
   const code=source.replace(/^import[^\n]+\n/gm,'').replace(/export /g,'');
@@ -100,6 +101,25 @@ test('Até agora bloqueia segundo clique e Enter de outra atividade até conclui
   await h.field('[data-until="activity"]').onclick();assert.equal(h.writes,1,'sem intervalo novo após a atualização');
 });
 
+test('pausar o indicador congela seu valor por dia sem interromper os lançamentos nem os totais',async()=>{
+  const h=harness(),itemId=Domain.PRE_WORK_ITEM_IDS[0],key=Domain.preWorkCounterPauseKey(date);
+  h.store.items.push({id:itemId,name:'Na cama após acordar',categoryId:'example',type:'duration',active:true,productive:false});
+  h.store.entries.push({id:'pre-work-before-pause',date,itemId,type:'duration',minutes:35,productiveSnapshot:false,source:'manual',createdAt:'2026-10-10T08:00:00.000Z'});
+  await h.mount();assert.match(h.root.html,/35min/);assert.ok(h.field('#pausePreWorkCounter'));
+  const wait=gate();h.wait=wait;const pause=h.field('#pausePreWorkCounter').onclick();
+  assert.equal(h.field('#pausePreWorkCounter').disabled,true,'a ação de pausa segue o bloqueio compartilhado do Diário');
+  await h.field('#pausePreWorkCounter').onclick();assert.equal(h.writes,0,'cliques repetidos durante a gravação não duplicam a operação');
+  wait.resolve();await pause;h.wait=null;
+  assert.equal(h.writes,1);assert.deepEqual(h.store.settings[key].minutes,35);assert.equal(h.store.entries.length,2,'pausar não altera nenhum lançamento');
+  assert.match(h.root.html,/35min/);assert.match(h.root.html,/Parado/);assert.equal(h.field('#pausePreWorkCounter'),null);
+  const later=h.type(`[data-manual="${itemId}"]`,'25');await later.onkeydown(enter());
+  assert.equal(h.store.entries.filter(row=>row.itemId===itemId&&row.date===date).length,2,'o registro da atividade continua disponível após a pausa');
+  assert.equal(Domain.totalPreWorkDuration(h.store.entries,date),60,'o total real das atividades continua sendo calculado normalmente');
+  assert.equal(h.api.total(),660,'o total geral registrado continua considerando todos os lançamentos');
+  assert.equal(h.writes,2);assert.match(h.root.html,/35min/,'o KPI permanece congelado apesar do novo lançamento');assert.match(h.root.html,/Parado/);
+  h.api.draw();assert.match(h.root.html,/35min/,'a pausa persiste no redesenho da tela');assert.match(h.root.html,/Parado/);
+});
+
 test('clique e Enter de valor não temporal compartilham bloqueio e preservam os demais campos',async()=>{
   const h=harness();await h.mount();h.type('#dayObservations','Preservar');h.select('[data-value="flag"]','0');
   const wait=gate();h.wait=wait;const button=h.field('[data-add-value="flag"]'),launch=button.onclick();
@@ -118,7 +138,7 @@ test('o Histórico mostra a última correção Sim/Não sem apagar os eventos an
   await h.mount();h.field('[data-tab="history"]').onclick();
   assert.match(h.root.innerHTML,new RegExp(`<td class="has-value " data-cell-item="item-alcool" data-cell-date="${date}">Não</td>`),'a célula do dia exibe Não após a correção');
   assert.doesNotMatch(h.root.innerHTML,new RegExp(`<td class="[^"]*time-alcohol-yes[^"]*" data-cell-item="item-alcool" data-cell-date="${date}">`),'célula corrigida não conserva o destaque de Sim');
-  assert.doesNotMatch(h.root.innerHTML,new RegExp(`<th class="time-alcohol-day">${date}</th>`),'cabeçalho corrigido não conserva o destaque de Sim');
+  assert.match(h.root.innerHTML,new RegExp(`<th class="time-clear-day">${date.split('-').reverse().join('/')}</th>`),'o cabeçalho fica verde automaticamente após a última resposta corrigida para Não');
   assert.equal(h.store.entries.filter(row=>row.itemId==='item-alcool'&&row.date===date).length,2,'a correção de exibição não remove lançamentos históricos');
 });
 

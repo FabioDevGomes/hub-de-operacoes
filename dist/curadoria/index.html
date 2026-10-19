@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hub v1.12.0 · Radar de Curadoria</title>
+  <title>Hub v1.22.4 · Radar de Curadoria</title>
   <meta name="description" content="Triagem local de sinais encontrados no SpyHero.">
   <link rel="icon" type="image/png" href="/favicon.png">
-  <link rel="stylesheet" href="trends-sheet.css?v=20261007-glimpse-borderless">
+  <link rel="stylesheet" href="trends-sheet.css?v=20261016-trends-keyword-candidates-flat">
   <style>
     :root{--bg:#07101e;--panel:#0d192b;--panel2:#122238;--line:#223654;--text:#eef5ff;--muted:#9fb0c9;--blue:#38bdf8;--orange:#fb923c;--green:#34d399;--red:#fb7185;--yellow:#facc15;--radius:18px;--shadow:0 18px 55px rgba(0,0,0,.28)}
     *{box-sizing:border-box}html{color-scheme:dark}body{margin:0;background:radial-gradient(circle at 15% -10%,#12335a 0,transparent 28%),var(--bg);color:var(--text);font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -35,10 +35,10 @@
   <link rel="stylesheet" href="/sidebar-component.css?v=15">
   <link rel="stylesheet" href="/table-headers.css?v=9">
   <link rel="stylesheet" href="/table-columns.css?v=2">
-<link rel="stylesheet" href="/table-edit-actions.css?v=3"><link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/white-button.css?v=5"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"><!-- hub-system-version:start -->
-<meta name="hub-system-version" content="1.12.0">
-<link rel="stylesheet" href="/system-version.css?v=1.12.0">
-<script defer src="/system-version.js?v=1.12.0"></script>
+<link rel="stylesheet" href="/table-edit-actions.css?v=3"><link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/white-button.css?v=6"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"><!-- hub-system-version:start -->
+<meta name="hub-system-version" content="1.22.4">
+<link rel="stylesheet" href="/system-version.css?v=1.22.4">
+<script defer src="/system-version.js?v=1.22.4"></script>
 <!-- hub-system-version:end -->
 </head>
 <body>
@@ -361,9 +361,9 @@ Zeneara (2025)\tHealth (Hearing & Tinnitus)\tClickbank\t38\t0\t6\t5`;
     $('#closeImport').onclick=$('#cancelImport').onclick=()=>$('#importDialog').close();$('#exampleBtn').onclick=()=>{$('#pasteArea').value=SAMPLE;preparePreview()};$('#pasteArea').addEventListener('input',preparePreview);
     $('#confirmImport').onclick=async()=>{const stamp=new Date(),label=stamp.toLocaleDateString('pt-BR'),existing=new Map(records.map(x=>[x.nameKey,x])),unique=new Map();preview.forEach((x,i)=>unique.set(normal(x.name),{...x,sourceOrder:i+1}));const items=[...unique.entries()].map(([key,x],i)=>{const old=existing.get(key),snapshot=makeSnapshot(x,stamp,x.sourceOrder);return {...x,id:old?.id||`${Date.now()}-${String(i).padStart(4,'0')}`,nameKey:key,status:old?.status||'Novo sinal',notes:old?.notes||'',source:'SpyHero Offers',importedAt:stamp.toISOString(),importedAtLabel:label,snapshots:withSnapshot(old?.snapshots,snapshot),trendsCollections:old?.trendsCollections||[],trendsAssessments:old?.trendsAssessments||[],trendsKeywordCandidates:old?.trendsKeywordCandidates||[],clickbankVerifications:old?.clickbankVerifications||[],history:[...(old?.history||[]),{at:stamp.toISOString(),action:old?'Retrato diário atualizado':'Importado do SpyHero'}]}});await putMany(items);$('#importDialog').close();await refresh();toast(`${items.length} produtos registrados no retrato de ${label}`)};
     document.querySelectorAll('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(sortKey===key)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortKey=key;sortDirection='asc'}render()});$('#search').addEventListener('input',render);$('#movementFilter').addEventListener('change',render);$('#autoFilter').addEventListener('change',render);$('#statusFilter').addEventListener('change',render);$('#networkFilter').addEventListener('change',render);$('#clickbankFilter').addEventListener('change',render);$('#landingFilter').addEventListener('change',render);$('#visibilityFilter').addEventListener('change',render);$('#closeDetail').onclick=()=>$('#detailPanel').classList.remove('open');
-    $('#saveDetail').onclick=async()=>{const x=records.find(r=>r.id===activeId);if(!x)return;const at=new Date().toISOString();x.status=$('#detailStatus').value;x.notes=$('#detailNotes').value.trim();x.history=[...(x.history||[]),{at,action:`Decisão alterada para ${x.status}`}];await putMany([x]);$('#detailPanel').classList.remove('open');await refresh();toast('Decisão registrada')};
+    $('#saveDetail').onclick=async()=>{const x=records.find(r=>r.id===activeId);if(!x)return;const at=new Date().toISOString();x.status=$('#detailStatus').value;x.notes=$('#detailNotes').value.trim().slice(0,5000);x.history=[...(x.history||[]),{at,action:`Decisão alterada para ${x.status}`,notes:x.notes}];await putMany([x]);$('#detailPanel').classList.remove('open');await refresh();toast('Decisão registrada')};
     $('#closeSheet').onclick=closeProductSheet;$('#summarySheetTab').onclick=()=>showSheetTab('summary');$('#trendsSheetTab').onclick=()=>showSheetTab('trends');$('#clickbankSheetTab').onclick=()=>showSheetTab('clickbank');$('#landingSheetTab').onclick=()=>showSheetTab('landing');$('#validateTrends').onclick=()=>validateTrends(true);
-    $('#saveSheetDecision').onclick=async()=>{const x=records.find(r=>r.id===activeId);if(!x)return;const at=new Date().toISOString();x.status=$('#sheetDecision').value;x.notes=$('#sheetNotes').value.trim();x.history=[...(x.history||[]),{at,action:`Decisão alterada para ${x.status}`}];await putMany([x]);await refresh();$('#decisionMessage').textContent='Decisão e observação salvas.';openProductSheet(x.id);$('#decisionMessage').textContent='Decisão e observação salvas.'};
+    $('#saveSheetDecision').onclick=async()=>{const x=records.find(r=>r.id===activeId);if(!x)return;const at=new Date().toISOString();x.status=$('#sheetDecision').value;x.notes=$('#sheetNotes').value.trim().slice(0,5000);x.history=[...(x.history||[]),{at,action:`Decisão alterada para ${x.status}`,notes:x.notes}];await putMany([x]);await refresh();$('#decisionMessage').textContent='Decisão e observação salvas.';openProductSheet(x.id);$('#decisionMessage').textContent='Decisão e observação salvas.'};
     $('#openGoogleTrends').onclick=()=>{const x=records.find(r=>r.id===activeId),term=$('#trendsSearchTerm').value.trim()||x?.name;if(!term)return;const tab=window.open(TrendsDomain.exploreUrl(term),'google-trends-radar');if(tab)tab.focus();else $('#trendsMessage').textContent='O navegador bloqueou a aba. Libere pop-ups para este endereço local.'};
     async function saveTrendsResult(status,{keepOpen=true,recordId=activeId,draft=null}={}){
       const x=records.find(r=>r.id===recordId);if(!x)return false;

@@ -1,7 +1,7 @@
-import {BACKUP_FORMAT,validateBackup,productFromForm,productValues} from './manual-domain.mjs?v=1';
+import {BACKUP_FORMAT,validateBackup,productFromForm,productValues} from './manual-domain.mjs?v=2';
 import {RESULT_OPTIONS} from '../trends-ui.mjs';
 import {IMAGE_RESULT_OPTIONS} from '../image-search-ui.mjs';
-import {normalizeDecision} from '../decision-ui.mjs';
+import {normalizeDecision} from '../decision-ui.mjs?v=curation-decision-notes-2';
 export const DB_NAME='radar-curadoria-manual';
 export const DB_VERSION=1;
 export const STORES=Object.freeze(['products','trends','images','decisions','analyses']);
@@ -51,7 +51,7 @@ export function createManualStorage({factory=globalThis.indexedDB,now=()=>new Da
     if(!IMAGE_RESULT_OPTIONS.includes(input.status))throw new Error('Selecione um resultado visual antes de registrar candidatas.');
     return mutate(productId,'images',(record,product,stamp)=>{if(!product.countries.includes(input.country))throw new Error('Adicione este país ao cadastro primeiro.');return {...record,productId,searchTerm:input.searchTerm,assessments:[...(record?.assessments||[]),{...input,assessmentId:id(),date:stamp.slice(0,10),capturedAt:stamp,negativeKeywordCandidates:candidates(input.negativeKeywordCandidates),productName:product.name}]};});
   }
-  function saveDecision(productId,status){if(normalizeDecision(status)!==status)throw new Error('Decisão inválida.');return mutate(productId,'decisions',(record,product,stamp)=>({...record,productId,currentStatus:status,history:[...(record?.history||[]),{entryId:id(),status,capturedAt:stamp,productName:product.name}]}));}
+  function saveDecision(productId,status,notes=''){if(normalizeDecision(status)!==status)throw new Error('Decisão inválida.');const decisionNotes=String(notes??'').trim().slice(0,5000);return mutate(productId,'decisions',(record,product,stamp)=>({...record,productId,currentStatus:status,notes:decisionNotes,history:[...(record?.history||[]),{entryId:id(),status,capturedAt:stamp,productName:product.name,notes:decisionNotes}]}));}
   function setHidden(productId,hidden){return mutate(productId,'products',(p,_product,stamp)=>({...p,hidden:Boolean(hidden),updatedAt:stamp,revision:p.revision+1,history:[...(p.history||[]),{revision:p.revision,changedAt:stamp,values:productValues(p)}]}));}
   async function historyByProduct(productId){const db=await openManualDB(factory);try{const tx=db.transaction('analyses'),done=completion(tx),rows=await requestValue(tx.objectStore('analyses').index('productId').getAll(productId));await done;return rows.sort((a,b)=>String(b.capturedAt).localeCompare(String(a.capturedAt)));}finally{db.close();}}
   async function saveAnalysis(value,productId){

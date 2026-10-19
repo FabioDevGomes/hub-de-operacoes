@@ -1,5 +1,18 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {keywordCandidateMarkerHtml,renderKeywordCandidates} from '../dist/curadoria/keyword-candidates-ui.mjs';
+
+const imagesStyles=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.meta.url),'utf8');
+assert.ok(imagesStyles.includes('.image-candidate{font-size:.9rem;font-weight:400}'),'candidatas de Google Imagens devem ter peso normal');
+assert.ok(imagesStyles.includes('.keyword-candidate.trends-keyword-candidate,\n.keyword-candidate.trends-keyword-candidate .keyword-candidate-text{font-weight:400}'),'texto das candidatas Google Trends deve usar peso regular em todas as telas compartilhadas');
+const positiveSearchStyle=imagesStyles.match(/\.keyword-candidate\.trends-keyword-candidate \.keyword-candidate-search\{([^}]*)\}/)?.[1]||'';
+assert.ok(['appearance:none','-webkit-appearance:none','border:1px solid rgba(53,198,145,.42)','border-radius:7px','background:rgba(5,34,24,.38)','box-shadow:none','color:#83e5bb','font-size:.578rem','font-weight:400'].every(style=>positiveSearchStyle.includes(style)),'pesquisar das candidatas Trends deve compartilhar o botão verde plano sem relevo');
+assert.ok(imagesStyles.includes('.keyword-candidate.image-candidate .keyword-candidate-search{border-color:rgba(169,214,255,.35);background:rgba(7,22,40,.25);font-weight:400}'),'estilo das candidatas negativas de Imagens deve permanecer independente');
+assert.ok(!imagesStyles.includes('.keyword-candidate.trends-keyword-candidate.saved'),'a regra compartilhada não deve alterar aparência de candidatas salvas de Imagens');
+for(const page of ['index.html','gerentes/index.html','top-performance/index.html','clickbank-top-offers/index.html','hot-offers-ms/index.html','manual/index.html','smartadv-offers/index.html']){
+  const html=await readFile(new URL(`../dist/curadoria/${page}`,import.meta.url),'utf8');
+  assert.match(html,/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,`${page} deve carregar o CSS compartilhado atualizado`);
+}
 
 assert.equal(keywordCandidateMarkerHtml(0), '', 'não deve mostrar marcador sem candidatas');
 assert.match(keywordCandidateMarkerHtml(1), /keyword-candidate-marker positive[^>]*>.*keyword-candidate-marker-dot[^>]*>·.*keyword-candidate-marker-exclamation[^>]*>!/);

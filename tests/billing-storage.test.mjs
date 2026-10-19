@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {summarizeCompetence,monthlyFinancialSeries} from '../src/billing/billing-domain.mjs';
-import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
+import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, updateMccConversionValues, updateMccConversionValuesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
   constructor() { this.values = new Set(); }
@@ -33,6 +33,8 @@ assert.match(storageSource, /IDBKeyRange\.upperBound\(`\$\{month\}-01`, true\)[\
   'navegação deve consultar meses anteriores e posteriores pelo intervalo de datas');
 assert.match(storageSource, /export async function updateSale[\s\S]*?makeAudit\(action, 'sale', saleId, changes/,
   'atualizar o status da venda registra alterações com antes/depois na auditoria');
+assert.match(storageSource, /export function updateMccConversionValuesToTransaction[\s\S]*?prior\.source !== 'mcc_conversion_aggregate'[\s\S]*?mcc_conversion_value_corrected/,
+  'a correção da conversão só aceita agregados MCC e grava auditoria');
 const originalIndexedDB = globalThis.indexedDB;
 const originalIDBKeyRange = globalThis.IDBKeyRange;
 const cursorRows = {
@@ -208,9 +210,43 @@ aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregate
 assert.equal(aggregate.confirmation_status,'confirmed','D−1 promove o registro estável de D0');
 assert.equal(aggregate.value_brl,240);
 assert.equal(aggregate.payment_status,'pending','confirmação MCC não transforma valor em recebimento');
+const originalBillingIndexedDB=globalThis.indexedDB;
+globalThis.indexedDB={open(){
+  const request={};
+  const db={close(){},transaction(){
+    let aborted=false;
+    const tx={
+      objectStore(name){
+        if(name==='billing_sales')return{
+          get(id){const getRequest={};queueMicrotask(()=>{getRequest.result=syncStores.get('billing_sales').rows.find(row=>row.sale_id===id);getRequest.onsuccess?.();queueMicrotask(()=>{if(!aborted)tx.oncomplete?.()})});return getRequest},
+          put(row){syncStores.get('billing_sales').put(row)},
+        };
+        return{add(row){syncStores.get('billing_audit').add(row)}};
+      },
+      abort(){aborted=true;queueMicrotask(()=>tx.onabort?.())},
+    };
+    return tx;
+  }};
+  queueMicrotask(()=>{request.result=db;request.onsuccess?.()});
+  return request;
+}};
+await updateMccConversionValues(aggregateId,{value_brl:246.75});
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.value_brl,246.75,'o valor convertido pode ser corrigido diretamente no agregado MCC');
+assert.equal(aggregate.manual_value_override,true,'a correção fica marcada para sobreviver a novas capturas');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'mcc_conversion_value_corrected','a edição MCC fica disponível no Histórico');
+assert.deepEqual(syncStores.get('billing_audit').rows.at(-1).changes.find(change=>change.field==='value_brl'),{field:'value_brl',old_value:240,new_value:246.75});
+upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,value_brl:999,conversion_count:3,source_period:'d1'}]);
+await new Promise(resolve=>setImmediate(resolve));
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.value_brl,246.75,'nova captura atualiza conversões, mas preserva o valor manual corrigido');
+assert.equal(aggregate.conversion_count,3,'preservar valor corrigido não bloqueia atualizações de quantidade MCC');
+assert.equal(aggregate.manual_value_override,true);
 upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,value_brl:999,source_period:'d0'}],{onlyIfMissing:true});
 await new Promise(resolve=>setImmediate(resolve));
-assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId).value_brl,240,'backfill do Diário não sobrescreve o registro MCC já sincronizado');
+assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId).value_brl,246.75,'backfill do Diário não sobrescreve o valor manual corrigido');
+// Restore the independent fixture so the following manual-coverage scenario starts from its original state.
+syncStores.get('billing_sales').put({...officialAggregate,manual_value_override:false});
 const recoveredAggregate={...provisionalAggregate,sale_id:'mcc-conversion:cmp-1:2026-09-22',sale_date:'2026-09-22',value_brl:75,conversion_count:1,source_ref:'cmp-1|2026-09-22'};
 upsertMccConversionSalesToTransaction(syncTx,[recoveredAggregate],{onlyIfMissing:true});
 await new Promise(resolve=>setImmediate(resolve));
@@ -258,6 +294,6 @@ assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===confir
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'billing'\)/, 'backup antigo sem faturamento preserva as stores financeiras');
-assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\]\}=\{\}\)/, 'edição do lançamento na base e no espelho financeiro compartilha uma transação local');
+assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\],mccConversionCorrections=\[\]\}=\{\}\)/, 'edição da base compartilhada e da linha financeira usa uma transação local');
 assert.match(template, /await persistLocalBase\(\{provisionalBillingSales:\[result\.sale\]\}\)/, 'venda manual D0 é espelhada em Faturamento no mesmo salvamento');
 console.log('billing storage and backup ok');

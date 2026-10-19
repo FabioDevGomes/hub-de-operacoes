@@ -61,6 +61,10 @@ assert.equal(renderedElements.get('#d1-changes-table').children.length,0);
 assert.equal(renderedElements.get('#d1-changes-empty').hidden,false);
 assert.match(renderedElements.get('#d1-changes-empty').textContent,/nenhum campo ausente foi tratado como zero/);
 
+const nextDayD0=context.buildD1DeltaRows(source,{manifesto_atual:{separacao_temporal:{D_zero:{datas_detectadas:['2026-10-03']}},campanhas:previous.manifesto_atual.campanhas}});
+assert.equal(nextDayD0.comparableDate,false,'D0 do dia seguinte fica fora do corte do fechamento D−1');
+assert.deepEqual(JSON.parse(JSON.stringify(nextDayD0.rows)),[],'não subtrai D0 de hoje do fechamento de ontem');
+
 const renamed=context.buildD1DeltaRows({dates:[date],records:[d1Record('Campanha A 02/10',{impressions:'105',clicks:'11',cost:'51'})]},previous,[{oldName:'Campanha A',newName:'Campanha A 02/10'}]);
 assert.deepEqual(JSON.parse(JSON.stringify(renamed.rows)),[{campaign:'Campanha A 02/10',currency:'BRL',impressions:5,clicks:1,cost:1}],'renomeação só é associada quando confirmada pelo detector existente');
 

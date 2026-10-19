@@ -21,6 +21,18 @@ main{min-width:0;padding:24px 28px 52px}
 #clickbankTopOffersRoot .tablewrap thead th{z-index:2}
 .tablewrap [data-column="future"]{text-align:center}
 .tablewrap [data-column="rank"]{text-align:center!important}
+#clickbankTopOffersRoot .tablewrap [data-column="trends"],
+#clickbankTopOffersRoot .tablewrap [data-column="glimpse"],
+#clickbankTopOffersRoot .tablewrap [data-column="images"],
+#clickbankTopOffersRoot .tablewrap [data-column="average"],
+#clickbankTopOffersRoot .tablewrap [data-column="initial"],
+#clickbankTopOffersRoot .tablewrap [data-column="future"],
+#clickbankTopOffersRoot .tablewrap [data-column="epc"],
+#clickbankTopOffersRoot .tablewrap [data-column="cvr"],
+#clickbankTopOffersRoot .tablewrap [data-column="gravity"],
+#clickbankTopOffersRoot .tablewrap [data-column="movement"],
+#clickbankTopOffersRoot .tablewrap [data-column="decision"],
+#clickbankTopOffersRoot .tablewrap [data-column="lastSeen"]{text-align:center!important}
 .import-dialog{width:min(970px,calc(100% - 24px));max-height:calc(100% - 24px);padding:0;border:1px solid var(--cb-line);border-radius:16px;background:var(--cb-surface);color:var(--cb-text);box-shadow:0 30px 90px #0009}.import-dialog::backdrop{background:#01060ecc;backdrop-filter:blur(3px)}.modalhead,.modalfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 17px;border-bottom:1px solid var(--cb-line)}.modalfoot{border-top:1px solid var(--cb-line);border-bottom:0;justify-content:flex-end}.modalbody{padding:16px;max-height:calc(100vh - 160px);overflow:auto}.field{display:grid;gap:7px;color:#9dc1e8;font-size:.78rem}.paste{width:100%;min-height:210px;margin-top:3px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.78rem;line-height:1.45}.validate-actions{margin-top:8px}.preview-box{margin-top:13px;padding:12px;border:1px solid var(--cb-line);border-radius:12px;background:#0a1627}.preview-box h2{font-size:.92rem;margin:0 0 9px}.preview-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.preview-metrics>div{padding:8px;border-radius:8px;background:#13263e}.preview-metrics span,.preview-metrics b{display:block}.preview-metrics span{color:var(--cb-muted);font-size:.68rem}.preview-metrics b{margin-top:3px;font-size:.82rem;font-weight:650}.preview-status{margin:9px 0 0;color:var(--cb-muted);font-size:.76rem;line-height:1.45}.preview-issues{display:grid;gap:5px;margin-top:8px;font-size:.75rem}.preview-issues .warning{color:var(--cb-amber)}.preview-issues .error{color:var(--cb-red)}.preview-issues .ok{color:var(--cb-green)}
 @media(max-width:1000px){.shell{grid-template-columns:190px minmax(0,1fr)}main{padding:20px 18px 38px}.top{flex-direction:column}.actions{justify-content:flex-start}.preview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;min-height:0;padding:10px;border-right:0;border-bottom:1px solid #24344d}.brand{padding-bottom:8px}.sidebar-nav{max-height:42vh;overflow:auto}main{padding:18px 12px 30px}.filter-grid{align-items:stretch;flex-direction:column}.search,.capture-selection select{width:100%}.capture-selection{display:flex;align-items:stretch;flex:0 1 auto;flex-direction:column;min-width:0}.capture-selection select{min-width:0}.capture-toolbar{width:100%}.preview-metrics{grid-template-columns:1fr 1fr}.modalhead{align-items:flex-start}.modalhead>.btn{flex:0 0 auto}}
@@ -30,6 +42,7 @@ main{min-width:0;padding:24px 28px 52px}
 .clickbank-rank-link{color:#9ec5f4;text-decoration:underline;text-underline-offset:2px}.clickbank-rank-link:hover,.clickbank-rank-link:focus-visible{color:#fff}.clickbank-offer-link-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}.clickbank-offer-link-row .sub{margin:0}
 #offerSheet .image-validation-intro{margin-bottom:10px}#offerSheet .image-validation-intro label{grid-column:2;grid-row:1/3}#offerSheet .image-validation-intro input{width:100%;margin-top:5px}
 #offerSheet .manual-country-entry{display:grid;gap:6px;margin-top:14px;color:var(--muted);font-size:.77rem}#offerSheet .manual-country-entry>div{display:flex;gap:7px;max-width:390px}#offerSheet .manual-country-entry input{width:90px;text-transform:uppercase}#offerSheet .manual-country-entry span{min-height:1em;color:var(--green)}#offerSheet .trends-result-card h2{margin-bottom:10px}#offerSheet #trendMessage{margin-top:8px}#offerSheet #trendMessage.error{color:var(--cb-red)}
+#offerSheet .manual-country-entry>div{align-items:center;flex-wrap:wrap;max-width:none}#offerSheet #trendCountries{flex:1 1 270px;min-width:0;margin-top:0}
 #offerSheet .image-candidate-entry{margin-top:8px}#offerSheet .image-candidate-entry input{width:100%}#offerSheet .image-candidate-summary-head b{color:#ffb5c3;font-size:.78rem}#offerSheet .image-candidate-list{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}#offerSheet .image-candidate-list .keyword-candidate-items{display:flex;gap:6px;flex-wrap:wrap}
 #offerSheet .image-country-title{display:flex;align-items:center;gap:8px}#offerSheet .manual-country-label{border:1px solid #31506e;border-radius:999px;padding:3px 7px;color:#a9d6ff;font-size:.66rem}#offerSheet .history-row{grid-template-columns:minmax(130px,.6fr) minmax(150px,.8fr) minmax(0,2fr)}
 @media(max-width:760px){#offerSheet .sheet-inner{padding:16px}#offerSheet .image-validation-intro{display:grid;grid-template-columns:1fr}#offerSheet .image-validation-intro h2,#offerSheet .image-validation-intro p,#offerSheet .image-validation-intro label{grid-column:1;grid-row:auto}#offerSheet .image-result-actions{grid-template-columns:repeat(2,minmax(0,1fr))}#offerSheet .history-row{grid-template-columns:1fr}}
@@ -38,11 +51,27 @@ main{min-width:0;padding:24px 28px 52px}
 #clickbankTopOffersRoot #offerSheet{--bg:#071222;--panel:#0e1d31;--panel2:#0b192b}
 #offerSheet .card{background:var(--panel);border-radius:16px;padding:14px;margin-bottom:12px}
 #offerSheet .card h2{margin:0 0 10px;font-size:1rem}
+#offerSheet .trends-country-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+#offerSheet .trends-country-heading h2{margin:0}
+#offerSheet .trends-country-heading .clickbank-offer-link-row{justify-content:flex-end;margin:0;text-align:right}
+#offerSheet .trends-country-heading .clickbank-offer-link-row .sub{max-width:min(100%,360px)}
 #offerSheet .field-label{display:block;color:var(--muted);font-size:.72rem;margin-bottom:4px}
 #offerSheet .trends-search-row .control{width:100%}
 #offerSheet .candidate-entry{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 #offerSheet .candidate-entry .control{width:100%;min-width:0}
 #offerSheet #trendCandidates{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+#offerSheet .affiliate-link-section{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+#offerSheet .affiliate-link-entry{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:8px}
+#offerSheet .affiliate-link-entry label{min-width:0}
+#offerSheet .affiliate-link-entry .control{width:100%;min-width:0}
+#offerSheet .affiliate-link-saved{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px}
+#offerSheet .affiliate-link-value{min-width:0}
+#offerSheet .affiliate-link-value a{display:block;overflow-wrap:anywhere;color:var(--cb-blue)}
+#offerSheet .affiliate-link-copy{display:grid;place-items:center;width:38px;height:36px;padding:7px}
+#offerSheet .affiliate-link-copy svg{display:block}
+#offerSheet .affiliate-link-message{margin:5px 0 0;color:var(--green);font-size:.75rem}
+#offerSheet .affiliate-link-message:empty{display:none}
+#offerSheet .affiliate-link-message.error{color:var(--cb-red)}
 #offerSheet #sheetMessage:empty{display:none}
 #offerSheet #sheetMessage{margin:0 0 12px;color:var(--green)}
 #offerSheet #sheetMessage.error{color:var(--cb-red)}
@@ -62,8 +91,19 @@ main{min-width:0;padding:24px 28px 52px}
 body:has(#clickbankTopOffersRoot #offerSheet:not(.hidden)):not(:has(#offerSheet [data-panel="glimpse"]:not(.hidden))){overflow:hidden}
 @media(max-width:760px){#offerSheet .image-result-actions{grid-template-columns:repeat(6,minmax(96px,1fr));overflow-x:auto}}
 @media(max-width:760px){#offerSheet .trends-analysis-meta{grid-template-columns:1fr;gap:8px}}
+@media(max-width:520px){#offerSheet .affiliate-link-entry{grid-template-columns:minmax(0,1fr) auto}#offerSheet .affiliate-link-entry label{grid-column:1/-1}#offerSheet .affiliate-link-saved{grid-template-columns:minmax(0,1fr) auto}#offerSheet .affiliate-link-saved [data-affiliate-edit]{grid-column:1/-1;justify-self:end}}
 
 #clickbankTopOffersRoot .tablewrap td.offer-name.hub-edit-host{padding-right:54px}
+
+/* As seis decisões da Top Offers CB ficam em botões de largura igual e uma única faixa. */
+body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(840px,calc(100% - 28px))}
+body:has(#clickbankTopOffersRoot) #sharedDecisionActions{grid-template-columns:repeat(6,minmax(126px,1fr));justify-content:center;overflow-x:auto;overscroll-behavior-inline:contain}
+body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{box-sizing:border-box;width:100%;white-space:nowrap;padding-inline:2px}
+@media(max-width:868px){
+  body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(840px,calc(100% - 16px))}
+  body:has(#clickbankTopOffersRoot) #sharedDecisionActions{display:grid;grid-template-columns:repeat(6,minmax(126px,1fr));justify-content:start;overflow-x:auto}
+  body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{grid-column:auto}
+}
 
 /* Ações do diálogo de captura: mesmo padrão compacto, sem borda e com sombra preta. */
 .import-dialog .btn{min-height:36px;padding:8px 11px;border:0;border-radius:10px;background:var(--hub-button-bg,#101e32);color:var(--cb-text);font-family:inherit;font-size:.78rem;font-weight:400;box-shadow:0 4px 9px rgba(0,0,0,.55);transition:box-shadow .15s ease,filter .15s ease}

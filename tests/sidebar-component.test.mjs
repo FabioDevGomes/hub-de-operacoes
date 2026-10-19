@@ -42,7 +42,7 @@ for (const group of groupOrder) {
 }
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
-  'Observabilidade decisória', 'Observabilidade da Curadoria', 'Radar SpyHero', 'Lista de Gerente GM',
+  'Observabilidade decisória', 'Observabilidade da Curadoria', 'Tracking ClickBank', 'Radar SpyHero', 'Lista de Gerente GM',
   'Plataforma Guru Media', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
   'Produtos testados', 'Curadoria manual',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
@@ -62,7 +62,7 @@ const creationEnd = source.indexOf("{ id: 'personal'", creationStart);
 const creationItems = source.slice(creationStart, creationEnd);
 assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'"), 'Asset Studio deve aparecer antes de Ficha e Presell no grupo Criação de ofertas');
 assert.ok(!creationItems.includes("key: 'presell'"), 'Gerador de Pre-Sell não deve aparecer como tela separada');
-for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'testedProductsNav', 'timeNav', 'copyFichaNav']) {
+for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'trackingNav', 'testedProductsNav', 'timeNav', 'copyFichaNav']) {
   assert.ok(viewRegistry.includes(id) || source.includes(id), `ID de navegação SPA ${id} não foi preservado no registro`);
 }
 const registryContext=vm.createContext({window:{},URLSearchParams,encodeURIComponent});

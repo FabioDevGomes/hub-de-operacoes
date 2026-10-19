@@ -1,12 +1,26 @@
 // Apresentação apenas: códigos e nomes vêm da validação estrutural.
 export function showCaptureStatus(root, message) {
-  root.classList.remove('error');
+  root.classList.remove('error', 'warning');
   root.textContent = message;
+}
+
+export function showCaptureWarning(root, message) {
+  const doc = root.ownerDocument;
+  root.replaceChildren();
+  root.classList.remove('error');
+  root.classList.add('warning');
+  const title = doc.createElement('strong');
+  title.textContent = 'Captura referente a data anterior a D−1';
+  const detail = doc.createElement('p');
+  detail.textContent = message;
+  root.append(title);
+  root.append(detail);
 }
 
 export function showCaptureError(root, failure) {
   const doc = root.ownerDocument;
   root.replaceChildren();
+  root.classList.remove('warning');
   root.classList.add('error');
   const add = (tag, text) => {
     const node = doc.createElement(tag);

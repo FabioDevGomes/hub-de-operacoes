@@ -1,6 +1,7 @@
 export const SCHEMA = 'personal_finance_v1';
 export const CURRENCIES = Object.freeze(['BRL', 'USD']);
 export const FUND_TYPES = Object.freeze(['available', 'reserve']);
+export const RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax']);
 export const DEBT_STATUSES = Object.freeze(['open', 'paid']);
 export const DEFAULT_SETTINGS = Object.freeze({ key:'preferences', default_currency:'BRL', near_limit_percent:80 });
 export const LUNCH_DINNER_MONTHLY_BUDGET = 1250;
@@ -105,7 +106,7 @@ export function normalizeFund(fund) {
   const month_key = String(fund?.month_key || '');
   if (!isoMonth(month_key)) throw new Error('Mês inválido.');
   if (!FUND_TYPES.includes(fund?.type)) throw new Error('Tipo deve ser Disponível ou Reserva.');
-  return {
+  const normalized = {
     snapshot_id: id(fund?.snapshot_id || `${month_key}:${fund?.item_id || ''}`, 'Identificador financeiro'),
     month_key,
     item_id: id(fund?.item_id, 'Identificador financeiro'),
@@ -114,6 +115,28 @@ export function normalizeFund(fund) {
     currency: currency(fund?.currency),
     type: fund.type,
     notes: String(fund?.notes ?? '').trim(),
+  };
+  if (fund?.reserve_movements != null) {
+    if (!Array.isArray(fund.reserve_movements)) throw new Error('Histórico da reserva inválido.');
+    if (fund.type !== 'reserve') throw new Error('Somente uma reserva pode conter movimentações de resgate ou imposto.');
+    normalized.reserve_movements = fund.reserve_movements.map(normalizeReserveMovement);
+    if (new Set(normalized.reserve_movements.map(movement => movement.movement_id)).size !== normalized.reserve_movements.length) throw new Error('O histórico da reserva contém movimentações duplicadas.');
+  }
+  return normalized;
+}
+
+export function normalizeReserveMovement(movement) {
+  if (!RESERVE_MOVEMENT_TYPES.includes(movement?.type)) throw new Error('Tipo de movimentação da reserva inválido.');
+  const amount = amountOrNull(movement?.amount, 'Valor da movimentação');
+  if (amount == null || amount <= 0) throw new Error('O valor da movimentação deve ser maior que zero.');
+  const created_at = String(movement?.created_at || '');
+  if (!created_at || !Number.isFinite(Date.parse(created_at))) throw new Error('Data da movimentação inválida.');
+  return {
+    movement_id: id(movement?.movement_id, 'Identificador da movimentação'),
+    type: movement.type,
+    amount,
+    currency: currency(movement?.currency),
+    created_at,
   };
 }
 
@@ -601,13 +624,26 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
     const latest = current.month_key < fund.month_key ? fund : current;
     reserveByItem.set(fund.item_id, { ...latest, started_month_key });
   }
-  const contributions = [...reserveByItem.values()].sort((a, b) => a.started_month_key.localeCompare(b.started_month_key) || a.item_id.localeCompare(b.item_id));
+  const latestContributions = [...reserveByItem.values()].sort((a, b) => a.started_month_key.localeCompare(b.started_month_key) || a.item_id.localeCompare(b.item_id));
+  const withdrawals = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
+  const taxes = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
+  const contributions = latestContributions.map(fund => {
+    const movements = (fund.reserve_movements || []).map(normalizeReserveMovement);
+    const itemMovements = movements.filter(movement => movement.currency === fund.currency);
+    const deducted = itemMovements.reduce((total, movement) => total + movement.amount, 0);
+    for (const movement of movements) {
+      const totals = movement.type === 'withdrawal' ? withdrawals : taxes;
+      totals[movement.currency] += movement.amount;
+    }
+    const grossAmount = Number(fund.amount) || 0;
+    return { ...fund, contributed_amount:grossAmount, amount:Math.max(0, Math.round((grossAmount - deducted + Number.EPSILON) * 100) / 100) };
+  });
   const firstContributionMonth = contributions.reduce((start, fund) => !start || fund.started_month_key < start ? fund.started_month_key : start, null);
   const contributed = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const nubankBalances = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const spent = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   for (const fund of contributions) {
-    if (CURRENCIES.includes(fund.currency)) contributed[fund.currency] += Number(fund.amount) || 0;
+    if (CURRENCIES.includes(fund.currency)) contributed[fund.currency] += Number(fund.contributed_amount) || 0;
   }
   for (const fund of nubankByItem.values()) {
     if (CURRENCIES.includes(fund.currency)) nubankBalances[fund.currency] += Number(fund.amount) || 0;
@@ -619,13 +655,14 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
     }
   }
   const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-  // O saldo bruto da reserva preserva os aportes; gastos e dívida são
-  // abatidos separadamente ao calcular o saldo disponível global.
-  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(contributed[code])]));
+  // Resgates e impostos reduzem o saldo da reserva; despesas continuam acompanhadas separadamente.
+  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(Math.max(0, contributed[code] - withdrawals[code] - taxes[code]))]));
   return {
     contributions,
     firstContributionMonth,
     contributed:Object.fromEntries(CURRENCIES.map(code => [code, round(contributed[code])])),
+    withdrawals:Object.fromEntries(CURRENCIES.map(code => [code, round(withdrawals[code])])),
+    taxes:Object.fromEntries(CURRENCIES.map(code => [code, round(taxes[code])])),
     nubankBalances:Object.fromEntries(CURRENCIES.map(code => [code, round(nubankBalances[code])])),
     spent:Object.fromEntries(CURRENCIES.map(code => [code, round(spent[code])])),
     balances,

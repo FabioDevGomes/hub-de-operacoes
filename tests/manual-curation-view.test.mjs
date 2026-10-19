@@ -79,7 +79,7 @@ test('manual UI: Imagens exige resultado antes de candidatas e autosalva classif
 });
 test('manual UI/build: componentes compartilhados, Esc e retorno explícito são conectados; conteúdo não é compartilhado',async()=>{
   const [html,css,page,storage,built]=await Promise.all(['src/curadoria/manual/index.html','src/curadoria/manual/manual.css','src/curadoria/manual/manual-page.mjs','src/curadoria/manual/manual-storage.mjs','dist/curadoria/manual/index.html'].map(read));
-  assert.equal(publishedPage(html),built);for(const component of ['trends-sheet.css','analysis-sheet-bar.css','glimpse-embed-host.css','sheet-escape.mjs','table-headers.css?v=9','input-standard.css?v=1','white-button.css?v=5','data-hub-sidebar-active="manual"','hub-table-button-behavior','hub-curation-viewport'])assert.ok(html.includes(component),component);
+  assert.equal(publishedPage(html),built);for(const component of ['trends-sheet.css','analysis-sheet-bar.css','glimpse-embed-host.css','sheet-escape.mjs','table-headers.css?v=9','input-standard.css?v=1','white-button.css?v=6','data-hub-sidebar-active="manual"','hub-table-button-behavior','hub-curation-viewport'])assert.ok(html.includes(component),component);
   for(const flag of ['highlightOnCapture:false','restoreOnWindowReturn:false','suppressPulseOnPageHide:true'])assert.ok(page.includes(flag));
   assert.match(page,/origin:'manual',productKey:product.productId/);assert.match(page,/event.origin!==location.origin\|\|event.source!==frame.contentWindow/);
   assert.match(css,/\.surface\{border:0/);assert.match(css,/#offerSheet \.card\{background:var\(--panel\);border:0/);

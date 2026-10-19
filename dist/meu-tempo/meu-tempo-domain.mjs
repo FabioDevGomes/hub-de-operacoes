@@ -3,6 +3,8 @@ export const BOOLEAN_ITEM_IDS=Object.freeze(['item-alcool','item-refrigerante','
 export const PARTIALLY_PRODUCTIVE_ITEM_ID='item-kakashi';
 export const PARTIAL_PRODUCTIVE_RATE=0.1;
 export const PRE_WORK_ITEM_IDS=Object.freeze(['item-cama-acordar','item-preparo-levantar','item-cafe',PARTIALLY_PRODUCTIVE_ITEM_ID]);
+export const PRE_WORK_COUNTER_PAUSE_PREFIX='preWorkCounterPaused:';
+export function preWorkCounterPauseKey(date){return`${PRE_WORK_COUNTER_PAUSE_PREFIX}${date}`}
 export const SYMPTOM_SCALE_ITEM_IDS=Object.freeze(['item-garganta','item-rim','item-metalico']);
 export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
   Object.freeze({value:3,label:'Alto'}),
@@ -184,6 +186,12 @@ export function totalPreWorkDuration(entries,date){
   },0);
 }
 
+export function preWorkCounterState(entries,date,settings={}){
+  const saved=settings?.[preWorkCounterPauseKey(date)],minutes=saved?.minutes;
+  if(saved&&typeof minutes==='number'&&Number.isFinite(minutes)&&minutes>=0)return{minutes,paused:true,pausedAt:saved.pausedAt||null};
+  return{minutes:totalPreWorkDuration(entries,date),paused:false,pausedAt:null};
+}
+
 export function productiveContributionMinutes(entry){
   if(entry?.type!=='duration')return 0;
   const minutes=Math.max(0,Number(entry.minutes)||0);
@@ -197,7 +205,7 @@ export function productivityLabel(entry){
 }
 
 export function comparisonMatrix(items,entries,dates){
-  const rows=items.map(item=>{const cells=dates.map(date=>{const cell=aggregateDay(entries.filter(entry=>entry.itemId===item.id),date).byItem.get(item.id)||{entries:[],minutes:0,values:[]};return SYMPTOM_SCALE_ITEM_IDS.includes(item.id)?{...cell,values:cell.values.length?[cell.values.at(-1)]:[]}:cell});const numeric=cells.map(cell=>{if(item.type==='duration')return cell.minutes;const values=cell.values.map(Number).filter(Number.isFinite);if(SYMPTOM_SCALE_ITEM_IDS.includes(item.id))return values.length?values.at(-1):null;return values.reduce((a,b)=>a+b,0)}).filter(Number.isFinite);return{item,cells,average:numeric.length?numeric.reduce((a,b)=>a+b,0)/numeric.length:0}});
+  const rows=items.map(item=>{const cells=dates.map(date=>{const cell=aggregateDay(entries.filter(entry=>entry.itemId===item.id),date).byItem.get(item.id)||{entries:[],minutes:0,values:[]};return SYMPTOM_SCALE_ITEM_IDS.includes(item.id)?{...cell,values:cell.values.length?[cell.values.at(-1)]:[]}:cell});const numeric=cells.map(cell=>{if(item.type==='duration')return cell.minutes;const values=cell.values.map(Number).filter(Number.isFinite);if(SYMPTOM_SCALE_ITEM_IDS.includes(item.id))return values.length?values.at(-1):null;return values.reduce((a,b)=>a+b,0)}).filter(Number.isFinite),isBoolean=item.type==='boolean'||BOOLEAN_ITEM_IDS.includes(item.id),yesDays=isBoolean?cells.filter(cell=>booleanHistoryValue(item,cell.values.at(-1))==='Sim').length:null;return{item,cells,average:numeric.length?numeric.reduce((a,b)=>a+b,0)/numeric.length:0,yesDays}});
   const foot=dates.map(date=>aggregateDay(entries,date));
   const averages=foot.length?{productiveMinutes:foot.reduce((sum,day)=>sum+day.productiveMinutes,0)/foot.length,totalMinutes:foot.reduce((sum,day)=>sum+day.totalMinutes,0)/foot.length}:{productiveMinutes:null,totalMinutes:null};
   return{dates,rows,foot,averages};

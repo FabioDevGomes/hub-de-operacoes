@@ -25,11 +25,12 @@
             const summary=cards.create(latest,{computedAt:latest.atualizado_em||latest.manifesto_atual.gerado_em_utc});
             summary.recovery={version:1,reason:'missing_or_invalid_summary',recoveredAt:new Date().toISOString()};
             const repaired={...latest,overview_cards:summary};
+            root.OverviewBaseSessionCache?.invalidate();
             store.put(repaired,'atual');
             result={base:repaired,recovered:true};
           }catch(error){failure=error;tx.abort();}
         };
-        tx.oncomplete=()=>resolve(result);
+        tx.oncomplete=()=>{if(result?.recovered)root.OverviewBaseSessionCache?.invalidate();resolve(result)};
         tx.onerror=tx.onabort=()=>reject(failure||tx.error||new Error('A recuperação dos cartões foi interrompida.'));
       });
     }finally{db.close();}

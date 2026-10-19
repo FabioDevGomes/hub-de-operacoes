@@ -83,6 +83,7 @@ function adapter(records) {
   const db = storage(records);
   Object.assign(context, {CampaignDatabase,ProductCatalog,state,CampaignBaseReader:reader,
     OverviewCardsRecovery:{ensure:async({base})=>({base,recovered:false})},
+    overviewBaseSessionCache:{marker:()=>null,markFresh:()=>true,scheduleSave(){},invalidate(){}},
     openLocalDb:db.openDatabase,embeddedManifest:{campanhas:[]},renderLegacyMigrationNotice(){},render(){},
     persistLocalBase(){throw new Error('unexpected write');},persistProductCatalog(){throw new Error('unexpected write');}});
   const start = template.indexOf('    async function restoreLocalBase(');
@@ -160,7 +161,7 @@ test('built startup wires the unified read and settles notice only after restora
     assert.match(source, /id="notice"[^>]*aria-busy="true">Carregando base local…/);
     assert.match(source, /storage\/campaign-base-reader\.js\?v=1/);
     assert.match(source, /overview\/base-load-notice\.js\?v=1/);
-    assert.match(source, /restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)\.then\(\(\)=>\{baseLoadNotice\.ready\(\);render\(\)\}\)\.catch\(\(\)=>\{baseLoadNotice\.fail\(\)/);
+    assert.match(source, /if\(cachedOverviewBase\)baseLoadNotice\.ready\(\);\s*else restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)\.then\(\(\)=>\{baseLoadNotice\.ready\(\);render\(\)\}\)\.catch\(\(\)=>\{baseLoadNotice\.fail\(/);
     assert.doesNotMatch(source, /restoreProductCatalog\(\)\.then\(restoreLocalBase\)/);
   }
 });

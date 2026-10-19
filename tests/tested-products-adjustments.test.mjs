@@ -92,7 +92,7 @@ test('adapter persists only catalog store and assigns state only after successfu
   const state={productCatalog:Catalog.create(),database:{campanhas:[{id:'keep'}],diario:[{id:'daily-keep'}]},localSavedAt:'unchanged'};
   const baseBefore=structuredClone(state.database),stored=[],transactions=[];let fail=false,closed=0;
   const db={transaction(store,mode){transactions.push([store,mode]);const tx={objectStore(name){assert.equal(name,'catalogos');return{put(payload,key){stored.push([payload,key]);queueMicrotask(()=>fail?tx.onerror():tx.oncomplete())}}},error:new Error('Synthetic transaction failed')};return tx},close(){closed++}};
-  const runtime=vm.createContext({state,ProductCatalog:Catalog,derivedCache:'cached',openLocalDb:async()=>db});vm.runInContext(persist,runtime);
+  const runtime=vm.createContext({state,ProductCatalog:Catalog,derivedCache:'cached',openLocalDb:async()=>db});runtime.overviewBaseSessionCache={invalidate(){}};vm.runInContext(persist,runtime);
   const next=Catalog.setTestedAdjustments(state.productCatalog,'synthetic',{salesCount:3});await runtime.persistProductCatalog(next);
   assert.deepEqual(transactions,[['catalogos','readwrite']]);assert.equal(stored[0][1],'atual');assert.equal(state.productCatalog.ajustes_testados.synthetic.values.salesCount,3);assert.deepEqual(state.database,baseBefore);assert.equal(state.localSavedAt,'unchanged');assert.equal(runtime.derivedCache,null);
   fail=true;const previous=state.productCatalog;await assert.rejects(runtime.persistProductCatalog(Catalog.setTestedAdjustments(previous,'synthetic',{salesCount:7})));assert.equal(state.productCatalog,previous);assert.equal(closed,2);

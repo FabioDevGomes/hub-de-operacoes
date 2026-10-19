@@ -21,11 +21,12 @@ function fixture(offerId=null, preferences) {
   const lists=['DE','US'].map(imageCandidateList=>element({imageCandidateList}));
   const resultButtons=['up','stable','down','point_peak','low_volume','no_data','inconclusive'].map(trendsResult=>element({trendsResult}));
   const brandButtons=['brand_bidding','no_brand_bidding',''].map(brandBidding=>element({brandBidding}));
+  const sortButtons=[element({sort:'decision'})];
   node('#trendResults').querySelectorAll=selector=>selector==='[data-trends-result]'?resultButtons:[];
   const sheet=node('#offerSheet');sheet.classList.add('hidden');
   sheet.querySelector=selector=>node(selector);
   sheet.querySelectorAll=selector=>selector==='[data-tab]'?tabs:selector==='[data-panel]'?panels:[];
-  const root={querySelector:selector=>selector==='#trendResults [data-trends-result].selected'?resultButtons.find(button=>button.classList.contains('selected'))||null:node(selector),querySelectorAll:selector=>selector==='[data-image-candidate-list]'?lists:selector==='[data-brand-bidding]'?brandButtons:selector.startsWith('[data-brand-bidding],')?[...brandButtons,node('#manualCountry'),node('#addManualCountry')]:[]};
+  const root={querySelector:selector=>selector==='#trendResults [data-trends-result].selected'?resultButtons.find(button=>button.classList.contains('selected'))||null:node(selector),querySelectorAll:selector=>selector==='[data-sort]'?sortButtons:selector==='[data-image-candidate-list]'?lists:selector==='[data-brand-bidding]'?brandButtons:selector.startsWith('[data-brand-bidding],')?[...brandButtons,node('#manualCountry'),node('#addManualCountry')]:[]};
   const trendsScope=node('[data-panel="trends"]');trendsScope.querySelector=node;
   trendsScope.querySelectorAll=selector=>selector.includes('data-trends-result')?resultButtons.filter(button=>!selector.includes('.selected')||button.classList.contains('selected')):[];
   const calls=[],actions={
@@ -40,10 +41,36 @@ function fixture(offerId=null, preferences) {
   view.render(state);
   const open=action=>node('#rows').listeners.click({target:{closest(selector){return selector==='[data-action]'?{dataset:{action,key:'offer'}}:null;}}});
   const clickTab=tab=>node('.tabs').listeners.click({target:{closest(){return {dataset:{tab}};}}});
-  return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,brandButtons,actions,open,clickTab};
+  return {view,state,calls,sheet,node,tabs,panels,lists,resultButtons,brandButtons,sortButtons,actions,open,clickTab};
 }
 
 const hiddenKey='hub:clickbank-top-offers:hidden-offer-keys:v1';
+
+test('a coluna Decisão alterna ordenação alfabética crescente/decrescente pelo status exibido',()=>{
+  const f=fixture();
+  f.state.captures[0].offers.push(
+    {offerKey:'live',offerName:'Campanha no ar',seller:'EXAMPLE',rank:2},
+    {offerKey:'review',offerName:'Revisar',seller:'EXAMPLE',rank:3},
+    {offerKey:'hidden',offerName:'Ocultar',seller:'EXAMPLE',rank:4},
+    {offerKey:'launch',offerName:'Subir campanha',seller:'EXAMPLE',rank:5},
+  );
+  f.state.decisions=[
+    {offerKey:'live',currentStatus:'Campanha no ar'},
+    {offerKey:'review',currentStatus:'Revisar'},
+    {offerKey:'hidden',currentStatus:'Ocultar'},
+    {offerKey:'launch',currentStatus:'Subir campanha'},
+  ];
+  f.view.render(f.state);
+  const sort=f.sortButtons[0];
+  assert.equal(sort.getAttribute('aria-sort'),'none');
+  const renderedKeys=()=>[...f.node('#rows').innerHTML.matchAll(/<tr data-offer="([^"]+)"/g)].map(match=>match[1]);
+  sort.onclick();
+  assert.equal(sort.getAttribute('aria-sort'),'descending');
+  assert.deepEqual(renderedKeys(),['launch','review','hidden','offer','live'],'a ausência entra no status padrão “Não definido”');
+  sort.onclick();
+  assert.equal(sort.getAttribute('aria-sort'),'ascending');
+  assert.deepEqual(renderedKeys(),['live','offer','hidden','review','launch']);
+});
 
 test('brand confirmation stays only in the header; other messages and errors remain visible in the sheet',()=>{
   const f=fixture();f.open('trends');

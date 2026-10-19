@@ -137,7 +137,8 @@ if ($null -ne $ficha -and $null -ne $indexText) {
         $checks.Add((New-Check 'affiliate-url' 'BLOCK' 'URL de afiliação não foi informada na ficha.'))
     }
     else {
-        $urlValues = @([regex]::Matches($indexText, '(?:href|data-url)\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value })
+        # HTML attributes escape query separators (for example &amp;); compare their decoded URL values.
+        $urlValues = @([regex]::Matches($indexText, '(?:href|data-url)\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase') | ForEach-Object { [System.Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
         $externalUrls = @($urlValues | Where-Object { $_ -match '^https?://' })
         $wrongUrls = @($externalUrls | Where-Object { $_ -ne $affiliateUrl } | Sort-Object -Unique)
         if ($externalUrls.Count -eq 0) {

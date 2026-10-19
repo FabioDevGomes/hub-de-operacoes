@@ -64,10 +64,12 @@
       return days.get(date);
     };
     const productForCampaign=id=>typeof campaignProducts?.get==='function'?campaignProducts.get(String(id??''))||null:campaignProducts?.[String(id??'')]||null;
-    const addProductSales=(day,{product=null,sales=0,amount=null,provisional=false}={})=>{
+    const addProductSales=(day,{product=null,sales=0,amount=null,provisional=false,campaignId=null}={})=>{
       const count=parseNumber(sales)||0;if(count<=0)return;
-      const label=String(product||'').trim()||null,key=JSON.stringify([label,Boolean(provisional)]),current=day.productSales.get(key)||{product:label,sales:0,amount:0,amountComplete:true,provisional:Boolean(provisional)};
-      current.sales+=count;const value=parseNumber(amount);if(value==null)current.amountComplete=false;else current.amount+=value;day.productSales.set(key,current);
+      const label=String(product||'').trim()||null,key=JSON.stringify([label,Boolean(provisional)]),current=day.productSales.get(key)||{product:label,sales:0,amount:0,amountComplete:true,provisional:Boolean(provisional),campaignSales:new Map()};
+      current.sales+=count;const value=parseNumber(amount);if(value==null)current.amountComplete=false;else current.amount+=value;
+      const id=String(campaignId||'').trim();if(id){const campaign=current.campaignSales.get(id)||{campaignId:id,sales:0,amount:0,amountComplete:true};campaign.sales+=count;if(value==null)campaign.amountComplete=false;else campaign.amount+=value;current.campaignSales.set(id,campaign)}
+      day.productSales.set(key,current);
     };
     for(const date of authoritativeDates||[]){const normalized=parseDate(date);if(normalized)get(normalized)}
     for(const record of dailyRecords||[]){
@@ -78,7 +80,7 @@
       if(Object.values(values).every(value=>value==null))continue;
       const day=get(date);
       for(const [metric,value] of Object.entries(values))if(value!=null){day.sums[metric]+=value;day.observed[metric]=true;}
-      if(values.sales>0)addProductSales(day,{product:productForCampaign(record.campanha_id??record.campaign_id),sales:values.sales,amount:values.revenue,provisional:false});
+      if(values.sales>0)addProductSales(day,{product:productForCampaign(record.campanha_id??record.campaign_id),sales:values.sales,amount:values.revenue,provisional:false,campaignId:record.campanha_id??record.campaign_id});
     }
     for(const [campaignId,summary] of adjustments?.entries?.()||[]){
       for(const [rawDate,adjustment] of Object.entries(summary?.byDate||{})){
@@ -88,12 +90,12 @@
         let remaining=pendingSales;
         for(const sale of Array.isArray(adjustment?.productSales)?adjustment.productSales:[]){
           const count=Math.min(remaining,Math.max(0,parseNumber(sale?.sales)??1));if(count<=0)continue;
-          addProductSales(day,{product:productForCampaign(campaignId)||sale?.product,sales:count,amount:sale?.amount,provisional:true});remaining-=count;
+          addProductSales(day,{product:productForCampaign(campaignId)||sale?.product,sales:count,amount:sale?.amount,provisional:true,campaignId});remaining-=count;
         }
         if(remaining>0)addProductSales(day,{product:productForCampaign(campaignId),sales:remaining,provisional:true});
       }
     }
-    return[...days.values()].map(day=>({date:day.date,hasMccData:true,source:'mcc',...deriveMetrics({investment:day.observed.investment?day.sums.investment:null,revenue:day.observed.revenue?day.sums.revenue:null,clicks:day.observed.clicks?day.sums.clicks:null,sales:day.observed.sales?day.sums.sales:null,pendingSales:day.pendingSales,pendingRevenue:day.pendingRevenue}),productSales:[...day.productSales.values()].map(item=>({product:item.product,sales:item.sales,amount:item.amountComplete?item.amount:null,provisional:item.provisional}))})).sort((a,b)=>a.date.localeCompare(b.date));
+    return[...days.values()].map(day=>({date:day.date,hasMccData:true,source:'mcc',...deriveMetrics({investment:day.observed.investment?day.sums.investment:null,revenue:day.observed.revenue?day.sums.revenue:null,clicks:day.observed.clicks?day.sums.clicks:null,sales:day.observed.sales?day.sums.sales:null,pendingSales:day.pendingSales,pendingRevenue:day.pendingRevenue}),productSales:[...day.productSales.values()].map(item=>({product:item.product,sales:item.sales,amount:item.amountComplete?item.amount:null,provisional:item.provisional,campaignSales:[...item.campaignSales.values()].map(campaign=>({campaignId:campaign.campaignId,sales:campaign.sales,amount:campaign.amountComplete?campaign.amount:null}))}))})).sort((a,b)=>a.date.localeCompare(b.date));
   }
   function parseHistoricalWorkbook(workbook){
     const entries=[],seen=new Map(),ignoredSheets=[];
@@ -136,7 +138,7 @@
     return{rows:[...next.values()].sort((a,b)=>a.date.localeCompare(b.date)),...preview,applied:true};
   }
   function reconcileProductSales(items=[],officialSales=null,pendingSales=0){
-    const output=(items||[]).filter(item=>parseNumber(item?.sales)>0).map(item=>({product:String(item.product||'').trim()||null,sales:parseNumber(item.sales),amount:parseNumber(item.amount),provisional:Boolean(item.provisional)}));
+    const output=(items||[]).filter(item=>parseNumber(item?.sales)>0).map(item=>({...item,product:String(item.product||'').trim()||null,sales:parseNumber(item.sales),amount:parseNumber(item.amount),provisional:Boolean(item.provisional)}));
     for(const [provisional,targetValue] of [[false,officialSales],[true,pendingSales]]){
       const target=parseNumber(targetValue);if(target==null)continue;
       const assigned=output.filter(item=>item.provisional===provisional).reduce((sum,item)=>sum+item.sales,0),remaining=target-assigned;
@@ -174,6 +176,99 @@
     }
     return combined.sort((a,b)=>b.date.localeCompare(a.date));
   }
+  function reconcileBillingSales(macroRows=[],billingSales=[],billingRevenueByDate=null){
+    const byDate=new Map();let activeRecords=0,billingConversions=0,invalidDateRecords=0;
+    for(const sale of billingSales||[]){
+      if(!sale||sale.active===false)continue;
+      const date=parseDate(sale.sale_date);
+      if(!date){invalidDateRecords++;continue}
+      const conversionCount=Math.max(0,parseNumber(sale.conversion_count)??1),revenueDay=billingRevenueByDate?.get?.(date),saleAmounts=revenueDay?.saleAmounts,amountBrl=saleAmounts?.has(String(sale.sale_id))?parseNumber(saleAmounts.get(String(sale.sale_id))):parseNumber(sale.value_brl);
+      let day=byDate.get(date);
+      if(!day){day={date,records:0,conversions:0,sales:[]};byDate.set(date,day)}
+      activeRecords++;day.records++;day.conversions+=conversionCount;billingConversions+=conversionCount;
+      day.sales.push({...sale,conversionCount,amountBrl});
+    }
+    const currentByDate=new Map((macroRows||[]).map(row=>[parseDate(row?.date),row]).filter(([date])=>date));
+    const hasBillingSource=billingRevenueByDate instanceof Map,dates=new Set([...currentByDate.keys(),...byDate.keys(),...(billingRevenueByDate?.keys?.()||[])]),output=[];
+    let appliedSales=0,appliedRevenue=0,appliedDates=0,macroAheadSalesDates=0,macroAheadRevenueDates=0,incompleteRevenueDates=0;
+    for(const date of dates){
+      const current=currentByDate.get(date)||null,billed=byDate.get(date),billingDay=billingRevenueByDate?.get?.(date),billedSales=billed?.sales||[];
+      const currentSales=parseNumber(current?.sales)??0,currentRevenue=parseNumber(current?.revenue),salesDelta=billed?Math.max(0,billed.conversions-currentSales):0;
+      if(billed&&currentSales>billed.conversions)macroAheadSalesDates++;
+      const row=current?{...current,productSales:(current.productSales||[]).map(item=>({...item,campaignSales:Array.isArray(item.campaignSales)?item.campaignSales.map(campaign=>({...campaign})):item.campaignSales}))}:{date,source:'billing',hasMccData:false,investment:null,revenue:null,profit:null,roi:null,clicks:null,sales:null,officialSales:null,pendingSales:0,pendingRevenue:0,clicksPerSale:null,productSales:[],observation:''};
+      const refs=[];
+      for(const item of row.productSales){
+        if(item.provisional||item.billing)continue;
+        if(Array.isArray(item.campaignSales)&&item.campaignSales.length){
+          for(const campaign of item.campaignSales){const amount=parseNumber(campaign.amount),sales=Math.max(0,parseNumber(campaign.sales)||0);refs.push({item,campaignId:String(campaign.campaignId||''),product:item.product,sales,amount,unitAmount:amount!=null&&sales>0?amount/sales:null,campaign})}
+        }else{const amount=parseNumber(item.amount),sales=Math.max(0,parseNumber(item.sales)||0);refs.push({item,campaignId:String(item.campaignId||''),product:item.product,sales,amount,unitAmount:amount!=null&&sales>0?amount/sales:null,campaign:null})}
+      }
+      const remainingBySale=new Map(billedSales.map(sale=>[sale,sale.conversionCount]));
+      const matchRefs=sale=>refs.filter(ref=>ref.sales>0&&(
+        sale.campaign_id&&ref.campaignId?String(sale.campaign_id)===ref.campaignId:
+        (!ref.campaignId||!sale.campaign_id)&&normalizeText(ref.product)===normalizeText(sale.product)
+      ));
+      const coveredSales=[...billedSales].sort((a,b)=>{
+        const priority=sale=>sale.source==='mcc_conversion_aggregate'||sale.source==='hub_manual_capture'&&sale.confirmation_status==='confirmed'?0:1;
+        return priority(a)-priority(b);
+      });
+      for(const sale of coveredSales){
+        let remaining=remainingBySale.get(sale)||0;
+        for(const ref of matchRefs(sale)){
+          if(remaining<=0)break;
+          const take=Math.min(remaining,ref.sales);if(take<=0)continue;
+          if(sale.amountBrl!=null&&ref.amount!=null&&sale.conversionCount>0){
+            const targetUnitAmount=sale.amountBrl/sale.conversionCount,correction=ref.unitAmount==null?0:(targetUnitAmount-ref.unitAmount)*take;
+            ref.amount+=correction;
+            ref.unitAmount=targetUnitAmount;
+            if(ref.campaign)ref.campaign.amount=Number((ref.amount).toFixed(8));
+            if(ref.item.amount!=null)ref.item.amount=Number((ref.item.amount+correction).toFixed(8));
+          }
+          ref.sales-=take;remaining-=take;
+        }
+        remainingBySale.set(sale,remaining);
+      }
+      if(salesDelta>0){
+        let remaining=salesDelta;
+        const candidates=[...billedSales].sort((a,b)=>{
+          const priority=sale=>sale.source==='manual'?0:sale.source==='hub_manual_capture'?1:sale.source==='mcc_conversion_aggregate'?2:3;
+          return priority(a)-priority(b);
+        });
+        for(const sale of candidates){
+          if(remaining<=0)break;
+          const available=Math.max(0,remainingBySale.get(sale)||0),take=Math.min(remaining,available);if(take<=0)continue;
+          const amount=sale.amountBrl==null||sale.conversionCount<=0?null:sale.amountBrl*take/sale.conversionCount;
+          row.productSales.push({product:String(sale.product||'').trim()||null,sales:take,amount,provisional:false,billing:true});
+          remaining-=take;remainingBySale.set(sale,available-take);
+        }
+        if(remaining>0)row.productSales.push({product:null,sales:remaining,amount:null,provisional:false,billing:true});
+        row.sales=currentSales+salesDelta;
+        const pendingSales=parseNumber(row.pendingSales)||0,officialSales=parseNumber(row.officialSales);
+        row.officialSales=(officialSales==null?Math.max(0,currentSales-pendingSales):officialSales)+salesDelta;
+        row.billingSales=(parseNumber(row.billingSales)||0)+salesDelta;
+        appliedSales+=salesDelta;
+      }
+      const targetRevenue=hasBillingSource?(billingDay?parseNumber(billingDay.amount):0):currentRevenue,targetComplete=!hasBillingSource||billingDay?.complete!==false;
+      if(hasBillingSource&&!targetComplete)incompleteRevenueDates++;
+      if(currentRevenue!=null&&targetRevenue!=null&&currentRevenue>targetRevenue)macroAheadRevenueDates++;
+      const rowChanged=(hasBillingSource&&currentRevenue!==targetRevenue)||salesDelta>0;
+      if(currentRevenue!==targetRevenue&&currentRevenue!=null&&targetRevenue!=null)appliedRevenue+=targetRevenue-currentRevenue;
+      row.revenue=targetRevenue;
+      row.billingRevenueComplete=targetComplete;
+      row.billingRevenueRecords=Number(billingDay?.records)||0;
+      row.billingRevenueMissing=Number(billingDay?.missingAmounts)||0;
+      row.billingRevenueAuthoritative=hasBillingSource;
+      row.billingRevenueDelta=hasBillingSource&&currentRevenue!=null&&targetRevenue!=null?Number((targetRevenue-currentRevenue).toFixed(2)):null;
+      const investment=parseNumber(row.investment),revenue=parseNumber(row.revenue),clicks=parseNumber(row.clicks),sales=parseNumber(row.sales);
+      row.profit=investment!=null&&revenue!=null?revenue-investment:null;
+      row.roi=row.profit!=null&&investment>0?row.profit/investment*100:null;
+      row.clicksPerSale=clicks!=null&&sales>0?clicks/sales:null;
+      if(!row.source)row.source='billing';
+      output.push(row);if(rowChanged)appliedDates++;
+    }
+    output.sort((a,b)=>b.date.localeCompare(a.date));
+    return{rows:output,check:{activeRecords,billingConversions,appliedSales,appliedRevenue,appliedDates,macroAheadSalesDates,macroAheadRevenueDates,incompleteRevenueDates,invalidDateRecords}};
+  }
   function summarize(rows=[]){
     const sum=key=>{const values=(rows||[]).map(row=>parseNumber(row?.[key])).filter(value=>value!=null);return values.length?values.reduce((total,value)=>total+value,0):null;};
     const investment=sum('investment'),revenue=sum('revenue'),clicks=sum('clicks'),sales=sum('sales'),profit=investment!=null&&revenue!=null?revenue-investment:null;
@@ -192,21 +287,26 @@
     const validInvestment=(rows||[]).filter(row=>parseNumber(row?.investment)!=null),validRevenue=(rows||[]).filter(row=>parseNumber(row?.revenue)!=null),matched=(rows||[]).filter(row=>parseNumber(row?.investment)!=null&&parseNumber(row?.revenue)!=null),salesRows=(rows||[]).filter(row=>parseNumber(row?.sales)!=null);
     const investment=observedSum(rows,'investment'),revenue=observedSum(rows,'revenue'),clicks=observedSum(rows,'clicks'),sales=observedSum(rows,'sales');
     const matchedInvestment=observedSum(matched,'investment'),matchedRevenue=observedSum(matched,'revenue'),profit=matched.length?matched.reduce((total,row)=>total+parseNumber(row.revenue)-parseNumber(row.investment),0):null;
-    const pendingSales=salesRows.length?salesRows.reduce((total,row)=>total+(parseNumber(row.pendingSales)||0),0):null,officialSales=sales==null?null:Math.max(0,sales-(pendingSales||0));
+    const pendingSales=salesRows.length?salesRows.reduce((total,row)=>total+(parseNumber(row.pendingSales)||0),0):null,billingSales=salesRows.length?salesRows.reduce((total,row)=>total+(parseNumber(row.billingSales)||0),0):null,officialSales=sales==null?null:Math.max(0,sales-(pendingSales||0)-(billingSales||0));
     const roi=matchedInvestment>0&&matchedRevenue!=null?(matchedRevenue-matchedInvestment)/matchedInvestment*100:null;
-    return{key,investment,revenue,profit,roi,clicks,sales,clicksPerSale:clicks!=null&&sales>0?clicks/sales:null,officialSales,pendingSales,expectedDays,coverage:{investment:validInvestment.length,revenue:validRevenue.length,profit:matched.length,roi:matched.filter(row=>parseNumber(row.investment)>0).length,clicks:(rows||[]).filter(row=>parseNumber(row?.clicks)!=null).length,sales:salesRows.length}};
+    return{key,investment,revenue,profit,roi,clicks,sales,clicksPerSale:clicks!=null&&sales>0?clicks/sales:null,officialSales,pendingSales,billingSales,expectedDays,coverage:{investment:validInvestment.length,revenue:validRevenue.length,profit:matched.length,roi:matched.filter(row=>parseNumber(row?.investment)>0).length,clicks:(rows||[]).filter(row=>parseNumber(row?.clicks)!=null).length,sales:salesRows.length}};
   }
-  function dailyTrendBuckets(rows=[],monthValue,throughDate=localIsoDate()){
+  function dailyTrendBuckets(rows=[],monthValue,throughDate=localIsoDate(),billingRevenueByDate=null){
     const month=normalizeMonth(monthValue),bounds=monthBounds(month),through=parseDate(throughDate)||localIsoDate();if(!month||!bounds||month>through.slice(0,7))return[];
     const end=month===through.slice(0,7)?(through<bounds.end?through:bounds.end):bounds.end,byDate=new Map((rows||[]).filter(row=>parseDate(row?.date)?.startsWith(`${month}-`)).map(row=>[row.date,row])),output=[];
-    for(let time=Date.parse(`${bounds.start}T00:00:00Z`);time<=Date.parse(`${end}T00:00:00Z`);time+=86400000){const date=new Date(time).toISOString().slice(0,10),row=byDate.get(date);output.push(trendBucket(date,row?[row]:[],1))}
+    for(let time=Date.parse(`${bounds.start}T00:00:00Z`);time<=Date.parse(`${end}T00:00:00Z`);time+=86400000){const date=new Date(time).toISOString().slice(0,10),row=byDate.get(date),billingDay=billingRevenueByDate instanceof Map?billingRevenueByDate.get(date):null,sourceRow=billingRevenueByDate instanceof Map?{...(row||{date}),revenue:billingDay?parseNumber(billingDay.amount):0}:row;output.push(trendBucket(date,sourceRow?[sourceRow]:[],1))}
     return output;
   }
-  function monthlyTrendBuckets(rows=[],{startMonth='2026-04',throughDate=localIsoDate()}={}){
+  function billingRevenueForRange(billingRevenueByDate,start,end){
+    if(!(billingRevenueByDate instanceof Map))return undefined;
+    const days=[...billingRevenueByDate.entries()].filter(([date])=>date>=start&&date<=end).map(([,value])=>value),known=days.map(day=>parseNumber(day?.amount)).filter(value=>value!=null);
+    return days.length?(known.length?known.reduce((total,value)=>total+value,0):null):0;
+  }
+  function monthlyTrendBuckets(rows=[],{startMonth='2026-04',throughDate=localIsoDate()}={},billingRevenueByDate=null){
     let month=normalizeMonth(startMonth);const through=parseDate(throughDate)||localIsoDate(),last=through.slice(0,7),output=[];if(!month||month>last)return output;
     const byMonth=new Map();for(const row of rows||[]){const date=parseDate(row?.date);if(!date)continue;const key=date.slice(0,7);if(key<month||key>last)continue;if(!byMonth.has(key))byMonth.set(key,[]);byMonth.get(key).push(row)}
-    while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month);output.push(trendBucket(month,byMonth.get(month)||[],days));month=shiftMonth(month,1)}
+    while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month),bucket=trendBucket(month,byMonth.get(month)||[],days);if(billingRevenueByDate instanceof Map){const start=`${month}-01`,end=month===last?through:monthBounds(month).end,monthDays=[...billingRevenueByDate.entries()].filter(([date])=>date>=start&&date<=end).map(([,value])=>value),known=monthDays.map(day=>parseNumber(day?.amount)).filter(value=>value!=null);bucket.revenue=monthDays.length?(known.length?known.reduce((total,value)=>total+value,0):null):0;bucket.coverage.revenue=known.length}output.push(bucket);month=shiftMonth(month,1)}
     return output;
   }
-  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,summarize,lifetimeSummary,dailyTrendBuckets,monthlyTrendBuckets});
+  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,reconcileBillingSales,summarize,lifetimeSummary,billingRevenueForRange,dailyTrendBuckets,monthlyTrendBuckets});
 });

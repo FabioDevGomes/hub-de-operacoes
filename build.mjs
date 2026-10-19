@@ -56,7 +56,7 @@ await cp(resolve(root, "src/usd-brl-rate.js"), resolve(root, "dist/usd-brl-rate.
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");
-for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance']) {
+for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking']) {
   await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
   await versionPublicPages(resolve(root, 'src', directory), resolve(root, 'dist', directory), version);
 }

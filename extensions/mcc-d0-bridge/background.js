@@ -2,7 +2,7 @@ import { deliverD0GridToPreparador, deliverD1GridToPreparador } from './bridge.m
 import { collectMccGrid } from './mcc-grid-reader.mjs';
 import { collectMccSelectableText } from './mcc-text-reader.mjs';
 import { scrollMccPageToBottom } from './mcc-page-scroll.mjs';
-import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD1Capture } from './mcc-grid-domain.mjs';
+import { D0_FIELDS, HEADER_ALIASES, validateMccD0Capture, validateMccD0ReportDate, validateMccD1Capture } from './mcc-grid-domain.mjs';
 import { parseMccSelectableText } from './mcc-text-domain.mjs';
 import { collectClickBankProducts } from './clickbank-reader.mjs';
 import { CLICKBANK_COLUMNS, isClickBankMarketplace } from './clickbank-domain.mjs';
@@ -57,7 +57,7 @@ async function forwardD0Grid(capture) {
   return execution.result;
 }
 
-async function forwardD1Grid(capture) {
+async function forwardD1Grid(capture, { activate = true } = {}) {
   const existing = await chrome.tabs.query({ currentWindow: true, url: PREPARADOR_MATCH });
   const tab = existing[0] || await chrome.tabs.create({ url: PREPARADOR_URL, active: false });
   if (!tab?.id) throw new Error('Não foi possível abrir uma aba do Preparador MCC.');
@@ -70,7 +70,7 @@ async function forwardD1Grid(capture) {
     args: [capture]
   });
   if (!execution?.result?.ok) throw new Error(execution?.result?.message || 'O Preparador não recebeu a captura D−1.');
-  await chrome.tabs.update(tab.id, { active: true });
+  if (activate) await chrome.tabs.update(tab.id, { active: true });
   return execution.result;
 }
 
@@ -105,6 +105,8 @@ async function captureAndForwardActiveMccD0() {
   const snapshot = await readActiveMccGrid();
   const validation = validateMccD0Capture(snapshot);
   if (!validation.ok) throw Object.assign(new Error(validation.errors.map(item => item.message).join('\n')), { errors: validation.errors });
+  const dateValidation = validateMccD0ReportDate(snapshot);
+  if (!dateValidation.ok) throw Object.assign(new Error(dateValidation.errors.map(item => item.message).join('\n')), { errors: dateValidation.errors });
   const received = await forwardD0Grid(validation.capture);
   return { ...received, campaignCount: validation.capture.campaignCount };
 }
@@ -113,8 +115,14 @@ async function captureAndForwardActiveMccD1() {
   const snapshot = await readActiveMccGrid();
   const validation = validateMccD1Capture(snapshot);
   if (!validation.ok) throw Object.assign(new Error(validation.errors.map(item => item.message).join('\n')), { errors: validation.errors });
-  const received = await forwardD1Grid(validation.capture);
-  return { ...received, campaignCount: validation.capture.campaignCount };
+  const received = await forwardD1Grid(validation.capture, { activate: !validation.earlierThanD1 });
+  return {
+    ...received,
+    campaignCount: validation.capture.campaignCount,
+    reportDate: validation.capture.reportDate,
+    expectedD1Date: validation.expectedDate,
+    earlierThanD1: validation.earlierThanD1
+  };
 }
 
 async function readActiveMccText() {

@@ -83,15 +83,32 @@ export function accountMccHeaderLabels(rows) {
   ]));
 }
 
+function accountMccPriority(account, labels) {
+  if (account === 'Sem conta') return 3;
+  const normalized = String(labels.get(account) ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  // If an account is explicitly associated with both MCCs, Nutra wins so it
+  // remains at the end instead of being pulled forward by the e-com label.
+  if (normalized.includes('nutra')) return 2;
+  if (normalized.includes('ecom')) return 0;
+  return 1;
+}
+
+function sortAccountsByMcc(accounts, labels) {
+  return [...accounts].sort((a, b) =>
+    accountMccPriority(a, labels) - accountMccPriority(b, labels) || compare(a, b));
+}
+
 export function buildAccountReport(allRows, filters) {
-  const accountOptions = [...new Set(allRows.map(row => row.account))].sort(compare);
+  const accountMccLabels = accountMccHeaderLabels(allRows);
+  const accountOptions = sortAccountsByMcc(new Set(allRows.map(row => row.account)), accountMccLabels);
   const productOptions = [...new Set(allRows.map(row => row.product))].sort(compare);
   const account = accountOptions.includes(filters.account) ? filters.account : 'all';
   const product = productOptions.includes(filters.product) ? filters.product : 'all';
   const accountRows = filterAccountCpaCoverageRows(allRows, filters.status, account);
   const rows = accountRows.filter(row => product === 'all' || row.product === product);
-  const accounts = [...new Set(rows.map(row => row.account))].sort((a, b) =>
-    a === 'Sem conta' ? 1 : b === 'Sem conta' ? -1 : a.localeCompare(b, 'pt-BR', {numeric:true}));
+  const accounts = sortAccountsByMcc(new Set(rows.map(row => row.account)), accountMccLabels);
   const groups = new Map();
   for (const row of rows) {
     const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, rows:[]};
@@ -111,7 +128,7 @@ export function buildAccountReport(allRows, filters) {
     a.name.localeCompare(b.name, 'pt-BR')).slice(0, 8);
   return {
     accountOptions, productOptions, account, product, rows, accounts, products, selected,
-    accountMccLabels:accountMccHeaderLabels(allRows),
+    accountMccLabels,
     selectedProduct, detail, bars, ranges, coverage, cpaBars:accountProductsByCpaRange(rows),
     missingTotal:coverage.reduce((sum, item) => sum + item.missing.length, 0),
     kpis:{

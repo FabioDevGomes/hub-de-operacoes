@@ -5,7 +5,7 @@ import * as Trends from '../trends-domain.mjs';
 import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
-import * as Decisions from '../decision-ui.mjs';
+import * as Decisions from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as AutomaticSignal from '../automatic-signal-domain.mjs';
 import * as AutomaticSignalUI from '../automatic-signal-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -404,7 +404,7 @@ export function mountHotOffersMsView({root, actions}) {
     const sort = event.target.closest('[data-sort]');
     if (sort) { if (sortKey === sort.dataset.sort) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; else { sortKey = sort.dataset.sort; sortDirection = 'asc'; } render(); return; }
     const decision = event.target.closest('[data-decision-key]');
-    if (decision) { const item = offerByKey(decision.dataset.decisionKey); Decisions.openDecisionPicker({title:item?.productName || 'Oferta',currentValue:decisionFor(decision.dataset.decisionKey).currentStatus,onSelect:value=>actions.saveDecision(decision.dataset.decisionKey,value,decisionFor(decision.dataset.decisionKey).notes || '')}); return; }
+    if (decision) { const item = offerByKey(decision.dataset.decisionKey),current=decisionFor(decision.dataset.decisionKey); Decisions.openDecisionPicker({title:item?.productName || 'Oferta',currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',onSelect:(value,notes)=>actions.saveDecision(decision.dataset.decisionKey,value,notes)}); return; }
     const button = event.target.closest('[data-action]'); if (!button) return;
     const item = offerByKey(button.dataset.key); if (!item) return;
     if (button.dataset.action === 'detail') openSheet(item);

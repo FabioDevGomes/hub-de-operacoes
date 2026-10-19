@@ -5,11 +5,17 @@
 .macro-kpi span{display:block;color:var(--muted);font-size:.67rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .macro-kpi strong{display:block;margin-top:4px;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .macro-kpi small{display:block;margin-top:2px;color:#8298b2;font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.macro-header-status{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;max-width:60%}
+.macro-header-status #macroBillingStatus{white-space:normal;text-align:right}
+.macro-billing-detail{color:#78c7ff;font-size:.66rem;display:block;margin-top:2px}
+#macroBillingStatus.billing-error{color:#ff9a9a}
 .macro-table-wrap{overflow-x:auto;overflow-y:visible;max-height:none}
 .macro-table{min-width:1000px}
 .macro-table th,.macro-table td{text-align:right;padding:6px 9px}
 .macro-table th:first-child,.macro-table td:first-child{text-align:left}
 .macro-table th:last-child,.macro-table td:last-child{text-align:left;white-space:normal;min-width:180px}
+.macro-table tfoot th,.macro-table tfoot td{position:static;padding:6px 9px;line-height:1.2;font-weight:650;white-space:nowrap;background:var(--panel2);border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.macro-table tfoot th:first-child{color:var(--text);font-weight:750}
 .macro-table .macro-date{font-weight:750;white-space:nowrap}
 .macro-table tr.macro-sales-row td{background:rgba(52,211,153,.075)}
 .macro-table tr.macro-sales-row td:first-child{box-shadow:inset 3px 0 0 rgba(52,211,153,.5)}
@@ -48,7 +54,7 @@
 .macro-import-conflicts td,.macro-import-conflicts th{padding:7px 9px}
 .macro-import-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
 @media(max-width:1200px){.macro-kpis{grid-template-columns:repeat(4,minmax(120px,1fr))}}
-@media(max-width:700px){.macro-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.macro-toolbar{align-items:stretch}.macro-month-nav{justify-content:center;flex-wrap:wrap}.macro-toolbar>label.btn{width:100%;text-align:center}.macro-trend-controls{justify-content:flex-start;width:100%}.macro-chart-switch{max-width:100%;overflow-x:auto}.macro-chart-switch .btn{padding:6px 7px;font-size:.62rem}.macro-trend-panel{padding:12px}.macro-trend-chart{overflow-x:auto}.macro-trend-svg{min-width:680px}}
+@media(max-width:700px){.macro-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.macro-toolbar{align-items:stretch}.macro-month-nav{justify-content:center;flex-wrap:wrap}.macro-toolbar>label.btn{width:100%;text-align:center}.macro-trend-controls{justify-content:flex-start;width:100%}.macro-chart-switch{max-width:100%;overflow-x:auto}.macro-chart-switch .btn{padding:6px 7px;font-size:.62rem}.macro-trend-panel{padding:12px}.macro-trend-chart{overflow-x:auto}.macro-trend-svg{min-width:680px}.macro-header-status{justify-content:flex-start;max-width:100%}.macro-header-status #macroBillingStatus{text-align:left}}
 .app:has(#controlMacroView:not(.hidden)) .topbar .actions .btn,
 .app:has(#controlMacroView:not(.hidden)) #statusbar .pill,
 #controlMacroView .card,

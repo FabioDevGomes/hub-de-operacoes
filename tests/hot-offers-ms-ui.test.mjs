@@ -96,7 +96,7 @@ test('Movimento usa o formato textual da Variação da Top Offers CB', () => {
   assert.match(css,/#hotOffersMsRoot \.tablewrap th\[data-col="payment"\],#hotOffersMsRoot \.tablewrap td\[data-col="payment"\],#hotOffersMsRoot \.tablewrap th\[data-col="movement"\],#hotOffersMsRoot \.tablewrap td\[data-col="movement"\]\{text-align:center!important\}/,'cabeçalhos e células de Pagamento e Movimento ficam centralizados');
   assert.match(view,/if \(key === 'payment'\) return '<td data-col="payment">/,'identifica as células de Pagamento com a mesma chave do cabeçalho');
   assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS atualizado não fica preso no cache anterior');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261011-manual-save/,'a view atualizada não fica presa no cache anterior');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261014-decision-notes/,'a view atualizada não fica presa no cache anterior');
 });
 
 test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantêm foco visível', () => {
@@ -110,10 +110,10 @@ test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantê
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
-  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261007-glimpse-borderless/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
   assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS local atualizado preserva a centralização de Pagamento e Movimento');
-  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261011-manual-save/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
+  assert.match(page,/hot-offers-ms-view\.mjs\?v=20261014-decision-notes/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
   assert.match(view,/keyword-candidates-ui\.mjs\?v=20261004-saved-candidate-remove/,'o componente compartilhado deve receber uma URL nova para habilitar X nas candidatas salvas');
   assert.match(sharedCurationCss,/button\.decision-badge\{border:0;font-weight:400;cursor:pointer\}/,'o padrão comum usa cápsula sem borda e texto regular');
   assert.match(sharedCurationCss,/#rows tr\.decision-row-launch>td\{background:var\(--curation-decision-launch-row\)\}/,'Subir campanha usa o mesmo dourado da E-commerce GM e prevalece sobre estilos locais');
@@ -183,7 +183,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
   assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
   assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
-  assert.match(html,/trends-sheet\.css\?v=20261007-glimpse-borderless/,'a ficha carrega a folha compartilhada com sombra de decisão');
+  assert.match(html,/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,'a ficha carrega a folha compartilhada com sombra de decisão');
   assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
   assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
   assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');

@@ -42,9 +42,14 @@ const copyCss=await readFile(new URL('../src/copy-ficha/copy-ficha.css',import.m
 for(const id of ['copyAnalyze','copyGenerateQuestions','copyGenerateFicha'])assert.ok(view.includes('id="'+id+'" class="copy-ficha-btn primary btn hub-white-button"'),'a ação azul adota o padrão branco: '+id);
 assert.equal((view.match(/hub-white-button/g)||[]).length,3,'somente as três ações azuis recebem o padrão');
 assert.ok(view.includes('id="copyReset" class="copy-ficha-btn danger"')&&view.includes('id="copyQuestionsCopy" class="copy-ficha-btn"'),'ações neutras e Nova coleta conservam seu formato');
+const clipboardActions=view.match(/<div class="copy-ficha-clipboard-row">([\s\S]*?)<\/div>/)?.[1]||'';
+assert.ok(clipboardActions.indexOf('id="copyReset"')>=0&&clipboardActions.indexOf('id="copyReset"')<clipboardActions.indexOf('id="copyAnalyze"')&&clipboardActions.indexOf('id="copyAnalyze"')<clipboardActions.indexOf('id="copyClipboardStatus"'),'Nova coleta e Analisar oferta ficam na mesma faixa, nessa ordem, antes do texto informativo');
+assert.ok(copyCss.includes('.copy-ficha-clipboard-row{display:grid;grid-template-columns:max-content max-content minmax(0,1fr)')&&copyCss.includes('@media(max-width:620px){.copy-ficha-clipboard-row{grid-template-columns:max-content max-content}.copy-ficha-clipboard-status{grid-column:1/-1}}'),'os botões continuam na mesma linha também em telas estreitas e o aviso pode ocupar a linha seguinte');
 assert.ok(copyCss.includes('.copy-ficha-btn.hub-white-button{padding:8px 12px;font-size:inherit}')&&!copyCss.includes('#fffaf0'),'preservar a geometria sem copiar o acabamento compartilhado');
 const publishedTemplate=await readFile(new URL('../dist/copy-ficha/copy-ficha-template.mjs',import.meta.url),'utf8');
 assert.ok(publishedTemplate.includes('primary btn hub-white-button'),'publicar os botões padronizados');
+const publishedClipboardActions=publishedTemplate.match(/copy-ficha-clipboard-row"><button id="copyReset"[\s\S]*?<\/div>/)?.[0]||'';
+assert.ok(publishedClipboardActions.indexOf('id="copyReset"')<publishedClipboardActions.indexOf('id="copyAnalyze"')&&publishedClipboardActions.indexOf('id="copyAnalyze"')<publishedClipboardActions.indexOf('id="copyClipboardStatus"'),'a distribuição publica a ordem Nova coleta, Analisar oferta e aviso informativo');
 const outputCss=await readFile(new URL('../src/copy-ficha/copy-ficha-output.css',import.meta.url),'utf8');
 assert.ok(!view.includes('Resultados')&&!view.includes('copyFichaJson')&&!view.includes('copyDownloadFicha'),'a restauração das perguntas não reintroduz resultados de anúncios ou download JSON');
 assert.ok(view.includes('copyGenerateQuestions')&&view.includes('copyOfferQuestions')&&view.includes('Perguntas e respostas da oferta')&&view.includes("by(root,'copyGenerateQuestions').onclick=()=>generateQuestions(root,toast)"),'a tela restaura o botão independente e o quadro editável de perguntas e respostas');

@@ -7,7 +7,7 @@ import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as DecisionUI from '../decision-ui.mjs';
+import * as DecisionUI from './clickbank-top-offers-decision.mjs?v=1';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
 import {BRAND_BIDDING_TYPES,brandBiddingLabel} from './brand-bidding.mjs?v=1';
@@ -27,7 +27,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
   let latestCaptureByOffer = new Map();
   let allCaptures = null;
-  let selectedCaptureId = ALL_CAPTURES, sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false;
+  let selectedCaptureId = ALL_CAPTURES, sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false, editingAffiliateLink = false;
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
   let hiddenOffers = new Set();
@@ -80,6 +80,14 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   function renderTrendResultButtons(item, latest) {
     TrendsUI.renderResultButtons($('#trendResults',root),trendsSave?.status(pendingTrendStatus||latest?.status||'')||'',status=>trendsSave.select(status));
   }
+  function renderAffiliateLink(item) {
+    const container=$('#affiliateLinkSection',root),link=metadataFor(item).affiliateLink||'';
+    if(link&&!editingAffiliateLink){
+      container.innerHTML=`<div class="affiliate-link-saved"><div class="affiliate-link-value"><span class="field-label">Link de afiliado</span><a href="${escape(link)}" target="_blank" rel="noopener noreferrer" title="${escape(link)}">${escape(link)}</a></div><button class="btn affiliate-link-copy" type="button" data-affiliate-copy aria-label="Copiar link de afiliado" title="Copiar link de afiliado"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button><button class="btn" type="button" data-affiliate-edit>Editar</button></div><div class="affiliate-link-message" id="affiliateLinkMessage" role="status" aria-live="polite"></div>`;
+      return;
+    }
+    container.innerHTML=`<div class="affiliate-link-entry"><label><span class="field-label">Link de afiliado</span><input class="control" id="affiliateLinkInput" type="url" maxlength="4096" value="${escape(link)}" placeholder="Cole o link de afiliado" autocomplete="off" aria-label="Link de afiliado"></label><button class="btn primary" type="button" data-affiliate-save>${link?'Salvar alteração':'Salvar link'}</button>${link?'<button class="btn" type="button" data-affiliate-cancel>Cancelar</button>':''}</div><div class="affiliate-link-message" id="affiliateLinkMessage" role="status" aria-live="polite"></div>`;
+  }
   function imageProgress(item) { return Images.progress(imagesFor(item).assessments,metadataFor(item).manualCountries || []); }
   function trendRank(item) { return ({up:7,stable:6,down:5,low_volume:4,point_peak:3,inconclusive:2,no_data:1})[trendLatest(item)?.status] || 0; }
   function imageRank(item) {
@@ -111,7 +119,8 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     offers=offers.filter(item=>!query||`${item.displayName} ${item.offerName} ${item.seller}`.toLocaleLowerCase().includes(query));
     offers=offers.filter(item=>visibility==='all'||(visibility==='hidden')===hiddenOffers.has(item.offerKey));
     offers.sort((a,b)=>{
-      const get=(item)=>sortKey==='movement'?item.rankDelta??Number.NEGATIVE_INFINITY:
+      const get=(item)=>sortKey==='decision'?DecisionUI.normalizeDecision(decisionFor(item).currentStatus).toLocaleLowerCase():
+        sortKey==='movement'?item.rankDelta??Number.NEGATIVE_INFINITY:
         sortKey==='rank'?item.rank:
         sortKey==='lastSeen'?collectionTime(latestCaptureByOffer.get(item.offerKey))??Number.NEGATIVE_INFINITY:
         sortKey==='future'?pageTypeText(item).toLocaleLowerCase():
@@ -175,10 +184,13 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       button.onclick=()=>selectMetadata('data-brand-bidding','brandBidding',button.dataset.brandBidding||null);
     });
     renderTrendResultButtons(item,latest);
-    KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates',root),{
-      candidates:record.keywordCandidates||[],variant:'positive',searchContext:'Google Trends',showRemoveForSaved:true,
+    const trendCandidates=record.keywordCandidates||[],trendCandidateList=$('#trendCandidates',root);
+    if(trendCandidates.length) KeywordCandidatesUI.renderKeywordCandidates(trendCandidateList,{
+      candidates:trendCandidates,variant:'positive',searchContext:'Google Trends',showRemoveForSaved:true,
       onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index),
     });
+    else trendCandidateList.replaceChildren();
+    renderAffiliateLink(item);
     $('#trendsHistory',root).innerHTML=(record.assessments||[]).slice().reverse().map(entry=>`<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries||[]).join(', '),entry.productAge==='new'?'Produto novo':entry.productAge==='old'?'Produto antigo':''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Sem avaliações de Google Trends.</p>';
   }
 
@@ -222,7 +234,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     trendsSave?.restore();updateSheetSaveButton();trendsSave?.sync();
   }
   function openSheet(item,tab='trends') {
-    trendsSave?.reset();pendingMetadata={};activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;
+    trendsSave?.reset();pendingMetadata={};activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;editingAffiliateLink=false;
     $('#trendMessage',root).textContent='';$('#trendMessage',root).classList.remove('error');
     sheet.classList.remove('hidden');renderSheet();
     sheet.scrollTop=0;
@@ -305,13 +317,54 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       return;
     }
     const decisionButton=event.target.closest('[data-decision-key]');
-    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,onSelect:status=>actions.saveDecision(item.offerKey,status)});return;}
+    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',onSelect:(status,notes)=>actions.saveDecision(item.offerKey,status,notes)});return;}
     const button=event.target.closest('[data-action]');if(!button)return;const item=selectedCapture()?.offers.find(offer=>offer.offerKey===button.dataset.key);if(item)openSheet(item,button.dataset.action);
   });
   $('#openTrends',root).onclick=()=>actions.openTrends($('#trendsTerm',root).value.trim()||activeOffer()?.offerName||'');
   $('#trendCandidate',root).addEventListener('keydown',async event=>{
     if(event.key!=='Enter')return;event.preventDefault();const input=event.currentTarget,term=input.value.trim();if(!term||!activeOffer())return;
     const saved=await actions.addTrendCandidate(activeOfferKey,term);if(saved){const fresh=$('#trendCandidate',root);fresh.value='';fresh.focus();}
+  });
+  async function submitAffiliateLink() {
+    const input=$('#affiliateLinkInput',root),button=$('[data-affiliate-save]',root),message=$('#affiliateLinkMessage',root);
+    if(!input||!button||!activeOffer())return;
+    message.textContent='';message.classList.remove('error');button.disabled=true;
+    try {
+      await actions.saveAffiliateLink(activeOfferKey,input.value);
+      editingAffiliateLink=false;
+      renderAffiliateLink(activeOffer());
+      const freshMessage=$('#affiliateLinkMessage',root);freshMessage.textContent='Link de afiliado salvo.';
+    } catch(error) {
+      message.textContent=error?.message||'Não foi possível salvar o link de afiliado.';
+      message.classList.add('error');button.disabled=false;
+    }
+  }
+  $('#affiliateLinkSection',root).addEventListener('click',async event=>{
+    const edit=event.target.closest('[data-affiliate-edit]');
+    if(edit){editingAffiliateLink=true;renderAffiliateLink(activeOffer());$('#affiliateLinkInput',root)?.focus();return;}
+    const cancel=event.target.closest('[data-affiliate-cancel]');
+    if(cancel){editingAffiliateLink=false;renderAffiliateLink(activeOffer());return;}
+    const save=event.target.closest('[data-affiliate-save]');
+    if(save){await submitAffiliateLink();return;}
+    const copy=event.target.closest('[data-affiliate-copy]');
+    if(copy){
+      const item=activeOffer(),link=item&&metadataFor(item).affiliateLink;
+      if(!link)return;
+      const message=$('#affiliateLinkMessage',root);
+      try {
+        const clipboard=root.ownerDocument.defaultView?.navigator?.clipboard;
+        if(!clipboard?.writeText)throw new Error('A cópia não está disponível neste navegador.');
+        await clipboard.writeText(link);
+        message.textContent='Link de afiliado copiado.';
+        message.classList.remove('error');
+      } catch(error) {
+        message.textContent=error?.message||'Não foi possível copiar. Selecione o link e copie manualmente.';
+        message.classList.add('error');
+      }
+    }
+  });
+  $('#affiliateLinkSection',root).addEventListener('keydown',event=>{
+    if(event.key==='Enter'&&event.target.closest('#affiliateLinkInput')){event.preventDefault();void submitAffiliateLink();}
   });
   $('#trendCountries',root).addEventListener('click',event=>{
     const button=event.target.closest('[data-country]');if(!button)return;

@@ -130,5 +130,5 @@ test('shared edit stylesheet/build contracts include both consumers without dupl
   const adapter=index.match(/async function saveDiaryObservation\(input\)\{[^\r\n]+/)?.[0];
   assert.match(adapter,/diary-observation-updated/);
   assert.doesNotMatch(adapter,/announceBaseUpdated|syncMccDiaryRowsToBilling|persistLocalBase/);
-  assert.match(index,/type==='diary-observation-updated'\)\{restoreLocalBase\(\{persist:false,renderPage:false\}\)/);
+  assert.match(index,/type==='diary-observation-updated'\)\{restoreLocalBase\(\{persist:false,renderPage:false,includeCatalog:true\}\)/);
 });

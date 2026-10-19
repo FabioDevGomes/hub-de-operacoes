@@ -66,6 +66,19 @@ test('pre-sell normalizes legacy technical identifiers without changing offer co
       const report=JSON.parse(run(script,['-Destination',legacy,...args,'-Json']));
       assert.equal(report.overall,'PASS',JSON.stringify(report));
     }
+    // Query separators are escaped in generated HTML but must still compare to the original affiliate URL.
+    ficha.affiliateUrl='https://hop.clickbank.net/?vendor=metabodrop&affiliate=marketprok&id=6100';
+    writeFileSync(fichaPath,JSON.stringify(ficha));
+    const clickbank=generate('clickbank');
+    const clickbankHtml=readFileSync(join(clickbank,'index.html'),'utf8');
+    assert.match(clickbankHtml,/href="https:\/\/hop\.clickbank\.net\/\?vendor=metabodrop&amp;affiliate=marketprok&amp;id=6100"/);
+    const clickbankReport=JSON.parse(run('Test-PresellAgainstFicha.ps1',['-Destination',clickbank,'-FichaPath',fichaPath,'-Json']));
+    assert.equal(clickbankReport.overall,'PASS',JSON.stringify(clickbankReport));
+    writeFileSync(join(clickbank,'index.html'),clickbankHtml.replace('</body>','<a href="https://example.com/unrelated">Unrelated</a></body>'));
+    let divergentReport;
+    try{run('Test-PresellAgainstFicha.ps1',['-Destination',clickbank,'-FichaPath',fichaPath,'-Json'])}
+    catch(error){divergentReport=JSON.parse(error.stdout)}
+    assert.equal(divergentReport?.overall,'BLOCKED','a URL externa realmente diferente continua bloqueada');
     // Factual text is inserted AFTER normalization, not filtered or concealed.
     ficha.offerIntro='A literal glp-faq reference supplied in factual content.';
     writeFileSync(fichaPath,JSON.stringify(ficha));

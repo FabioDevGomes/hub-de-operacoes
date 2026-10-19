@@ -8,7 +8,7 @@ export const BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v3';
 export const LEGACY_BACKUP_V2_FORMAT = 'radar-clickbank-top-offers-backup-v2';
 export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
 
-const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Ocultar']);
+const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Ocultar']);
 
 export function openDB() {
   return new Promise((resolve, reject) => {
@@ -48,6 +48,16 @@ export async function saveCapture(capture) {
   });
 }
 
+export function normalizeAffiliateLink(value) {
+  if (typeof value !== 'string') return null;
+  const link=value.trim();
+  if (!link || link.length>4096) return null;
+  try {
+    const url=new URL(link);
+    return ['http:','https:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password ? link : null;
+  } catch { return null; }
+}
+
 function validOfferRecord(storeName, record) {
   if (!record || typeof record.offerKey !== 'string' || !record.offerKey || record.offerKey.length > 1400 ||
     typeof record.productKey !== 'string' || record.productKey.length > 1400 ||
@@ -58,6 +68,7 @@ function validOfferRecord(storeName, record) {
       record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
       isSalesPageType(record.salesPageType) &&
       isBrandBidding(record.brandBidding) &&
+      (record.affiliateLink == null || normalizeAffiliateLink(record.affiliateLink) === record.affiliateLink) &&
       (record.dtcCountryCapture == null || (record.dtcCountryCapture.source === 'clickbank-dtc-checkout' &&
         typeof record.dtcCountryCapture.productName === 'string' && record.dtcCountryCapture.productName.trim().length > 0 &&
         record.dtcCountryCapture.productName.length <= 200 && typeof record.dtcCountryCapture.capturedAt === 'string' &&
@@ -102,6 +113,28 @@ export async function putOfferRecord(storeName, record) {
     tx.oncomplete = () => resolve(record);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
+  });
+}
+
+// Patch only the affiliate URL on the latest metadata, preserving manual countries and other fields.
+export async function saveAffiliateLink(identity, value) {
+  const affiliateLink=normalizeAffiliateLink(value);
+  if (!identity || !affiliateLink) throw new Error('Informe um link de afiliado HTTP ou HTTPS válido.');
+  const initial={...identity,manualCountries:[],affiliateLink};
+  if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Metadado de link de afiliado inválido.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
+    let stored;
+    const request=store.get(identity.offerKey);
+    request.onsuccess=()=>{
+      stored={manualCountries:[],...request.result,...identity,affiliateLink};
+      if(!validOfferRecord(STORES.offerMetadata,stored)){tx.abort();return;}
+      store.put(stored);
+    };
+    tx.oncomplete=()=>resolve(stored);
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(tx.error||new Error('Não foi possível salvar o link de afiliado.'));
   });
 }
 

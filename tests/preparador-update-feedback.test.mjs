@@ -37,7 +37,7 @@ test('o horário usa o instante persistido e o fuso de Brasília, inclusive na v
     assert.equal(formatTime(missing), 'horário indisponível');
   }
   assert.equal(rateFormatter({rate:6.7,quoteDate:'2026-10-13'}),'PTAX venda consultada: US$ 1 = R$ 6,7000 (13/10/2026).');
-  assert.equal(rateFormatter({rate:5.1,isStale:true,isFallback:true}),'Aviso: a PTAX não foi confirmada; usada a taxa legada de compatibilidade: US$ 1 = R$ 5,1000.');
+  assert.equal(rateFormatter({rate:5.1,isStale:true,isFallback:true}),'Aviso: a cotação não foi confirmada; usada a taxa legada de compatibilidade: US$ 1 = R$ 5,1000.');
 });
 
 test('o aviso mostra o horário retornado pela gravação somente depois do sucesso', async () => {
@@ -62,7 +62,7 @@ test('a MCC é aplicada mesmo com cotação indisponível e o aviso distingue a 
   await ui.click();
   assert.equal(ui.feedback.className, 'apply-feedback warning');
   assert.match(ui.feedback.textContent, /Base atualizada com sucesso/);
-  assert.match(ui.feedback.textContent, /Aviso: a PTAX não foi confirmada; usada a taxa legada de compatibilidade: US\$ 1 = R\$ 5,1000\./);
+  assert.match(ui.feedback.textContent, /Aviso: a cotação não foi confirmada; usada a taxa legada de compatibilidade: US\$ 1 = R\$ 5,1000\./);
   assert.equal(ui.announcer.textContent,ui.feedback.textContent);
 });
 

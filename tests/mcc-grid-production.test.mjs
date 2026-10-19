@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import { deliverD0GridToPreparador, deliverD1GridToPreparador } from '../extensions/mcc-d0-bridge/bridge.mjs';
-import { expectedMccD1Date, validateMccD0Capture, validateMccD1Capture } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
+import { expectedMccD0Date, expectedMccD1Date, validateMccD0Capture, validateMccD0ReportDate, validateMccD1Capture } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
 import { collectMccGrid } from '../extensions/mcc-d0-bridge/mcc-grid-reader.mjs';
 import { D0_FIELDS, HEADER_ALIASES } from '../extensions/mcc-d0-bridge/mcc-grid-domain.mjs';
 
@@ -109,7 +109,7 @@ assert.equal(searchShareSnapshot.records[1].search_impression_share,'22,22%');
 assert.equal(validateMccD0Capture(searchShareSnapshot).ok,true);
 
 const { doc } = makeDocument();
-const snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, doc);
+const snapshot = { ...collectMccGrid(D0_FIELDS, HEADER_ALIASES, doc), capturedAt:'2026-09-23T15:00:00.000Z' };
 assert.equal(snapshot.ok, true);
 assert.equal(snapshot.cellOffset, 1, 'usa o vínculo da célula Campanha para confirmar a coluna extra estrutural');
 assert.equal(snapshot.rowsCaptured, 2);
@@ -276,6 +276,13 @@ ambiguousManager.body.innerText='MCC uma\n111-222-3333\nMCC outra\n222-333-4444\
 assert.ok(validateMccD0Capture(collectMccGrid(D0_FIELDS,HEADER_ALIASES,ambiguousManager)).errors.some(error=>error.code==='manager_identity'),'a captura é bloqueada quando há contexto MCC ambíguo');
 
 const referenceNow = new Date('2026-09-24T15:00:00.000Z');
+const d0ReferenceNow = new Date('2026-09-23T15:00:00.000Z');
+assert.equal(expectedMccD0Date(d0ReferenceNow), '2026-09-23', 'D0 usa a data civil operacional de São Paulo');
+assert.equal(expectedMccD0Date(new Date('2026-09-24T02:30:00.000Z')), '2026-09-23', 'D0 respeita o fuso de São Paulo perto da meia-noite UTC');
+assert.equal(validateMccD0ReportDate(snapshot, { now:d0ReferenceNow }).ok, true, 'D0 aceita exatamente a data de hoje');
+assert.equal(validateMccD0ReportDate(snapshot).ok, true, 'usa o instante da leitura para validar o dia da captura');
+assert.match(validateMccD0ReportDate({ reportDate:{value:'2026-09-22'} }, { now:d0ReferenceNow }).errors[0].message, /precisa ser hoje/);
+assert.match(validateMccD0ReportDate({ reportDate:{value:'2026-09-24'} }, { now:d0ReferenceNow }).errors[0].message, /precisa ser hoje/);
 assert.equal(expectedMccD1Date(referenceNow), '2026-09-23', 'ontem é calculado no fuso operacional, não em UTC');
 assert.equal(expectedMccD1Date(new Date('2026-09-24T02:30:00.000Z')), '2026-09-22', 'a virada de dia respeita America/Sao_Paulo perto da meia-noite UTC');
 const d1Snapshot = collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 23, 2026' }).doc);
@@ -287,7 +294,11 @@ assert.equal(validD1.capture.records[0].impressions, '0', 'D−1 preserva zero c
 assert.equal(validD1.capture.records[0].avg_cost, '—', 'D−1 preserva ausência sem convertê-la em zero');
 
 const wrongD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 22, 2026' }).doc), { now:referenceNow });
-assert.ok(wrongD1.errors.some(error => error.code === 'date_expected'), 'D−1 com data diferente de ontem é bloqueado');
+assert.equal(wrongD1.ok, true, 'uma data MCC anterior a D−1 é aceita após validação estrutural');
+assert.equal(wrongD1.earlierThanD1, true, 'a extensão identifica que a captura é anterior ao D−1 esperado');
+assert.equal(wrongD1.expectedDate, '2026-09-23');
+const futureD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 24, 2026' }).doc), { now:referenceNow });
+assert.ok(futureD1.errors.some(error => error.code === 'date_expected'), 'D−1 continua bloqueando a data de hoje e datas futuras');
 const intervalD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Sep 1, 2026 – Sep 23, 2026' }).doc), { now:referenceNow });
 assert.ok(intervalD1.errors.some(error => error.code === 'date'), 'intervalo MCC é bloqueado para D−1');
 const relativeD1 = validateMccD1Capture(collectMccGrid(D0_FIELDS, HEADER_ALIASES, makeDocument({ dateRange:'Yesterday' }).doc), { now:referenceNow });
@@ -357,10 +368,11 @@ assert.throws(() => mccNumber('12.34', 'pt-BR', 'impressions'), /ambíguo/i);
 const parserStart = html.indexOf('    const ABSENT = new Set');
 const parserEnd = html.indexOf('    function uniqueRecord(', parserStart);
 assert.ok(parserStart >= 0 && parserEnd > parserStart);
-const parserContext = vm.createContext({ crypto:webcrypto, TextEncoder, Intl, Date });
+const parserContext = vm.createContext({ crypto:webcrypto, TextEncoder, Intl, Date, expectedMccD0ReportDate:expectedMccD0Date });
 vm.runInContext(await readFile(new URL('../src/storage/hub-database.js', import.meta.url),'utf8'), parserContext);
 vm.runInContext(html.slice(parserStart, parserEnd) + '\nglobalThis.__gridAdapter = decodeMccGridCapture; globalThis.__parseSource = parseSource;', parserContext);
 const decodedGrid = await parserContext.__gridAdapter(valid.capture);
+await assert.rejects(parserContext.__gridAdapter({ ...valid.capture, reportDate:'2026-09-22' }), /D0 precisa corresponder a hoje/);
 const parsedGrid = parserContext.__parseSource(decodedGrid, 'd0');
 assert.equal(parsedGrid.source, 'mcc_chrome_extension');
 assert.deepEqual(Array.from(parsedGrid.dates), ['2026-09-23']);
@@ -385,7 +397,7 @@ const otherMccValidation=validateMccD0Capture(otherMccSnapshot);
 assert.equal(otherMccValidation.ok,true,JSON.stringify(otherMccValidation.errors));
 assert.equal(otherMccValidation.capture.managerAccountName,'MCC Nutra de teste');
 assert.equal(otherMccValidation.capture.managerAccountId,'888-777-6666');
-const otherMccParsed=parserContext.__parseSource(await parserContext.__gridAdapter(otherMccValidation.capture),'d0');
+const otherMccParsed=parserContext.__parseSource(await parserContext.__gridAdapter({ ...otherMccValidation.capture, capturedAt:'2026-10-04T15:00:00.000Z' }),'d0');
 assert.equal(otherMccParsed.records.length,1);
 assert.equal(otherMccParsed.records[0].conta_id,'444-555-6666');
 assert.equal(otherMccParsed.records[0].status_qualificacao,'Pendente');
@@ -438,6 +450,7 @@ assert.ok(popup.includes("type: 'CAPTURE_AND_FORWARD_MCC_D1'"));
 assert.ok(popupHtml.indexOf('id="capture-d1"') < popupHtml.indexOf('id="capture-d0"'), 'o botão Capturar D−1 deve aparecer antes do Capturar D0');
 assert.ok(popup.includes('D−1 validado e prévia pronta. A base só muda se você clicar em “Atualizar base”.'));
 assert.ok(background.includes('validateMccD0Capture(snapshot)'));
+assert.ok(background.includes('validateMccD0ReportDate(snapshot)'), 'a extensão só encaminha D0 quando a data selecionada é hoje em São Paulo');
 assert.ok(background.includes('validateMccD1Capture(snapshot)'));
 assert.ok(background.includes('deliverD0GridToPreparador'));
 assert.ok(background.includes('deliverD1GridToPreparador'));
@@ -452,6 +465,7 @@ const receiverSource = html.slice(receiverStart, receiverEnd);
 assert.ok(receiverSource.includes("installParsedSource('d0', parsed, { capturedAt:capture.capturedAt })"));
 assert.ok(!receiverSource.includes('applyManifestToPanel'), 'o receptor só prepara a prévia; não aplica a base');
 assert.ok(receiverSource.includes("renderPreviewTable(currentResult.manifest, 'd0')"));
+assert.ok(html.includes('D0 precisa corresponder a hoje'), 'o Preparador repete a validação defensiva de data no recebimento');
 
 // A função registrada pelo Preparador vive no MAIN world. O DOM é comum aos
 // dois mundos, mas o window da injeção ISOLATED não contém esse receptor.
@@ -460,6 +474,7 @@ const forwardEnd = background.indexOf('async function readActiveMccGrid()', forw
 assert.ok(forwardStart >= 0 && forwardEnd > forwardStart);
 let injectedWorld = null;
 let captureReceivedInMain = null;
+let preparadorFocusCount = 0;
 const mainWindow = {
   async __hubReceiveMccD0Grid(capture) {
     captureReceivedInMain = capture;
@@ -479,7 +494,7 @@ const forwardContext = vm.createContext({
   chrome: {
     tabs: {
       query:async () => [{id:42}],
-      update:async id => ({id}),
+      update:async (id, properties) => { if (properties?.active) preparadorFocusCount++; return {id}; },
       create:async () => { throw new Error('A aba de teste já existe.'); }
     },
     scripting: {
@@ -498,13 +513,17 @@ const forwardContext = vm.createContext({
 vm.runInContext(background.slice(forwardStart, forwardEnd) + '\nglobalThis.__forwardD0Grid = forwardD0Grid; globalThis.__forwardD1Grid = forwardD1Grid;', forwardContext);
 const forwarded = await forwardContext.__forwardD0Grid(valid.capture);
 assert.equal(injectedWorld, 'MAIN', 'usa o mesmo mundo JavaScript do receptor da página');
+assert.equal(preparadorFocusCount, 1, 'D0 aceito continua focando o Preparador');
 assert.equal(forwarded.previewReady, true);
 assert.equal(captureReceivedInMain, valid.capture, 'a ponte entrega a captura ao receptor real, não ao window isolado');
 const forwardedD1 = await forwardContext.__forwardD1Grid(validD1.capture);
 assert.equal(injectedWorld, 'MAIN', 'a entrega D−1 também usa o mundo da página');
+assert.equal(preparadorFocusCount, 2, 'D−1 normal continua focando o Preparador');
 assert.equal(forwardedD1.waitingForD0, false);
 assert.equal(forwardedD1.previewReady, true);
 assert.equal(captureReceivedInMain, validD1.capture, 'a ponte entrega o contrato D−1 ao receptor D−1');
+await forwardContext.__forwardD1Grid(wrongD1.capture, { activate:false });
+assert.equal(preparadorFocusCount, 2, 'captura D−2 deixa o Preparador em segundo plano para o aviso amarelo ficar visível');
 
 const previous = new Map(['location','window'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
 let receivedCapture = null;

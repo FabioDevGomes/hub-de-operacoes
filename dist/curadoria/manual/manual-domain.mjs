@@ -86,7 +86,7 @@ export function validateBackup(payload) {
         const parsed=r.parsed,sources=['peopleAlsoSearch','relatedTrends','regions','relatedTopics','relatedQueries'];
         if(r.productKey!==r.productId||!parsed||!parsed.basic||!parsed.volume||!parsed.movement||!parsed.seasonality||!parsed.channel||sources.some(key=>!Array.isArray(parsed[key]?.items))||!r.indicators?.categoryCounts||!r.indicators.coverage||!r.indicators.contamination||!r.indicators.geography||!r.indicators.intent||!r.classified||['peopleAlsoSearch','relatedTrends','relatedTopics','relatedQueries'].some(key=>!Array.isArray(r.classified[key]))||!r.signal||!Array.isArray(r.signal.reasons)||!Array.isArray(r.offerIds)||!Number.isFinite(Date.parse(r.capturedAt)))throw new Error('Glimpse inválido no backup.');
       }else if(kind==='decisions'){
-        if(!Array.isArray(r.history)||normalizeDecision(r.currentStatus)!==r.currentStatus||r.history.some(entry=>!entry||!entry.entryId||normalizeDecision(entry.status)!==entry.status||!Number.isFinite(Date.parse(entry.capturedAt))))throw new Error('Decisão inválida no backup.');
+        if(!Array.isArray(r.history)||normalizeDecision(r.currentStatus)!==r.currentStatus||typeof (r.notes??'')!=='string'||(r.notes??'').length>5000||r.history.some(entry=>!entry||!entry.entryId||normalizeDecision(entry.status)!==entry.status||!Number.isFinite(Date.parse(entry.capturedAt))||typeof (entry.notes??'')!=='string'||(entry.notes??'').length>5000))throw new Error('Decisão inválida no backup.');
       }else {
         if(!Array.isArray(r.assessments)||kind==='trends'&&(!Array.isArray(r.keywordCandidates)||r.keywordCandidates.some(value=>typeof value!=='string')))throw new Error('Histórico inválido no backup.');
         for(const entry of r.assessments){

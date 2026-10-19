@@ -1,6 +1,6 @@
-import * as Domain from './manual-domain.mjs?v=1';
-import {manualStorage as storage} from './manual-storage.mjs?v=2';
-import {mountManualView} from './manual-view.mjs?v=3';
+import * as Domain from './manual-domain.mjs?v=2';
+import {manualStorage as storage} from './manual-storage.mjs?v=3';
+import {mountManualView} from './manual-view.mjs?v=4';
 import {exploreUrl} from '../trends-domain.mjs';
 import {imageSearchUrl,imageSearchUrlExcluding} from '../image-search-domain.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
@@ -20,7 +20,7 @@ const view=mountManualView({root,preferences,actions:{
   saveTrend:(id,input)=>change(()=>storage.saveTrend(id,input)),
   changeTrendCandidates:(id,operation)=>change(()=>storage.updateTrendCandidates(id,operation)),
   saveImage:(id,input)=>change(()=>storage.saveImage(id,input)),
-  saveDecision:(id,status)=>change(()=>storage.saveDecision(id,status)),
+  saveDecision:(id,status,notes)=>change(()=>storage.saveDecision(id,status,notes)),
   addCountry:(id,raw)=>{const countries=Domain.countryCodes(raw);if(countries.length!==1)throw new Error('Informe um país por vez.');const product=find(id);return change(()=>storage.saveProduct({...product,payoutValue:product.payout.value,currency:product.payout.currency,countries:[...product.countries,...countries]},product));},
   openTrends:term=>openExternal(exploreUrl(term)),
   openImages:(term,country,excluded=[])=>openExternal(excluded.length?imageSearchUrlExcluding(term,country,excluded):imageSearchUrl(term,country)),

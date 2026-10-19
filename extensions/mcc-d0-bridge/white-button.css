@@ -1,7 +1,6 @@
-/* Padrão botão branco — opt-in; ações verdes adotam o mesmo acabamento.
+/* Padrão botão branco — opt-in; ações não incluídas preservam o próprio estilo.
    Tamanho/posição pertencem ao consumidor; estados semânticos e ações azuis não mudam. */
 body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)),
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search,
 body .btn.hub-white-button{
   background:linear-gradient(145deg,#fffaf0 0%,#f1eadc 55%,#e7decd 100%);
   color:#201d18;
@@ -17,29 +16,23 @@ body .btn.hub-white-button{
   transition:background .15s ease,box-shadow .15s ease,transform .15s ease;
 }
 body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):hover:not(:disabled),
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search:hover:not(:disabled),
 body .btn.hub-white-button:hover:not(:disabled){
   background:linear-gradient(145deg,#fffdf7 0%,#f6f0e4 55%,#ede4d4 100%);
   box-shadow:inset 0 0 0 1px rgba(var(--hub-bevel-rim,255,250,239),.95),inset 1.5px 1.5px 1px rgba(var(--hub-bevel-shine,255,255,255),.9),inset -1px -2px 1px rgba(var(--hub-bevel-shade,156,134,98),.15),1px 3px 0 var(--hub-bevel-base,#b5a68e),2px 6px 9px rgba(0,0,0,.27);
 }
 body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):focus-visible,
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search:focus-visible,
 body .btn.hub-white-button:focus-visible{outline:2px solid var(--blue,#4fa7ff);outline-offset:4px}
 body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):active:not(:disabled),
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search:active:not(:disabled),
 body .btn.hub-white-button:active:not(:disabled){
   transform:translateY(1px);
   box-shadow:inset 0 0 0 1px rgba(var(--hub-bevel-rim,255,250,239),.9),inset 1px 1px 1px rgba(var(--hub-bevel-shine,255,255,255),.7),inset -1px -2px 1px rgba(var(--hub-bevel-shade,156,134,98),.15),.5px 2px 0 var(--hub-bevel-base,#b5a68e),1px 3px 5px rgba(0,0,0,.2);
 }
 body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):disabled,
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search:disabled,
 body .btn.hub-white-button:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:inset 0 0 0 1px rgba(var(--hub-bevel-rim,255,250,239),.8),.5px 1px 0 var(--hub-bevel-base,#b5a68e)}
 @media(prefers-reduced-motion:reduce){body .btn.hub-white-button{transition:none}body .btn.hub-white-button:active:not(:disabled){transform:none}}
 @media(prefers-reduced-motion:reduce){
-body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)),
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search{transition:none}
-body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):active:not(:disabled),
-body .keyword-candidate:not(.image-candidate) .keyword-candidate-search:active:not(:disabled){transform:none}
+body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)){transition:none}
+body[data-hub-green-actions] :is(.btn,.button).primary:not(:where(main>header>:is(.actions,.hero-actions)>*,.hub-standard-action,[data-hub-green-actions="clickbank"] .import-dialog .btn)):active:not(:disabled){transform:none}
 }
 /* Variante azul: mesma geometria/bisel do creme, com face e relevo em azuis.
    Adoção nas barras de ficha com abas da Curadoria; creme e outros azuis não mudam. */

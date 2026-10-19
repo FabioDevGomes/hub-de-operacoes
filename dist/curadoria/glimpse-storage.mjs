@@ -1,7 +1,7 @@
 export const DB_NAME='radar-glimpse';
 export const DB_VERSION=1;
 export const STORE='analyses';
-async function manualStore(options){if(options?.origin!=='manual')return null;if(!options.productId)throw new Error('Cadastro manual sem identidade.');return import('./manual/manual-storage.mjs?v=2');}
+async function manualStore(options){if(options?.origin!=='manual')return null;if(!options.productId)throw new Error('Cadastro manual sem identidade.');return import('./manual/manual-storage.mjs?v=3');}
 export async function openGlimpseDB(options){const manual=await manualStore(options);if(manual)return manual.openManualDB();return new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,DB_VERSION);request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(STORE)){const store=db.createObjectStore(STORE,{keyPath:'analysisId'});store.createIndex('productKey','productKey');store.createIndex('capturedAt','capturedAt')}};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
 export async function getAllAnalyses(){const db=await openGlimpseDB();return new Promise((resolve,reject)=>{const request=db.transaction(STORE).objectStore(STORE).getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
 export async function getLatestByProduct(productKey){const all=await getAllAnalyses();return all.filter(item=>item.productKey===productKey).sort((a,b)=>String(b.capturedAt).localeCompare(String(a.capturedAt)))[0]||null}

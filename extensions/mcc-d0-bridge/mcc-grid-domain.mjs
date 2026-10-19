@@ -138,7 +138,7 @@ export function validateMccD0Capture(snapshot) {
 
 export const MCC_OPERATIONAL_TIME_ZONE = 'America/Sao_Paulo';
 
-export function expectedMccD1Date(now = new Date()) {
+export function expectedMccD0Date(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: MCC_OPERATIONAL_TIME_ZONE,
     year: 'numeric',
@@ -146,8 +146,29 @@ export function expectedMccD1Date(now = new Date()) {
     day: '2-digit'
   }).formatToParts(now);
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  const today = Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
-  return new Date(today - 86400000).toISOString().slice(0, 10);
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function expectedMccD1Date(now = new Date()) {
+  const today = expectedMccD0Date(now);
+  return new Date(Date.parse(`${today}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+}
+
+export function validateMccD0ReportDate(snapshot, { now = new Date() } = {}) {
+  const actualDate = snapshot?.reportDate?.value ?? snapshot?.reportDate;
+  const capturedAt = new Date(snapshot?.capturedAt);
+  const comparisonDate = !Number.isNaN(capturedAt.getTime()) ? capturedAt : now;
+  const expectedDate = expectedMccD0Date(comparisonDate);
+  if (actualDate !== expectedDate) {
+    return {
+      ok: false,
+      errors: [{
+        code: 'date_expected',
+        message: `A MCC está em ${actualDate || 'uma data não identificada'}, mas D0 precisa ser hoje (${expectedDate}, ${MCC_OPERATIONAL_TIME_ZONE}). Selecione a data de hoje; nenhum dado foi enviado.`
+      }]
+    };
+  }
+  return { ok: true, expectedDate, reportDate: actualDate };
 }
 
 export function validateMccD1Capture(snapshot, { now = new Date() } = {}) {
@@ -161,18 +182,20 @@ export function validateMccD1Capture(snapshot, { now = new Date() } = {}) {
 
   const expectedDate = expectedMccD1Date(now);
   const actualDate = validation.capture.reportDate;
-  if (actualDate !== expectedDate) {
+  if (actualDate > expectedDate) {
     return {
       ok: false,
       errors: [{
         code: 'date_expected',
-        message: `A MCC está em ${actualDate}, mas D−1 esperado para hoje é ${expectedDate} (${MCC_OPERATIONAL_TIME_ZONE}). Selecione o dia correto; nenhum dado foi enviado.`
+        message: `A MCC está em ${actualDate}, depois do D−1 esperado para hoje (${expectedDate}, ${MCC_OPERATIONAL_TIME_ZONE}). Selecione D−1 ou uma data anterior; nenhum dado foi enviado.`
       }]
     };
   }
 
   return {
     ok: true,
+    expectedDate,
+    earlierThanD1: actualDate < expectedDate,
     capture: {
       ...validation.capture,
       schema: 'mcc-d1-grid-v3',

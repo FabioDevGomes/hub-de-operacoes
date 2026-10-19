@@ -1,6 +1,6 @@
 # Extensão local — captura MCC D0/D−1
 
-Extensão Chrome Manifest V3 para rolar a grade MCC até o final e capturar D0/D−1 para preparar uma prévia no Preparador local. O popup oferece uma ação discreta de rolagem e os botões **Capturar D0 da MCC** e **Capturar D−1 da MCC**. A tela do Preparador recebe somente as capturas estruturadas da extensão; não há campos de colagem nem seleção de arquivos.
+Extensão Chrome Manifest V3 para rolar a grade MCC até o final e capturar D0/D−1 para preparar uma prévia no Preparador local. O popup oferece uma ação discreta de rolagem e os botões **Capturar D0 da MCC** e **Capturar (ou data anterior) D−1 da MCC**. A tela do Preparador recebe somente as capturas estruturadas da extensão; não há campos de colagem nem seleção de arquivos.
 
 A extensão não grava a base. A confirmação final continua sendo o botão **Atualizar base** no Preparador.
 
@@ -20,7 +20,7 @@ Não é necessário compactar, publicar ou instalar pela Chrome Web Store.
 
 ## Atualização da extensão
 
-Versão atual: `1.2.23`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão. A versão 1.2.11 acrescentou acesso exclusivamente à rota local Top Offers CB; aceite essa permissão caso o Chrome a solicite. A leitura da DTC usa `activeTab` somente após o clique, sem permissão permanente para `orders.clickbank.net`. Confirme que a extensão carregada usa esta pasta, não uma cópia antiga.
+Versão atual: `1.2.25`. Toda atualização deve incrementar pelo menos o patch de `version` no `manifest.json`. Após atualizar os arquivos, recarregue **Hub MCC D0** em `chrome://extensions` e confira a nova versão. Recarregar somente as páginas do Hub não atualiza o código da extensão. A versão 1.2.11 acrescentou acesso exclusivamente à rota local Top Offers CB; aceite essa permissão caso o Chrome a solicite. A leitura da DTC usa `activeTab` somente após o clique, sem permissão permanente para `orders.clickbank.net`. Confirme que a extensão carregada usa esta pasta, não uma cópia antiga.
 
 No popup, as três ações ClickBank compartilham uma grade de duas colunas com intervalo de 8px e botões compactos de altura mínima de 33px. A captura de países da DTC ocupa uma coluna, logo abaixo das duas ações do Marketplace. A orientação detalhada fica neste README; mensagens de resultado continuam disponíveis, mas não reservam espaço quando vazias.
 
@@ -28,24 +28,25 @@ Erros de nomes duplicados aparecem em um quadro vermelho com o título **Captura
 
 ## Captura direta de D0
 
-1. Abra na MCC a visão de campanhas, selecione um único dia D0 explícito e deixe visíveis as colunas obrigatórias: campanha, conta, status de qualificação, impressões, cliques, conversões, custo médio, impr. primeira posição, impr. parte superior, orçamento, estratégia de lance e custo.
+1. Abra na MCC a visão de campanhas, selecione explicitamente a data de hoje no fuso `America/Sao_Paulo` e deixe visíveis as colunas obrigatórias: campanha, conta, status de qualificação, impressões, cliques, conversões, custo médio, impr. primeira posição, impr. parte superior, orçamento, estratégia de lance e custo.
 2. Clique no ícone da extensão e, se a grade ainda não estiver no final, use **Rolar MCC até o final**. Aguarde a confirmação; a extensão rola a área da grade/página e espera o carregamento terminar, sem ler campanhas nem enviar dados.
 3. Clique em **Capturar D0 da MCC**.
-4. A extensão associa semanticamente cabeçalhos e células e lê o número completo da conta na mesma célula do nome. Só envia quando paginação/contagem indicam a lista completa, as campanhas são únicas, a associação linha/campanha é estrutural e os campos obrigatórios são legíveis. Se a MCC estiver incompleta, ambígua, truncada/virtualizada, sem data única explícita, sem número completo da conta ou sem moeda identificável, a captura é bloqueada.
+4. A extensão compara a data selecionada com hoje em `America/Sao_Paulo` e bloqueia qualquer data passada ou futura; o Preparador repete essa checagem antes de instalar a prévia. Ela não infere nem corrige a data. Também associa semanticamente cabeçalhos e células e lê o número completo da conta na mesma célula do nome. Só envia quando paginação/contagem indicam a lista completa, as campanhas são únicas, a associação linha/campanha é estrutural e os campos obrigatórios são legíveis. Se a MCC estiver incompleta, ambígua, truncada/virtualizada, sem data única explícita, sem número completo da conta ou sem moeda identificável, a captura é bloqueada.
 5. O Preparador conserva o instante `capturedAt` lido pela extensão para identificar quando essa captura foi feita. Revise a aba da captura e suas diferenças antes da prévia.
 6. O Preparador valida os dados e deixa a prévia pronta para revisão. Confira os dados e alertas.
 7. A base permanece inalterada até você clicar manualmente em **Atualizar base**.
 
 ## Captura direta de D−1
 
-Você pode capturar somente D−1, sem capturar D0 primeiro. Se o Preparador tiver um D0 antigo/incompatível aberto, ele fica preservado **Fora da prévia**, e o novo D−1 gera sua própria prévia. Com D0 compatível, a combinação normal continua; para usar só D−1, clique em **Usar apenas D−1** no Preparador. O botão passa a **Incluir D0 na prévia**, que só combina novamente se data/MCC forem compatíveis. Capturar um novo D0 compatível também volta ao modo combinado. Nada é aplicado até **Atualizar base**. Este ajuste é do Hub: recarregue a página do Preparador; não requer atualizar a extensão.
+Você pode capturar somente D−1, sem capturar D0 primeiro. Se o Preparador tiver um D0 antigo/incompatível aberto, ele fica preservado **Fora da prévia**, e o novo D−1 gera sua própria prévia. Com D0 compatível, a combinação normal continua; para usar só D−1, clique em **Usar apenas D−1** no Preparador. O botão passa a **Incluir D0 na prévia**, que só combina novamente se data/MCC forem compatíveis. Capturar um novo D0 compatível também volta ao modo combinado. Nada é aplicado até **Atualizar base**. O modo D−1 isolado é do Hub: recarregue a página do Preparador; para capturar uma data anterior, também atualize e recarregue a extensão para a versão atual acima.
 
-1. Na MCC, selecione uma única data explícita correspondente a ontem no fuso `America/Sao_Paulo`; texto relativo como “Yesterday” sem a data resolvida não é aceito.
-2. Use **Rolar MCC até o final** para que todas as campanhas estejam materializadas; aguarde a confirmação e clique em **Capturar D−1 da MCC**. A rolagem não lê nem encaminha dados.
-3. A captura usa o mesmo leitor semântico e os mesmos campos obrigatórios de D0, mas envia o contrato `mcc-d1-grid-v3`. Data errada, intervalo, grade incompleta, cabeçalho ausente, nome duplicado, número completo da conta ilegível, identidade da MCC ausente ou moeda ambígua bloqueiam a entrega.
-4. O Preparador instala os dados no slot D−1 existente e gera a prévia mesmo sem D0. A base só é atualizada após validação e clique explícito em “Atualizar base”. Se D0 for carregado depois, a prévia passa a combinar os dois períodos.
-5. Quando D0 estiver carregado, o Preparador exige uma única data em cada período e que D0 seja o dia imediatamente seguinte a D−1. Nomes, contas, moedas e percentuais seguem as validações normais do manifesto `manifesto_mcc_v2`.
-6. Revise a prévia combinada. A base continua inalterada até clicar manualmente em **Atualizar base**.
+1. Na MCC, selecione uma única data explícita correspondente a ontem ou anterior no fuso `America/Sao_Paulo`; texto relativo como “Yesterday” sem a data resolvida não é aceito.
+2. Se o dia esperado de D−1 não foi trabalhado/fechado, selecione a data anterior desejada no controle da MCC. O botão **Capturar (ou data anterior) D−1 da MCC** aceita ontem ou qualquer data explícita anterior; não aceita hoje, datas futuras, intervalo nem texto relativo sem data resolvida.
+3. Use **Rolar MCC até o final** para que todas as campanhas estejam materializadas; aguarde a confirmação e clique em **Capturar (ou data anterior) D−1 da MCC**. A rolagem não lê nem encaminha dados.
+4. A captura usa o mesmo leitor semântico e os mesmos campos obrigatórios de D0, mas envia o contrato `mcc-d1-grid-v3`. Grade incompleta, cabeçalho ausente, nome duplicado, número completo da conta ilegível, identidade da MCC ausente ou moeda ambígua bloqueiam a entrega. Uma data anterior válida gera aviso amarelo no popup com a data capturada e o D−1 esperado; para manter o aviso visível, a aba do Preparador fica em segundo plano. Alterne para essa aba e revise a prévia manualmente.
+5. O Preparador instala os dados no slot D−1 existente e gera a prévia mesmo sem D0. A base só é atualizada após validação e clique explícito em “Atualizar base”. Se D0 for carregado depois, a prévia passa a combinar os dois períodos.
+6. Quando D0 estiver carregado, o Preparador exige uma única data em cada período e que D0 seja o dia imediatamente seguinte a D−1. Nomes, contas, moedas e percentuais seguem as validações normais do manifesto `manifesto_mcc_v2`.
+7. Revise a prévia combinada. A base continua inalterada até clicar manualmente em **Atualizar base**.
 
 Valores `0` são mantidos como zero confirmado; `—` e células vazias são ausência e não se convertem em zero. A moeda só é inferida de código/símbolo explícito e inequívoco (`$` isolado é insuficiente). GEO, estado individual, CPA e valor de conversão não são inventados quando não estão disponíveis com segurança.
 
@@ -65,7 +66,7 @@ Os quadros D0 e D−1 exibem o estado e o resumo da captura estruturada enviada 
 
 Na captura direta, o service worker envia somente os dados validados e chama `window.__hubReceiveMccD0Grid` ou `window.__hubReceiveMccD1Grid` em `world: 'MAIN'`. Parser, validação, manifesto, identidade, IndexedDB e observabilidade permanecem exclusivamente no Hub.
 
-Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Prefixos ambíguos continuam sem vínculo automático. D−1 precisa corresponder a ontem no fuso `America/Sao_Paulo`; quando D0 também estiver carregado, as datas devem ser consecutivas. D−1 ou D0, isoladamente, pode atualizar somente o período recebido depois que a prévia for validada e o usuário clicar em **Atualizar base**.
+Ao aplicar uma nova captura, o Hub usa o número completo como identidade da conta. Prefixos ambíguos continuam sem vínculo automático. D−1 pode corresponder a ontem ou a uma data anterior no fuso `America/Sao_Paulo`; quando D0 também estiver carregado, as datas devem ser consecutivas. D−1 ou D0, isoladamente, pode atualizar somente o período recebido depois que a prévia for validada e o usuário clicar em **Atualizar base**.
 
 ## Capturar produtos ClickBank
 
@@ -86,7 +87,7 @@ As páginas posteriores mantêm suas posições globais: com 50 itens por págin
 2. No popup, clique em **Capturar países comuns da DTC**. A ação, iniciada pelo usuário, lê apenas o título exibido depois de **Cart Summary** e as opções de duas letras do grupo **Países Comuns/Common Countries** no seletor de país. Esse grupo tem prioridade. Quando não existe, aceita todos os países de uma lista sem grupos com 1 a 10 códigos válidos distintos. Ignora placeholders como “Selecione o país”, opções desabilitadas, duplicatas e códigos inválidos. Nenhum dado de pagamento ou endereço é consultado.
 3. O Hub normaliza o nome do produto e considera a frase completa ou, se o checkout incluir uma variante/pacote após hífen, o nome principal (antes do hífen) no início do título da oferta. Prefixos promocionais conhecidos, como “NEW”, são ignorados. Nomes de uma palavra com pelo menos 6 caracteres, como **FemiCore**, exigem igualdade com o segmento inicial completo da oferta; não casam com **FemiCorePlus**, **FemiCore Max** ou ocorrência no slogan. Frases mantêm o mínimo de 8 caracteres e duas palavras. A gravação só acontece com uma correspondência única; nomes principais curtos ou repetidos entre ofertas continuam bloqueados. A correção dessa associação é do Hub: recarregue Top Offers CB; não exige nova versão da extensão.
 4. A lista encontrada é mesclada com os países existentes (sem duplicatas), salva na store isolada `offerMetadata` e exibida na aba Google Trends com a marca **DTC**. A ficha mostra **Lista capturada da DTC** e o horário da captura. A captura original do Marketplace, países manuais existentes e outras lojas/bases não são sobrescritos.
-5. A extensão não abre nem foca uma tela do Hub. Ela ignora abas Top Offers antigas sem o marcador do receptor atual; se nenhuma aba compatível estiver aberta, recarregue a extensão `1.2.23` em `chrome://extensions`, atualize a página Top Offers CB e repita o clique. A ficha individual não precisa estar aberta.
+5. A extensão não abre nem foca uma tela do Hub. Ela ignora abas Top Offers antigas sem o marcador do receptor atual; se nenhuma aba compatível estiver aberta, recarregue a extensão `1.2.25` em `chrome://extensions`, atualize a página Top Offers CB e repita o clique. A ficha individual não precisa estar aberta.
 
 Não há uma permissão permanente para o domínio da DTC: `activeTab` só permite leitura após clicar no botão com o checkout na aba ativa. A ação não acessa endpoints nem percorre os campos de pagamento.
 
@@ -115,7 +116,7 @@ Referências: [API pública VTurb](https://smartplayer.vturb.com/en/api/) e [lim
 
 ### Verificação ClickBank
 
-`node --test tests/clickbank-forward.test.mjs tests/clickbank-dtc-countries.test.mjs` cobre os fluxos ClickBank e DTC com dados sintéticos: extração restrita nos dois formatos, limites de 1/10/11 países na lista simples, exclusão de placeholders, prioridade do grupo comum, correspondência ambígua, mesclagem sem sobrescrita, receiver local e roteamento sem abrir/focar aba. Após recarregar a extensão 1.2.23 em `chrome://extensions` e a página Top Offers CB, use o botão no checkout DTC para salvar países; a instalação real não é substituída pelos mocks.
+`node --test tests/clickbank-forward.test.mjs tests/clickbank-dtc-countries.test.mjs` cobre os fluxos ClickBank e DTC com dados sintéticos: extração restrita nos dois formatos, limites de 1/10/11 países na lista simples, exclusão de placeholders, prioridade do grupo comum, correspondência ambígua, mesclagem sem sobrescrita, receiver local e roteamento sem abrir/focar aba. Após recarregar a extensão 1.2.25 em `chrome://extensions` e a página Top Offers CB, use o botão no checkout DTC para salvar países; a instalação real não é substituída pelos mocks.
 
 `node --test tests/clickbank-extension.test.mjs tests/mcc-extension-popup.test.mjs tests/mcc-extension-parity.test.mjs tests/mcc-grid-experiment.test.mjs tests/mcc-text-experiment.test.mjs tests/mcc-page-scroll.test.mjs` cobre virtualização em ambos os eixos, 50 linhas, última página menor, repetição sem duplicação, nove colunas fora de ordem, Offer ID opcional, completude, TSV seguro, erros, bloqueio de concorrência, clipboard negado, restauração exata e preservação do roteamento MCC, em memória. A validação final na conta real deve confirmar os seletores/cabeçalhos do Marketplace e a cópia pelo Chrome após recarregar a extensão; os testes sintéticos não substituem essa conferência.
 

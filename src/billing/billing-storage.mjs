@@ -1,4 +1,4 @@
-import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=2';
+import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=3';
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
 export const BILLING_DB_NAME = DB_NAME;
@@ -199,6 +199,7 @@ function reconcileMccAggregateForManualSale(transaction, sales, audit, manual, s
       active:remaining > 0,
       value_brl:null,
       value_usd:null,
+      manual_value_override:false,
       confirmation_status:remaining > 0 ? existing.confirmation_status : 'represented_by_manual',
       notes:remaining > 0
         ? `Restam ${remaining} conversão(ões) MCC sem vínculo individual. O valor agregado não foi dividido após associar uma conversão a lançamento manual.`
@@ -232,7 +233,10 @@ export function upsertMccConversionSalesToTransaction(transaction, mccSales, { n
         observed_payment_status:existing.observed_payment_status,
         created_at:existing.created_at,
       } : {};
-      const updated = normalizeSale({ ...existing, ...incoming, ...paymentFields, updated_at:now }, { now });
+      const manualValueOverride = existing?.source === 'mcc_conversion_aggregate' && existing.manual_value_override === true
+        ? { value_brl:existing.value_brl, value_usd:existing.value_usd, manual_value_override:true }
+        : {};
+      const updated = normalizeSale({ ...existing, ...incoming, ...paymentFields, ...manualValueOverride, updated_at:now }, { now });
       const fields = existing
         ? Object.keys(updated).filter(field => !['sale_id', 'created_at', 'updated_at'].includes(field) && !Object.is(existing[field] ?? null, updated[field] ?? null))
         : Object.keys(updated).filter(field => !['sale_id', 'created_at', 'updated_at'].includes(field));
@@ -538,6 +542,55 @@ export async function updateSale(saleId, patch, action = 'sale_updated') {
     tx.oncomplete = () => { db.close(); resolve(updated); };
     tx.onerror = () => { db.close(); reject(tx.error); };
     tx.onabort = () => { db.close(); reject(tx.error || new Error('A venda não foi encontrada ou não pôde ser atualizada.')); };
+  });
+}
+
+export function updateMccConversionValuesToTransaction(tx, saleId, values = {}) {
+  const patch = { manual_value_override:true };
+  for (const field of ['value_brl', 'value_usd']) {
+    if (Object.hasOwn(values, field)) patch[field] = values[field];
+  }
+  if (!Object.hasOwn(patch, 'value_brl') && !Object.hasOwn(patch, 'value_usd')) {
+    throw new Error('Informe o valor corrigido em R$ ou US$.');
+  }
+  const sales = tx.objectStore(BILLING_STORES.sales);
+  const request = sales.get(saleId);
+  const result = { updated:null, failure:null };
+  request.onsuccess = () => {
+    const prior = request.result;
+    if (!prior || prior.source !== 'mcc_conversion_aggregate') {
+      result.failure = new Error('A linha agregada da MCC não foi encontrada para corrigir.');
+      tx.abort();
+      return;
+    }
+    const now = new Date().toISOString();
+    try {
+      result.updated = normalizeSale({ ...prior, ...patch, sale_id:prior.sale_id, created_at:prior.created_at, updated_at:now }, { now });
+      if (result.updated.value_brl == null && result.updated.value_usd == null) throw new Error('Informe o valor corrigido em R$ ou US$.');
+    } catch (error) {
+      result.failure = error;
+      tx.abort();
+      return;
+    }
+    const changes = Object.keys(patch)
+      .filter(field => !Object.is(prior[field] ?? null, result.updated[field] ?? null))
+      .map(field => ({ field, old_value:prior[field] ?? null, new_value:result.updated[field] ?? null }));
+    if (!changes.length) return;
+    sales.put(result.updated);
+    tx.objectStore(BILLING_STORES.audit).add(makeAudit('mcc_conversion_value_corrected', 'sale', saleId, changes, { now }));
+  };
+  request.onerror = () => { result.failure = request.error; tx.abort(); };
+  return result;
+}
+
+export async function updateMccConversionValues(saleId, values = {}) {
+  const db = await openBillingDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([BILLING_STORES.sales, BILLING_STORES.audit], 'readwrite');
+    const result = updateMccConversionValuesToTransaction(tx, saleId, values);
+    tx.oncomplete = () => { db.close(); resolve(result.updated); };
+    tx.onerror = () => { db.close(); reject(result.failure || tx.error); };
+    tx.onabort = () => { db.close(); reject(result.failure || tx.error || new Error('A correção do valor MCC não pôde ser salva.')); };
   });
 }
 

@@ -1,4 +1,5 @@
 import assert from'node:assert/strict';
+import{PRE_WORK_COUNTER_PAUSE_PREFIX,preWorkCounterPauseKey,preWorkCounterState}from'../src/meu-tempo/meu-tempo-domain.mjs';
 import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,dailyDurationLaunchHistory,dailyLaunchHistory,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
@@ -92,6 +93,19 @@ const correctedBooleanMatrix=comparisonMatrix([{id:'item-alcool',name:'Bebida al
 assert.deepEqual(correctedBooleanMatrix.rows[0].cells[0].values,[false],'a comparação usa a resposta booleana atualizada mais recentemente, ainda que a linha tenha criação anterior');
 assert.equal(booleanHistoryValue({id:'item-alcool',type:'boolean'},correctedBooleanMatrix.rows[0].cells[0].values[0]),'Não','uma correção de Sim para Não deve prevalecer no Histórico');
 assert.equal(correctedBooleanMatrix.rows[0].cells[0].entries.length,2,'a leitura preserva os eventos originais para auditoria/detalhamento');
+const booleanPeriodEntries=[
+  {id:'yes-1',date:'2026-10-01',itemId:'item-alcool',type:'boolean',value:true,createdAt:'2026-10-01T08:00:00.000Z'},
+  {id:'yes-2-old',date:'2026-10-02',itemId:'item-alcool',type:'boolean',value:true,createdAt:'2026-10-02T08:00:00.000Z'},
+  {id:'yes-2-corrected',date:'2026-10-02',itemId:'item-alcool',type:'boolean',value:false,createdAt:'2026-10-02T09:00:00.000Z'},
+  {id:'no-3',date:'2026-10-03',itemId:'item-alcool',type:'boolean',value:false,createdAt:'2026-10-03T08:00:00.000Z'},
+  {id:'yes-4',date:'2026-10-04',itemId:'item-alcool',type:'boolean',value:true,createdAt:'2026-10-04T08:00:00.000Z'},
+  {id:'yes-5',date:'2026-10-05',itemId:'item-alcool',type:'boolean',value:true,createdAt:'2026-10-05T08:00:00.000Z'}
+];
+const booleanPeriodMatrix=comparisonMatrix([{id:'item-alcool',name:'Bebida alcoólica',type:'boolean'},{id:'work',name:'Trabalho',type:'duration'}],booleanPeriodEntries,['2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06']);
+assert.equal(booleanPeriodMatrix.rows[0].yesDays,3,'conta dias com Sim usando a resposta mais recente e não duplica registros do mesmo dia');
+assert.equal(booleanPeriodMatrix.rows[1].yesDays,null,'a contagem de dias com Sim só é aplicável aos itens Sim/Não');
+assert.equal(booleanPeriodMatrix.rows[0].cells.length,6,'o recorte do histórico permanece completo, inclusive dias sem resposta');
+assert.equal(comparisonMatrix([{id:'item-acucar',name:'Açúcar',type:'boolean'}],[],['2026-10-01']).rows[0].yesDays,0,'nenhuma resposta Sim no período é exibida como contagem zero');
 assert.equal(PARTIALLY_PRODUCTIVE_ITEM_ID,'item-kakashi');
 assert.equal(PARTIAL_PRODUCTIVE_RATE,.1);
 assert.deepEqual(PRE_WORK_ITEM_IDS,['item-cama-acordar','item-preparo-levantar','item-cafe','item-kakashi'],'o intervalo pré-trabalho soma apenas as quatro atividades destacadas');
@@ -108,6 +122,11 @@ const preWorkEntries=[
 assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-02'),62,'o total sintético inclui a duração integral de Kakashi e exclui sono, outros itens, outros tipos e outras datas');
 assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-03'),30,'o cálculo acompanha somente a data selecionada');
 assert.equal(totalPreWorkDuration(preWorkEntries,'2026-10-04'),0,'data sem lançamentos retorna zero');
+const preWorkPauseKey=preWorkCounterPauseKey('2026-10-02');
+assert.equal(preWorkPauseKey,`${PRE_WORK_COUNTER_PAUSE_PREFIX}2026-10-02`,'a pausa usa uma chave independente para cada dia');
+assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{}),{minutes:62,paused:false,pausedAt:null},'sem pausa a métrica continua usando os lançamentos atuais');
+assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{[preWorkPauseKey]:{minutes:42,pausedAt:'2026-10-02T12:00:00.000Z'}}),{minutes:42,paused:true,pausedAt:'2026-10-02T12:00:00.000Z'},'a pausa congela o valor salvo mesmo que os lançamentos atuais sejam diferentes');
+assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{[preWorkPauseKey]:{minutes:-1}}),{minutes:62,paused:false,pausedAt:null},'um valor pausado inválido não substitui o cálculo válido');
 const kakashiEntries=[
   {id:'k1',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:120,productiveSnapshot:false},
   {id:'k2',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:30,productiveSnapshot:true},

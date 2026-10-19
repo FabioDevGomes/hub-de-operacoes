@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { aggregateBillingRevenueByDate } from '../src/billing/billing-domain.mjs';
 import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
@@ -15,8 +16,9 @@ let persisted = db.create();
 persisted.campanhas = [{ id:'synthetic', nome_mcc:'Wego6 campanha', nome_exibicao:'Wego6' }];
 persisted.diario = [{ campanha_id:'synthetic', data:'2026-09-29', celulas:{ O:{value:100}, P:{value:50}, C:{value:10}, F:{value:1} } }];
 const state = { database:null, controlMacroRows:null, productCatalog:{aliases:{}} };
+const macroUi = {};
 let aggregateCalls=0;
-const context = vm.createContext({ state, CampaignBaseReader, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:{...domain,aggregateMccDaily(...args){aggregateCalls++;return domain.aggregateMccDaily(...args)}}, ProductCatalog:{normalize:value=>value||{aliases:{}}},
+const context = vm.createContext({ state, macroUi, CampaignBaseReader, CampaignDatabase:db, OverviewDomain:databaseContext.window.OverviewDomain, ControlMacroDomain:{...domain,aggregateMccDaily(...args){aggregateCalls++;return domain.aggregateMccDaily(...args)}}, ProductCatalog:{normalize:value=>value||{aliases:{}}},
   OverviewCardsRecovery:{ensure:async({base})=>({base,recovered:false})},
   accountProductIdentity:(campaign,catalog)=>({label:catalog.aliases[String(campaign.nome_exibicao||'').toLocaleLowerCase('pt-BR')]||campaign.nome_exibicao||campaign.nome_mcc}),
   embeddedManifest:null,
@@ -74,4 +76,14 @@ persisted.manifesto_atual={separacao_temporal:{D_menos_1:{datas_detectadas:['202
 await context.restoreLocalBase({persist:false,renderPage:false});
 assert.equal(september()[0].pendingSales,0,'a confirmação D−1 também remove a marcação provisória do Macro');
 assert.equal(persisted.vendas_provisorias[0].status,'provisoria','a prévia de reconciliação D−1 não grava alterações no registro');
+state.macroBillingSales=[
+  {sale_id:'mcc-existing',sale_date:'2026-09-29',source:'mcc_conversion_aggregate',conversion_count:1,value_brl:30,product:'Wego6'},
+  {sale_id:'billing-manual',sale_date:'2026-09-29',source:'manual',confirmation_status:'manual',conversion_count:1,value_brl:225,product:'Nebula'},
+];state.macroBillingRevenueByDate=aggregateBillingRevenueByDate(state.macroBillingSales,5.1);state.macroBillingCheckedAt='2026-10-18T12:34:00.000Z';state.controlMacroRows=null;
+const billingReconciled=september()[0];
+assert.equal(billingReconciled.sales,2,'a cache do Macro integra a venda nova registrada diretamente no Faturamento');
+assert.equal(billingReconciled.billingSales,1,'a integração preserva a distinção entre MCC e venda manual do Faturamento');
+assert.equal(billingReconciled.revenue,255,'a receita diária converge com o total completo do Faturamento sem dobrar a MCC');
+assert.equal(billingReconciled.productSales.at(-1).product,'Nebula');
+assert.equal(macroUi.macroBillingCheckedAt,state.macroBillingCheckedAt,'o horário da conferência também chega ao estado visual da view');
 console.log('Control Macro sync: async load and cross-tab cache refresh ok');

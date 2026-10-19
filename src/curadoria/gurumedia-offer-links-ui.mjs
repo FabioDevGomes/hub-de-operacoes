@@ -36,6 +36,37 @@ function linkTopTableOfferIds() {
   }
 }
 
+function ensureTopOfferActionTarget() {
+  const card = sheet?.querySelector('.trends-country-card');
+  const heading = card?.querySelector('h2');
+  if (!card || !heading) return null;
+
+  let headingRow = card.querySelector('.trends-country-heading');
+  if (!headingRow) {
+    headingRow = document.createElement('div');
+    headingRow.className = 'trends-country-heading';
+    card.insertBefore(headingRow, heading);
+    headingRow.append(heading);
+  }
+
+  let target = headingRow.querySelector('#topGuruMediaOfferAction');
+  if (!target) {
+    target = document.createElement('div');
+    target.id = 'topGuruMediaOfferAction';
+    target.className = 'trends-country-offer-action';
+    headingRow.append(target);
+  }
+
+  if (!document.querySelector('style[data-gurumedia-offer-action]')) {
+    const style = document.createElement('style');
+    style.dataset.gurumediaOfferAction = '';
+    style.textContent = '#offerSheet .trends-country-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}#offerSheet .trends-country-heading h2{margin:0}#offerSheet .trends-country-offer-action{display:flex;justify-content:flex-end;min-width:0}#offerSheet .trends-country-offer-action .trends-gurumedia-links{justify-content:flex-end}@media(max-width:560px){#offerSheet .trends-country-heading{align-items:flex-start;flex-wrap:wrap}#offerSheet .trends-country-offer-action{margin-left:auto}}';
+    document.head.append(style);
+  }
+
+  return target;
+}
+
 function renderOfferLinks() {
   const actions = document.querySelector(view === 'top' ? '#topProductAgeActions' : '#managerProductAgeActions');
   const ageRow = actions?.closest('.trends-product-age');
@@ -49,12 +80,16 @@ function renderOfferLinks() {
   }
 
   const ids = [...new Set(offerIds())].filter(id => guruMediaOfferUrl(id));
-  const signature = ids.join(',');
-  if (group.dataset.offerIds === signature) return;
-  group.dataset.offerIds = signature;
-  group.innerHTML = ids.length
-    ? `<span>Oferta(s) específica(s) na GuruMedia</span><div class="trends-gurumedia-links">${ids.map(id => `<a class="btn trends-gurumedia-link" href="${guruMediaOfferUrl(id)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ${id} na GuruMedia">Abrir oferta #${id}</a>`).join('')}</div>`
+  const links = ids.map(id => `<a class="btn trends-gurumedia-link" href="${guruMediaOfferUrl(id)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ${id} na GuruMedia">Abrir oferta #${id}</a>`).join('');
+  const target = view === 'top' ? ensureTopOfferActionTarget() : null;
+  const linksHtml = `<div class="trends-gurumedia-links">${links}</div>`;
+  const groupHtml = ids.length
+    ? `<span>Oferta(s) específica(s) na GuruMedia</span>${target ? '' : linksHtml}`
     : '';
+  const targetHtml = ids.length && target ? linksHtml : '';
+
+  if (group.innerHTML !== groupHtml) group.innerHTML = groupHtml;
+  if (target && target.innerHTML !== targetHtml) target.innerHTML = targetHtml;
 }
 
 if (sheet && (view === 'top' || view === 'manager')) {

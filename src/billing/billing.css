@@ -41,4 +41,4 @@
 .billing-root .btn,
 .billing-root .billing-audit,
 .billing-root .billing-modal-card{border:0}
-.billing-mcc-correction .billing-form-grid>label:not(#billingValueBrlField):not(#billingValueUsdField){display:none}
+.billing-mcc-correction .billing-form-grid>label:not(#billingPlatformField):not(#billingValueBrlField):not(#billingValueUsdField){display:none}

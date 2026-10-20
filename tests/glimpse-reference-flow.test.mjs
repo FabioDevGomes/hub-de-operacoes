@@ -36,11 +36,6 @@ function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=f
 }
 
 const clipboardOrigins = ['top','manager','smartadv-offers','hot-offers-ms','clickbank-top-offers'];
-test('ClickBank move Sinais emergentes para antes de People Also Search, sem reordenar as outras origens',()=>{
-  const clickbank=harness({origin:'clickbank-top-offers'}),other=harness({origin:'top'});
-  assert.deepEqual(clickbank.node('#peopleAlsoSearchPanel').beforeNodes,['#emergingSignalsPanel']);
-  assert.deepEqual(other.node('#peopleAlsoSearchPanel').beforeNodes,[]);
-});
 test('ClickBank omite apenas o aviso do clipboard e a leitura operacional longa',()=>{
   const clickbank=harness({origin:'clickbank-top-offers'}),other=harness({origin:'top'});
   assert.equal(clickbank.node('.clipboard-note').classList.contains('hidden'),true);
@@ -112,6 +107,22 @@ test('Hot Offers MS reference usa clipboard, salva uma vez e confirma sem fechar
   assert.equal(h.stored.length,1,'Salvar não duplica a análise já persistida');
   assert.equal(h.messages.filter(m=>m.type==='hub-glimpse-save-result'&&m.saved===true).length,2);
   assert.equal(h.messages.some(m=>m.type==='hub-glimpse-close'),false);
+});
+
+test('Top Offers CB notifica a listagem após autosave para atualizar a coluna Glimpse',async()=>{
+  const h=harness({origin:'clickbank-top-offers'});await settle();
+  await h.api.pasteAndAnalyze();await settle();await settle();
+  assert.equal(h.stored.length,1,'a análise automática foi persistida');
+  assert.equal(h.messages.some(message=>message.type==='hub-glimpse-save-result'&&message.saved===true),true,'o sucesso do autosave chega ao host sem clique em Salvar');
+  assert.equal(h.node('#message').textContent,'Análise salva automaticamente.');
+});
+
+test('Top Offers CB sinaliza falha de autosave para permitir tentar novamente',async()=>{
+  const h=harness({origin:'clickbank-top-offers',failSave:true});await settle();
+  await h.api.pasteAndAnalyze();await settle();await settle();
+  assert.equal(h.stored.length,0);
+  assert.equal(h.messages.some(message=>message.type==='hub-glimpse-save-result'&&message.saved===false),true,'o host libera Salvar para uma nova tentativa');
+  assert.match(h.node('#message').textContent,/Clique em Salvar para tentar novamente/);
 });
 
 test('referência vazia ou com falha não confirma sucesso nem fecha',async()=>{

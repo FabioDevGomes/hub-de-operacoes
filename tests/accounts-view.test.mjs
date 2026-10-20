@@ -127,6 +127,25 @@ test('selection, filters and subsequent data refresh use the latest read-only sn
   assert.match(root.elements.accountDetailBody.innerHTML,/Selecione um produto/);
 });
 
+test('product account chart refreshes on new snapshots, shows every product and names the status scope',()=>{
+  const initial=Array.from({length:9},(_,index)=>sample('ativa',{
+    productKey:`product-${index+1}`,product:`Product ${index+1}`,account:`A${index+1}`
+  }));
+  const {root,controller,update}=setup(initial);
+  const barRows=()=>root.elements.accountProductBars.innerHTML.match(/class="account-bar-row"/g)||[];
+  assert.equal(barRows().length,9);
+  assert.match(root.elements.accountProductBarsCaption.textContent,/filtro Ativas/);
+
+  update({rows:[...initial,sample('ativa',{productKey:'new-upload',product:'New Upload',account:'B'})],accountStatuses:{},period:'Updated period'});
+  controller.render();
+  assert.equal(barRows().length,10);
+  assert.match(root.elements.accountProductBars.innerHTML,/New Upload/);
+
+  change(root,'accountReportStatus','pausada');
+  assert.match(root.elements.accountProductBarsCaption.textContent,/filtro Pausadas/);
+  assert.equal(barRows().length,0,'active campaigns are excluded after the shared filter changes to Pausadas');
+});
+
 test('untrusted names and invalid domain text are escaped, never rendered as markup',()=>{
   const {root}=setup([sample('ativa',{product:'<img src=x>',campaign:'<script>',identity:{name:'<b>text</b>',dateLabel:'—',dateSort:null},domain:'javascript:alert(1)'})]);
   assert.ok(!root.elements.accountMatrixBody.innerHTML.includes('<img'));

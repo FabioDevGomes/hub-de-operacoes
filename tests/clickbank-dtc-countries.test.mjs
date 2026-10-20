@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {collectClickBankDtcCommonCountries,isClickBankDtcCheckout} from '../extensions/mcc-d0-bridge/clickbank-dtc-reader.mjs';
 import {mountClickBankDtcCountries} from '../extensions/mcc-d0-bridge/clickbank-dtc-popup.mjs';
 import {deliverDtcCommonCountries,isDtcCountryReceiverReady} from '../extensions/mcc-d0-bridge/clickbank-forward.mjs';
-import {matchDtcCheckoutOffer,mergeDtcCountries,validateDtcCountryCapture} from '../src/curadoria/clickbank-top-offers/dtc-country-capture.mjs';
+import {matchDtcCheckoutOffer,mergeDtcCountries,removeManualCountry,validateDtcCountryCapture} from '../src/curadoria/clickbank-top-offers/dtc-country-capture.mjs';
 import {mountExtensionCapture} from '../src/curadoria/clickbank-top-offers/extension-capture.mjs';
 
 const checkout='https://orders.clickbank.net/?cbfid=synthetic';
@@ -140,6 +140,18 @@ test('DTC payload validation, unique title match and ambiguity fail closed',()=>
     'o nome principal não deve associar por ocorrência no meio do título');
 });
 
+test('remover país manual preserva campos existentes e bloqueia países também presentes na captura DTC',()=>{
+  const metadata={offerKey:'seller|offer',manualCountries:['US','GB'],affiliateLink:'https://example.test/?aff=1',
+    dtcCountryCapture:{source:'clickbank-dtc-checkout',capturedAt:payload.capturedAt,productName:payload.productName,countries:['GB']}};
+  const removed=removeManualCountry(metadata,{offerKey:metadata.offerKey,offerName:'Offer'},' us ');
+  assert.equal(removed.ok,true);
+  assert.deepEqual(removed.record.manualCountries,['GB']);
+  assert.equal(removed.record.affiliateLink,metadata.affiliateLink);
+  assert.deepEqual(removed.record.dtcCountryCapture,metadata.dtcCountryCapture);
+  assert.equal(removeManualCountry(metadata,{},'GB').ok,false,'país já presente na captura DTC não pode ser removido como manual');
+  assert.deepEqual(metadata.manualCountries,['US','GB'],'a função pura não altera a metadata original');
+});
+
 test('DTC associates a single-word product name without matching partial names or ambiguous offers',()=>{
   const offer={offerKey:'synthetic-femicore',offerName:'FemiCore - $4 EPC Doctor-Endorsed Bladder-Reset Formula'};
   for(const name of ['FemiCore','FemiCore - 2 Bottles','FemiCore – 2 Bottles','FemiCore — 2 Bottles']){
@@ -157,11 +169,11 @@ test('DTC associates a single-word product name without matching partial names o
 test('DTC matching update invalidates the complete browser import chain and publishes the domain',async()=>{
   const root=new URL('../',import.meta.url);
   const read=path=>readFile(new URL(path,root),'utf8');
-  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=43/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=45/);
   const page=await read('src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs');
-  assert.match(page,/extension-capture\.mjs\?v=6/);
-  assert.match(page,/dtc-country-capture\.mjs\?v=5/);
-  assert.match(await read('src/curadoria/clickbank-top-offers/extension-capture.mjs'),/dtc-country-capture\.mjs\?v=5/);
+  assert.match(page,/extension-capture\.mjs\?v=7/);
+  assert.match(page,/dtc-country-capture\.mjs\?v=6/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/extension-capture.mjs'),/dtc-country-capture\.mjs\?v=6/);
   assert.equal(await read('dist/curadoria/clickbank-top-offers/dtc-country-capture.mjs'),await read('src/curadoria/clickbank-top-offers/dtc-country-capture.mjs'));
 });
 

@@ -71,3 +71,38 @@ test('first Billing backfill applies latest correction, preserves older sales, p
   await context.syncMccDiaryRowsToBilling({force:true});
   assert.equal(audit.length,auditCount);assert.equal(writes.length,writeCount,'repeated correction remains idempotent');
 });
+
+test('Billing repairs a missing account through an exact campaign link or unique same-day Diary evidence',async()=>{
+  const sourceSale={id:'sale_synthetic',billing_sale_id:'manual-sale:cmp_synthetic-sale',campanha_id:'campaign-synthetic',data:'2026-10-03',produto:'Synthetic Product Bundle',plataforma:'Demo Platform',conta:null,valor_brl:42.75,status:'provisoria'};
+  const target=normalizeSale({sale_id:sourceSale.billing_sale_id,sale_date:sourceSale.data,product:sourceSale.produto,platform:sourceSale.plataforma,account:'',value_brl:sourceSale.valor_brl,payment_status:'unknown',confirmation_status:'manual',campaign_id:sourceSale.campanha_id,source:'hub_manual_capture',source_ref:sourceSale.id});
+  const sameNameManual=normalizeSale({sale_id:'manual-unlinked-slimqa',sale_date:sourceSale.data,product:sourceSale.produto,platform:sourceSale.plataforma,account:'',value_brl:sourceSale.valor_brl,payment_status:'unknown',confirmation_status:'manual',source:'manual'});
+  const unrelatedManual=normalizeSale({sale_id:'manual-unrelated',sale_date:sourceSale.data,product:'Other Test Item',platform:'Demo Platform',account:'',value_brl:20,source:'manual'});
+  const rows=new Map([[target.sale_id,target],[sameNameManual.sale_id,sameNameManual],[unrelatedManual.sale_id,unrelatedManual]]),audit=[],meta=new Map([['mcc-backfill',{key:'mcc-backfill'}],['manual-backfill',{key:'manual-backfill'}]]),writes=[];
+  const fakeDatabase={close(){},transaction(_names,mode){
+    const tx={objectStore(name){
+      if(name==='billing_sales')return{get(id){const request={};queueMicrotask(()=>{request.result=rows.get(id);request.onsuccess?.()});return request},index(indexName){assert.equal(indexName,'sale_date');return{openCursor(date){const dated=[...rows.values()].filter(row=>row.sale_date===date),request={};let index=0;const advance=()=>queueMicrotask(()=>{const row=dated[index];if(!row){request.result=null;request.onsuccess?.();return}request.result={value:row,update(updated){writes.push(updated.sale_id);rows.set(updated.sale_id,updated)},continue(){index+=1;advance()}};request.onsuccess?.()});advance();return request}}},put(row){writes.push(row.sale_id);rows.set(row.sale_id,row)},add(row){writes.push(row.sale_id);rows.set(row.sale_id,row)}};
+      if(name==='billing_audit')return{add(row){audit.push(row)}};
+      if(name==='billing_meta')return{get(key){const request={};queueMicrotask(()=>{request.result=meta.get(key);request.onsuccess?.()});return request},put(row){meta.set(row.key,row)}};
+      throw Error('unexpected access: '+name);
+    },abort(){throw Error('unexpected transaction abort')}};
+    assert.ok(['readonly','readwrite'].includes(mode));setImmediate(()=>tx.oncomplete?.());return tx;
+  }};
+  const database={atualizado_em:'2026-10-20T12:00:00Z',campanhas:[{id:sourceSale.campanha_id,nome_mcc:'Synthetic Product campaign',nome_exibicao:'Synthetic Product',conta_id:'111-222-3333',conta_sufixo:'3333'}],vendas_provisorias:[sourceSale],diario:[{campanha_id:sourceSale.campanha_id,data:sourceSale.data,celulas:{F:{value:1}}}],manifesto_atual:{}};
+  const context=vm.createContext({state:{database},testedProductName:campaign=>campaign.nome_exibicao||campaign.nome_mcc,openLocalDb:async()=>fakeDatabase,getBillingStorage:async()=>BillingStorage,CampaignDatabase:{mccBillingSalesFromDiary:()=>[],mccBillingSalesFromManifest:()=>[]}});
+  const start=template.indexOf('    async function syncMccDiaryRowsToBilling('),end=template.indexOf('    async function persistProductCatalog(',start);
+  vm.runInContext("let billingDiarySyncVersion=null,billingDiarySyncPromise=null;const MCC_DIARY_BACKFILL_KEY='mcc-backfill',MCC_MANUAL_SALE_BACKFILL_KEY='manual-backfill';\n"+template.slice(start,end),context);
+  await context.syncMccDiaryRowsToBilling();
+  assert.equal(rows.get(target.sale_id).account,'111-222-3333','a venda histórica vinculada recebe a conta conhecida da campanha exata');
+  assert.equal(rows.get(target.sale_id).value_brl,42.75,'o vínculo não altera o valor da venda');
+  assert.equal(rows.get(target.sale_id).payment_status,'unknown','o vínculo não infere recebimento');
+  assert.equal(rows.get(sameNameManual.sale_id).account,'111-222-3333','a venda manual sem campanha recebe a conta única confirmada por conversão no Diário do mesmo dia');
+  assert.equal(rows.get(sameNameManual.sale_id).value_brl,42.75,'o rastreamento não altera o valor da venda manual');
+  assert.equal(rows.get(unrelatedManual.sale_id).account,'','produto diferente não recebe conta inferida');
+  assert.equal(writes.length,2,'somente as contas vazias com vínculo exato ou evidência única no Diário são corrigidas');
+  assert.equal(audit.length,2);
+  assert.equal(audit[0].action,'manual_sale_account_linked_from_campaign');
+  assert.equal(audit[1].action,'manual_sale_account_linked_from_unique_diary_match');
+  const auditCount=audit.length;
+  await context.syncMccDiaryRowsToBilling({force:true});
+  assert.equal(audit.length,auditCount,'a sincronização repetida não duplica auditoria');
+});

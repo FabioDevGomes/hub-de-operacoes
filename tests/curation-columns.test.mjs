@@ -73,8 +73,7 @@ test('all six curation list screens expose columns; new lists reuse global prese
   for(const [screen,html] of [['radar',radar],['clickbank',cb]]){
     const tableHead=html.match(/<table class="hub-curation-column-table hub-table-button-behavior"><thead><tr>([\s\S]*?)<\/tr><\/thead>/)[1];
     const sortKeys=[...tableHead.matchAll(/data-sort="([^"]+)"/g)].map(match=>match[1]);
-    // CB's Decision heading has no sort action, but occupies the same physical column.
-    if(screen==='clickbank')sortKeys.splice(13,0,'decision');
+    assert.equal(new Set(sortKeys).size,sortKeys.length,`${screen} headings must not duplicate physical columns`);
     assert.deepEqual(sortKeys,CURATION_COLUMNS[screen].columns.map(([key])=>key));
   }
   assert.equal(await read('dist/curadoria/curation-columns.mjs'),await read('src/curadoria/curation-columns.mjs'));

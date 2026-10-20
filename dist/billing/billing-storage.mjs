@@ -1,4 +1,4 @@
-import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=3';
+import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=4';
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
 export const BILLING_DB_NAME = DB_NAME;
@@ -116,6 +116,86 @@ export function upsertProvisionalSalesToTransaction(transaction, provisionalSale
   return entries.length;
 }
 
+export function linkProvisionalSaleAccountsToCampaignsToTransaction(transaction, provisionalSales, { now = new Date().toISOString() } = {}) {
+  const entries = (provisionalSales || []).map(source => {
+    const legacyId = String(source?.id || '').match(/^sale_([a-z0-9]+)$/i)?.[1];
+    const saleId = String(source?.billing_sale_id || '').trim() || (legacyId ? `manual-sale:cmp_${legacyId}` : '');
+    const sourceRef = String(source?.id || '').trim();
+    const campaignId = String(source?.campanha_id || '').trim();
+    const account = String(source?.conta || '').trim();
+    if (!saleId || !sourceRef || !campaignId || !account || source?.status === 'cancelada') return null;
+    return { saleId, sourceRef, campaignId, account };
+  }).filter(Boolean);
+  if (!entries.length) return 0;
+
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  for (const entry of entries) {
+    const request = sales.get(entry.saleId);
+    request.onsuccess = () => {
+      const existing = request.result;
+      if (!existing || existing.source !== 'hub_manual_capture' || existing.source_ref !== entry.sourceRef
+        || existing.campaign_id !== entry.campaignId || existing.active === false || existing.cancelled_at
+        || String(existing.account || '').trim()) return;
+
+      const updated = normalizeSale({ ...existing, account:entry.account, updated_at:now }, { now });
+      sales.put(updated);
+      audit.add(makeAudit('manual_sale_account_linked_from_campaign', 'sale', entry.saleId, [
+        { field:'account', old_value:existing.account || null, new_value:updated.account },
+      ], { now }));
+    };
+    request.onerror = () => transaction.abort();
+  }
+  return entries.length;
+}
+
+function accountMatchingProductKey(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function linkManualSaleAccountsFromDiaryToTransaction(transaction, diaryCandidates, { now = new Date().toISOString() } = {}) {
+  const candidatesByDate = new Map();
+  for (const source of diaryCandidates || []) {
+    const saleDate = String(source?.sale_date || source?.data || '').trim();
+    const productKey = accountMatchingProductKey(source?.product || source?.produto);
+    const account = String(source?.account || source?.conta || '').trim();
+    const conversions = Number(source?.conversion_count ?? source?.conversions);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate) || !productKey || !account || !Number.isFinite(conversions) || conversions <= 0) continue;
+    if (!candidatesByDate.has(saleDate)) candidatesByDate.set(saleDate, []);
+    candidatesByDate.get(saleDate).push({ productKey, account });
+  }
+  if (!candidatesByDate.size) return 0;
+
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  for (const [saleDate, candidates] of candidatesByDate) {
+    const request = sales.index('sale_date').openCursor(saleDate);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const existing = cursor.value;
+      const productKey = accountMatchingProductKey(existing?.product);
+      if (existing?.source === 'manual' && !String(existing.account || '').trim() && !String(existing.campaign_id || '').trim()
+        && !String(existing.source_ref || '').trim() && existing.active !== false && !existing.cancelled_at) {
+        const matches = candidates.filter(candidate => productKey === candidate.productKey || productKey.startsWith(`${candidate.productKey} `));
+        const specificity = matches.reduce((max, candidate) => Math.max(max, candidate.productKey.length), 0);
+        const accounts = new Set(matches.filter(candidate => candidate.productKey.length === specificity).map(candidate => candidate.account));
+        if (specificity && accounts.size === 1) {
+          const account = [...accounts][0];
+          const updated = normalizeSale({ ...existing, account, updated_at:now }, { now });
+          cursor.update(updated);
+          audit.add(makeAudit('manual_sale_account_linked_from_unique_diary_match', 'sale', existing.sale_id, [
+            { field:'account', old_value:existing.account || null, new_value:updated.account },
+          ], { now }));
+        }
+      }
+      cursor.continue();
+    };
+    request.onerror = () => transaction.abort();
+  }
+  return candidatesByDate.size;
+}
+
 export function correctProvisionalSaleValuesToTransaction(transaction, provisionalSales, { now = new Date().toISOString() } = {}) {
   const entries = (provisionalSales || []).map(source => {
     if (!source?.id || !source?.billing_sale_id || !Number.isFinite(Number(source.valor_brl)) || Number(source.valor_brl) <= 0) return null;
@@ -215,7 +295,7 @@ function reconcileMccAggregateForManualSale(transaction, sales, audit, manual, s
   request.onerror = () => transaction.abort();
 }
 
-export function upsertMccConversionSalesToTransaction(transaction, mccSales, { now = new Date().toISOString(), onlyIfMissing = false } = {}) {
+export function upsertMccConversionSalesToTransaction(transaction, mccSales, { now = new Date().toISOString(), onlyIfMissing = false, preserveExistingPlatform = false } = {}) {
   const entries = (mccSales || []).map(item => normalizeSale({ ...item, updated_at:now }, { now }));
   if (!entries.length) return 0;
   const sales = transaction.objectStore(BILLING_STORES.sales);
@@ -236,7 +316,13 @@ export function upsertMccConversionSalesToTransaction(transaction, mccSales, { n
       const manualValueOverride = existing?.source === 'mcc_conversion_aggregate' && existing.manual_value_override === true
         ? { value_brl:existing.value_brl, value_usd:existing.value_usd, manual_value_override:true }
         : {};
-      const updated = normalizeSale({ ...existing, ...incoming, ...paymentFields, ...manualValueOverride, updated_at:now }, { now });
+      const manualPlatformOverride = existing?.source === 'mcc_conversion_aggregate' && existing.manual_platform_override === true
+        ? { platform:existing.platform, mcc_source_platform:existing.mcc_source_platform || existing.platform, manual_platform_override:true }
+        : {};
+      const preservedPlatform = preserveExistingPlatform && existing?.source === 'mcc_conversion_aggregate' && existing.manual_platform_override !== true
+        ? { platform:existing.platform }
+        : {};
+      const updated = normalizeSale({ ...existing, ...incoming, ...paymentFields, ...manualValueOverride, ...manualPlatformOverride, ...preservedPlatform, updated_at:now }, { now });
       const fields = existing
         ? Object.keys(updated).filter(field => !['sale_id', 'created_at', 'updated_at'].includes(field) && !Object.is(existing[field] ?? null, updated[field] ?? null))
         : Object.keys(updated).filter(field => !['sale_id', 'created_at', 'updated_at'].includes(field));
@@ -545,14 +631,15 @@ export async function updateSale(saleId, patch, action = 'sale_updated') {
   });
 }
 
-export function updateMccConversionValuesToTransaction(tx, saleId, values = {}) {
-  const patch = { manual_value_override:true };
-  for (const field of ['value_brl', 'value_usd']) {
-    if (Object.hasOwn(values, field)) patch[field] = values[field];
-  }
-  if (!Object.hasOwn(patch, 'value_brl') && !Object.hasOwn(patch, 'value_usd')) {
+export function updateMccConversionValuesToTransaction(tx, saleId, values = {}, options = {}) {
+  const patch = {};
+  const valueFields = ['value_brl', 'value_usd'].filter(field => Object.hasOwn(values, field));
+  for (const field of valueFields) patch[field] = values[field];
+  const hasPlatform = Object.hasOwn(options, 'platform');
+  if (!valueFields.length && !hasPlatform) {
     throw new Error('Informe o valor corrigido em R$ ou US$.');
   }
+  if (hasPlatform && !String(options.platform ?? '').trim()) throw new Error('Informe uma plataforma.');
   const sales = tx.objectStore(BILLING_STORES.sales);
   const request = sales.get(saleId);
   const result = { updated:null, failure:null };
@@ -563,10 +650,18 @@ export function updateMccConversionValuesToTransaction(tx, saleId, values = {}) 
       tx.abort();
       return;
     }
+    if (hasPlatform) {
+      const platform = String(options.platform).trim();
+      const sourcePlatform = prior.manual_platform_override === true ? prior.mcc_source_platform || prior.platform : prior.platform;
+      patch.platform = platform;
+      patch.mcc_source_platform = sourcePlatform || null;
+      patch.manual_platform_override = platform !== sourcePlatform;
+    }
+    if (valueFields.length) patch.manual_value_override = true;
     const now = new Date().toISOString();
     try {
       result.updated = normalizeSale({ ...prior, ...patch, sale_id:prior.sale_id, created_at:prior.created_at, updated_at:now }, { now });
-      if (result.updated.value_brl == null && result.updated.value_usd == null) throw new Error('Informe o valor corrigido em R$ ou US$.');
+      if (valueFields.length && result.updated.value_brl == null && result.updated.value_usd == null) throw new Error('Informe o valor corrigido em R$ ou US$.');
     } catch (error) {
       result.failure = error;
       tx.abort();
@@ -577,17 +672,20 @@ export function updateMccConversionValuesToTransaction(tx, saleId, values = {}) 
       .map(field => ({ field, old_value:prior[field] ?? null, new_value:result.updated[field] ?? null }));
     if (!changes.length) return;
     sales.put(result.updated);
-    tx.objectStore(BILLING_STORES.audit).add(makeAudit('mcc_conversion_value_corrected', 'sale', saleId, changes, { now }));
+    const action = valueFields.length
+      ? (hasPlatform ? 'mcc_conversion_updated' : 'mcc_conversion_value_corrected')
+      : result.updated.manual_platform_override ? 'mcc_platform_overridden' : 'mcc_platform_override_removed';
+    tx.objectStore(BILLING_STORES.audit).add(makeAudit(action, 'sale', saleId, changes, { now }));
   };
   request.onerror = () => { result.failure = request.error; tx.abort(); };
   return result;
 }
 
-export async function updateMccConversionValues(saleId, values = {}) {
+export async function updateMccConversionValues(saleId, values = {}, options = {}) {
   const db = await openBillingDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction([BILLING_STORES.sales, BILLING_STORES.audit], 'readwrite');
-    const result = updateMccConversionValuesToTransaction(tx, saleId, values);
+    const result = updateMccConversionValuesToTransaction(tx, saleId, values, options);
     tx.oncomplete = () => { db.close(); resolve(result.updated); };
     tx.onerror = () => { db.close(); reject(result.failure || tx.error); };
     tx.onabort = () => { db.close(); reject(result.failure || tx.error || new Error('A correção do valor MCC não pôde ser salva.')); };

@@ -89,14 +89,14 @@ assert.ok(sidebarComponent.includes("key: 'macro'")&&(html+macroView).includes("
 const operationMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'operation'"),sidebarComponent.indexOf("{ id: 'analysis'"));
 const financeMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'finance'"),sidebarComponent.indexOf("{ id: 'curation'"));
 assert.ok(!operationMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'billing'")&&financeMenu.includes('Faturamento'),'Controle Macro e Faturamento devem estar no grupo Financeiro, não em Operação');
-assert.ok(html.includes("query:'billing'")&&html.includes('id="billingView"')&&html.includes("navId:'billingNav'")&&html.includes("import('./billing/billing-view.mjs?v=14')"),'rota ou view do Faturamento ausente');
+assert.ok(html.includes("query:'billing'")&&html.includes('id="billingView"')&&html.includes("navId:'billingNav'")&&html.includes("import('./billing/billing-view.mjs?v=19')"),'rota ou view do Faturamento ausente');
 assert.ok(html.includes('billing/billing-status.css?v=2')&&billingStatusCss.includes('.billing-payment-dialog'),'seletor de status e seus estilos precisam ser publicados pelo build');
 assert.ok(databaseModule.includes('mccBillingSalesFromDiary')&&html.includes('await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling()')&&html.includes('onlyIfMissing:true')&&html.includes('currentEntryIds.has(entry.sale_id)')&&html.includes("MCC_DIARY_BACKFILL_KEY='mcc-diary-backfill:v1'")&&html.includes("MCC_MANUAL_SALE_BACKFILL_KEY='mcc-manual-sale-backfill:current-period-v2'")&&html.includes("currentMccDates.has(String(sale.data))"),'Faturamento deve atualizar a base local antes da sincronização e fazer backfills idempotentes limitados às datas MCC atuais');
 assert.ok(html.includes("syncMccDiaryRowsToBilling({force:true,provisionalSaleIds:event.data.provisionalSaleIds||[]})"),'atualização MCC em outra aba deve sincronizar também as vendas manuais que acabaram de ser conciliadas');
-assert.ok(html.includes('const historicalEntries=backfillDone?[]:CampaignDatabase.mccBillingSalesFromDiary(database)')&&html.includes("CampaignDatabase.mccBillingSalesFromDiary(database,{manifestOnly:true})")&&html.includes('CampaignDatabase.mccBillingSalesFromManifest(database)'),'o backfill deve combinar o histórico, as datas atuais do Diário e os agregados explícitos do manifesto MCC');
+assert.ok(html.includes('const historicalEntries=backfillDone?[]:CampaignDatabase.mccBillingSalesFromDiary(database)')&&html.includes("CampaignDatabase.mccBillingSalesFromDiary(database,{manifestOnly:true})")&&html.includes('CampaignDatabase.mccBillingSalesFromManifest(database)')&&html.includes('preserveExistingPlatform:true'),'a reconciliação recupera registros MCC sem apagar plataformas existentes ao abrir Faturamento');
 assert.ok(!html.includes('provisionalBillingSales:reconciledSales')&&!html.includes('source:\'hub_manifest_upload\'')&&!html.includes('loadManifest(file)'),'a importação manual de manifesto deve ficar fora do Hub; atualização MCC usa o Preparador');
 assert.ok(databaseModule.includes('manifestOnly=false')&&databaseModule.includes("period==='d1'")&&databaseModule.includes('eligibleKeys'),'sincronização incremental deve reconhecer D−1 a partir do Diário e limitar reprocessamento às datas do manifesto atual');
-assert.ok(html.includes('function mccBillingSalesFromDiary')&&html.includes('function mccBillingSalesFromManifest')&&html.includes('mccBillingSalesFromDiary,mccBillingSalesFromManifest,salesAdjustmentMap')&&html.includes('correctMccConversionValue')&&html.includes('mcc_conversion_value_overrides'),'banco MCC deve expor correções compartilhadas persistentes para todos os consumidores');
+assert.ok(html.includes('function mccBillingSalesFromDiary')&&html.includes('function mccBillingSalesFromManifest')&&html.includes('mccBillingSalesFromDiary,mccBillingSalesFromManifest,inferAffiliatePlatformFromCampaignName,salesAdjustmentMap')&&html.includes('correctMccConversionValue')&&html.includes('mcc_conversion_value_overrides'),'banco MCC deve expor correções compartilhadas persistentes e inferência de plataforma');
 assert.ok(html.includes('await persistLocalBase({provisionalBillingSales:[result.sale]})'),'venda manual lançada no D0 precisa ser espelhada no Faturamento durante o salvamento');
 assert.ok(html.includes('storage/hub-database.js?v=1')&&html.includes('HubDatabase.openDatabase()')&&hubDatabase.includes("DB_VERSION = 5")&&['billing_sales','billing_movements','billing_audit','billing_meta','personal_finance_entries'].every(name=>hubDatabase.includes(name)),'upgrade aditivo das stores financeiras e pessoais deve vir da infraestrutura publicada');
 assert.ok(html.includes('payload.billing=await billing.exportBillingBundle()')&&html.includes('Object.hasOwn(parsed,\'billing\')'),'backup/exportação/restauração financeira não foi empacotada');
@@ -324,23 +324,26 @@ assert.ok(timeViewModule.includes('Domain.SYMPTOM_SCALE_OPTIONS.map(option=>`<op
 assert.ok(timeCss.includes('.time-daily-summary{display:flex;align-items:end;gap:8px;flex-wrap:nowrap}'),'data e indicadores diários não estão organizados na mesma linha');
 // Accounts is now a separately built UI/domain/CSS module, not inline implementation.
 assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-view.mjs?v=3')") &&
+  html.includes("import('./accounts/accounts-view.mjs?v=4')") &&
   html.includes('getSnapshot:()=>accountReportSnapshot(accountStatusStorage.read())'), 'Mapa por Conta não está conectado ao adaptador do Hub');
 assert.ok(html.includes('id="accountDirectoryView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-list-view.mjs?v=7')") &&
-  html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
+  html.includes("import('./accounts/accounts-list-view.mjs?v=15')") &&
+  html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('diario:state.database?.diario||[]') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
   sidebarComponent.includes("href: '/?view=account-directory'"), 'lista de contas não está conectada à sua rota do Hub');
 for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts-list-domain.mjs','accounts-list-view.mjs','accounts-list-storage.mjs','accounts.css']) {
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
-assert.ok(html.includes('accounts/accounts.css?v=10') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountView.includes('./accounts-domain.mjs?v=3') &&
-  accountListView.includes('./accounts-list-domain.mjs?v=2') && accountListView.includes('./accounts-list-storage.mjs?v=4'),
+assert.ok(html.includes('accounts/accounts.css?v=21') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountView.includes('./accounts-domain.mjs?v=4') &&
+  accountListView.includes('./accounts-list-domain.mjs?v=6') && accountListView.includes('./accounts-list-storage.mjs?v=4') && accountListView.includes("clicks:'Cliques totais'") && accountListView.includes("campaignCount:'Total de campanhas'") && accountListView.includes('data-account-directory-sort'),
   'dependências do Mapa por Conta e da nova lista não foram publicadas ou a faixa global continua visível em Contas');
-assert.ok(accountListView.includes('Data de início') && accountListView.includes('Status</th>') &&
-  accountListView.includes('E-mail</th>') && accountListView.includes('ID de perfil de pagamento</th>') && accountListView.includes('data-account-email-open') &&
-  accountListView.includes('accountDirectoryPaymentProfileDialog') && accountListView.includes('data-account-payment-profile-open') &&
-  accountListView.includes('class="hub-corner-edit"') && accountListView.includes('account-directory-email-value') &&
+assert.ok(accountListView.includes("startDate:'Data de início'") && accountListView.includes("status:'Status'") &&
+  accountListView.includes("email:'E-mail'") && accountListView.includes("paymentProfile:'ID de perfil de pagamento'") && accountListView.includes('data-account-column-resizer') &&
+  accountListView.includes('hub:account-directory:column-widths:v1') && accountListView.includes('data-account-edit-open') &&
+  accountListView.includes('accountDirectoryEditDialog') && accountListView.includes('accountDirectoryEmailForm') &&
+  accountListView.includes('accountDirectoryPaymentProfileForm') && !accountListView.includes('accountDirectoryEmailDialog') &&
+  !accountListView.includes('accountDirectoryPaymentProfileDialog') && !accountListView.includes('data-account-edit-field') && !accountListView.includes('data-account-email-open') &&
+  !accountListView.includes('data-account-payment-profile-open') && !accountListView.includes('class="hub-corner-edit"') && accountListView.includes('account-directory-email-value') &&
   accountListView.includes('data-account-status-choice="active"') && accountListView.includes('data-account-status-choice="suspended"') &&
   accountListView.includes('data-account-create-open') && accountListView.includes('accountDirectoryManualAccountDialog') &&
   accountListStorage.includes('hub:account-directory:manual-accounts:v1') && accountListStorage.includes('normalizeAccountDirectoryId(accountValue)') &&

@@ -52,7 +52,6 @@ não autorizam abrir/gravar bancos ou criar testes fictícios de comportamento.
    node scripts/set-version.mjs patch "Corrige a apresentação dos indicadores"
    node build.mjs
    node --test --test-concurrency=1
-   git diff --check
    ```
 
    O comando também aceita uma versão explícita maior, como `1.1.0`. Exige uma
@@ -60,8 +59,9 @@ não autorizam abrir/gravar bancos ou criar testes fictícios de comportamento.
    com a data de São Paulo. Não altera Git nem dados locais. Revise o texto
    gerado; não inclua informações privadas no histórico.
 4. Confira o selo/título no servidor local e revise os arquivos gerados em dist.
-5. Faça manualmente stage dos arquivos da entrega, um **novo commit** e push.
-   Inclua VERSION, README, CHANGELOG, fontes, testes e distribuição correspondente.
+5. Git fica fora do fluxo normal de implementação e validação. Stage, commit,
+   tag ou push só devem ocorrer mediante pedido explícito do usuário; este
+   procedimento não exige verificações Git.
 
 Enviar novamente o mesmo commit não cria uma versão nova: o conteúdo publicado
 continua igual. O README/CHANGELOG só aparecem atualizados no GitHub depois que

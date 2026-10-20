@@ -6,7 +6,7 @@ import {renderTemplate} from '../src/copy-ficha/copy-ficha-template.mjs';
 import {createFromStructuredContent} from '../src/copy-ficha/copy-ficha-workflow.mjs';
 import {buildStructuredFicha,structuredFichaFormat} from '../src/copy-ficha/copy-ficha-structured.mjs';
 import {createPresellFromFicha,parseFicha} from '../src/presell/presell-service.mjs?v=1';
-import {reportHtml} from '../src/presell/presell-report.mjs?v=1';
+import {reportHtml} from '../src/presell/presell-report.mjs?v=2';
 import {parseFicha as legacyParse,createPresellFromFicha as legacyCreate,reportHtml as legacyReport} from '../src/presell/presell-view.mjs';
 
 const fields={PRODUTO:'Synthetic board',TEXTO_EXPANDIR:'View details',TITULO_PRINCIPAL:'Synthetic offer',INTRODUCAO:'Text & accents: ação.',TITULO_OFERTA:'Overview',TEXTO_OFERTA:'Terms unchanged.',TITULO_PRECO:'Price',TEXTO_PRECO:'$10 per unit. Save 70%.',TITULO_FRETE_GARANTIA:'Shipping',TEXTO_FRETE_GARANTIA:'See checkout.',TITULO_FAQ:'FAQ'};
@@ -79,6 +79,13 @@ test('presentation keeps creation separate from restored questions and safely es
   for(const id of ['copyGenerateQuestions','copyOfferQuestions','copyQuestionsCopy'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   const report=reportHtml({overall:'BLOCKED',phases:[{name:'<unsafe>',report:{checks:[{status:'BLOCK',name:'field',message:'<img onerror=bad>'}]}}]});
   assert.ok(report.includes('&lt;img onerror=bad&gt;')&&!report.includes('<img'));
+  assert.ok(report.includes('BLOQUEADO')&&report.includes('&lt;unsafe&gt;'));
+  const noisy=reportHtml({overall:'BLOCKED',phases:[{name:'ficha',report:{checks:[
+    {status:'BLOCK',name:'validator-output',message:'A saída não pôde ser lida.',items:['ExitCode: 2','SYNTHETIC_DIAGNOSTIC: invalid report']},
+    {status:'PASS',name:'ficha',message:'Ficha JSON carregada.'}
+  ]}}]});
+  assert.ok(noisy.includes('Saída técnica do validador')&&noisy.includes('SYNTHETIC_DIAGNOSTIC: invalid report'));
+  assert.ok(noisy.includes('Ver 1 verificação(ões) aprovada(s)')&&noisy.includes('A validação terminou com uma falha técnica'));
   assert.equal(legacyParse,parseFicha);assert.equal(legacyCreate,createPresellFromFicha);assert.equal(legacyReport,reportHtml);
 });
 test('view delegates layout, drafts and workflow without importing another view or producing at mount time',async()=>{

@@ -2,6 +2,106 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.31.4] - 2026-10-20
+
+- Padroniza a ordem dos quadros Glimpse
+
+## [1.31.3] - 2026-10-20
+
+- Atualiza todos os produtos no resumo do Mapa por Conta
+
+## [1.31.2] - 2026-10-20
+
+- Esclarece diagnóstico da validação de Pre-Sell
+
+## [1.31.1] - 2026-10-20
+
+- Abre diretamente a edição dos dados da conta
+
+## [1.31.0] - 2026-10-20
+
+- Adiciona ordenação por coluna à tela Contas
+
+## [1.30.8] - 2026-10-20
+
+- Agrupa contas do Mapa por ID da MCC
+
+## [1.30.7] - 2026-10-20
+
+- Adiciona contagem automática de campanhas por conta
+
+## [1.30.6] - 2026-10-20
+
+- Centraliza impressões e adiciona cliques por conta
+
+## [1.30.5] - 2026-10-20
+
+- Expande a tabela Contas à largura disponível
+
+## [1.30.4] - 2026-10-20
+
+- Inferir ClickBank, Midi Scalers e Guru Media das siglas CB, MS e GM nas campanhas MCC
+
+## [1.30.3] - 2026-10-20
+
+- Adiciona impressões totais por conta na lista
+
+## [1.30.2] - 2026-10-20
+
+- Exibe equivalente em USD na tabela do Faturamento
+
+## [1.30.1] - 2026-10-20
+
+- Rastreamento de conta pelo Diário de Campanha
+
+## [1.30.0] - 2026-10-20
+
+- Persiste a ordenação da tabela Top Offers CB
+
+## [1.29.5] - 2026-10-20
+
+- Rastreia a conta das vendas vinculadas à campanha
+
+## [1.29.4] - 2026-10-20
+
+- Permite sobrescrever e auditar a plataforma dos agregados MCC no Faturamento
+
+## [1.29.3] - 2026-10-20
+
+- Remove negrito das candidatas negativas do ClickBank
+
+## [1.29.2] - 2026-10-20
+
+- Corrige atualização automática da coluna Glimpse e estado de Salvar
+
+## [1.29.1] - 2026-10-20
+
+- Padroniza o botão Adicionar conta
+
+## [1.29.0] - 2026-10-20
+
+- Centraliza a edição de e-mail e perfil de pagamento na lista Contas
+
+## [1.28.0] - 2026-10-20
+
+- Adiciona remoção de países manuais na ficha Top Offers CB
+
+## [1.27.0] - 2026-10-20
+
+- Adiciona redimensionamento de colunas na tela Contas
+
+## [1.26.6] - 2026-10-20
+
+- Corrige testes e isolamento de arquivos privados no Windows
+
+## [1.26.5] - 2026-10-20
+
+- Centraliza cabeçalhos e dados na tabela Contas
+
+## [1.26.4] - 2026-10-20
+
+- Deduplica horários repetidos no histórico de buscas do Google Trends
+
 ## [1.26.3] - 2026-10-20
 
 - Adiciona ID de perfil de pagamento à lista de contas

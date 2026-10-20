@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 
 function Get-PresellPowerShellExecutable {
     try {
@@ -69,6 +69,21 @@ function New-PresellWorkflowPhase {
     }
 }
 
+function Get-PresellOutputExcerpt {
+    param([string]$Text, [int]$Limit = 900)
+
+    $excerpt = ([string]$Text -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Last 8) -join ' | '
+    $excerpt = ($excerpt -replace '\s+', ' ').Trim()
+    if ([string]::IsNullOrWhiteSpace($excerpt)) { return 'O processo não escreveu saída.' }
+    if ($excerpt.Length -gt $Limit) { return '[trecho final, truncado] ' + $excerpt.Substring($excerpt.Length - $Limit) }
+    return $excerpt
+}
+
+function ConvertTo-PresellPowerShellLiteral {
+    param([AllowEmptyString()][string]$Value)
+    return "'" + $Value.Replace("'", "''") + "'"
+}
+
 function Invoke-PresellValidator {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
@@ -89,22 +104,84 @@ function Invoke-PresellValidator {
     }
 
     $powerShellExecutable = Get-PresellPowerShellExecutable
-    $output = & $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1 | Out-String
-    $exitCode = $LASTEXITCODE
+    $previousOutputEncoding = [Console]::OutputEncoding
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
-        $report = $output | ConvertFrom-Json
+        # Set UTF-8 in the validator process itself and in this process's decoder.
+        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        # Native stderr becomes PowerShell ErrorRecords. Keep it non-terminating here so
+        # stdout can be parsed independently and both streams remain available to the log.
+        $ErrorActionPreference = 'Continue'
+        $argumentLiterals = @($Arguments | ForEach-Object { ConvertTo-PresellPowerShellLiteral ([string]$_) }) -join ', '
+        $command = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)' + [Environment]::NewLine +
+            ('$scriptPath = ' + (ConvertTo-PresellPowerShellLiteral $ScriptPath)) + [Environment]::NewLine +
+            ('$arguments = @(' + $argumentLiterals + ')') + [Environment]::NewLine +
+            '& $scriptPath @arguments' + [Environment]::NewLine +
+            'exit $LASTEXITCODE'
+        $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+        $captured = @(& $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        [Console]::OutputEncoding = $previousOutputEncoding
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $output = ($captured | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | Out-String)
+    $stderr = ($captured | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object {
+        if ($null -ne $_.Exception -and -not [string]::IsNullOrWhiteSpace($_.Exception.Message)) { $_.Exception.Message }
+        else { [string]$_ }
+    } | Out-String).Trim()
+    try {
+        $report = $output | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $report -or $null -eq $report.PSObject.Properties['overall'] -or $null -eq $report.PSObject.Properties['checks']) {
+            throw 'O JSON retornado não contém os campos esperados overall e checks.'
+        }
     }
     catch {
+        $parseError = $_.Exception.Message
+        $details = @(
+            "Validador: $ScriptPath"
+            "ExitCode: $exitCode"
+            "Falha ao interpretar o relatório: $parseError"
+            "Saída padrão: $(Get-PresellOutputExcerpt $output)"
+            "Erro padrão: $(Get-PresellOutputExcerpt $stderr)"
+        )
         return [PSCustomObject]@{
             module  = 'workflow'
             overall = 'BLOCKED'
             checks  = @([PSCustomObject]@{
                 name = 'validator-output'
                 status = 'BLOCK'
-                message = 'Validador produziu uma saída que não pôde ser interpretada.'
-                items = @($ScriptPath, "ExitCode: $exitCode")
+                message = 'A validação não retornou um relatório legível. O código de saída, sem esse relatório, não confirma se houve uma regra de conteúdo violada ou uma falha interna; a aprovação não foi confirmada.'
+                items = $details
             })
         }
+    }
+
+    $expectedExitCode = switch ($report.overall) {
+        'BLOCKED' { 2 }
+        'PASS_WITH_WARNINGS' { 1 }
+        default { 0 }
+    }
+    if ($exitCode -ne $expectedExitCode) {
+        $report.checks = @($report.checks) + @([PSCustomObject]@{
+            name = 'validator-exit-code'
+            status = 'BLOCK'
+            message = 'O código de saída do processo não corresponde ao estado informado no relatório.'
+            items = @("ExitCode: $exitCode", "Esperado para $($report.overall): $expectedExitCode")
+        })
+        $report.overall = 'BLOCKED'
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        $stderrCheck = [PSCustomObject]@{
+            name = 'validator-stderr'
+            status = 'WARN'
+            message = 'O validador também escreveu uma mensagem no fluxo de erro; o relatório JSON foi lido, mas revise o diagnóstico técnico.'
+            items = @((Get-PresellOutputExcerpt $stderr))
+        }
+        $report.checks = @($report.checks) + @($stderrCheck)
+        if ($report.overall -eq 'PASS') { $report.overall = 'PASS_WITH_WARNINGS' }
     }
     return $report
 }

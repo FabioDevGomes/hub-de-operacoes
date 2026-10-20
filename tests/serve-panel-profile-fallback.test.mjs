@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import { request } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -12,6 +13,23 @@ import { test } from 'node:test';
 const scriptsRoot = fileURLToPath(new URL('../scripts/', import.meta.url));
 const engineRoot = fileURLToPath(new URL('../presell-engine/', import.meta.url));
 const windowsOnly = { skip: process.platform !== 'win32', timeout: 20_000 };
+
+function requestHealth(port) {
+  return new Promise((resolve, reject) => {
+    const req = request({ hostname:'127.0.0.1', port, path:'/api/presell/health', method:'GET' }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode !== 200) return reject(new Error(`Health retornou HTTP ${response.statusCode}: ${body}`));
+        try { resolve(JSON.parse(body)); } catch (error) { reject(error); }
+      });
+    });
+    req.setTimeout(1000, () => req.destroy(new Error('Timeout ao consultar health local.')));
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 async function makeFixture() {
   const root = await mkdtemp(join(tmpdir(), 'hub-startup-test-'));
@@ -45,6 +63,7 @@ test('Windows PowerShell starts the standalone server with a supplied profile en
   });
   let output = '';
   let launchError;
+  let lastRequestError;
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
   child.on('error', error => { launchError = error; });
@@ -63,12 +82,11 @@ test('Windows PowerShell starts the standalone server with a supplied profile en
     assert.ifError(launchError);
     assert.equal(child.exitCode, null, output);
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/presell/health`, { signal: AbortSignal.timeout(1000) });
-      if (response.ok) health = await response.json();
-    } catch {}
+      health = await requestHealth(port);
+    } catch (error) { lastRequestError = error; }
     if (!health) await delay(100);
   }
-  assert.deepEqual(health, { presellApi: 'v2', runtime: 'powershell', engine: 'embedded' }, output);
+  assert.deepEqual(health, { presellApi: 'v2', runtime: 'powershell', engine: 'embedded' }, `${output}\n${lastRequestError || ''}`);
 });
 
 test('a browser launch failure does not misreport a healthy server as an occupied port', windowsOnly, async t => {

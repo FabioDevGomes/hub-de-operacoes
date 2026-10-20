@@ -1,4 +1,4 @@
-export function mountGlimpseHeaderAction({frame,panel,backButton,actionButton=null,finishLabel='Concluir',showSavedFeedback=false}) {
+export function mountGlimpseHeaderAction({frame,panel,backButton,actionButton=null,finishLabel='Concluir',showSavedFeedback=false,disableUntilSaveRetry=false}) {
   if (!frame || !panel || (!actionButton&&!backButton?.parentElement)) return null;
 
   const parent = actionButton?.parentElement || backButton.parentElement;
@@ -32,13 +32,17 @@ export function mountGlimpseHeaderAction({frame,panel,backButton,actionButton=nu
     savedMessage.hidden = true;
   };
 
-  let pendingFinish = false;
+  let pendingFinish = false,saveRetryRequired = false;
   backButton.classList.add('glimpse-host-back');
   const syncVisibility = () => {
     const active = !panel.classList.contains('hidden');
     if (!actionButton) finishButton.hidden = !active;
     if (active&&!actionButton) finishButton.disabled = false;
-    if (active&&actionButton) finishButton.disabled = pendingFinish;
+    if (active&&actionButton) finishButton.disabled = pendingFinish||(disableUntilSaveRetry&&!saveRetryRequired);
+    if(disableUntilSaveRetry){
+      finishButton.title=saveRetryRequired?'O autosalvamento falhou. Clique para tentar novamente.':'A análise Glimpse é salva automaticamente.';
+      finishButton.setAttribute('aria-label',saveRetryRequired?'Tentar salvar a análise Glimpse novamente':'Análise Glimpse salva automaticamente');
+    }
     else clearSavedMessage();
   };
   const requestFinish = () => {
@@ -57,7 +61,8 @@ export function mountGlimpseHeaderAction({frame,panel,backButton,actionButton=nu
       if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.type !== 'hub-glimpse-save-result') return;
       const active = !panel.classList.contains('hidden');
       pendingFinish = false;
-      if (active || !actionButton) finishButton.disabled = false;
+      if(disableUntilSaveRetry)saveRetryRequired=event.data.saved!==true;
+      if (active || !actionButton) syncVisibility();
       if (active&&event.data.saved === true) {
         savedMessage.textContent = 'Salvo';
         savedMessage.hidden = false;

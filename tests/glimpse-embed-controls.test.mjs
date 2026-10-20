@@ -97,7 +97,8 @@ test('o helper preserva compatibilidade com o rótulo e o fluxo legado Concluir'
   parent.append(backButton);
   const panel = new Element();
   const messages = [];
-  const frame = {contentWindow:{postMessage:(message,target)=>messages.push({message,target})}};
+  const child = {postMessage:(message,target)=>messages.push({message,target})};
+  const frame = {contentWindow:child};
   globalThis.document = {createElement:()=>new Element()};
   globalThis.window = {addEventListener(){}};
   globalThis.location = {origin:'http://127.0.0.1:8765'};
@@ -118,25 +119,38 @@ test('o helper preserva compatibilidade com o rótulo e o fluxo legado Concluir'
 
 test('Top Offers CB conecta o Glimpse ao botão compartilhado sem duplicá-lo na barra',()=>{
   const original = Object.fromEntries(['document','window','location','MutationObserver'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
+  const listeners = new Map();
   const parent = new Element(), actionButton = new Element(), backButton = new Element();
   parent.append(actionButton,backButton);
   const panel = new Element();
   const messages = [];
-  const frame = {contentWindow:{postMessage:(message,target)=>messages.push({message,target})}};
+  const child = {postMessage:(message,target)=>messages.push({message,target})};
+  const frame = {contentWindow:child};
   globalThis.document = {createElement:()=>new Element()};
-  globalThis.window = {addEventListener(){}};
+  globalThis.window = {addEventListener:(name,listener)=>listeners.set(name,listener)};
   globalThis.location = {origin:'http://127.0.0.1:8765'};
   globalThis.MutationObserver = class { constructor(callback){this.callback=callback} observe(){} };
   try {
-    const button = mountGlimpseHeaderAction({frame,panel,backButton,actionButton,finishLabel:'Salvar',showSavedFeedback:true});
+    const button = mountGlimpseHeaderAction({frame,panel,backButton,actionButton,finishLabel:'Salvar',showSavedFeedback:true,disableUntilSaveRetry:true});
     assert.equal(button,actionButton,'a função conecta o botão que já pertence à barra');
     assert.equal(parent.children.length,3,'a barra recebe só o feedback textual; nenhum segundo botão é criado');
     const status=parent.querySelector('.glimpse-host-saved');
     assert.equal(parent.children.indexOf(status),0,'a confirmação fica antes de Salvar');
     assert.equal(parent.children.indexOf(actionButton),1,'o botão permanece depois da área reservada para feedback');
+    assert.equal(button.disabled,true,'Glimpse salva automaticamente e não oferece um Salvar redundante');
+    assert.match(button.title,/salva automaticamente/);
+    const onMessage=listeners.get('message');
+    onMessage({origin:location.origin,source:child,data:{type:'hub-glimpse-save-result',saved:true}});
+    assert.equal(button.disabled,true,'o botão continua desabilitado após o autosave');
+    assert.equal(parent.querySelector('.glimpse-host-saved').textContent,'Salvo');
+    onMessage({origin:location.origin,source:child,data:{type:'hub-glimpse-save-result',saved:false}});
+    assert.equal(button.disabled,false,'uma falha de autosave habilita a tentativa manual');
+    assert.match(button.title,/falhou/);
     button.listeners.get('click')();
     assert.equal(button.disabled,true);
     assert.deepEqual(messages.at(-1),{message:{type:'hub-glimpse-finish'},target:location.origin});
+    onMessage({origin:location.origin,source:child,data:{type:'hub-glimpse-save-result',saved:true}});
+    assert.equal(button.disabled,true,'uma nova gravação bem-sucedida desabilita a repetição');
   } finally {
     for (const [key,descriptor] of Object.entries(original)) {
       if (descriptor) Object.defineProperty(globalThis,key,descriptor);

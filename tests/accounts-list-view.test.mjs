@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import {accountsListTemplate, mount} from '../src/accounts/accounts-list-view.mjs';
+import {ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY, accountsListTemplate, mount} from '../src/accounts/accounts-list-view.mjs';
 import {ACCOUNT_DIRECTORY_EMAIL_KEY, ACCOUNT_DIRECTORY_MANUAL_ACCOUNTS_KEY, ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY, ACCOUNT_DIRECTORY_STATUS_KEY} from '../src/accounts/accounts-list-storage.mjs';
 
 function mockRoot() {
@@ -8,21 +9,26 @@ function mockRoot() {
     accountDirectoryCount:{textContent:''},
     accountDirectoryActiveCount:{textContent:''},
     accountDirectorySuspendedCount:{textContent:''},
+    accountDirectoryWidthsMessage:{textContent:''},
     accountDirectoryBody:{innerHTML:''},
+    accountDirectoryTable:{attributes:new Map(),setAttribute(key,value){this.attributes.set(key,String(value));},getAttribute(key){return this.attributes.get(key)||null;},removeAttribute(key){this.attributes.delete(key);}},
+    accountDirectoryHeaders:[],
+    accountDirectoryCells:[],
+    accountDirectoryResizers:[],
+    accountDirectorySortButtons:[],
+    accountDirectorySortHeaders:{},
     accountDirectoryStatusDialog:{open:false,handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},showModal(){this.open=true;},close(){this.open=false;this.handlers.close?.();}},
     accountDirectoryStatusAccount:{textContent:''},
     accountDirectoryStatusError:{textContent:''},
-    accountDirectoryEmailDialog:{open:false,handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},showModal(){this.open=true;},close(){this.open=false;this.handlers.close?.();}},
-    accountDirectoryEmailAccount:{textContent:''},
-    accountDirectoryEmailTitle:{textContent:''},
-    accountDirectoryEmailInput:{value:'',focus(){}},
+    accountDirectoryEditDialog:{open:false,handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},showModal(){this.open=true;},close(){this.open=false;this.handlers.close?.();}},
+    accountDirectoryEditAccount:{textContent:''},
+    accountDirectoryEmailInput:{value:'',handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},focus(){}},
     accountDirectoryEmailError:{textContent:''},
+    accountDirectoryEmailSaved:{textContent:''},
     accountDirectoryEmailForm:{handlers:{},addEventListener(type,handler){this.handlers[type]=handler;}},
-    accountDirectoryPaymentProfileDialog:{open:false,handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},showModal(){this.open=true;},close(){this.open=false;this.handlers.close?.();}},
-    accountDirectoryPaymentProfileAccount:{textContent:''},
-    accountDirectoryPaymentProfileTitle:{textContent:''},
-    accountDirectoryPaymentProfileInput:{value:'',focus(){}},
+    accountDirectoryPaymentProfileInput:{value:'',handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},focus(){}},
     accountDirectoryPaymentProfileError:{textContent:''},
+    accountDirectoryPaymentProfileSaved:{textContent:''},
     accountDirectoryPaymentProfileForm:{handlers:{},addEventListener(type,handler){this.handlers[type]=handler;}},
     accountDirectoryManualAccountDialog:{open:false,handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},showModal(){this.open=true;},close(){this.open=false;this.handlers.close?.();}},
     accountDirectoryManualAccountInput:{value:'',focus(){}},
@@ -32,15 +38,22 @@ function mockRoot() {
   const listeners = {};
   const root = {
     innerHTML:'',
-    querySelector(selector){return fields[selector.slice(1)];},
+    classList:{values:new Set(),add(value){this.values.add(value);},remove(value){this.values.delete(value);}},
+    querySelector(selector){return selector==='.account-directory-table'?fields.accountDirectoryTable:fields[selector.slice(1)];},
     addEventListener(type,listener){listeners[type]=listener;},
+    querySelectorAll(selector){if(selector==='[data-account-column-resizer]')return fields.accountDirectoryResizers;if(selector==='[data-account-directory-sort]')return fields.accountDirectorySortButtons;if(selector==='.account-directory-table th[data-column]')return fields.accountDirectoryHeaders;if(selector==='.account-directory-table td[data-column]')return fields.accountDirectoryCells;if(selector==='.account-directory-table th[data-column],.account-directory-table td[data-column]')return [...fields.accountDirectoryHeaders,...fields.accountDirectoryCells];return [];},
     click(selector,dataset={}){
       const event={defaultPrevented:false,preventDefault(){this.defaultPrevented=true;},target:{closest(candidate){return candidate===selector?{dataset}:null;}}};
       listeners.click(event);
       return event;
     }
   };
-  root.querySelectorAll = () => [];
+  for(const key of ['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','status']){
+    const attributes=new Map(),headerAttributes=new Map(),arrow={textContent:'↕'};
+    const header={dataset:{column:key},setAttribute(name,value){headerAttributes.set(name,String(value));},getAttribute(name){return headerAttributes.get(name)||null;}};
+    const button={dataset:{accountDirectorySort:key},setAttribute(name,value){attributes.set(name,String(value));},getAttribute(name){return attributes.get(name)||null;},querySelector(selector){return selector==='.account-directory-sort-arrow'?arrow:null;},closest(selector){return selector==='th[data-column]'?header:null;}};
+    fields.accountDirectorySortButtons.push(button);fields.accountDirectorySortHeaders[key]={header,button,arrow};
+  }
   return {root,fields,listeners};
 }
 
@@ -61,24 +74,150 @@ const snapshot = () => ({
   managers:[{id:'999-888-7777',nome:'MCC principal'}]
 });
 
-test('account directory shows the manual e-mail column and persists an explicitly entered e-mail', () => {
+function openAccountEdit(root, fields, account) {
+  root.click('[data-account-edit-open]',{accountEditOpen:account});
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
+  assert.equal(fields.accountDirectoryEditAccount.textContent,`Conta ${account}`);
+}
+
+test('account directory centers the table and all numeric totals', () => {
+  const css = readFileSync(new URL('../src/accounts/accounts.css', import.meta.url), 'utf8');
+  assert.match(css,/\.account-directory-panel\{width:100%;max-width:none;box-sizing:border-box\}/,'o painel da tabela ocupa toda a largura disponível do conteúdo');
+  assert.match(css,/\.account-directory-table th,\.account-directory-table td\{[^}]*text-align:center(?:;|\})/);
+  assert.match(css,/\.account-directory-table \.account-directory-impressions-cell,\.account-directory-table \.account-directory-clicks-cell,\.account-directory-table \.account-directory-campaign-count-cell\{text-align:center!important;font-variant-numeric:tabular-nums\}/);
+  assert.match(css,/\.account-directory-table \.account-directory-sort:focus-visible\{outline:2px solid #4fa7ff;outline-offset:-1px\}/,'ordenação mantém foco de teclado visível');
+});
+
+test('account directory sorts by numeric columns, toggles direction, exposes aria-sort and does not persist sorting',()=>{
+  const database={
+    campaigns:[
+      {id:'campaign-a',nome_mcc:'Campanha A',conta_id:'111-222-3333'},
+      {id:'campaign-b',nome_mcc:'Campanha B',conta_id:'222-333-4444'},
+      {id:'campaign-c',nome_mcc:'Campanha C',conta_id:'333-444-5555'}
+    ],
+    diario:[
+      {campanha_id:'campaign-a',data:'2026-10-18',celulas:{B:{value:1000}}},
+      {campanha_id:'campaign-b',data:'2026-10-18',celulas:{B:{value:20}}}
+    ]
+  };
+  const storage=memoryStorage();storage.setItem(ACCOUNT_DIRECTORY_STATUS_KEY,JSON.stringify({'111-222-3333':'suspended','222-333-4444':'active'}));
+  const savedPreferences=JSON.stringify([...storage.values]),{root,fields}=mockRoot();
+  const controller=mount({root,getSnapshot:()=>database,format:{date:value=>value},storage});controller.render();
+  const accounts=()=>[...fields.accountDirectoryBody.innerHTML.matchAll(/<td data-column="account">([^<]+)<\/td>/g)].map(match=>match[1]);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="impressions"[^>]*><button type="button" class="account-directory-sort" data-account-directory-sort="impressions"/);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="edit">Editar<span/,'a coluna Editar não recebe ordenação');
+  root.click('[data-account-directory-sort]',{accountDirectorySort:'impressions'});
+  assert.deepEqual(accounts(),['222-333-4444','111-222-3333','333-444-5555'],'a ordenação numérica crescente mantém ausentes por último');
+  assert.equal(fields.accountDirectorySortHeaders.impressions.header.getAttribute('aria-sort'),'ascending');
+  assert.equal(fields.accountDirectorySortHeaders.impressions.button.getAttribute('aria-pressed'),'true');
+  assert.equal(fields.accountDirectorySortHeaders.impressions.arrow.textContent,'↑');
+  root.click('[data-account-directory-sort]',{accountDirectorySort:'impressions'});
+  assert.deepEqual(accounts(),['111-222-3333','222-333-4444','333-444-5555'],'o segundo clique inverte para decrescente');
+  assert.equal(fields.accountDirectorySortHeaders.impressions.header.getAttribute('aria-sort'),'descending');
+  root.click('[data-account-directory-sort]',{accountDirectorySort:'status'});
+  assert.deepEqual(accounts(),['222-333-4444','111-222-3333','333-444-5555'],'status não definido permanece no fim');
+  root.click('[data-account-directory-sort]',{accountDirectorySort:'status'});
+  assert.deepEqual(accounts(),['111-222-3333','222-333-4444','333-444-5555'],'status ausente continua no fim ao inverter a direção');
+  controller.render();
+  assert.deepEqual(accounts(),['111-222-3333','222-333-4444','333-444-5555'],'a ordenação permanece ao atualizar a apresentação');
+  assert.equal(JSON.stringify([...storage.values]),savedPreferences,'ordenar não grava preferências nem dados da conta');
+});
+
+test('account directory add action reuses the dark standard button without changing its dialog action', () => {
+  assert.match(accountsListTemplate,/id="accountDirectoryAddButton" type="button" class="btn hub-standard-action account-directory-add-button" data-account-create-open/);
+  const css = readFileSync(new URL('../src/accounts/accounts.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css,/\.account-directory-add-button\s*\{/);
+});
+
+function resizeFixture(fields, widths=[140,205,230,210,120,150,130,158,136,110]) {
+  const makeClassList=()=>({values:new Set(),add(value){this.values.add(value);},remove(value){this.values.delete(value);}});
+  const element=(dataset,width=0)=>{
+    const attributes=new Map();
+    return {dataset,style:{},classList:makeClassList(),setAttribute(key,value){attributes.set(key,String(value));},getAttribute(key){return attributes.get(key)||null;},removeAttribute(key){attributes.delete(key);},getBoundingClientRect(){return {width};}};
+  };
+  const columns=['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','status','edit'];
+  fields.accountDirectoryHeaders=columns.map((column,index)=>element({column},widths[index]));
+  fields.accountDirectoryCells=columns.map(column=>element({column}));
+  fields.accountDirectoryResizers=columns.map(accountColumnResizer=>element({accountColumnResizer}));
+  return fields.accountDirectoryResizers[0];
+}
+
+test('account directory resizes columns by pointer and persists a screen-local preference without changing account data',()=>{
+  const storage=memoryStorage(),data=JSON.stringify(snapshot()),{root,fields,listeners}=mockRoot(),handle=resizeFixture(fields);
+  const controller=mount({root,getSnapshot:snapshot,format:{date:value=>value},storage});controller.render();
+  assert.equal(storage.values.size,0,'montar e renderizar não grava larguras');
+  assert.match(root.innerHTML,/data-account-column-resizer="paymentProfile" role="separator" tabindex="0"/);
+  handle.setPointerCapture=id=>{handle.pointerId=id};handle.hasPointerCapture=id=>handle.pointerId===id;handle.releasePointerCapture=()=>{handle.pointerId=null};
+  const event=(x,target=handle)=>({button:0,pointerId:7,clientX:x,target:{closest(selector){return selector==='[data-account-column-resizer]'?target:null;}},preventDefault(){},stopPropagation(){}});
+  assert.equal(typeof listeners.pointerdown,'function');
+  listeners.pointerdown(event(100));assert.equal(handle.pointerId,7,'o handle inicia a captura do ponteiro');listeners.pointermove(event(180));
+  assert.equal(fields.accountDirectoryHeaders[0].getAttribute('style'),'width:220px');
+  assert.equal(fields.accountDirectoryCells[0].getAttribute('style'),'width:220px');
+  assert.equal(storage.values.size,0,'arrastar não grava até soltar');
+  listeners.pointerup(event(180));
+  const saved=JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY));
+  assert.equal(saved.account,220);assert.equal(saved.paymentProfile,230);assert.equal(storage.values.size,1);
+  assert.equal(JSON.stringify(snapshot()),data,'redimensionamento não altera dados da conta');
+
+  const remount=mockRoot(),remountHandle=resizeFixture(remount.fields,[100,100,100,100,100,100,100,100,100,100]);
+  mount({root:remount.root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
+  assert.equal(remount.fields.accountDirectoryHeaders[0].getAttribute('style'),'width:220px','a largura é restaurada ao abrir novamente');
+  assert.equal(remount.fields.accountDirectoryHeaders[2].getAttribute('style'),'width:230px','as outras colunas mantêm a largura congelada');
+  assert.equal(remountHandle.getAttribute('aria-valuenow'),'220');
+});
+
+test('adding metrics and edit columns preserves existing six-column width preferences',()=>{
+  const storage=memoryStorage();
+  storage.setItem(ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY,JSON.stringify({account:170,email:215,paymentProfile:240,mcc:205,startDate:135,status:142}));
+  const {root,fields}=mockRoot();resizeFixture(fields);
+  mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
+  assert.equal(fields.accountDirectoryHeaders[0].getAttribute('style'),'width:170px');
+  assert.equal(fields.accountDirectoryHeaders[5].getAttribute('style'),'width:150px','a coluna nova recebe uma largura mínima legível');
+  assert.equal(fields.accountDirectoryHeaders[6].getAttribute('style'),'width:130px','Cliques recebe largura inicial própria');
+  assert.equal(fields.accountDirectoryHeaders[7].getAttribute('style'),'width:158px','Total de campanhas recebe largura inicial própria');
+  assert.equal(fields.accountDirectoryHeaders[8].getAttribute('style'),'width:142px','a largura de Status salva anteriormente é preservada');
+  assert.equal(fields.accountDirectoryHeaders[9].getAttribute('style'),'width:104px','Editar mantém a largura mínima inicial');
+  assert.equal(storage.values.size,1,'a preferência antiga não é regravada só por abrir a tela');
+});
+
+test('account directory column resizing supports keyboard, cancellation, width limits and blocked storage feedback',()=>{
+  const storage=memoryStorage({failWrite:true}),{root,fields,listeners}=mockRoot(),handle=resizeFixture(fields);
+  mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
+  handle.setPointerCapture=id=>{handle.pointerId=id};handle.hasPointerCapture=id=>handle.pointerId===id;handle.releasePointerCapture=()=>{handle.pointerId=null};
+  const event=(x,target=handle)=>({button:0,pointerId:3,clientX:x,target:{closest(selector){return selector==='[data-account-column-resizer]'?target:null;}},preventDefault(){},stopPropagation(){}});
+  listeners.pointerdown(event(100));listeners.pointermove(event(-500));
+  assert.equal(handle.getAttribute('aria-valuenow'),'132','a largura mínima é aplicada');
+  listeners.pointercancel(event(-500));assert.equal(fields.accountDirectoryTable.getAttribute('style'),null,'cancelar restaura o layout anterior');
+  listeners.keydown({...event(),key:'ArrowRight',shiftKey:true});
+  assert.equal(handle.getAttribute('aria-valuenow'),'170','Shift + seta ajusta 30 px');
+  assert.match(fields.accountDirectoryWidthsMessage.textContent,/nesta sessão/,'falha de gravação é informada sem descartar o ajuste');
+  assert.equal(storage.values.size,0);
+});
+
+test('account directory opens both editable fields directly and saves them independently', () => {
   const storage = memoryStorage();
   const {root,fields} = mockRoot();
   const controller = mount({root,getSnapshot:snapshot,format:{date:value=>value},storage});
   controller.render();
 
-  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,6);
-  assert.match(root.innerHTML,/accountDirectoryEmailDialog/);
-  assert.match(root.innerHTML,/accountDirectoryPaymentProfileDialog/);
+  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,10);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="impressions" aria-sort="none" title="Soma das impressões diárias registradas no Diário de campanha para esta conta"><button[^>]*data-account-directory-sort="impressions"[^>]*>.*?Impressões totais/s);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="clicks" aria-sort="none" title="Soma dos cliques diários registrados no Diário de campanha para esta conta"><button[^>]*data-account-directory-sort="clicks"[^>]*>.*?Cliques totais/s);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="campaignCount" aria-sort="none" title="Quantidade de campanhas distintas registradas nesta conta"><button[^>]*data-account-directory-sort="campaignCount"[^>]*>.*?Total de campanhas/s);
+  assert.match(root.innerHTML,/id="accountDirectoryEditDialog"/);
+  assert.match(root.innerHTML,/id="accountDirectoryEmailForm"[\s\S]*id="accountDirectoryEmailInput"[\s\S]*Salvar e-mail/);
+  assert.match(root.innerHTML,/id="accountDirectoryPaymentProfileForm"[\s\S]*id="accountDirectoryPaymentProfileInput"[\s\S]*Salvar ID/);
+  assert.doesNotMatch(root.innerHTML,/accountDirectoryEmailDialog|accountDirectoryPaymentProfileDialog|data-account-edit-field/,'não existe seletor nem segundo diálogo');
   assert.match(root.innerHTML,/accountDirectoryManualAccountDialog/);
   assert.match(root.innerHTML,/data-account-create-open aria-haspopup="dialog" aria-controls="accountDirectoryManualAccountDialog">Adicionar conta/);
   assert.equal(storage.values.size,0,'abrir e renderizar não infere nem grava e-mails');
-  assert.match(fields.accountDirectoryBody.innerHTML,/<td class="account-directory-email-cell hub-edit-host"><span class="account-directory-email-value" title="E-mail não definido">Não definido<\/span><a href="#" class="hub-corner-edit" data-account-email-open="111-222-3333"[^>]*>Cadastrar<\/a><\/td>/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/<td class="account-directory-payment-profile-cell hub-edit-host"><span class="account-directory-payment-profile-value" title="ID de perfil de pagamento não definido">Não definido<\/span><a href="#" class="hub-corner-edit" data-account-payment-profile-open="111-222-3333"[^>]*>Cadastrar<\/a><\/td>/);
-  assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/account-directory-email-button|<button[^>]*data-account-email-open/,'e-mail e ação de cadastro não usam aparência de botão');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="E-mail não definido">Não definido<\/span><\/td>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="ID de perfil de pagamento não definido">Não definido<\/span><\/td>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/data-column="edit" class="account-directory-edit-cell"><button[^>]*data-account-edit-open="111-222-3333"[^>]*>Editar<\/button>/);
+  assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/data-account-email-open|data-account-payment-profile-open|hub-corner-edit/,'os links de edição não ficam mais dentro das colunas de dados');
   const empty = mockRoot();
   mount({root:empty.root,getSnapshot:()=>({}),format:{date:value=>value},storage}).render();
-  assert.match(empty.fields.accountDirectoryBody.innerHTML,/colspan="6"/,'estado vazio acompanha as seis colunas');
+  assert.match(empty.fields.accountDirectoryBody.innerHTML,/colspan="10"/,'estado vazio acompanha as dez colunas');
 
   root.click('[data-account-create-open]');
   assert.equal(fields.accountDirectoryManualAccountDialog.open,true);
@@ -92,51 +231,73 @@ test('account directory shows the manual e-mail column and persists an explicitl
   fields.accountDirectoryManualAccountForm.handlers.submit({preventDefault(){}});
   assert.equal(fields.accountDirectoryManualAccountDialog.open,false);
   assert.deepEqual(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_MANUAL_ACCOUNTS_KEY)),['777-888-9999']);
-  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span><a href="#" class="hub-corner-edit" data-account-email-open="777-888-9999"[^>]*>Cadastrar<\/a>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span>/);
   assert.match(fields.accountDirectoryBody.innerHTML,/data-status="unset" data-account-status-open="777-888-9999"[^>]*>Não definido<\/button>/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/data-account-email-open="777-888-9999"[^>]*aria-label="Cadastrar e-mail da conta 777-888-9999"/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/data-account-email-open="777-888-9999"[^>]*>[\s\S]*?<td title="Não identificada">Não identificada<\/td><td class="account-directory-date">—/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/data-account-edit-open="777-888-9999"[^>]*aria-label="Editar e-mail ou ID de perfil de pagamento da conta 777-888-9999"/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="mcc" title="Não identificada">Não identificada<\/td><td data-column="startDate" class="account-directory-date">—/);
 
-  const emailOpenEvent = root.click('[data-account-email-open]',{accountEmailOpen:'111-222-3333'});
-  assert.equal(emailOpenEvent.defaultPrevented,true,'o link abre o diálogo sem navegar para o topo da página');
-  assert.equal(fields.accountDirectoryEmailDialog.open,true);
-  assert.equal(fields.accountDirectoryEmailAccount.textContent,'Conta 111-222-3333');
-  assert.equal(fields.accountDirectoryEmailTitle.textContent,'Cadastrar e-mail');
+  openAccountEdit(root,fields,'111-222-3333');
+  assert.equal(fields.accountDirectoryEmailInput.value,'');
+  assert.equal(fields.accountDirectoryPaymentProfileInput.value,'');
   fields.accountDirectoryEmailInput.value='owner+ads@example.com';
   fields.accountDirectoryEmailForm.handlers.submit({preventDefault(){}});
 
-  assert.equal(fields.accountDirectoryEmailDialog.open,false);
-  assert.match(fields.accountDirectoryBody.innerHTML,/<span class="account-directory-email-value" title="owner\+ads@example\.com">owner\+ads@example\.com<\/span><a href="#" class="hub-corner-edit" data-account-email-open="111-222-3333"[^>]*>Editar<\/a>/);
+  assert.equal(fields.accountDirectoryEditDialog.open,true,'salvar um campo mantém os outros disponíveis no mesmo diálogo');
+  assert.equal(fields.accountDirectoryEmailSaved.textContent,'E-mail salvo.');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="owner\+ads@example\.com">owner\+ads@example\.com<\/span><\/td>/);
+  fields.accountDirectoryEmailInput.value='draft@example.com';
+  fields.accountDirectoryEmailInput.handlers.input();
+  assert.equal(fields.accountDirectoryEmailSaved.textContent,'','editar novamente limpa a confirmação antiga');
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['111-222-3333'],'owner+ads@example.com','editar não salva sem acionar o botão');
+  fields.accountDirectoryEmailInput.value='owner+ads@example.com';
+  fields.accountDirectoryEmailInput.handlers.input();
   assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['111-222-3333'],'owner+ads@example.com');
   assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_MANUAL_ACCOUNTS_KEY))[0],'777-888-9999');
   assert.equal(storage.getItem(ACCOUNT_DIRECTORY_STATUS_KEY),null,'adicionar conta ou e-mail não define o status');
 
-  const remounted = mockRoot();
-  mount({root:remounted.root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
-  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/<span class="account-directory-email-value" title="owner\+ads@example\.com">owner\+ads@example\.com<\/span><a href="#" class="hub-corner-edit" data-account-email-open="111-222-3333"[^>]*>Editar<\/a>/);
-  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/777-888-9999/,'a conta cadastrada permanece na lista após reabrir');
-  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/data-status="unset"[^>]*>Não definido<\/button>/);
-  root.click('[data-account-email-open]',{accountEmailOpen:'111-222-3333'});
-  assert.equal(fields.accountDirectoryEmailTitle.textContent,'Alterar e-mail');
-  assert.equal(fields.accountDirectoryEmailInput.value,'owner+ads@example.com');
-
-  const profileOpenEvent = root.click('[data-account-payment-profile-open]',{accountPaymentProfileOpen:'111-222-3333'});
-  assert.equal(profileOpenEvent.defaultPrevented,true,'o link do perfil abre o diálogo sem navegação');
-  assert.equal(fields.accountDirectoryPaymentProfileDialog.open,true);
-  assert.equal(fields.accountDirectoryPaymentProfileAccount.textContent,'Conta 111-222-3333');
-  assert.equal(fields.accountDirectoryPaymentProfileTitle.textContent,'Cadastrar ID de perfil de pagamento');
   fields.accountDirectoryPaymentProfileInput.value='profile-123456789012';
   fields.accountDirectoryPaymentProfileForm.handlers.submit({preventDefault(){}});
-  assert.equal(fields.accountDirectoryPaymentProfileDialog.open,false);
-  assert.match(fields.accountDirectoryBody.innerHTML,/<span class="account-directory-payment-profile-value" title="profile-123456789012">profile-123456789012<\/span><a href="#" class="hub-corner-edit" data-account-payment-profile-open="111-222-3333"[^>]*>Editar<\/a>/);
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
+  assert.equal(fields.accountDirectoryPaymentProfileSaved.textContent,'ID salvo.');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="profile-123456789012">profile-123456789012<\/span><\/td>/);
   assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY))['111-222-3333'],'profile-123456789012');
   assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['111-222-3333'],'owner+ads@example.com','e-mail permanece independente do ID de pagamento');
 
+  const remounted = mockRoot();
+  mount({root:remounted.root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
+  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/<td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="owner\+ads@example\.com">owner\+ads@example\.com<\/span><\/td>/);
+  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/777-888-9999/,'a conta cadastrada permanece na lista após reabrir');
+  assert.match(remounted.fields.accountDirectoryBody.innerHTML,/data-status="unset"[^>]*>Não definido<\/button>/);
   const profileRemount = mockRoot();
   mount({root:profileRemount.root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
-  profileRemount.root.click('[data-account-payment-profile-open]',{accountPaymentProfileOpen:'111-222-3333'});
-  assert.equal(profileRemount.fields.accountDirectoryPaymentProfileTitle.textContent,'Alterar ID de perfil de pagamento');
+  openAccountEdit(profileRemount.root,profileRemount.fields,'111-222-3333');
   assert.equal(profileRemount.fields.accountDirectoryPaymentProfileInput.value,'profile-123456789012');
+  assert.equal(profileRemount.fields.accountDirectoryEmailInput.value,'owner+ads@example.com');
+});
+
+test('account directory recalculates metrics and distinct campaign totals when the base gains rows',()=>{
+  const database={
+    campaigns:[{id:'campaign-a',nome_mcc:'Produto A',conta_id:'111-222-3333'}],
+    diario:[{campanha_id:'campaign-a',data:'2026-10-18',celulas:{B:{value:1200},C:{value:42}}}]
+  };
+  const {root,fields}=mockRoot();
+  const controller=mount({root,getSnapshot:()=>database,format:{date:value=>value,num:value=>new Intl.NumberFormat('pt-BR').format(value)},storage:memoryStorage()});
+  controller.render();
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="impressions" class="account-directory-impressions-cell">1\.200<\/td>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="clicks" class="account-directory-clicks-cell">42<\/td>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="campaignCount" class="account-directory-campaign-count-cell">1<\/td>/);
+  database.diario[0].celulas.B.value=1225;database.diario[0].celulas.C.value=45;
+  controller.render();
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="impressions" class="account-directory-impressions-cell">1\.225<\/td>/,'novos parciais do mesmo dia substituem o valor atualizado, sem somá-lo novamente');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="clicks" class="account-directory-clicks-cell">45<\/td>/,'cliques acompanham a atualização da mesma linha diária');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="campaignCount" class="account-directory-campaign-count-cell">1<\/td>/,'novos dias da mesma campanha não aumentam o total');
+  database.diario.push({campanha_id:'campaign-a',data:'2026-10-19',celulas:{B:{value:35},C:{value:7}}});
+  database.campaigns.push({id:'campaign-b',nome_mcc:'Produto B',conta_id:'111-222-3333'});
+  database.diario.push({campanha_id:'campaign-b',data:'2026-10-19',celulas:{B:{value:15},C:{value:3}}});
+  controller.render();
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="impressions" class="account-directory-impressions-cell">1\.275<\/td>/,'a soma se atualiza na renderização após uma nova carga');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="clicks" class="account-directory-clicks-cell">55<\/td>/,'a soma de cliques se atualiza após uma nova carga');
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="campaignCount" class="account-directory-campaign-count-cell">2<\/td>/,'uma campanha nova eleva a contagem automaticamente');
 });
 
 test('selecting a status closes the popup, updates its row, and survives remounting', () => {
@@ -193,16 +354,16 @@ test('an invalid or failed e-mail save keeps the dialog open and leaves the valu
   const storage = memoryStorage({failWrite:true});
   const {root,fields} = mockRoot();
   mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
-  root.click('[data-account-email-open]',{accountEmailOpen:'444-555-6666'});
+  openAccountEdit(root,fields,'444-555-6666');
   fields.accountDirectoryEmailInput.value='not-an-email';
   fields.accountDirectoryEmailForm.handlers.submit({preventDefault(){}});
-  assert.equal(fields.accountDirectoryEmailDialog.open,true);
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
   assert.match(fields.accountDirectoryEmailError.textContent,/e-mail válido/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span><a href="#" class="hub-corner-edit" data-account-email-open="444-555-6666"[^>]*>Cadastrar<\/a>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span>/);
 
   fields.accountDirectoryEmailInput.value='owner@example.com';
   fields.accountDirectoryEmailForm.handlers.submit({preventDefault(){}});
-  assert.equal(fields.accountDirectoryEmailDialog.open,true);
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
   assert.match(fields.accountDirectoryEmailError.textContent,/Não foi possível salvar o e-mail/);
   assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/<span>owner@example\.com<\/span>/);
   assert.equal(storage.values.size,0);
@@ -212,16 +373,16 @@ test('an invalid or failed payment profile ID save keeps the dialog open and lea
   const storage = memoryStorage({failWrite:true});
   const {root,fields} = mockRoot();
   mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
-  root.click('[data-account-payment-profile-open]',{accountPaymentProfileOpen:'444-555-6666'});
+  openAccountEdit(root,fields,'444-555-6666');
   fields.accountDirectoryPaymentProfileInput.value='';
   fields.accountDirectoryPaymentProfileForm.handlers.submit({preventDefault(){}});
-  assert.equal(fields.accountDirectoryPaymentProfileDialog.open,true);
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
   assert.match(fields.accountDirectoryPaymentProfileError.textContent,/ID de perfil de pagamento/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-payment-profile-value" title="ID de perfil de pagamento não definido">Não definido<\/span><a href="#" class="hub-corner-edit" data-account-payment-profile-open="444-555-6666"[^>]*>Cadastrar<\/a>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-payment-profile-value" title="ID de perfil de pagamento não definido">Não definido<\/span>/);
 
   fields.accountDirectoryPaymentProfileInput.value='profile-987654321098';
   fields.accountDirectoryPaymentProfileForm.handlers.submit({preventDefault(){}});
-  assert.equal(fields.accountDirectoryPaymentProfileDialog.open,true);
+  assert.equal(fields.accountDirectoryEditDialog.open,true);
   assert.match(fields.accountDirectoryPaymentProfileError.textContent,/Não foi possível salvar o ID do perfil de pagamento/);
   assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/profile-987654321098/);
   assert.equal(storage.values.size,0);

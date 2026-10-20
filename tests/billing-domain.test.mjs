@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {
-  aggregateBillingRevenueByDate, aggregateBy, aggregateCashBy, BILLING_MANUAL_STATUS_OPTIONS, BILLING_STATUSES, compareRows, dateRangeFor, dateRangeForMonth, displayProductName, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
-  normalizeMovement, normalizeSale, paginate, parseBrazilianDate, provisionalSaleToBilling, summarizeCash, summarizeCompetence, totalSalesCount,
+  aggregateBillingRevenueByDate, aggregateBy, aggregateCashBy, billingValueInBrlForPresentation, billingValueInUsdForPresentation, BILLING_MANUAL_STATUS_OPTIONS, BILLING_STATUSES, compareRows, dateRangeFor, dateRangeForMonth, displayProductName, filterRows, formatBrazilianDate, mccConversionSaleId, monthlyFinancialSeries,
+  normalizeMovement, normalizeSale, paginate, parseBrazilianDate, provisionalSaleToBilling, resolveMccSalePlatforms, summarizeCash, summarizeCompetence, totalSalesCount,
 } from '../src/billing/billing-domain.mjs';
 
 const sales = [
@@ -62,7 +62,16 @@ const linkedConfirmedSale=provisionalSaleToBilling({id:'sale-local',billing_sale
 assert.equal(linkedConfirmedSale.confirmation_status,'confirmed');
 assert.equal(linkedConfirmedSale.confirmation_source,'MCC D−1');
 assert.equal(linkedConfirmedSale.payment_status,'pending','confirmação MCC não significa pagamento recebido');
-const mccAggregate=normalizeSale({sale_id:mccConversionSaleId('cmp-mcc','2026-09-24'),sale_date:'2026-09-24',product:'Produto MCC',platform:'Google Ads MCC',value_brl:120,payment_status:'pending',confirmation_status:'confirmed',confirmation_source:'MCC D−1',source:'mcc_conversion_aggregate',source_period:'d1',conversion_count:2});
+const mccAggregate=normalizeSale({sale_id:mccConversionSaleId('cmp-mcc','2026-09-24'),sale_date:'2026-09-24',product:'Produto MCC',platform:'Google Ads MCC',value_brl:120,payment_status:'pending',confirmation_status:'confirmed',confirmation_source:'MCC D−1',campaign_id:'cmp-mcc',source:'mcc_conversion_aggregate',source_period:'d1',conversion_count:2});
+const campaignCatalog=[{id:'cmp-mcc',nome_mcc:'Campanha antiga (GM-BB-US)'}];
+const platformResolver=name=>name.includes('(GM-')?'Guru Media':name.includes('(MS-')?'Midi Scalers':name.includes('(CB-')?'ClickBank':null;
+const resolvedMcc=resolveMccSalePlatforms([mccAggregate],campaignCatalog,platformResolver);
+assert.equal(resolvedMcc[0].platform,'Guru Media','registro MCC antigo exibe a plataforma inferida mesmo que tenha sido salvo com Google Ads MCC');
+assert.equal(mccAggregate.platform,'Google Ads MCC','a resolução visual não altera o registro persistido');
+const overrideMcc=normalizeSale({...mccAggregate,sale_id:'manual-override-mcc',platform:'Parceiro escolhido',manual_platform_override:true});
+assert.equal(resolveMccSalePlatforms([overrideMcc],campaignCatalog,platformResolver)[0].platform,'Parceiro escolhido','plataforma ajustada manualmente não é substituída pela inferência');
+const nonMccSale=normalizeSale({sale_id:'non-mcc-platform',sale_date:'2026-09-24',product:'Produto',platform:'Parceiro',campaign_id:'cmp-mcc',source:'manual'});
+assert.equal(resolveMccSalePlatforms([nonMccSale],campaignCatalog,platformResolver)[0],nonMccSale,'a inferência não altera vendas que não vieram do agregado MCC');
 assert.equal(mccAggregate.conversion_count,2);
 assert.equal(totalSalesCount([mccAggregate]),2,'total histórico conta conversões agregadas MCC, não só as linhas');
 assert.equal(mccAggregate.confirmation_status,'confirmed');
@@ -92,6 +101,18 @@ const cashByMonth = aggregateCashBy(movements.filter(move => move.effective_date
 assert.equal(cashByMonth.length, 1);
 assert.equal(cashByMonth[0].key, '2026-09');
 const chartSales = [...sales, normalizeSale({ sale_id:'s5', sale_date:'2026-09-25', product:'Produto D', platform:'Hotmart', value_brl:null, value_usd:10 })];
+assert.deepEqual(billingValueInBrlForPresentation(chartSales.at(-1),5.1),{amount:51,source:'usd'},'a tabela pode apresentar o mesmo equivalente em reais sem alterar o valor original USD');
+assert.deepEqual(billingValueInBrlForPresentation(normalizeSale({sale_id:'s-usd-no-rate-display',sale_date:'2026-10-11',product:'Produto USD',platform:'ClickBank',value_usd:10})),{amount:null,source:'usd'},'sem taxa válida, o equivalente de USD fica indisponível em vez de virar zero');
+assert.deepEqual(billingValueInBrlForPresentation(normalizeSale({sale_id:'s-usd-zero-display',sale_date:'2026-10-11',product:'Produto USD zero',platform:'ClickBank',value_usd:0})),{amount:0,source:'usd'},'zero USD continua equivalente válido mesmo sem taxa');
+assert.deepEqual(billingValueInBrlForPresentation(normalizeSale({sale_id:'s-dual-display',sale_date:'2026-10-11',product:'Produto em duas moedas',platform:'ClickBank',value_brl:125,value_usd:24.5}),5.1),{amount:125,source:'brl'},'quando BRL foi informado, ele prevalece sem conversão ou soma com USD');
+const brlOnlySale = normalizeSale({sale_id:'s-brl-display',sale_date:'2026-10-11',product:'Produto BRL',platform:'ClickBank',value_brl:299.99});
+const brlOnlySaleBeforePresentation = JSON.stringify(brlOnlySale);
+assert.deepEqual(billingValueInUsdForPresentation(brlOnlySale,5.1),{amount:299.99/5.1,source:'brl'},'a tabela pode apresentar o equivalente em dólares de uma venda BRL pela cotação operacional');
+assert.equal(JSON.stringify(brlOnlySale),brlOnlySaleBeforePresentation,'calcular o equivalente USD é somente apresentação e não altera o lançamento');
+assert.deepEqual(billingValueInUsdForPresentation(normalizeSale({sale_id:'s-brl-no-rate-display',sale_date:'2026-10-11',product:'Produto BRL',platform:'ClickBank',value_brl:100})),{amount:null,source:'brl'},'sem taxa válida, o equivalente de BRL fica indisponível em vez de inventar valor');
+assert.deepEqual(billingValueInUsdForPresentation(normalizeSale({sale_id:'s-brl-zero-display',sale_date:'2026-10-11',product:'Produto BRL zero',platform:'ClickBank',value_brl:0})),{amount:0,source:'brl'},'zero BRL continua equivalente válido mesmo sem taxa');
+assert.deepEqual(billingValueInUsdForPresentation(normalizeSale({sale_id:'s-dual-usd-display',sale_date:'2026-10-11',product:'Produto em duas moedas',platform:'ClickBank',value_brl:125,value_usd:24.5}),5.1),{amount:24.5,source:'usd'},'quando USD original está informado, ele prevalece sem conversão ou soma com BRL');
+assert.deepEqual(billingValueInUsdForPresentation(normalizeSale({sale_id:'s-no-currency-display',sale_date:'2026-10-11',product:'Produto sem valor',platform:'ClickBank'}),5.1),{amount:null,source:null},'sem valor nas duas moedas, a apresentação permanece vazia');
 const chartManualSale = provisionalSaleToBilling({id:'sale-chart',billing_sale_id:'manual-sale:cmp-chart',campanha_id:'cmp-chart',data:'2026-09-29',produto:'Produto E',plataforma:'FlowTracking',valor_brl:235.12,status:'provisoria'});
 const chartConfirmedManualSale = provisionalSaleToBilling({id:'sale-chart-confirmed',billing_sale_id:'manual-sale:cmp-chart-confirmed',campanha_id:'cmp-chart',data:'2026-09-30',produto:'Produto F',plataforma:'FlowTracking',valor_brl:20,status:'conciliada'});
 const monthlyCompetence = monthlyFinancialSeries({ sales:[...chartSales, chartManualSale, chartConfirmedManualSale], movements, start:'2026-08-20', end:'2026-10-02', exchangeRate:5.1 });

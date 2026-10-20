@@ -856,7 +856,7 @@
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
-        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=9'):null;
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=12'):null;
         window.OverviewBaseSessionCache?.invalidate();
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         window.OverviewBaseSessionCache?.invalidate();

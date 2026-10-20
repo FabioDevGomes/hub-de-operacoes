@@ -6,6 +6,11 @@ const source=await readFile(new URL('../src/database.js',import.meta.url),'utf8'
 const context=vm.createContext({window:{},structuredClone});
 vm.runInContext(source,context);
 const db=context.window.CampaignDatabase;
+assert.equal(db.inferAffiliatePlatformFromCampaignName('20/09 - Produto (CB-BB-US) 85% - US$ 135'),'ClickBank','campanha com o marcador CB preenche ClickBank');
+assert.equal(db.inferAffiliatePlatformFromCampaignName('04/10 - Produto (MS-BB-DE) 80% - US$ 60'),'Midi Scalers','campanha com o marcador MS preenche Midi Scalers');
+assert.equal(db.inferAffiliatePlatformFromCampaignName('20/09 - Produto (GM-BB-CH/DE) 95% - US$ 45'),'Guru Media','campanha com o marcador GM preenche Guru Media');
+assert.equal(db.inferAffiliatePlatformFromCampaignName('Produto MSBs sem separador de campanha'),null,'sigla dentro de outra palavra não deve ser classificada por engano');
+assert.equal(db.inferAffiliatePlatformFromCampaignName('Produto GM2 sem hífen de rede'),null,'sigla sem o delimitador de rede não deve ser classificada');
 assert.equal(db.accountDomain('7890 - 4ª CNPJ .exemplo.shop'),'.exemplo.shop','o domínio com ponto inicial deve ser extraído do nome completo da conta');
 assert.equal(db.accountDomain('7890 - CNPJ .empresa.co.uk'),'.empresa.co.uk','extensões compostas também devem ser reconhecidas');
 assert.equal(db.accountDomain('7441- PP[Des] .dominio-teste.shop\u202c - Google Ads'),'.dominio-teste.shop','marcadores Unicode invisíveis no texto da MCC não devem impedir a extração do domínio');
@@ -97,11 +102,12 @@ assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_
 assert.deepEqual(smallerRows.map(row=>row.cells.B.value),[40,250]);
 assert.deepEqual(appliedSmallerSnapshots.base.diario.filter(row=>row.campanha_id===appliedSmallerSnapshots.base.campanhas[0].id).sort((a,b)=>a.data.localeCompare(b.data)).map(row=>[row.celulas.B.value,row.celulas.C.value]),[[40,4],[250,22]],'o Diário também deve substituir valores MCC da mesma data por novos valores menores');
 
-const mccBillingCampaign='Campanha agregada MCC';
+const mccBillingCampaign='Campanha agregada (GM-BB-US)';
 const mccBillingManifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-09-24']}},campanhas:[{nome_campanha_exato:mccBillingCampaign,metricas_D_zero:{data:{valor:'2026-09-24'},conversoes:{valor:2},valor_conversao:{valor:100},moeda:{valor:'BRL'}}}]};
 const mccBillingRow=source=>({date:source.metricas_D_zero.data.valor,period:'d0',cells:{A:{value:46288},F:{value:source.metricas_D_zero.conversoes.valor},P:{value:source.metricas_D_zero.valor_conversao.valor}}});
 const provisionalMccBilling=db.importManifest(db.create(),mccBillingManifest,mccBillingRow);
 assert.equal(provisionalMccBilling.mccBillingSales.length,1);
+assert.equal(provisionalMccBilling.mccBillingSales[0].platform,'Guru Media','novo faturamento MCC usa a plataforma inferida do nome completo da campanha');
 assert.equal(provisionalMccBilling.mccBillingSales[0].confirmation_status,'provisional');
 assert.equal(provisionalMccBilling.mccBillingSales[0].conversion_count,2);
 assert.equal(provisionalMccBilling.mccBillingSales[0].value_brl,100);
@@ -140,6 +146,7 @@ diaryBillingBase.diario.push({campanha_id:diaryBillingBase.campanhas[0].id,data:
 const diaryBillingSales=db.mccBillingSalesFromDiary(diaryBillingBase);
 const recoveredDiarySale=diaryBillingSales.find(item=>item.sale_date==='2026-09-23');
 assert.equal(recoveredDiarySale.confirmation_status,'provisional','conversão MCC D0 já existente no Diário entra no Faturamento como provisória');
+assert.equal(recoveredDiarySale.platform,'Guru Media','conversões recuperadas do Diário MCC também recebem a plataforma da campanha');
 assert.equal(recoveredDiarySale.payment_status,'pending','venda encontrada no Diário não é tratada como recebida');
 assert.equal(recoveredDiarySale.conversion_count,1);
 assert.equal(recoveredDiarySale.value_brl,229.5,'comissão agregada do Diário é preservada em reais');

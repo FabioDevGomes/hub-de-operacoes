@@ -96,3 +96,13 @@ export function mergeDtcCountries(existing, identity, capture) {
   };
   return {ok:true, record, addedCount:capture.countries.filter(code => !previous.includes(code)).length, existingCount:previous.length};
 }
+
+export function removeManualCountry(existing, identity, value) {
+  const code = String(value || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return {ok:false, message:'Informe um código de país com duas letras.'};
+  const countries = Array.isArray(existing?.manualCountries) ? existing.manualCountries : [];
+  if (!countries.includes(code)) return {ok:false, message:'Este país não está cadastrado manualmente.'};
+  const captured = Array.isArray(existing?.dtcCountryCapture?.countries) ? existing.dtcCountryCapture.countries : [];
+  if (captured.includes(code)) return {ok:false, message:'Este país também está presente na captura DTC e será preservado.'};
+  return {ok:true, record:{...existing, ...identity, manualCountries:countries.filter(country => country !== code)}};
+}

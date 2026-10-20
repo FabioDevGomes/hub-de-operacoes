@@ -83,21 +83,37 @@ export function accountMccHeaderLabels(rows) {
   ]));
 }
 
-function accountMccPriority(account, labels) {
-  if (account === 'Sem conta') return 3;
-  const normalized = String(labels.get(account) ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-  // If an account is explicitly associated with both MCCs, Nutra wins so it
-  // remains at the end instead of being pulled forward by the e-com label.
-  if (normalized.includes('nutra')) return 2;
-  if (normalized.includes('ecom')) return 0;
-  return 1;
+function accountMccHeaderIds(rows) {
+  const idsByAccount = new Map();
+  for (const row of rows) {
+    if (!row.account || row.account === 'Sem conta') continue;
+    const rawId = String(row.mccId ?? '').trim();
+    if (!rawId) continue;
+    const digits = rawId.replace(/\D/g, '');
+    const id = /^\d{10}$/.test(digits) ? digits : rawId.toLocaleLowerCase('pt-BR');
+    const ids = idsByAccount.get(row.account) || new Set();
+    ids.add(id);
+    idsByAccount.set(row.account, ids);
+  }
+  return new Map([...idsByAccount].map(([account, ids]) => [
+    account,
+    [...ids].sort(compare)
+  ]));
 }
 
-function sortAccountsByMcc(accounts, labels) {
-  return [...accounts].sort((a, b) =>
-    accountMccPriority(a, labels) - accountMccPriority(b, labels) || compare(a, b));
+function sortAccountsByMcc(accounts, idsByAccount) {
+  const group = account => {
+    if (account === 'Sem conta') return {priority:2, id:''};
+    // An account linked to multiple managers uses the first normalized MCC ID
+    // as its stable primary group; its displayed labels still include all MCCs.
+    const id = idsByAccount.get(account)?.[0];
+    return id ? {priority:0, id} : {priority:1, id:''};
+  };
+  return [...accounts].sort((a, b) => {
+    const left = group(a), right = group(b);
+    return left.priority - right.priority ||
+      (left.priority === 0 ? compare(left.id, right.id) : 0) || compare(a, b);
+  });
 }
 
 export function buildAccountReport(allRows, filters, accountStatuses = {}) {
@@ -108,15 +124,16 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
       .filter(account => account && account !== 'Sem conta'))]
     : [];
   const accountMccLabels = accountMccHeaderLabels(allRows);
+  const accountMccIds = accountMccHeaderIds(allRows);
   for (const account of activeAccounts) if (!accountMccLabels.has(account)) accountMccLabels.set(account, 'MCC não identificada');
-  const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts]), accountMccLabels);
+  const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts]), accountMccIds);
   const productOptions = [...new Set(allRows.map(row => row.product))].sort(compare);
   const account = accountOptions.includes(filters.account) ? filters.account : 'all';
   const product = productOptions.includes(filters.product) ? filters.product : 'all';
   const accountRows = filterAccountCpaCoverageRows(allRows, filters.status, account);
   const rows = accountRows.filter(row => product === 'all' || row.product === product);
   const activeAccountColumns = account === 'all' ? activeAccounts : activeAccounts.filter(value => value === account);
-  const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns]), accountMccLabels);
+  const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns]), accountMccIds);
   const groups = new Map();
   for (const row of rows) {
     const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, rows:[]};
@@ -131,9 +148,12 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
   const ranges = [...new Set(accountRows.map(row => row.cpa.range).filter(range => range != null))].sort((a, b) => a - b);
   const coverage = accountCpaCoverage(rows, ranges);
   const paused = rows.filter(row => row.status === 'pausada').length;
-  const bars = [...products].sort((a, b) =>
-    new Set(b.rows.map(row => row.account)).size - new Set(a.rows.map(row => row.account)).size ||
-    a.name.localeCompare(b.name, 'pt-BR')).slice(0, 8);
+  const bars = products.map(item => ({
+    key:item.key,
+    name:item.name,
+    count:new Set(item.rows.map(row => String(row.account ?? '').trim())
+      .filter(account => account && account !== 'Sem conta')).size
+  })).sort((a, b) => b.count - a.count || compare(a.name, b.name));
   return {
     accountOptions, productOptions, account, product, rows, accounts, products, selected,
     accountMccLabels,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {summarizeCompetence,monthlyFinancialSeries} from '../src/billing/billing-domain.mjs';
-import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, updateMccConversionValues, updateMccConversionValuesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
+import {normalizeSale,summarizeCompetence,monthlyFinancialSeries} from '../src/billing/billing-domain.mjs';
+import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, linkManualSaleAccountsFromDiaryToTransaction, linkProvisionalSaleAccountsToCampaignsToTransaction, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, updateMccConversionValues, updateMccConversionValuesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
   constructor() { this.values = new Set(); }
@@ -185,6 +185,54 @@ upsertProvisionalSalesToTransaction(syncTx,[{...legacyManual,conta:'6244'}]);
 await new Promise(resolve=>setImmediate(resolve));
 assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id==='manual-sale:cmp_legacy42').account,'6244','a sincronização preenche uma conta ausente a partir da campanha, sem substituir uma conta já definida');
 
+const accountTarget=normalizeSale({sale_id:'manual-sale:cmp-account-target',sale_date:'2026-10-03',product:'Synthetic Product',platform:'Demo Platform',account:'',value_brl:42.75,payment_status:'unknown',confirmation_status:'manual',campaign_id:'campaign-account-target',source:'hub_manual_capture',source_ref:'sale_account_target'});
+const unrelatedManual=normalizeSale({sale_id:'manual-entry-unrelated',sale_date:'2026-10-03',product:'Synthetic Product',platform:'Demo Platform',account:'',value_brl:42.75,payment_status:'unknown',confirmation_status:'manual',source:'manual'});
+syncStores.get('billing_sales').put(accountTarget);
+syncStores.get('billing_sales').put(unrelatedManual);
+const accountBackfillCount=syncStores.get('billing_audit').rows.length;
+assert.equal(linkProvisionalSaleAccountsToCampaignsToTransaction(syncTx,[{id:'sale_account_target',billing_sale_id:accountTarget.sale_id,campanha_id:'campaign-account-target',conta:'111-222-3333',data:'2026-10-03',valor_brl:42.75,status:'provisoria'}]),1,'a sincronização agenda apenas um vínculo manual com ID estável de campanha');
+await new Promise(resolve=>setImmediate(resolve));
+const accountLinkedSale=syncStores.get('billing_sales').rows.find(row=>row.sale_id===accountTarget.sale_id);
+assert.equal(accountLinkedSale.account,'111-222-3333','o vínculo da conta é recuperado da campanha da venda');
+assert.equal(accountLinkedSale.value_brl,42.75,'a correção não altera o valor da venda');
+assert.equal(accountLinkedSale.confirmation_status,'manual','a correção não altera a confirmação MCC');
+assert.equal(accountLinkedSale.payment_status,'unknown','a correção não altera o pagamento');
+assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===unrelatedManual.sale_id).account,'','uma venda manual sem vínculo de campanha não recebe conta inferida');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'manual_sale_account_linked_from_campaign','a associação de conta fica auditada como vínculo de campanha');
+assert.deepEqual(syncStores.get('billing_audit').rows.at(-1).changes,[{field:'account',old_value:null,new_value:'111-222-3333'}]);
+
+const diaryMatched=normalizeSale({sale_id:'manual-diary-match',sale_date:'2026-10-03',product:'Synthetic Product Bundle',platform:'Demo Platform',account:'',value_brl:42.75,payment_status:'unknown',confirmation_status:'manual',source:'manual'});
+const diaryAmbiguous=normalizeSale({sale_id:'manual-diary-ambiguous',sale_date:'2026-10-03',product:'Synthetic Product Premium',account:'',value_brl:20,source:'manual'});
+const diaryOtherDate=normalizeSale({sale_id:'manual-diary-other-date',sale_date:'2026-10-04',product:'Synthetic Product Bundle',account:'',value_brl:20,source:'manual'});
+const diaryOtherProduct=normalizeSale({sale_id:'manual-diary-other-product',sale_date:'2026-10-03',product:'Different product',account:'',value_brl:200,source:'manual'});
+const diaryAlreadyAccounted=normalizeSale({sale_id:'manual-diary-accounted',sale_date:'2026-10-03',product:'Synthetic Product Bundle',account:'777-888-9999',value_brl:20,source:'manual'});
+const diaryCampaignLinked=normalizeSale({sale_id:'manual-diary-campaign-linked',sale_date:'2026-10-03',product:'Synthetic Product Bundle',account:'',campaign_id:'campaign-other',value_brl:20,source:'hub_manual_capture'});
+const diaryRows=new Map([diaryMatched,diaryAmbiguous,diaryOtherDate,diaryOtherProduct,diaryAlreadyAccounted,diaryCampaignLinked].map(row=>[row.sale_id,row]));
+const diaryAudit=[];
+const diaryTransaction={objectStore(name){
+  if(name==='billing_sales')return{index(indexName){assert.equal(indexName,'sale_date');return{openCursor(date){const rows=[...diaryRows.values()].filter(row=>row.sale_date===date),request={};let index=0;const advance=()=>queueMicrotask(()=>{const row=rows[index];if(!row){request.result=null;request.onsuccess?.();return}request.result={value:row,update(updated){diaryRows.set(updated.sale_id,updated)},continue(){index+=1;advance()}};request.onsuccess?.()});advance();return request}}}};
+  if(name==='billing_audit')return{add(row){diaryAudit.push(row)}};
+  throw Error('unexpected store: '+name);
+},abort(){throw Error('unexpected transaction abort')}};
+assert.equal(linkManualSaleAccountsFromDiaryToTransaction(diaryTransaction,[
+  {sale_date:'2026-10-03',product:'Synthetic Product',account:'111-222-3333',conversion_count:1},
+  {sale_date:'2026-10-03',product:'Synthetic Product Premium',account:'111-222-3333',conversion_count:1},
+  {sale_date:'2026-10-03',product:'Synthetic Product Premium',account:'555-666-7777',conversion_count:1},
+  {sale_date:'2026-10-04',product:'Synthetic Product',account:'111-222-3333',conversion_count:0},
+  {sale_date:'2026-10-03',product:'Other',account:'555-666-7777',conversion_count:1},
+]),1,'a reconciliação consulta somente os dias que têm evidência positiva no Diário');
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(diaryRows.get(diaryMatched.sale_id).account,'111-222-3333','produto/data com conta única no Diário recebe a conta MCC');
+assert.equal(diaryRows.get(diaryMatched.sale_id).value_brl,42.75,'o vínculo inferido não altera o valor lançado');
+assert.equal(diaryRows.get(diaryAmbiguous.sale_id).account,'','mais de uma conta para o mesmo produto/data não cria associação ambígua');
+assert.equal(diaryRows.get(diaryOtherDate.sale_id).account,'','a conta não é propagada para outro dia sem conversão positiva');
+assert.equal(diaryRows.get(diaryOtherProduct.sale_id).account,'','um produto diferente não recebe conta');
+assert.equal(diaryRows.get(diaryAlreadyAccounted.sale_id).account,'777-888-9999','uma conta já preenchida não é sobrescrita');
+assert.equal(diaryRows.get(diaryCampaignLinked.sale_id).account,'','a heurística não altera lançamentos associados a campanha');
+assert.equal(diaryAudit.length,1);
+assert.equal(diaryAudit[0].action,'manual_sale_account_linked_from_unique_diary_match');
+assert.deepEqual(diaryAudit[0].changes,[{field:'account',old_value:null,new_value:'111-222-3333'}]);
+
 const aggregateId='mcc-conversion:cmp-1:2026-09-23';
 const provisionalAggregate={sale_id:aggregateId,sale_date:'2026-09-23',product:'Produto A',platform:'Google Ads MCC',commission_type:'Valor de conversão MCC',account:'3248',value_brl:200,value_usd:null,payment_status:'pending',confirmation_status:'provisional',confirmation_source:'MCC D0',campaign_id:'cmp-1',conversion_count:2,source:'mcc_conversion_aggregate',source_ref:'cmp-1|2026-09-23',source_period:'d0',active:true,notes:'D0 agregado'};
 assert.equal(upsertMccConversionSalesToTransaction(syncTx,[provisionalAggregate]),1);
@@ -210,6 +258,14 @@ aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregate
 assert.equal(aggregate.confirmation_status,'confirmed','D−1 promove o registro estável de D0');
 assert.equal(aggregate.value_brl,240);
 assert.equal(aggregate.payment_status,'pending','confirmação MCC não transforma valor em recebimento');
+upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,platform:'Guru Media'}],{preserveExistingPlatform:true});
+await new Promise(resolve=>setImmediate(resolve));
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.platform,'Google Ads MCC','reconciliação ao abrir Faturamento não sobrescreve a plataforma já armazenada');
+upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,platform:'Guru Media'}]);
+await new Promise(resolve=>setImmediate(resolve));
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.platform,'Guru Media','nova captura MCC persiste a plataforma inferida');
 const originalBillingIndexedDB=globalThis.indexedDB;
 globalThis.indexedDB={open(){
   const request={};
@@ -236,15 +292,34 @@ assert.equal(aggregate.value_brl,246.75,'o valor convertido pode ser corrigido d
 assert.equal(aggregate.manual_value_override,true,'a correção fica marcada para sobreviver a novas capturas');
 assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'mcc_conversion_value_corrected','a edição MCC fica disponível no Histórico');
 assert.deepEqual(syncStores.get('billing_audit').rows.at(-1).changes.find(change=>change.field==='value_brl'),{field:'value_brl',old_value:240,new_value:246.75});
+await updateMccConversionValues(aggregateId,{}, {platform:'ClickBank'});
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.platform,'ClickBank','o editor permite sobrescrever a plataforma exibida no agregado MCC');
+assert.equal(aggregate.mcc_source_platform,'Guru Media','a plataforma inferida fica registrada para permitir restaurá-la');
+assert.equal(aggregate.manual_platform_override,true,'a sobrescrita de plataforma fica marcada para sobreviver a novas capturas');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'mcc_platform_overridden','a sobrescrita de plataforma gera uma ação específica no Histórico');
+assert.ok(syncStores.get('billing_audit').rows.at(-1).changes.some(change=>change.field==='platform'&&change.old_value==='Guru Media'&&change.new_value==='ClickBank'),'o Histórico registra a plataforma anterior e a nova');
 upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,value_brl:999,conversion_count:3,source_period:'d1'}]);
 await new Promise(resolve=>setImmediate(resolve));
 aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
 assert.equal(aggregate.value_brl,246.75,'nova captura atualiza conversões, mas preserva o valor manual corrigido');
+assert.equal(aggregate.platform,'ClickBank','nova captura preserva a plataforma manualmente sobrescrita');
 assert.equal(aggregate.conversion_count,3,'preservar valor corrigido não bloqueia atualizações de quantidade MCC');
 assert.equal(aggregate.manual_value_override,true);
+assert.equal(aggregate.manual_platform_override,true);
+await updateMccConversionValues(aggregateId,{}, {platform:'Guru Media'});
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.platform,'Guru Media','a plataforma detectada pode ser restaurada no editor');
+assert.equal(aggregate.manual_platform_override,false,'restaurar a origem remove a marca de sobrescrita manual');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'mcc_platform_override_removed','a restauração também fica registrada no Histórico');
+await updateMccConversionValues(aggregateId,{value_brl:251.25},{platform:'ClickBank'});
+aggregate=syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId);
+assert.equal(aggregate.value_brl,251.25,'a correção do valor e da plataforma pode ser salva em conjunto');
+assert.equal(aggregate.platform,'ClickBank');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'mcc_conversion_updated','a edição conjunta tem uma ação de auditoria própria');
 upsertMccConversionSalesToTransaction(syncTx,[{...officialAggregate,value_brl:999,source_period:'d0'}],{onlyIfMissing:true});
 await new Promise(resolve=>setImmediate(resolve));
-assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId).value_brl,246.75,'backfill do Diário não sobrescreve o valor manual corrigido');
+assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===aggregateId).value_brl,251.25,'backfill do Diário não sobrescreve o valor manual corrigido');
 // Restore the independent fixture so the following manual-coverage scenario starts from its original state.
 syncStores.get('billing_sales').put({...officialAggregate,manual_value_override:false});
 const recoveredAggregate={...provisionalAggregate,sale_id:'mcc-conversion:cmp-1:2026-09-22',sale_date:'2026-09-22',value_brl:75,conversion_count:1,source_ref:'cmp-1|2026-09-22'};

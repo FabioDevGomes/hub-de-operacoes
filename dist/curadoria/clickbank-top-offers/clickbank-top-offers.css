@@ -117,3 +117,12 @@ body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{box-si
 .import-dialog .btn:focus-visible{outline:2px solid rgba(101,169,255,.45);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.import-dialog .btn{transition:none}}
 @media(max-width:520px){#offerSheet .candidate-entry{grid-template-columns:minmax(0,1fr)}#offerSheet .clickbank-trends-search-history{justify-self:end}}
+#offerSheet .trends-manual-country-chip{display:inline-flex;align-items:center;border:1px dashed #536c8a;border-radius:999px;background:#121f31;color:#a9bbd5}
+#offerSheet .trends-manual-country-chip.selected{border-style:solid;border-color:#34d399;background:#123b31;color:#a7f3d0;box-shadow:0 0 0 2px rgba(52,211,153,.16)}
+#offerSheet .trends-manual-country-chip .trends-country-action{border:0;background:transparent;color:inherit;box-shadow:none;border-radius:999px;padding:6px 4px 6px 10px}
+#offerSheet .trends-manual-country-chip .trends-country-action.selected{border:0;background:transparent;color:inherit;box-shadow:none}
+#offerSheet .trends-country-remove{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 8px 0 2px;line-height:1;font:inherit;font-size:.95rem}
+#offerSheet .trends-country-remove:hover{color:#eafff5}
+#offerSheet .trends-country-remove:focus-visible{outline:2px solid rgba(53,198,145,.75);outline-offset:2px;border-radius:4px}
+#offerSheet .trends-country-remove:disabled{cursor:wait;opacity:.6}
+#offerSheet .image-candidate.saved{font-weight:400}

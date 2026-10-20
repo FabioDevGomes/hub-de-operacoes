@@ -28,6 +28,26 @@ test('default active report preserves grouping, counts and first selection', () 
   assert.deepEqual(report.kpis,{products:2,campaigns:3,active:3,paused:0,accounts:2,multiAccount:0,missing:0});
 });
 
+test('account chart includes every current product, counts distinct identified accounts, and follows status scope', () => {
+  const sample = [
+    row('alpha','A','ativa',70),
+    row('alpha','A','ativa',70),
+    row('alpha','B','pausada',70),
+    row('paused-only','B','pausada',60),
+    row('unidentified','Sem conta','ativa',60),
+    ...Array.from({length:9},(_,index)=>row(`new product ${index+1}`,`A${index+1}`,'ativa',80))
+  ];
+  const active = buildAccountReport(sample,createAccountState());
+  assert.equal(active.bars.length,11,'new/smaller products are not hidden behind a top-eight limit');
+  assert.equal(active.bars.find(item=>item.key==='alpha').count,1,'multiple campaigns in one account count only once');
+  assert.equal(active.bars.find(item=>item.key==='unidentified').count,0,'unknown account is not fabricated as an account');
+  assert.ok(!active.bars.some(item=>item.key==='paused-only'),'paused-only products are outside the active scope');
+
+  const all = buildAccountReport(sample,{...createAccountState(),status:'all'});
+  assert.equal(all.bars.find(item=>item.key==='alpha').count,2,'pausing the campaign changes the account count only when the all-situations scope includes it');
+  assert.equal(all.bars.length,12);
+});
+
 test('paused and all scopes apply identically to matrix, detail and coverage', () => {
   const state = createAccountState();
   const paused = buildAccountReport(rows,{...state,status:'pausada'});
@@ -115,31 +135,30 @@ test('account header MCC labels combine explicit names and label missing associa
   assert.equal(report.accountMccLabels.has('Sem conta'),false);
 });
 
-test('account columns and filter options prioritize e-com, place Nutra last, and sort new accounts automatically',()=>{
+test('account columns and filters group by MCC ID, independent of names, and accept new MCCs',()=>{
   const sample = [
-    row('product','104','ativa',70,{mccName:'MCC Nutra'}),
-    row('product','202','ativa',70,{mccName:'MCC E-commerce'}),
-    row('product','802','ativa',70,{mccName:'MCC Ads'}),
+    row('product','103','ativa',70,{mccId:'353-379-6641',mccName:'MCC Nutra'}),
+    row('product','802','ativa',70,{mccId:'300-000-0000',mccName:'MCC Alpha'}),
+    row('product','504','ativa',70,{mccId:'250-000-0000',mccName:'MCC Zulu'}),
     row('product','Sem conta','ativa',70,{mccName:''}),
-    row('product','102','ativa',70,{mccName:'MCC NUTRA'}),
-    row('product','201','ativa',70,{mccName:'MCC e-com'}),
-    row('product','150','ativa',70,{mccName:''}),
-    row('product','999','ativa',70,{mccName:'MCC e-com'}),
-    row('product','999','ativa',70,{mccName:'MCC Nutra'})
+    row('product','900','ativa',70,{mccId:'223-139-0435',mccName:'MCC e-com'}),
+    row('product','901','ativa',70,{mccId:'2231390435',mccName:'MCC e-com'}),
+    row('product','150','ativa',70,{mccName:'MCC e-com'}),
+    row('product','999','ativa',70,{mccId:'223-139-0435',mccName:'MCC e-com'})
   ];
   const filters = {...createAccountState(),status:'all'};
   const report = buildAccountReport(sample,filters);
-  const expected = ['201','202','150','802','102','104','999','Sem conta'];
+  const expected = ['900','901','999','504','802','103','150','Sem conta'];
   assert.deepEqual(report.accounts,expected);
   assert.deepEqual(report.accountOptions,expected);
 
-  const withNewNutraAccount = buildAccountReport([
+  const withNewMcc = buildAccountReport([
     ...sample,
-    row('new product','103','ativa',70,{mccName:'MCC Nutra'})
+    row('new product','202','ativa',70,{mccId:'400-000-0000',mccName:'MCC Beta'})
   ],filters);
-  assert.deepEqual(withNewNutraAccount.accounts,
-    ['201','202','150','802','102','103','104','999','Sem conta']);
-  assert.deepEqual(withNewNutraAccount.accountOptions,withNewNutraAccount.accounts);
+  assert.deepEqual(withNewMcc.accounts,
+    ['900','901','999','504','802','103','202','150','Sem conta']);
+  assert.deepEqual(withNewMcc.accountOptions,withNewMcc.accounts);
 });
 
 test('sorting keeps null last in either direction and does not confuse zero', () => {

@@ -32,10 +32,10 @@ function restoreEditor(scope,snapshot) {
     const selected=values.includes(attributeValue(node,attr));node.classList.toggle('selected',selected);node.setAttribute('aria-pressed',String(selected));
   }
 }
-export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=null,
+export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=null,disableWhenClean=false,
   watch='input[id],textarea[id]',clickWatch='[data-country],[data-trend-country],[data-manager-trends-country],[data-trends-product-age]',
   isUnchanged=({previous,draft})=>sameTrendAssessment(previous,draft)}) {
-  let busy=false,runner=null,liveEditor=null,inFlight=null,feedbackContext='',editorIdentity='',dirty=false;
+  let busy=false,runner=null,liveEditor=null,inFlight=null,feedbackContext='',editorIdentity='',dirty=false,lastSaveFailed=false;
   const queue=new Map();
   const savedSignatures=new Map(),selectedStatuses=new Map();
   const signature=draft=>JSON.stringify({...draft,countries:countries(draft.countries)});
@@ -43,9 +43,12 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
   function sync() {
     const context=getContext();
     const identity=context?.tab==='trends'?context.offerKey:'';
-    if(context?.offerKey!==editorIdentity){selectedStatuses.clear();liveEditor=null;dirty=false;editorIdentity=context?.offerKey;}
+    if(context?.offerKey!==editorIdentity){selectedStatuses.clear();liveEditor=null;dirty=false;lastSaveFailed=false;editorIdentity=context?.offerKey;}
     if(identity!==feedbackContext){showTrendsSaveFeedback(button,'');feedbackContext=identity;}
-    if(context?.tab==='trends'){button.disabled=busy;if(dirty&&!busy)showTrendsSaveFeedback(button,'Alterações pendentes — clique em Salvar.','pending');}
+    if(context?.tab==='trends'){
+      button.disabled=busy||(disableWhenClean&&!dirty);
+      if(dirty&&!busy&&!lastSaveFailed)showTrendsSaveFeedback(button,'Alterações pendentes — clique em Salvar.','pending');
+    }
     else showTrendsSaveFeedback(button,'');
     for(const node of scope?.querySelectorAll?.('[data-trends-result]')||[])node.disabled=busy;
     // Candidate/metadata writes must not overlap an assessment write. Editable
@@ -67,7 +70,7 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
     return {...context,draft};
   }
   async function drain() {
-    busy=true;if(button.dataset)button.dataset.trendsSaving='true';sync();
+    lastSaveFailed=false;busy=true;if(button.dataset)button.dataset.trendsSaving='true';sync();
     let success=true;
     try{
       while(queue.size){
@@ -88,6 +91,7 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
           if(await persist(offerKey,status,payload)!==true)throw new Error('Save was not confirmed');
           savedSignatures.set(offerKey,key);
           if(isCurrent()){
+            lastSaveFailed=false;
             restoreEditor(scope,liveEditor?.offerKey===offerKey?liveEditor.snapshot:editor);
             if(status)for(const node of scope?.querySelectorAll?.('[data-trends-result]')||[]){
               const selected=node.dataset.trendsResult===(queue.get(offerKey)?.draft.status||status);
@@ -99,7 +103,7 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
             else if(!queue.has(offerKey))announce(draft.status?'Avaliação de Trends salva.':'Rascunho de Trends salvo.','saved');
           }
         }catch{
-          success=false;if(isCurrent()){dirty=false;restoreEditor(scope,liveEditor?.offerKey===offerKey?liveEditor.snapshot:editor);announce('Não foi possível salvar. Suas alterações foram mantidas; tente novamente.','error');}
+          success=false;if(isCurrent()){dirty=true;lastSaveFailed=true;restoreEditor(scope,liveEditor?.offerKey===offerKey?liveEditor.snapshot:editor);announce('Não foi possível salvar. Suas alterações foram mantidas; tente novamente.','error');}
           queue.delete(offerKey);
         }
       }
@@ -122,7 +126,7 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
   function schedule() {
     const context=snapshot();if(!context)return;
     liveEditor={offerKey:context.offerKey,snapshot:captureEditor(scope)};
-    dirty=true;announce('Alterações pendentes — clique em Salvar.','pending');
+    dirty=true;lastSaveFailed=false;announce('Alterações pendentes — clique em Salvar.','pending');sync();
   }
   function select(status) {
     const context=snapshot(status);if(!context)return false;
@@ -138,7 +142,7 @@ export function mountTrendsSaveAction({button,getContext,persist,feedback,scope=
   sync();showTrendsSaveFeedback(button,'');
   return {save,select,sync,schedule,status:(fallback='')=>selectedStatuses.get(currentKey())||fallback,
     restore(){if(liveEditor?.offerKey===currentKey())restoreEditor(scope,liveEditor.snapshot);},
-    reset(){selectedStatuses.clear();savedSignatures.clear();liveEditor=null;dirty=false;feedbackContext='';showTrendsSaveFeedback(button,'');},
+    reset(){selectedStatuses.clear();savedSignatures.clear();liveEditor=null;dirty=false;lastSaveFailed=false;feedbackContext='';showTrendsSaveFeedback(button,'');},
     async flush(){
     const context=snapshot();if(!context)return false;
     liveEditor={offerKey:context.offerKey,snapshot:captureEditor(scope)};

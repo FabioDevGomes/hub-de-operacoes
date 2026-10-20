@@ -81,6 +81,19 @@ test('Radar detects evidence/concentration edits without changing the selected r
   assert.equal(f.writes[0].value.trendsCollections.length,0,'unrecognized raw text is not promoted to evidence');
 });
 
+test('ClickBank save is enabled only for pending edits and remains retryable after failure',async()=>{
+  const button={disabled:false,dataset:{},ownerDocument:null,addEventListener(){},before(){},parentElement:null};
+  const scope={querySelectorAll:()=>[],addEventListener(){}};
+  let fail=false;
+  const action=mountTrendsSaveAction({button,scope,disableWhenClean:true,
+    getContext:()=>({tab:'trends',offerKey:'synthetic-offer',previous:{status:'stable',searchTerm:'Original',countries:[]},draft:{status:'stable',term:'Edited',countries:[]}}),
+    persist:async()=>{if(fail)throw new Error('synthetic failure');return true;}});
+  action.sync();assert.equal(button.disabled,true,'sem mudanças a salvar, o botão fica desativado');
+  action.schedule();assert.equal(button.disabled,false,'uma edição pendente habilita o botão');
+  fail=true;assert.equal(await action.save(),false);assert.equal(button.disabled,false,'falha preserva o estado pendente e permite repetir');
+  fail=false;assert.equal(await action.save(),true);assert.equal(button.disabled,true,'após salvar, não há ação redundante');
+});
+
 for(const origin of Object.keys(origins))test(origin+': candidate edits preserve the newly saved assessment and later explicit saves retain candidates',async()=>{
   const f=await fixture(origin),name=origin==='top'?'persistTopTrendKeywordCandidates':origin==='manager'?'persistManagerTrendKeywordCandidates':'persistRadarTrendKeywordCandidates';
   const source=await readFile(new URL('../src/curadoria/'+origins[origin].path,import.meta.url),'utf8');

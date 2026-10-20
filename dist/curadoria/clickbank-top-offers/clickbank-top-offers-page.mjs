@@ -1,8 +1,8 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
 import * as Storage from './clickbank-top-offers-storage.mjs?v=11';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=37';
-import {mountExtensionCapture} from './extension-capture.mjs?v=6';
-import {mergeDtcCountries} from './dtc-country-capture.mjs?v=5';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=41';
+import {mountExtensionCapture} from './extension-capture.mjs?v=7';
+import {mergeDtcCountries,removeManualCountry as removeManualCountryMetadata} from './dtc-country-capture.mjs?v=6';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
 import {brandBiddingLabel} from './brand-bidding.mjs?v=1';
 import * as Trends from '../trends-domain.mjs';
@@ -11,7 +11,7 @@ import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
 import * as TopOffersDecision from './clickbank-top-offers-decision.mjs?v=1';
-import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=4';
+import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=5';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
 
 const root = document.querySelector('#clickbankTopOffersRoot');
@@ -19,10 +19,10 @@ let captures = [], offerMetadata = [], trends = [], images = [], decisions = [],
 const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
-  addTrendCandidate,removeTrendCandidate,addManualCountry,saveSalesPageType,saveBrandBidding,saveAffiliateLink,saveImage,saveImageSearchTerm,
+  addTrendCandidate,removeTrendCandidate,addManualCountry,removeManualCountry,saveSalesPageType,saveBrandBidding,saveAffiliateLink,saveImage,saveImageSearchTerm,
   openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
 }});
-mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true});
+mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true,disableUntilSaveRetry:true});
 
 function latestMatching(listName) {
   return [...captures].filter(item => item.listName === listName).sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)))[0] || null;
@@ -180,6 +180,21 @@ async function addManualCountry(offerKey,value) {
   if(old.manualCountries.includes(code)){view.showMessage(`${code} já foi adicionado.`);return false;}
   const stored={...old,...baseRecord(item),manualCountries:[...old.manualCountries,code]};
   await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);offerMetadata=replaceRecord(offerMetadata,stored);show();view.showMessage(`${code} adicionado manualmente; não faz parte dos dados da ClickBank.`);return true;
+}
+async function removeManualCountry(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)return false;
+  const removal=removeManualCountryMetadata(metadataFor(item),baseRecord(item),value);
+  if(!removal.ok){view.showMessage(removal.message,{error:true});return false;}
+  try {
+    await Storage.putOfferRecord(Storage.STORES.offerMetadata,removal.record);
+    offerMetadata=replaceRecord(offerMetadata,removal.record);show();
+    view.showMessage(`${String(value).trim().toUpperCase()} removido dos países manuais.`);
+    return true;
+  } catch(error) {
+    console.error('Não foi possível remover o país manual.',error);
+    view.showMessage('Não foi possível remover o país manual. Os dados existentes foram preservados.',{error:true});
+    return false;
+  }
 }
 async function saveSalesPageType(offerKey,value) {
   const item=currentOffer(offerKey);if(!item)return false;

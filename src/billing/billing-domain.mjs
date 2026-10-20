@@ -66,6 +66,8 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     sale_id: text(input.sale_id) || id || makeId('sale'),
     sale_date: saleDate,
     platform: text(input.platform),
+    mcc_source_platform: text(input.mcc_source_platform) || null,
+    manual_platform_override: input.manual_platform_override === true,
     product: text(input.product),
     commission_type: text(input.commission_type),
     account: text(input.account),
@@ -92,6 +94,18 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     created_at: input.created_at || now,
     updated_at: input.updated_at || now,
   };
+}
+
+export function resolveMccSalePlatforms(sales, campaigns, inferPlatformFromCampaignName) {
+  const campaignNames = new Map((campaigns || []).filter(campaign => campaign?.id && campaign?.nome_mcc)
+    .map(campaign => [String(campaign.id), campaign.nome_mcc]));
+  return (sales || []).map(sale => {
+    if (sale?.source !== 'mcc_conversion_aggregate' || sale.manual_platform_override === true) return sale;
+    const campaignName = campaignNames.get(String(sale.campaign_id || ''));
+    if (!campaignName || typeof inferPlatformFromCampaignName !== 'function') return sale;
+    const platform = inferPlatformFromCampaignName(campaignName);
+    return platform && platform !== sale.platform ? { ...sale, platform } : sale;
+  });
 }
 
 export function provisionalSaleToBilling(input, { now = new Date().toISOString() } = {}) {
@@ -292,28 +306,41 @@ export function aggregateCashBy(movements, salesById, dimension = 'month') {
   }).sort((a, b) => validDimension === 'month' ? b.key.localeCompare(a.key) : a.key.localeCompare(b.key));
 }
 
-function sumChartAmountsInBrl(rows, exchangeRate, signForRow = () => 1) {
+export function billingValueInBrlForPresentation(row, exchangeRate = null) {
+  const brl = typeof row?.value_brl === 'number' && Number.isFinite(row.value_brl) ? row.value_brl : null;
+  if (brl != null) return { amount:brl, source:'brl' };
+
+  const usd = typeof row?.value_usd === 'number' && Number.isFinite(row.value_usd) ? row.value_usd : null;
+  if (usd == null) return { amount:null, source:null };
+  if (usd === 0) return { amount:0, source:'usd' };
+
   const rate = typeof exchangeRate === 'number' && Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : null;
+  return { amount:rate == null ? null : usd * rate, source:'usd' };
+}
+
+export function billingValueInUsdForPresentation(row, exchangeRate = null) {
+  const usd = typeof row?.value_usd === 'number' && Number.isFinite(row.value_usd) ? row.value_usd : null;
+  if (usd != null) return { amount:usd, source:'usd' };
+
+  const brl = typeof row?.value_brl === 'number' && Number.isFinite(row.value_brl) ? row.value_brl : null;
+  if (brl == null) return { amount:null, source:null };
+  if (brl === 0) return { amount:0, source:'brl' };
+
+  const rate = typeof exchangeRate === 'number' && Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : null;
+  return { amount:rate == null ? null : brl / rate, source:'brl' };
+}
+
+function sumChartAmountsInBrl(rows, exchangeRate, signForRow = () => 1) {
   let amount = 0;
   let known = 0;
   let missing = 0;
   for (const row of rows) {
-    const brl = typeof row?.value_brl === 'number' && Number.isFinite(row.value_brl) ? row.value_brl : null;
-    const usd = typeof row?.value_usd === 'number' && Number.isFinite(row.value_usd) ? row.value_usd : null;
     const sign = signForRow(row);
-    if (brl != null) {
-      amount += brl * sign;
+    const equivalent = billingValueInBrlForPresentation(row, exchangeRate);
+    if (equivalent.amount != null) {
+      amount += equivalent.amount * sign;
       known += 1;
-      continue;
-    }
-    if (usd != null) {
-      if (rate != null) {
-        amount += usd * rate * sign;
-        known += 1;
-      } else if (usd === 0) known += 1;
-      else missing += 1;
-    }
-    else missing += 1;
+    } else missing += 1;
   }
   return { amount:known ? amount : null, known, missing, complete:missing === 0 };
 }

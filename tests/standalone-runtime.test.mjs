@@ -35,7 +35,7 @@ assert.match(presellCommon,/function Get-PresellPowerShellExecutable/);
 assert.match(presellCommon,/Process\]::GetCurrentProcess\(\)\.MainModule\.FileName/);
 assert.match(presellCommon,/Get-Process -Id \$PID/);
 assert.match(presellCommon,/if \(-not \[string\]::IsNullOrWhiteSpace\(\$engineDirectory\)\)\s*\{\s*\$hostExecutable = Join-Path -Path \$engineDirectory/);
-assert.match(presellCommon,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File \$ScriptPath/);
+assert.match(presellCommon,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -EncodedCommand \$encodedCommand/);
 assert.match(presellWorkflow,/\$powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File \$ProductionScript/);
 assert.doesNotMatch(presellCommon,/&\s*pwsh\b/i,'validadores não devem depender de pwsh estar no PATH');
 assert.doesNotMatch(presellWorkflow,/&\s*pwsh\b/i,'produção do workflow não deve depender de pwsh estar no PATH');

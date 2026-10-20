@@ -25,6 +25,7 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-side{display:grid;gap:12px;align-content:start}
 .account-chart{padding:14px}
 .account-chart h3{font-size:.86rem;margin:0 0 12px}
+.account-chart-caption{color:var(--muted);font-size:.66rem;line-height:1.4;margin:-6px 0 10px}
 .account-bar-row{display:grid;grid-template-columns:minmax(70px,auto) 1fr 24px;gap:8px;align-items:center;margin:8px 0;font-size:.72rem}
 .account-bar-track{height:9px;border-radius:999px;background:#0a1627;overflow:hidden}
 .account-bar-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#278de9,#66c4ff)}
@@ -97,34 +98,55 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-directory-status-kpi span{color:#8eb0d3;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
 .account-directory-status-kpi strong{color:var(--green);font-size:1.18rem;line-height:1.1}
 .account-directory-status-kpi.is-suspended strong{color:#ff8191}
-.account-directory-panel{max-width:1050px}
+.account-directory-panel{width:100%;max-width:none;box-sizing:border-box}
 .account-directory-table{width:100%;border-collapse:collapse}
-.account-directory-table th,.account-directory-table td{padding:11px 14px;text-align:left;border-bottom:1px solid rgba(129,157,191,.16)}
+.account-directory-table th,.account-directory-table td{padding:11px 14px;text-align:center;border-bottom:1px solid rgba(129,157,191,.16)}
 .account-directory-table th{color:#8eb0d3;font-size:.68rem;font-weight:500;white-space:nowrap}
+.account-directory-table th[data-column]{position:sticky;box-sizing:border-box;min-width:0;max-width:none}
+.account-directory-table .account-directory-sort{display:inline-flex;align-items:center;justify-content:center;gap:5px;max-width:calc(100% - 9px);min-height:30px;padding:2px 10px 2px 4px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;white-space:nowrap;cursor:pointer}
+.account-directory-table .account-directory-sort:hover{background:rgba(79,167,255,.12);color:#cfe7ff}
+.account-directory-table .account-directory-sort:focus-visible{outline:2px solid #4fa7ff;outline-offset:-1px}
+.account-directory-table .account-directory-sort-arrow{min-width:1em;color:#36c8d4;font-size:.78rem;line-height:1}
+.account-directory-table td[data-column]{box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-directory-table .account-directory-column-resizer{position:absolute;z-index:3;top:0;right:0;bottom:0;width:9px;touch-action:none;cursor:col-resize;user-select:none}
+.account-directory-table .account-directory-column-resizer::after{position:absolute;top:0;right:3px;bottom:0;width:2px;background:transparent;content:"";transition:background-color .12s ease}
+.account-directory-table .account-directory-column-resizer:hover::after,.account-directory-table .account-directory-column-resizer:focus-visible::after,.account-directory-table .account-directory-column-resizer.is-resizing::after{background:#36c8d4}
+.account-directory-table .account-directory-column-resizer:focus-visible{outline:2px solid #4fa7ff;outline-offset:-1px}
+.account-directory-resizing,.account-directory-resizing *{cursor:col-resize!important;user-select:none!important}
+.account-directory-widths-message:empty{display:none}
+.account-directory-widths-message{margin:0;padding:0 20px 8px;color:#ffd99e;font-size:.72rem}
 .account-directory-table td:first-child{font-weight:600}
 .account-directory-table tbody tr:last-child td{border-bottom:0}
 .account-directory-table .account-directory-date{white-space:nowrap}
+.account-directory-table .account-directory-impressions-cell,.account-directory-table .account-directory-clicks-cell,.account-directory-table .account-directory-campaign-count-cell{text-align:center!important;font-variant-numeric:tabular-nums}
 .account-directory-empty{text-align:center!important;color:var(--muted);padding:24px!important}
 .account-directory-head-actions{display:flex;align-items:center;gap:8px}
-.account-directory-add-button{min-height:34px;padding:7px 12px;border:1px solid #267456;border-radius:9px;background:#102d24;color:#63dda7;font:inherit;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap}
-.account-directory-add-button:hover{background:#153b2e}
-.account-directory-add-button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(max-width:560px){.account-directory-status-kpis{grid-template-columns:1fr 1fr;gap:8px}.account-directory-status-kpi{min-height:82px;padding:12px 10px 12px 15px}.account-directory-table th,.account-directory-table td{padding:10px 8px}.account-directory-table{font-size:.76rem}}
 main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
 .account-directory-status-cell{text-align:center!important;white-space:nowrap}
 .account-directory-status-button{display:inline-flex;align-items:center;justify-content:center;min-height:29px;min-width:104px;padding:5px 10px;border:1px solid #31506e;border-radius:999px;background:#17263a;color:#b9c9dc;font:inherit;font-size:.73rem;cursor:pointer;white-space:nowrap}
 .account-directory-email-cell{max-width:300px}
 .account-directory-payment-profile-cell{max-width:250px}
-.account-directory-email-value,.account-directory-payment-profile-value{display:block;max-width:calc(100% - 54px);overflow:hidden;padding-top:8px;text-overflow:ellipsis;white-space:nowrap}
+.account-directory-email-value,.account-directory-payment-profile-value{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-directory-status-button[data-status="active"]{border-color:#267456;background:#102d24;color:#63dda7}
 .account-directory-status-button[data-status="suspended"]{border-color:#713943;background:#2b181d;color:#ff9aa5}
+.account-directory-edit-cell{text-align:center!important;white-space:nowrap}
+.account-directory-edit-button{min-height:30px;padding:5px 13px;border:1px solid #31506e;border-radius:8px;background:#132b44;color:#d3e5f7;font:inherit;font-size:.73rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.account-directory-edit-button:hover{background:#1b3855}
+.account-directory-edit-button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-directory-status-button:focus-visible,.account-directory-status-choice:focus-visible,.account-directory-status-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-directory-status-dialog{width:min(560px,calc(100vw - 28px));padding:0;border:0;border-radius:18px;background:#0d192b;color:var(--text);box-shadow:0 18px 56px rgba(0,0,0,.55)}
-.account-directory-email-form,.account-directory-payment-profile-form,.account-directory-manual-account-form{margin:0}
+.account-directory-edit-field-form,.account-directory-manual-account-form{margin:0}
+.account-directory-edit-fields{display:grid;gap:15px}
+.account-directory-edit-field-form{display:grid;gap:6px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.account-directory-edit-field-form:last-child{padding-bottom:0;border-bottom:0}
+.account-directory-edit-actions{display:flex;justify-content:flex-end;margin-top:4px}
+.account-directory-edit-saved{min-height:0;margin:0;color:#63dda7;font-size:.76rem}
+.account-directory-edit-actions .account-directory-status-choice{min-width:150px}
 .account-directory-email-label,.account-directory-field-label{display:block;margin:0 0 6px;color:#b9c9dc;font-size:.76rem}
 .account-directory-email-input,.account-directory-payment-profile-input,.account-directory-account-input{box-sizing:border-box;width:100%;min-height:40px;padding:9px 11px;border:1px solid #31506e;border-radius:8px;background:#081525;color:var(--text);font:inherit;font-size:.82rem}
 .account-directory-email-input:focus-visible,.account-directory-payment-profile-input:focus-visible,.account-directory-account-input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.account-directory-email-actions,.account-directory-payment-profile-actions,.account-directory-account-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.account-directory-account-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
 .account-directory-email-cancel{min-height:44px;border:1px solid #31506e;border-radius:10px;background:#132034;color:#c4d1e0;font:inherit;font-size:.82rem;cursor:pointer}
 .account-directory-email-cancel:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-directory-status-dialog::backdrop{background:rgba(2,8,18,.78);backdrop-filter:blur(3px)}
@@ -141,7 +163,7 @@ main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
 .account-directory-status-choice{min-height:44px;border:1px solid #31506e;border-radius:10px;background:#132b44;color:#d3e5f7;font:inherit;font-size:.82rem;font-weight:750;cursor:pointer}
 .account-directory-status-choice.is-active{border-color:#267456;background:#102d24;color:#63dda7}
 .account-directory-status-choice.is-suspended{border-color:#713943;background:#2b181d;color:#ff9aa5}
-@media(max-width:560px){.account-directory-status-head,.account-directory-status-body{padding-left:15px;padding-right:15px}.account-directory-status-button{min-width:88px;padding-inline:6px}.account-directory-email-cell,.account-directory-payment-profile-cell{max-width:220px}.account-directory-status-actions,.account-directory-email-actions,.account-directory-payment-profile-actions,.account-directory-account-actions{gap:7px}.account-directory-head-actions{gap:6px}.account-directory-add-button{padding-inline:9px}}
+@media(max-width:560px){.account-directory-status-head,.account-directory-status-body{padding-left:15px;padding-right:15px}.account-directory-status-button{min-width:88px;padding-inline:6px}.account-directory-email-cell,.account-directory-payment-profile-cell{max-width:220px}.account-directory-status-actions,.account-directory-account-actions{gap:7px}.account-directory-edit-actions .account-directory-status-choice{min-width:0;width:100%}.account-directory-head-actions{gap:6px}}
 
 .account-domain-link{color:#8fc9ff;text-decoration:underline;text-decoration-color:rgba(143,201,255,.38);text-underline-offset:2px}
 .account-domain-link:hover{color:#b2ddff;text-decoration-color:currentColor}

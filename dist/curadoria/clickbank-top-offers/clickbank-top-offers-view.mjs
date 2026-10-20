@@ -1,4 +1,4 @@
-import {mountTrendsSaveAction,trendPageState,sameTrendAssessment} from '../trends-save-action.mjs?v=4';
+import {mountTrendsSaveAction,trendPageState,sameTrendAssessment} from '../trends-save-action.mjs?v=5';
 import {clickBankOfferDetailsUrl, compareCapturedOffers, captureOfferVariations, allCaptureOfferVariations, movementLabel} from './clickbank-top-offers-domain.mjs?v=5';
 import {lastCollectionCell, latestCollectionIndex, collectionTime} from '../last-collection.mjs';
 import {mountCurationColumns} from '../curation-columns.mjs?v=1';
@@ -21,21 +21,36 @@ const dateTime = value => {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-BR', {dateStyle:'short', timeStyle:'short'}).format(date);
 };
 const HIDDEN_OFFERS_KEY = 'hub:clickbank-top-offers:hidden-offer-keys:v1';
+const SORT_PREFERENCE_KEY = 'hub:clickbank-top-offers:sort:v1';
+const SORT_KEYS = new Set(['rank','offerName','seller','trends','glimpse','images','average','initial','future','epc','cvr','gravity','movement','decision','lastSeen']);
 const ALL_CAPTURES = '__all__';
 
 export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
   let latestCaptureByOffer = new Map();
   let allCaptures = null;
-  let selectedCaptureId = ALL_CAPTURES, sortKey = 'rank', sortDirection = 'asc', activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', savingTrend = false, editingAffiliateLink = false;
+  let selectedCaptureId = ALL_CAPTURES, activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', editingAffiliateLink = false;
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
+  let sortKey = 'rank', sortDirection = 'asc';
+  try {
+    const saved = JSON.parse(preferences?.getItem(SORT_PREFERENCE_KEY) || 'null');
+    if (saved && SORT_KEYS.has(saved.key) && (saved.direction === 'asc' || saved.direction === 'desc')) {
+      sortKey = saved.key;
+      sortDirection = saved.direction;
+    }
+  } catch {}
   let hiddenOffers = new Set();
   try {
     const saved = JSON.parse(preferences?.getItem(HIDDEN_OFFERS_KEY) || '[]');
     if (Array.isArray(saved)) hiddenOffers = new Set(saved.filter(key=>typeof key==='string' && key));
   } catch {}
   const columns = mountCurationColumns({root, screen:'clickbank', preferences});
+
+  function persistSortPreference() {
+    try { preferences?.setItem(SORT_PREFERENCE_KEY, JSON.stringify({key:sortKey,direction:sortDirection})); }
+    catch {}
+  }
 
   function selectedCapture() { return selectedCaptureId === ALL_CAPTURES ? allCaptures : state.captures.find(item => item.captureId === selectedCaptureId) || null; }
   function previousCapture(selected) {
@@ -65,13 +80,13 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     const button=$('#saveSheetButton',root);
     const reasons={
       trends:['Salvar a avaliação de Google Trends.','Salvar avaliação de Google Trends'],
-      glimpse:['Salvar a análise Glimpse.','Salvar análise Glimpse'],
+      glimpse:['A análise Glimpse é salva automaticamente após a colagem.','Análise Glimpse salva automaticamente'],
       images:['As classificações e candidatas de Imagens são salvas automaticamente em cada ação.','As avaliações de Google Imagens são salvas automaticamente'],
       history:['A aba Histórico é somente leitura.','Histórico somente leitura'],
     };
     const [description,label]=reasons[activeTab]||reasons.history;
     button.hidden=false;
-    button.disabled=activeTab==='trends'?(savingTrend||button.dataset.trendsSaving==='true'):activeTab!=='glimpse';
+    button.disabled=true;
     button.title=description;
     button.setAttribute('aria-label',label);
   }
@@ -89,11 +104,17 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       history.push({searchedAt:record.lastSearchedAt,term:''});
       history.sort((a,b)=>String(b.searchedAt).localeCompare(String(a.searchedAt)));
     }
-    select.innerHTML=history.length?history.map((entry,index)=>`<option value="${index}">${escape(dateTime(entry.searchedAt))}</option>`).join(''):'<option value=""></option>';
-    select.disabled=!history.length;
-    select.value=history.length?'0':'';
+    const seenLabels=new Set(),displayedHistory=history.filter(entry=>{
+      const label=dateTime(entry.searchedAt);
+      if(seenLabels.has(label))return false;
+      seenLabels.add(label);
+      return true;
+    });
+    select.innerHTML=displayedHistory.length?displayedHistory.map((entry,index)=>`<option value="${index}">${escape(dateTime(entry.searchedAt))}</option>`).join(''):'<option value=""></option>';
+    select.disabled=!displayedHistory.length;
+    select.value=displayedHistory.length?'0':'';
     select.onchange=()=>{
-      const selected=history[Number(select.value)];
+      const selected=displayedHistory[Number(select.value)];
       if(selected?.term)$('#trendsTerm',root).value=selected.term;
     };
   }
@@ -161,7 +182,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     $$ (root,'[data-sort]').forEach(button=>{
       button.classList.toggle('active',button.dataset.sort===sortKey);
       button.setAttribute('aria-sort',button.dataset.sort===sortKey?(sortDirection==='asc'?'ascending':'descending'):'none');
-      button.onclick=()=>{const key=button.dataset.sort;if(sortKey===key)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortKey=key;sortDirection=key==='rank'?'asc':'desc';}renderTable(selected,previous)};
+      button.onclick=()=>{const key=button.dataset.sort;if(!SORT_KEYS.has(key))return;if(sortKey===key)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortKey=key;sortDirection=key==='rank'?'asc':'desc';}persistSortPreference();renderTable(selected,previous)};
     });
   }
 
@@ -173,7 +194,11 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     else{offerLink.removeAttribute?.('href');offerLink.classList.add('hidden');offerUnavailable.classList.remove('hidden');}
     $('#trendsTerm',root).value=latest?.searchTerm||item.offerName;
     renderTrendSearchHistory(record);
-    $('#trendCountries',root).innerHTML=countries.length?countries.map(code=>`<button type="button" class="trends-country-action ${selected.has(code)?'selected':''}" data-country="${escape(code)}" aria-pressed="${selected.has(code)}">${escape(code)} · ${dtcCountries.has(code)?'DTC':'manual'}</button>`).join(''):'<span class="sub">Nenhum país adicionado ainda.</span>';
+    $('#trendCountries',root).innerHTML=countries.length?countries.map(code=>{
+      const isSelected=selected.has(code),isDtc=dtcCountries.has(code);
+      const button='<button type="button" class="trends-country-action '+(isSelected?'selected':'')+'" data-country="'+escape(code)+'" aria-pressed="'+isSelected+'">'+escape(code)+' · '+(isDtc?'DTC':'manual')+'</button>';
+      return isDtc?button:'<span class="trends-manual-country-chip '+(isSelected?'selected':'')+'">'+button+'<button type="button" class="trends-country-remove" data-country-remove="'+escape(code)+'" aria-label="Remover país manual '+escape(code)+'" title="Remover país manual '+escape(code)+'">×</button></span>';
+    }).join(''):'<span class="sub">Nenhum país adicionado ainda.</span>';
     pendingProductAge=latest?.productAge||pendingProductAge;
     TrendsUI.renderProductAgeButtons($('#productAgeActions',root),pendingProductAge,value=>{
       pendingProductAge=value;
@@ -252,7 +277,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     trendsSave?.restore();updateSheetSaveButton();trendsSave?.sync();
   }
   function openSheet(item,tab='trends') {
-    trendsSave?.reset();pendingMetadata={};activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';savingTrend=false;editingAffiliateLink=false;
+    trendsSave?.reset();pendingMetadata={};activeOfferKey=item.offerKey;activeTab=tab;pendingProductAge=Trends.latestAssessment(trendsFor(item).assessments)?.productAge||'';pendingTrendStatus='';editingAffiliateLink=false;
     $('#trendMessage',root).textContent='';$('#trendMessage',root).classList.remove('error');
     sheet.classList.remove('hidden');renderSheet();
     sheet.scrollTop=0;
@@ -304,7 +329,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   importDialog.addEventListener('close',()=>importDialog.classList.add('hidden'));
   $('#closeSheet',root).onclick=closeSheet;
   trendsSave=mountTrendsSaveAction({
-    button:$('#saveSheetButton',root),scope:$('[data-panel="trends"]',root),watch:'#trendsTerm',clickWatch:'[data-country],[data-trends-product-age],[data-sales-page-type],[data-brand-bidding]',
+    button:$('#saveSheetButton',root),scope:$('[data-panel="trends"]',root),disableWhenClean:true,watch:'#trendsTerm',clickWatch:'[data-country],[data-trends-product-age],[data-sales-page-type],[data-brand-bidding]',
     getContext:()=>{const item=activeOffer();return {
       tab:sheet.classList.contains('hidden')?'':activeTab,offerKey:item?.offerKey,
       previous:item?trendLatest(item):null,
@@ -384,11 +409,26 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   $('#affiliateLinkSection',root).addEventListener('keydown',event=>{
     if(event.key==='Enter'&&event.target.closest('#affiliateLinkInput')){event.preventDefault();void submitAffiliateLink();}
   });
-  $('#trendCountries',root).addEventListener('click',event=>{
+  $('#trendCountries',root).addEventListener('click',async event=>{
+    const remove=event.target.closest('[data-country-remove]');
+    if(remove){
+      event.preventDefault?.();event.stopPropagation?.();
+      const item=activeOffer(),code=remove.dataset.countryRemove;
+      if(!item||!code||!actions.removeManualCountry)return;
+      remove.disabled=true;
+      try {
+        if(!await actions.removeManualCountry(item.offerKey,code))remove.disabled=false;
+      } catch {
+        remove.disabled=false;
+        $('#trendMessage',root).textContent='Não foi possível remover o país manual. Tente novamente.';
+        $('#trendMessage',root).classList.add('error');
+      }
+      return;
+    }
     const button=event.target.closest('[data-country]');if(!button)return;
     const selected=$$ (root,'#trendCountries [data-country].selected');
     if(!button.classList.contains('selected')&&selected.length>=5){$('#trendMessage',root).textContent='É possível registrar até cinco países por avaliação.';return;}
-    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));$('#trendMessage',root).textContent='Alterações pendentes…';
+    button.classList.toggle('selected');button.setAttribute('aria-pressed',String(button.classList.contains('selected')));button.closest('.trends-manual-country-chip')?.classList.toggle('selected',button.classList.contains('selected'));$('#trendMessage',root).textContent='Alterações pendentes…';
   });
   async function submitManualCountry() {
     const input=$('#manualCountry',root),item=activeOffer();if(!item)return;

@@ -22,7 +22,7 @@ function fixture(offerId=null, preferences) {
   const lists=['DE','US'].map(imageCandidateList=>element({imageCandidateList}));
   const resultButtons=['up','stable','down','point_peak','low_volume','no_data','inconclusive'].map(trendsResult=>element({trendsResult}));
   const brandButtons=['brand_bidding','no_brand_bidding',''].map(brandBidding=>element({brandBidding}));
-  const sortButtons=[element({sort:'decision'})];
+  const sortButtons=['decision','rank','offerName','seller','trends','glimpse','images','average','initial','future','epc','cvr','gravity','movement','lastSeen'].map(sort=>element({sort}));
   node('#trendResults').querySelectorAll=selector=>selector==='[data-trends-result]'?resultButtons:[];
   const sheet=node('#offerSheet');sheet.classList.add('hidden');
   sheet.querySelector=selector=>node(selector);
@@ -33,6 +33,7 @@ function fixture(offerId=null, preferences) {
   const calls=[],actions={
     openGlimpse:item=>calls.push(['glimpse',item.offerKey]),saveImage:(...args)=>calls.push(['saveImage',...args]),
     saveTrend:async(...args)=>{calls.push(['saveTrend',...args]);return true;},
+    removeManualCountry:async(...args)=>{calls.push(['removeManualCountry',...args]);return true;},
     openImagesExcluding:(...args)=>calls.push(['exclude',...args]),
   };
   const view=mountClickBankTopOffersView({root,actions,preferences});
@@ -73,6 +74,29 @@ test('a coluna Decisão alterna ordenação alfabética crescente/decrescente pe
   assert.deepEqual(renderedKeys(),['live','offer','hidden','review','launch']);
 });
 
+test('a última coluna e direção de ordenação são restauradas da preferência local',()=>{
+  const values=new Map(),preferences={getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)};
+  const addOffers=f=>f.state.captures[0].offers.push(
+    {offerKey:'alpha',offerName:'Alpha',seller:'EXAMPLE',rank:2},
+    {offerKey:'zulu',offerName:'Zulu',seller:'EXAMPLE',rank:3},
+  );
+  const renderedKeys=f=>[...f.node('#rows').innerHTML.matchAll(/<tr data-offer="([^"]+)"/g)].map(match=>match[1]);
+  const first=fixture(null,preferences);addOffers(first);first.view.render(first.state);
+  first.sortButtons.find(button=>button.dataset.sort==='offerName').onclick();
+  assert.deepEqual(renderedKeys(first),['zulu','offer','alpha']);
+  assert.deepEqual(JSON.parse(values.get('hub:clickbank-top-offers:sort:v1')),{key:'offerName',direction:'desc'});
+
+  const reopened=fixture(null,preferences);addOffers(reopened);reopened.view.render(reopened.state);
+  assert.equal(reopened.sortButtons.find(button=>button.dataset.sort==='offerName').getAttribute('aria-sort'),'descending');
+  assert.deepEqual(renderedKeys(reopened),['zulu','offer','alpha']);
+  reopened.sortButtons.find(button=>button.dataset.sort==='offerName').onclick();
+  assert.deepEqual(JSON.parse(values.get('hub:clickbank-top-offers:sort:v1')),{key:'offerName',direction:'asc'});
+
+  const reopenedAscending=fixture(null,preferences);addOffers(reopenedAscending);reopenedAscending.view.render(reopenedAscending.state);
+  assert.equal(reopenedAscending.sortButtons.find(button=>button.dataset.sort==='offerName').getAttribute('aria-sort'),'ascending');
+  assert.deepEqual(renderedKeys(reopenedAscending),['alpha','offer','zulu']);
+});
+
 test('brand confirmation stays only in the header; other messages and errors remain visible in the sheet',()=>{
   const f=fixture();f.open('trends');
   f.view.showMessage('Uma confirmação anterior.');
@@ -102,6 +126,42 @@ test('ClickBank Trends history shows only date/time and restores a prior term wi
   history.value='1';history.onchange();
   assert.equal(f.node('#trendsTerm').value,'older search term','selecionar o histórico apenas recupera o termo no campo');
   assert.equal(f.calls.length,0,'selecionar uma entrada não abre uma pesquisa');
+});
+
+test('país manual tem × acessível, remove somente pela ação e países capturados DTC permanecem sem remoção',async()=>{
+  const f=fixture();
+  f.state.offerMetadata=[{offerKey:'offer',manualCountries:['DE','US'],dtcCountryCapture:{countries:['DE']}}];
+  f.view.render(f.state);f.open('trends');
+  const html=f.node('#trendCountries').innerHTML;
+  assert.match(html,/data-country-remove="US" aria-label="Remover país manual US"/);
+  assert.match(html,/data-country="DE" aria-pressed="false">DE · DTC/);
+  assert.doesNotMatch(html,/data-country-remove="DE"/,'país capturado da DTC não ganha botão de remoção');
+  const remove={dataset:{countryRemove:'US'},disabled:false};
+  let prevented=false,stopped=false;
+  await f.node('#trendCountries').listeners.click({
+    target:{closest:selector=>selector==='[data-country-remove]'?remove:null},
+    preventDefault(){prevented=true;},stopPropagation(){stopped=true;},
+  });
+  assert.deepEqual(f.calls.find(call=>call[0]==='removeManualCountry'),['removeManualCountry','offer','US']);
+  assert.equal(prevented,true);assert.equal(stopped,true);
+  assert.equal(remove.disabled,true,'o botão fica temporariamente desabilitado durante a gravação');
+});
+
+test('ClickBank Trends history shows one option when distinct searches share the same displayed date and time',()=>{
+  const f=fixture();
+  f.state.trends=[{offerKey:'offer',assessments:[],keywordCandidates:[],searchHistory:[
+    {searchedAt:'2026-01-03T11:15:01.000Z',term:'same-minute older term'},
+    {searchedAt:'2026-01-03T11:15:49.000Z',term:'same-minute newest term'},
+    {searchedAt:'2026-01-03T10:15:00.000Z',term:'different minute term'},
+  ]}];
+  f.view.render(f.state);
+  f.open('trends');
+  const history=f.node('#trendSearchHistory');
+  assert.equal((history.innerHTML.match(/<option\b/g)||[]).length,2,'horários iguais no formato visível são condensados, mas horários diferentes continuam disponíveis');
+  assert.equal(history.value,'0','a opção mais recente continua selecionada');
+  history.value='0';history.onchange();
+  assert.equal(f.node('#trendsTerm').value,'same-minute newest term','entre rótulos repetidos, selecionar o horário restaura o termo da pesquisa mais recente');
+  assert.equal(f.calls.length,0,'deduplicar opções não inicia outra pesquisa');
 });
 
 test('ClickBank Trends history selector is positioned beside the candidate input and tracks both search actions',async()=>{
@@ -229,23 +289,26 @@ test('preferência indisponível ou inválida mantém ocultação segura na sess
 test('Resultado de Trends fica pendente até Salvar, mantém ficha aberta e não duplica',async()=>{
   const f=fixture();f.open('trends');
   const save=f.node('#saveSheetButton'),selected=f.resultButtons.find(button=>button.dataset.trendsResult==='up');
-  assert.equal(save.disabled,false);await selected.onclick();
+  assert.equal(save.disabled,true,'sem alterações, Salvar começa desativado');await selected.onclick();
+  assert.equal(save.disabled,false,'selecionar um resultado cria alterações pendentes');
   assert.equal(f.calls.length,0);assert.match(f.node('#trendMessage').textContent,/pendentes/);
   await save.listeners.click();
   assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
   assert.equal(f.calls.find(call=>call[0]==='saveTrend')[2],'up');
   assert.equal(f.sheet.classList.contains('hidden'),false);
   assert.match(f.node('#trendMessage').textContent,/salva/);
-  await save.listeners.click();
-  assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1,'mesma avaliação não é salva novamente');
-  assert.equal(save.disabled,false);
+  assert.equal(save.disabled,true,'depois de salvar não há uma nova ação pendente');
 });
 
 test('Salvar antes de escolher resultado persiste um rascunho sem classificação artificial',async()=>{
   const f=fixture();f.open('trends');const save=f.node('#saveSheetButton');
-  assert.equal(save.disabled,false);await save.listeners.click();
+  assert.equal(save.disabled,true,'não há rascunho alterado para salvar');
+  f.node('#trendsTerm').value='Produto <teste> revisado';
+  f.node('[data-panel="trends"]').listeners.input({target:{matches:()=>true},isComposing:false});
+  assert.equal(save.disabled,false,'a edição do termo habilita o salvamento do rascunho');
+  await save.listeners.click();
   const call=f.calls.find(call=>call[0]==='saveTrend');assert.equal(call[2],'');
-  assert.equal(call[3].term,'Produto <teste>');assert.match(f.node('#trendMessage').textContent,/Rascunho/);
+  assert.equal(call[3].term,'Produto <teste> revisado');assert.match(f.node('#trendMessage').textContent,/Rascunho/);
 });
 
 test('Salvar reutiliza o resultado atual quando a oferta já tem uma avaliação',async()=>{
@@ -253,8 +316,11 @@ test('Salvar reutiliza o resultado atual quando a oferta já tem uma avaliação
   f.state.trends=[{offerKey:'offer',assessments:[{assessmentId:'saved',status:'stable',countries:[],productAge:'old',searchTerm:'busca existente',capturedAt:'2026-01-02T13:00:00Z'}]}];
   f.view.render(f.state);f.open('trends');
   const save=f.node('#saveSheetButton');
+  assert.equal(save.disabled,true,'a avaliação já existente não precisa ser salva novamente');
+  f.node('#trendsTerm').value='busca editada';
+  f.node('[data-panel="trends"]').listeners.input({target:{matches:()=>true},isComposing:false});
   assert.equal(save.disabled,false);
-  f.node('#trendsTerm').value='busca editada';await save.listeners.click();
+  await save.listeners.click();
   assert.equal(f.calls.filter(call=>call[0]==='saveTrend').length,1);
   const saved=f.calls.find(call=>call[0]==='saveTrend');
   assert.equal(saved[2],'stable','usa o último resultado selecionado');
@@ -399,7 +465,7 @@ test('CB abre Glimpse/Imagens diretamente, muda abas e conclui sem gravar',()=>{
   const f=fixture(),initial=JSON.stringify(f.state);
   f.open('glimpse');
   assert.equal(f.node('#saveSheetButton').hidden,false,'Salvar continua na mesma barra também no Glimpse');
-  assert.equal(f.node('#saveSheetButton').disabled,false,'o botão compartilhado aciona o salvamento do Glimpse nessa aba');
+  assert.equal(f.node('#saveSheetButton').disabled,true,'Glimpse já é salvo automaticamente e não expõe um salvamento redundante');
   assert.equal(f.sheet.classList.contains('hidden'),false);
   assert.equal(f.tabs.find(tab=>tab.classList.contains('active')).dataset.tab,'glimpse');
   assert.equal(f.panels.find(panel=>!panel.classList.contains('hidden')).dataset.panel,'glimpse');

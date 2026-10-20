@@ -1,5 +1,6 @@
-import { cp, mkdir, readdir, rename, stat } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { copyFile, cp, mkdir, readdir, rename, stat, unlink } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { constants, createReadStream } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 
 // The shared web package contains code and presentation assets only.
@@ -26,6 +27,30 @@ export async function privateDistributionFiles(directory) {
   return found;
 }
 
+async function fileDigest(path) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function movePrivateFile(source, destination) {
+  try {
+    await rename(source, destination);
+    return;
+  } catch (error) {
+    if (!['EPERM', 'EACCES', 'EXDEV'].includes(error?.code)) throw error;
+  }
+
+  // Windows may deny rename across sandboxed/temp directories even on one volume.
+  // Preserve the source until a byte-for-byte verified recovery copy exists.
+  await copyFile(source, destination, constants.COPYFILE_EXCL);
+  const [sourceDigest, destinationDigest] = await Promise.all([fileDigest(source), fileDigest(destination)]);
+  if (sourceDigest !== destinationDigest) {
+    throw new Error(`A cópia de recuperação do arquivo privado não confere; a origem foi preservada: ${source}`);
+  }
+  await unlink(source);
+}
+
 export async function isolatePrivateDistributionFiles(projectRoot) {
   const output = resolve(projectRoot, 'dist');
   const recovery = resolve(projectRoot, 'data-local/distribution-recovery');
@@ -36,7 +61,7 @@ export async function isolatePrivateDistributionFiles(projectRoot) {
     const destination = join(recovery, `${path}.${randomUUID()}.private`);
     await mkdir(dirname(destination), { recursive: true });
     // Move to an ignored recovery directory, preserving bytes and older copies.
-    await rename(source, destination);
+    await movePrivateFile(source, destination);
     isolated.push({ source, destination });
   }
   return isolated;

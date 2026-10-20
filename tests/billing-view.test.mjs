@@ -29,16 +29,33 @@ assert.match(view, /const actions = `<div class="billing-action-buttons"><button
   'todas as vendas, inclusive agregados MCC e registros inativos, exibem Editar');
 assert.ok(view.includes('billingMccCorrectionNotice') && view.includes("form.dataset.mccAggregateCorrection = 'true'")
   && view.includes('root.__updateMccConversionValues')
-  && view.includes('Storage.updateMccConversionValues(form.elements.sale_id.value, values)'),
+  && view.includes('Storage.updateMccConversionValues(form.elements.sale_id.value, values,'),
   'Editar agregado MCC envia a correção ao adaptador compartilhado e mantém a operação de fallback auditada');
+assert.ok(view.includes('id="billingPlatformField"') && view.includes('form.elements.platform.disabled = false')
+  && view.includes("platformChanged ? {platform} : {}") && view.includes("...(platformChanged ? {platform} : {})"),
+  'Editar agregado MCC permite sobrescrever a plataforma e salva mudanças junto da correção de valor quando aplicável');
+assert.ok(view.includes('Plataforma atualizada e registrada no Histórico') && view.includes('preservada nas próximas sincronizações MCC'),
+  'a confirmação informa que a sobrescrita de plataforma persiste após sincronizações');
 assert.ok(view.includes('Controle Macro, relatórios e páginas de produto foram atualizados.')
   && view.includes('Como a moeda original não está identificada'),
   'o usuário recebe a confirmação de propagação e evita assumir ou combinar moedas');
 assert.ok(view.includes("sale?.source === 'hub_manual_capture' && sale.source_ref") && view.includes('root.__updateManualSale({ sourceSaleId:sourceSaleRef, data:saleDate'), 'edição da venda manual vinculada atualiza o lançamento original junto do espelho');
+assert.ok(view.includes('onManualSaleSaved = null') && view.includes('root.__onManualSaleSaved = onManualSaleSaved') && view.includes('await root.__onManualSaleSaved?.(sale)')
+  && app.includes('onManualSaleSaved:()=>syncMccDiaryRowsToBilling({force:true})'),
+  'ao salvar uma venda manual, o Faturamento tenta imediatamente rastrear uma conta por evidência inequívoca do Diário');
 assert.ok(view.includes('billingPaymentStatusDialog') && view.includes('data-payment-status-choice') && view.includes('data-billing-action="payment-status"'), 'o status na coluna de vendas é acionável e abre o seletor de pagamento');
+assert.ok(view.includes('getCampaigns = () => []') && view.includes('inferPlatformFromCampaignName = null')
+  && view.includes('Domain.resolveMccSalePlatforms(rawAllSales, campaigns, root.__inferBillingCampaignPlatform)')
+  && view.includes('Domain.resolveMccSalePlatforms(raw, campaigns, root.__inferBillingCampaignPlatform)'),
+  'os registros MCC antigos são classificados antes dos filtros, totais e tabela usando a campanha associada');
+assert.ok(app.includes('inferPlatformFromCampaignName:CampaignDatabase.inferAffiliatePlatformFromCampaignName')
+  && app.includes('CampaignDatabase.mccBillingSalesFromDiary(database,{manifestOnly:true})')
+  && app.includes('CampaignDatabase.mccBillingSalesFromManifest(database)')
+  && app.includes('preserveExistingPlatform:true'),
+  'a listagem deriva plataformas antigas sem trocar dados ao abrir; novas capturas MCC gravam a classificação inferida');
 assert.match(view, /competenceKpis\(context\.sales, context\.movements, context\.allSales\)[\s\S]*?kpi\('Total de vendas', lifetimeSalesCount/,
   'total de vendas usa todo o histórico, sem herdar o período/filtros da seleção atual');
-assert.match(view, /const \[raw, allSales\] = await Promise\.all\([\s\S]*?Storage\.queryAllSales\(\)/,
+assert.match(view, /const \[raw, rawAllSales\] = await Promise\.all\([\s\S]*?Storage\.queryAllSales\(\)[\s\S]*?Domain\.resolveMccSalePlatforms\(rawAllSales/,
   'Faturamento total consulta o histórico persistido no IndexedDB, não uma constante da interface');
 assert.match(view, /function lifetimeTotalKpi\(sales\)[\s\S]*?Domain\.sumCurrency\(activeSales, 'value_brl'\)[\s\S]*?Domain\.sumCurrency\(activeSales, 'value_usd'\)/,
   'o faturamento total é calculado a partir das vendas lidas do banco local e exclui canceladas');
@@ -50,10 +67,18 @@ assert.ok(monthlyChartView.includes('monthlyFinancialSeries({ sales:rawSales') &
 assert.ok(monthlyChartView.includes('exchangeRate:root.__billingExchangeRate') && monthlyChartView.includes('chartRateNote(root)')
   && view.includes("style:'currency', currency:'BRL'") && view.includes('equivalente em R$ indisponível'),
   'o gráfico converte USD para BRL pela taxa operacional e identifica indisponibilidade sem apresentar USD como real');
-assert.ok(view.includes('no gráfico mensal, cada registro usa R$ quando disponível e converte US$ somente se R$ estiver ausente')
+assert.ok(view.includes('No gráfico mensal e na coluna Valor R$ das vendas')
+  && view.includes('Domain.billingValueInBrlForPresentation(sale, root.__billingExchangeRate)')
+  && view.includes('não gravado no lançamento') && view.includes('renderTable(root)')
   && app.includes('exchangeRate:state.rate,exchangeRateQuote:state.exchangeRateQuote')
   && app.includes("state.activeView==='billing')$('#billingRoot').__setBillingExchangeRate?.(state.rate,quote)"),
-  'somente o gráfico recebe a taxa operacional, que atualiza a série sem recalcular outras telas financeiras');
+  'a tabela exibe somente como equivalente o valor em R$ derivado da mesma taxa operacional, sem persistir conversão');
+assert.ok(view.includes('Domain.billingValueInUsdForPresentation(sale, root.__billingExchangeRate)')
+  && view.includes('const usdCell = usdEquivalent.source === \'brl\'')
+  && view.includes('chartUsdEquivalentRateNote(root)')
+  && view.includes('Equivalente calculado de ${money(sale.value_brl, \'BRL\')}; não gravado no lançamento')
+  && view.includes('${usdCell}</td><td class="num">${brlCell}'),
+  'a tabela exibe em US$ o equivalente somente de vendas originalmente em BRL, sinaliza a conversão e não persiste alteração');
 assert.ok(!monthlyChartView.includes('getFilters(root)') && !monthlyChartView.includes('Domain.filterRows'),
   'filtros e paginação da tabela não removem lançamentos das séries mensais');
 assert.ok(monthlyChartView.includes('sem os filtros da tabela') && !monthlyChartView.includes('filtros atuais'),
@@ -70,8 +95,8 @@ assert.match(css, /\.billing-root \.billing-action-buttons\{display:inline-flex;
   'os botões devem ficar em uma única linha');
 assert.match(css, /\.billing-root \.billing-action-buttons \.btn\{margin:0;[^}]*font-size:\.64rem/,
   'os botões devem usar espaçamento compacto');
-assert.match(css, /\.billing-mcc-correction \.billing-form-grid>label:not\(#billingValueBrlField\):not\(#billingValueUsdField\)\{display:none\}/,
-  'a correção de agregado MCC mostra somente os campos de valor');
+assert.match(css, /\.billing-mcc-correction \.billing-form-grid>label:not\(#billingPlatformField\):not\(#billingValueBrlField\):not\(#billingValueUsdField\)\{display:none\}/,
+  'o editor de agregado MCC mostra plataforma e os campos de valor sem liberar outros dados derivados');
 assert.match(css, /\.billing-custom-period\{align-items:flex-end;flex-wrap:nowrap\}/,
   'datas e botão Aplicar devem alinhar pela base dos campos em telas largas');
 assert.match(css, /\.billing-custom-period input\{box-sizing:border-box;width:12ch;min-width:0/,

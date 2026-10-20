@@ -47,7 +47,7 @@ for (const [label,path,trendName,imageName,glimpseName] of consumers) {
       assert.match(html,/· !/,'marcador de negativas preservado');
       assert.doesNotMatch(html,/\bsaved\b/);
     }
-    assert.match(badgeRenderer(source,trendName,{}),/class="table-action trends-badge "/);
+    assert.match(badgeRenderer(source,trendName,{}),/class="table-action trends-badge (?:unsearched)?"/);
     assert.match(badgeRenderer(source,imageName,{}),/class="table-action image-badge "/);
     assert.match(badgeRenderer(source,glimpseName,{}),/class="table-action glimpse-badge "/);
     assert.match(badgeRenderer(source,glimpseName,{analysis:{capturedAt:'2026-01-01'}}),/class="table-action glimpse-badge saved"/);

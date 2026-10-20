@@ -251,7 +251,7 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     assert.match(kpis,/Venda provisória[\s\S]*overview-info-icon/);
     assert.match(kpis,/overview-kpi-main-label">Investimento/);assert.match(kpis,/overview-kpi-detail-value">10/);
     assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row hidden"/);
-    assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,15);
+    assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,16);
     s.state.campaignStatusFilter='all';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis);
   }
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
@@ -517,5 +517,22 @@ test('column choices persist locally, keep campaign identifiable and maintain vi
   s.get('#totalsD0').onclick();assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/);
   const next=setup([row('Oferta','ativa',10)],preferences);next.controller.render();assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="current"/);
   next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.size,0);
-  const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,15);
+  const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,16);
+});
+
+test('MCC column renders escaped catalog label, participates in columns and preserves legacy preferences',()=>{
+  const values=new Map([['hub:overview:visible-columns:v1',JSON.stringify(['campaign','account','limit'])]]),preferences={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},s=setup([row('Oferta','ativa',10,{mcc:'MCC <e-com>'})],preferences);
+  s.setList('[data-column-choice]',[{columnChoice:'mcc'}]);
+  s.controller.render();
+  assert.match(s.get('#totalsHead').innerHTML,/data-column="mcc"/);
+  assert.match(s.get('#totalsBody').innerHTML,/data-column="mcc"[^>]*title="MCC &lt;e-com&gt;">MCC &lt;e-com&gt;/);
+  assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/,'colunas anteriormente ocultadas continuam ocultas');
+  assert.equal(values.has('hub:overview:visible-columns:v2'),false,'a leitura da preferência antiga não grava nem migra automaticamente');
+  const mccOption=s.root.querySelectorAll('[data-column-choice]').find(input=>input.dataset.columnChoice==='mcc');mccOption.checked=false;mccOption.onchange();
+  assert.deepEqual(JSON.parse(values.get('hub:overview:visible-columns:v2')),['campaign','account','limit']);
+  assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="mcc"/);
+  const next=setup([row('Oferta','ativa',10,{mcc:'MCC e-com'})],preferences);next.controller.render();
+  assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="mcc"/,'a preferência nova permite manter a MCC oculta após reabrir');
+  next.get('#overviewColumnsReset').onclick();assert.equal(values.has('hub:overview:visible-columns:v1'),false);assert.equal(values.has('hub:overview:visible-columns:v2'),false);
+  next.controller.render();assert.match(next.get('#totalsHead').innerHTML,/data-column="mcc"/,'restaurar padrão exibe a coluna MCC');
 });

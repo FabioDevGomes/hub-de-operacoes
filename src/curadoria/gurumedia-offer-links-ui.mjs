@@ -60,7 +60,7 @@ function ensureTopOfferActionTarget() {
   if (!document.querySelector('style[data-gurumedia-offer-action]')) {
     const style = document.createElement('style');
     style.dataset.gurumediaOfferAction = '';
-    style.textContent = '#offerSheet .trends-country-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}#offerSheet .trends-country-heading h2{margin:0}#offerSheet .trends-country-offer-action{display:flex;justify-content:flex-end;min-width:0}#offerSheet .trends-country-offer-action .trends-gurumedia-links{justify-content:flex-end}@media(max-width:560px){#offerSheet .trends-country-heading{align-items:flex-start;flex-wrap:wrap}#offerSheet .trends-country-offer-action{margin-left:auto}}';
+    style.textContent = '#offerSheet .trends-country-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}#offerSheet .trends-country-heading h2{margin:0}#offerSheet .trends-country-offer-action{display:flex;justify-content:flex-end;min-width:0}#offerSheet .trends-country-offer-action .trends-gurumedia-links{justify-content:flex-end}#offerSheet .trends-country-offer-action .trends-gurumedia-link.trends-gurumedia-link-text{display:inline;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#9fc9ff;font-family:inherit;font-size:inherit;font-weight:400;line-height:inherit;text-decoration:underline}#offerSheet .trends-country-offer-action .trends-gurumedia-link.trends-gurumedia-link-text:hover{color:#c4e0ff}#offerSheet .trends-country-offer-action .trends-gurumedia-link.trends-gurumedia-link-text:focus-visible{outline:2px solid rgba(101,169,255,.55);outline-offset:3px}@media(max-width:560px){#offerSheet .trends-country-heading{align-items:flex-start;flex-wrap:wrap}#offerSheet .trends-country-offer-action{margin-left:auto}}';
     document.head.append(style);
   }
 
@@ -80,7 +80,8 @@ function renderOfferLinks() {
   }
 
   const ids = [...new Set(offerIds())].filter(id => guruMediaOfferUrl(id));
-  const links = ids.map(id => `<a class="btn trends-gurumedia-link" href="${guruMediaOfferUrl(id)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ${id} na GuruMedia">Abrir oferta #${id}</a>`).join('');
+  const linkClasses = view === 'top' ? 'trends-gurumedia-link trends-gurumedia-link-text' : 'btn trends-gurumedia-link';
+  const links = ids.map(id => `<a class="${linkClasses}" href="${guruMediaOfferUrl(id)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta ${id} na GuruMedia">Abrir oferta #${id}</a>`).join('');
   const target = view === 'top' ? ensureTopOfferActionTarget() : null;
   const linksHtml = `<div class="trends-gurumedia-links">${links}</div>`;
   const groupHtml = ids.length

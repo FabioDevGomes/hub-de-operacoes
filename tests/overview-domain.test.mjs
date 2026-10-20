@@ -16,6 +16,7 @@ const authoritativeMccSnapshots=window.OverviewDomain.authoritativeMccSnapshots;
 const pausedCampaignNamesOnDate=window.OverviewDomain.pausedCampaignNamesOnDate;
 const replaceAuthoritativeDates=window.OverviewDomain.replaceAuthoritativeDates;
 const totalsColumns=window.OverviewDomain.totalsColumns;
+const domain=window.OverviewDomain;
 const parseMinimumRoi=window.OverviewDomain.parseMinimumRoi;
 const parseTestLimit=window.OverviewDomain.parseTestLimit;
 const testLimitForRoi=window.OverviewDomain.testLimitForRoi;
@@ -99,7 +100,11 @@ const expectedD1=previousIsoDate('2026-09-29'),historyByDate={'2026-09-27':{inve
 assert.deepEqual(JSON.parse(JSON.stringify(resolveD1({investment:null,impressions:null,clicks:null,conversions:null,date:expectedD1},historyByDate[expectedD1]))),{investment:45,impressions:120,clicks:8,conversions:1,commission:60,date:expectedD1},'D−1 sem retrato no manifesto recupera somente o dia anterior correspondente, sem usar datas mais antigas');
 const d1Columns=totalsColumns('d1','D−1'),d0Columns=totalsColumns('d0','D zero');
 assert.deepEqual(JSON.parse(JSON.stringify(d1Columns.map(([key])=>key))),JSON.parse(JSON.stringify(d0Columns.map(([key])=>key))),'D−1 e D0 preservam o mesmo formato e a mesma ordem de colunas');
-assert.deepEqual(JSON.parse(JSON.stringify(d1Columns)),[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current','Investimento D−1'],['imp','Impressões D−1'],['clicks','Cliques D−1'],['conv','Conversões D−1'],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit','Lucro D−1 (R$)'],['account','Conta'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']],'D−1 mantém ROIs históricos de venda e lucro, com o mesmo formato de D0');
+assert.deepEqual(JSON.parse(JSON.stringify(d1Columns)),[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current','Investimento D−1'],['imp','Impressões D−1'],['clicks','Cliques D−1'],['conv','Conversões D−1'],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit','Lucro D−1 (R$)'],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']],'D−1 mantém ROIs históricos de venda e lucro, com o mesmo formato de D0 e MCC após Conta');
+assert.equal(domain.mccNameForCampaign({mcc_id:'123-456-7890'},[{id:'123-456-7890',nome:'MCC e-com'}]),'MCC e-com','resolver MCC pelo ID explícito da campanha');
+assert.equal(domain.mccNameForCampaign({mcc_id:'123-456-7890'},[{id:'123-456-7891',nome:'MCC e-com'}]),null,'não associar MCC com ID diferente');
+assert.equal(domain.mccNameForCampaign({conta_id:'123-456-7890',nome_campanha_exato:'Campanha MCC e-com'},[{id:'123-456-7890',nome:'MCC e-com'}]),null,'não inferir MCC pela conta-cliente ou nome da campanha');
+assert.deepEqual(Array.from(domain.sortRows([{mcc:'MCC Nutra',identity:{name:'A'}},{mcc:'MCC e-com',identity:{name:'B'}}],{sortKey:'mcc',sortDir:'asc'}).map(row=>row.mcc)),['MCC e-com','MCC Nutra'],'MCC também pode ser ordenada pelo nome do catálogo');
 
 assert.deepEqual(Array.from(pausedCampaignNamesOnDate([{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Zulu'},{status:'pausada',pausada_em:'2026-10-05',nome_mcc:'Ontem'},{status:'ativa',pausada_em:'2026-10-06',nome_mcc:'Ativa'},{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Akemi'}],'2026-10-06')),['Akemi','Zulu'],'somente pausadas hoje, ordenadas pelo nome');
 assert.deepEqual(Array.from(pausedCampaignNamesOnDate([{status:'pausada',pausada_em:'2026-10-06',nome_mcc:'Hoje'}],'invalid')),[],'data inválida não corresponde a pausas');

@@ -33,7 +33,7 @@ test('notes survive JSON backup, normalization and MCC import; revisions retain 
   assert.equal(domain.observationFor(otherCampaign,'a',date).texto,'Segunda edição');
   assert.equal(domain.observationFor(otherCampaign,'b',date).texto,'Outra campanha');
   assert.equal(domain.observationFor(database.normalize(otherCampaign),'b',date).texto,'Outra campanha');
-  const imported=database.importManifest(otherCampaign,{schema:'manifesto_mcc_v1',campanhas:[],separacao_temporal:{}},()=>[],{trackEvents:false}).base;
+  const imported=database.importManifest(otherCampaign,{schema:'manifesto_mcc_v1',campanhas:[],separacao_temporal:{}}).base;
   assert.equal(domain.observationFor(imported,'a',date).texto,'Segunda edição');
   assert.equal(domain.observationFor(imported,'a',date).historico[0].texto,'Texto revisado');
 });

@@ -80,6 +80,23 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   function renderTrendResultButtons(item, latest) {
     TrendsUI.renderResultButtons($('#trendResults',root),trendsSave?.status(pendingTrendStatus||latest?.status||'')||'',status=>trendsSave.select(status));
   }
+  function renderTrendSearchHistory(record) {
+    const select=$('#trendSearchHistory',root);
+    const history=(Array.isArray(record.searchHistory)?record.searchHistory:[])
+      .filter(entry=>entry&&typeof entry.searchedAt==='string'&&Number.isFinite(Date.parse(entry.searchedAt))&&typeof entry.term==='string'&&entry.term.trim())
+      .sort((a,b)=>String(b.searchedAt).localeCompare(String(a.searchedAt)));
+    if(typeof record.lastSearchedAt==='string'&&Number.isFinite(Date.parse(record.lastSearchedAt))&&!history.some(entry=>entry.searchedAt===record.lastSearchedAt)){
+      history.push({searchedAt:record.lastSearchedAt,term:''});
+      history.sort((a,b)=>String(b.searchedAt).localeCompare(String(a.searchedAt)));
+    }
+    select.innerHTML=history.length?history.map((entry,index)=>`<option value="${index}">${escape(dateTime(entry.searchedAt))}</option>`).join(''):'<option value=""></option>';
+    select.disabled=!history.length;
+    select.value=history.length?'0':'';
+    select.onchange=()=>{
+      const selected=history[Number(select.value)];
+      if(selected?.term)$('#trendsTerm',root).value=selected.term;
+    };
+  }
   function renderAffiliateLink(item) {
     const container=$('#affiliateLinkSection',root),link=metadataFor(item).affiliateLink||'';
     if(link&&!editingAffiliateLink){
@@ -96,9 +113,9 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   }
   function glimpseRank(item) { return Glimpse.analysisRank(glimpseFor(item)); }
   function trendBadge(item) {
-    const latest=trendLatest(item),label=Trends.resultLabel(latest?.status),candidateMarker=KeywordCandidatesUI.keywordCandidateMarkerHtml(trendsFor(item).keywordCandidates?.length||0,'positive');
+    const latest=trendLatest(item),statusClass=latest?.status||'unsearched',label=Trends.resultLabel(latest?.status),candidateMarker=KeywordCandidatesUI.keywordCandidateMarkerHtml(trendsFor(item).keywordCandidates?.length||0,'positive');
     const context=[...(latest?.countries||[])].slice(0,5).join(', '),text=context?`${label} · ${context}`:label;
-    return `<button type="button" class="table-action trends-badge ${escape(latest?.status || '')}" data-action="trends" data-key="${escape(item.offerKey)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(text)}${candidateMarker}</button>`;
+    return `<button type="button" class="table-action trends-badge ${escape(statusClass)}" data-action="trends" data-key="${escape(item.offerKey)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(text)}${candidateMarker}</button>`;
   }
   function glimpseBadge(item) {
     const analysis=glimpseFor(item);
@@ -155,6 +172,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     if(offerUrl){offerLink.href=offerUrl;offerLink.setAttribute('aria-label',`Abrir detalhes ClickBank para ${item.offerName}`);offerLink.classList.remove('hidden');offerUnavailable.classList.add('hidden');}
     else{offerLink.removeAttribute?.('href');offerLink.classList.add('hidden');offerUnavailable.classList.remove('hidden');}
     $('#trendsTerm',root).value=latest?.searchTerm||item.offerName;
+    renderTrendSearchHistory(record);
     $('#trendCountries',root).innerHTML=countries.length?countries.map(code=>`<button type="button" class="trends-country-action ${selected.has(code)?'selected':''}" data-country="${escape(code)}" aria-pressed="${selected.has(code)}">${escape(code)} · ${dtcCountries.has(code)?'DTC':'manual'}</button>`).join(''):'<span class="sub">Nenhum país adicionado ainda.</span>';
     pendingProductAge=latest?.productAge||pendingProductAge;
     TrendsUI.renderProductAgeButtons($('#productAgeActions',root),pendingProductAge,value=>{
@@ -395,6 +413,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       if(headerOnly&&!error){const element=$('#sheetMessage',root);element.textContent='';element.classList.remove('error');return;}
       for(const id of ['message','sheetMessage']){const element=$('#'+id,root);element.textContent=message;element.classList.toggle('error',error);}
     },
+    updateTrendSearchHistory(record){if(activeOfferKey===record.offerKey)renderTrendSearchHistory(record);},
     returnFromGlimpse(){if(activeOfferKey)switchTab('trends');},
     getActiveOfferKey(){return activeOfferKey;},
   };

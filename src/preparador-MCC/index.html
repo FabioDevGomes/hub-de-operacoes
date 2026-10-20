@@ -381,7 +381,7 @@
 
   <script src="/sidebar-component.js?v=20261010-gurumedia"></script>
   <script src="/database.js?v=6"></script>
-  <script src="/overview-domain.js?v=19"></script>
+  <script src="/overview-domain.js?v=20"></script>
   <script src="/overview/cards-domain.js?v=1"></script>
   <script src="/storage/hub-database.js?v=1"></script>
   <script src="/overview/base-session-cache.js?v=1"></script>
@@ -430,7 +430,6 @@
     const PANEL_DB_NAME = HubDatabase.DB_NAME;
     const PANEL_DB_VERSION = HubDatabase.DB_VERSION;
     const PANEL_BASE_STORE = 'bases';
-    const PANEL_EVENT_STORE = 'events';
     const PANEL_BASE_KEY = 'atual';
     const panelUsdBrlRateService = globalThis.UsdBrlRateService?.create?.() || {
       getState:() => ({rate:5.1,status:'unavailable',isStale:true,isFallback:true}),
@@ -676,18 +675,9 @@
 
     function readPanelBase(db) {
       return new Promise((resolve, reject) => {
-        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE], 'readonly');
+        const transaction = db.transaction([PANEL_BASE_STORE], 'readonly');
         const baseRequest = transaction.objectStore(PANEL_BASE_STORE).get(PANEL_BASE_KEY);
-        const eventRequest = transaction.objectStore(PANEL_EVENT_STORE).getAll();
-        let base = null, events = [];
-        baseRequest.onsuccess = () => { base = baseRequest.result || null; };
-        eventRequest.onsuccess = () => { events = eventRequest.result || []; };
-        transaction.oncomplete = () => {
-          if (base) base.event_log = window.CampaignDatabase?.mergeEventLogs
-            ? window.CampaignDatabase.mergeEventLogs(base, events).event_log
-            : [...new Map([...(base.event_log || []), ...events].filter(item => item?.event_id).map(item => [item.event_id, item])).values()];
-          resolve(base);
-        };
+        baseRequest.onsuccess = () => resolve(baseRequest.result || null);
         transaction.onerror = () => reject(transaction.error);
       });
     }
@@ -695,19 +685,12 @@
     function writePanelBase(db, base, { billingStorage=null, provisionalSales=[], mccSales=[], accountAliases={} }={}) {
       return new Promise((resolve, reject) => {
         const billingNames=billingStorage&&(provisionalSales.length||mccSales.length||Object.keys(accountAliases).length)?billingStorage.BILLING_STORE_NAMES:[];
-        const transaction = db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE, ...billingNames], 'readwrite');
-        const persistedBase = panelClone(base), eventStore = transaction.objectStore(PANEL_EVENT_STORE);
-        const events = persistedBase.event_log || [];
-        delete persistedBase.event_log;
+        const transaction = db.transaction([PANEL_BASE_STORE, ...billingNames], 'readwrite');
+        const persistedBase = panelClone(base);
         transaction.objectStore(PANEL_BASE_STORE).put(persistedBase, PANEL_BASE_KEY);
         if (billingNames.length && Object.keys(accountAliases).length) billingStorage.migrateAccountAliasesToTransaction(transaction, accountAliases, Object.fromEntries((base.campanhas||[]).filter(campaign=>campaign.conta_id).map(campaign=>[campaign.id,campaign.conta_id])));
         if (billingNames.length) billingStorage.upsertProvisionalSalesToTransaction(transaction, provisionalSales);
         if (billingNames.length) billingStorage.upsertMccConversionSalesToTransaction(transaction, mccSales);
-        const keys = eventStore.getAllKeys();
-        keys.onsuccess = () => {
-          const existing = new Set(keys.result.map(String));
-          for (const event of events) if (event?.event_id && !existing.has(String(event.event_id))) eventStore.add(event);
-        };
         transaction.oncomplete = resolve;
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error || new Error('A atualização da base foi cancelada.'));
@@ -766,7 +749,7 @@
     }
     function normalizePanelBase(base) {
       const value = base?.schema === 'base_campanhas_v1' ? panelClone(base) : { schema:'base_campanhas_v1', atualizado_em:new Date().toISOString(), manifesto_atual:null, campanhas:[], diario:[], campos_operacionais:[], importacoes:[] };
-      value.campanhas ??= []; value.diario ??= []; value.campos_operacionais ??= []; value.importacoes ??= []; value.event_log ??= [];
+      value.campanhas ??= []; value.diario ??= []; value.campos_operacionais ??= []; value.importacoes ??= [];
       return value;
     }
     function ensurePanelCampaign(base, exactName) {
@@ -860,7 +843,7 @@
         }
         const quote = await panelUsdBrlRateService.refresh({force:true}), exchangeRate = Number(quote?.rate) || PANEL_USD_BRL_RATE, importedManifest = panelManifestWithExchangeRate(manifest, quote);
         PANEL_USD_BRL_RATE = exchangeRate;
-        const rowFactory = campaign => panelManifestRow(campaign, exchangeRate), importOptions = { source:'preparador_mcc', confirmedDateChanges:dateChanges };
+        const rowFactory = campaign => panelManifestRow(campaign, exchangeRate), importOptions = { confirmedDateChanges:dateChanges };
         const preview = databaseApi.importManifest(original, importedManifest, rowFactory, importOptions);
         const overwrite = preview.conflicts.length > 0;
         const applied = overwrite ? databaseApi.importManifest(original, importedManifest, rowFactory, { ...importOptions, overwrite:true }) : preview;

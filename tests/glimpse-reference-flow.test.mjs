@@ -15,9 +15,9 @@ function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=f
   function node(selector) {
     if (!nodes.has(selector)) {
       const classes = new Set();
-      nodes.set(selector,{textContent:'',innerHTML:'',value:'',disabled:false,style:{},dataset:{},scrollHeight:104,
+      nodes.set(selector,{selector,beforeNodes:[],textContent:'',innerHTML:'',value:'',disabled:false,style:{},dataset:{},scrollHeight:104,
         classList:{add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value),toggle:(value,active)=>active?classes.add(value):classes.delete(value)},
-        addEventListener(){},setAttribute(){},focus(){},remove(){this.removed=true}});
+        addEventListener(){},setAttribute(){},focus(){},before(node){this.beforeNodes.push(node.selector)},remove(){this.removed=true}});
     }
     return nodes.get(selector);
   }
@@ -30,13 +30,25 @@ function harness({origin='hot-offers-ms',reference=true,embedded=true,failSave=f
     navigator:{clipboard:{readText:async()=>{clipboardReads.count++;if(failClipboard) throw new Error('Denied');return readClipboard?readClipboard():clipboardText}}},
     requestAnimationFrame(){},setTimeout,scrollTo(){},
     Storage:storageOverride||{openGlimpseDB:async()=>{},getHistoryByProduct:async()=>stored,saveAnalysis:async analysis=>{if(failSave)throw new Error('Storage unavailable');stored.push(analysis)}},
-    CurationObservability:{recordGlimpse:async()=>{}},
   });
   vm.runInContext(source+'\n globalThis.api={finishAnalysis,pasteAndAnalyze,analyzeInput};',context);
   return {api:context.api,node,messages,stored,parent,listeners,location:context.location,clipboardReads};
 }
 
 const clipboardOrigins = ['top','manager','smartadv-offers','hot-offers-ms','clickbank-top-offers'];
+test('ClickBank move Sinais emergentes para antes de People Also Search, sem reordenar as outras origens',()=>{
+  const clickbank=harness({origin:'clickbank-top-offers'}),other=harness({origin:'top'});
+  assert.deepEqual(clickbank.node('#peopleAlsoSearchPanel').beforeNodes,['#emergingSignalsPanel']);
+  assert.deepEqual(other.node('#peopleAlsoSearchPanel').beforeNodes,[]);
+});
+test('ClickBank omite apenas o aviso do clipboard e a leitura operacional longa',()=>{
+  const clickbank=harness({origin:'clickbank-top-offers'}),other=harness({origin:'top'});
+  assert.equal(clickbank.node('.clipboard-note').classList.contains('hidden'),true);
+  assert.equal(clickbank.node('#operationalReading').classList.contains('hidden'),true);
+  assert.equal(clickbank.node('#signalReasons').classList.contains('hidden'),false,'as justificativas curtas do sinal permanecem visíveis');
+  assert.equal(other.node('.clipboard-note').classList.contains('hidden'),false);
+  assert.equal(other.node('#operationalReading').classList.contains('hidden'),false);
+});
 test('Curadoria manual reutiliza o fluxo Glimpse mas encaminha chave estável, sem normalizar nome nem registrar observabilidade compartilhada',async()=>{
   const calls=[],records=[];
   const storage={openGlimpseDB:async options=>{calls.push(['open',options]);},getHistoryByProduct:async(key,options)=>{calls.push(['history',key,options]);return records;},saveAnalysis:async(value,options)=>{calls.push(['save',options]);records.push(value);}};

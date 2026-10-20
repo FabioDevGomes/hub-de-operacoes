@@ -99,8 +99,8 @@ test('classic pages delegate to the same infrastructure; business writes and bac
     const context={HubDatabase:{openDatabase:()=>42}};
     vm.runInNewContext(signature,context);assert.equal(vm.runInNewContext(signature.includes('openLocalDb')?'openLocalDb()':'openPanelDatabase()',context),42);
   }
-  assert.ok(preparer.includes("db.transaction([PANEL_BASE_STORE, PANEL_EVENT_STORE, ...billingNames], 'readwrite')"));
-  assert.ok(preparer.includes('eventStore.add(event)')&&!preparer.includes('eventStore.put(event)'));
+  assert.ok(preparer.includes("db.transaction([PANEL_BASE_STORE, ...billingNames], 'readwrite')"));
+  assert.ok(!preparer.includes('PANEL_EVENT_STORE')&&!preparer.includes('eventStore.add(event)'));
   assert.ok(main.includes("db.transaction(names,'readwrite')")&&main.includes('billing.writeBillingBundleToTransaction(tx,billingBundle)')&&main.includes('personalFinance.writeBundleToTransaction(tx,personalFinanceBundle)'));
   assert.ok(main.includes('payload.billing=await billing.exportBillingBundle()')&&main.includes('payload.personal_finance=await personalFinance.exportBundle()'));
   assert.ok(main.includes("tx.objectStore('catalogos').put(catalog,'atual')")&&main.includes('payload.catalogo_produtos=ProductCatalog.normalize(state.productCatalog)'));

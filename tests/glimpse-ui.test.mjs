@@ -67,7 +67,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(page,/id="dimensionRows"/);
   assert.match(page,/id="signalReasons"/);
   assert.match(page,/Intenção das queries/);
-  assert.match(page,/Sinais emergentes/);
+  assert.match(page,/<section id="emergingSignalsPanel" class="surface">[\s\S]*?<h2>Sinais emergentes<\/h2>/,'o bloco de sinais emergentes tem identidade própria para a composição específica da ClickBank');
   assert.match(page,/glimpse\.css\?v=\d+/,'CSS do componente compartilhado tem versão de cache; conteúdo servido é comparado à fonte acima');
   assert.match(page,/glimpse-page\.mjs\?v=\d+/,'script compartilhado tem versão de cache; conteúdo servido é comparado à fonte acima');
   assert.match(page,/people-also-search\.css\?v=2/);

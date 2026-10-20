@@ -6,7 +6,7 @@
   <title>Top Offers CB · Curadoria</title>
   <link rel="icon" href="/favicon.png">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261016-trends-keyword-candidates-flat">
-  <link rel="stylesheet" href="./clickbank-top-offers.css?v=35">
+  <link rel="stylesheet" href="./clickbank-top-offers.css?v=40">
   <link rel="stylesheet" href="/table-edit-actions.css?v=3">
   <link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
   <link rel="stylesheet" href="../analysis-sheet-bar.css?v=3">
@@ -26,7 +26,7 @@
         <div><div class="eyebrow">Curadoria · ClickBank</div><h1>Top Offers CB</h1><div class="sub">Acompanhe as posições e métricas observadas nas capturas do Affiliate Marketplace.</div></div>
         <div class="actions"><button class="btn" id="exportBackup" type="button">Baixar backup JSON</button><label class="btn file-button">Restaurar backup<input id="restoreBackup" type="file" accept="application/json,.json" hidden></label><button class="btn primary" id="openImport" type="button">Colar captura</button></div>
       </header>
-      <section class="summary" aria-label="Resumo"><span class="chip">Capturas salvas <b id="captureCount">0</b></span><span class="chip"><span id="offerCountLabel">Ofertas no histórico</span> <b id="offerCount">0</b></span><span class="chip">Mudanças de posição <b id="movementCount">—</b></span></section>
+      <section class="summary" aria-label="Resumo"><span class="chip">Capturas salvas <b id="captureCount">0</b></span><span class="chip"><span id="offerCountLabel">Ofertas no histórico</span> <b id="offerCount">0</b></span><span class="chip">Mudanças de posição <b id="movementCount">—</b></span><a class="clickbank-rank-link marketplace-link" href="https://accounts.clickbank.com/master/dashboard/affiliate-marketplace?v=0.5198402258977115#/results?sortField=rank&amp;sortDescending=false" target="_blank" rel="noopener noreferrer">Abrir Top Offers</a></section>
       <section class="surface">
         <div class="filter-grid hub-curation-table-filters">
           <input class="control search hub-search-filter" id="search" type="search" placeholder="Buscar oferta ou vendedor" aria-label="Buscar oferta ou vendedor">
@@ -58,7 +58,7 @@
       <header class="sheet-top"><div><div class="eyebrow">ClickBank · Oferta</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div></header>
       <div class="sheet-message" id="sheetMessage" role="status" aria-live="polite"></div>
       <section data-panel="trends">
-        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"></div><div id="trendCandidates"></div><div id="affiliateLinkSection" class="affiliate-link-section"></div></article>
+        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"><label class="clickbank-trends-search-history" for="trendSearchHistory"><span>Histórico de buscas</span><select class="control" id="trendSearchHistory" aria-label="Histórico de buscas no Google Trends"></select></label></div><div id="trendCandidates"></div><div id="affiliateLinkSection" class="affiliate-link-section"></div></article>
         <article class="card trends-country-card">
           <div class="trends-country-heading"><h2>Países</h2><div class="clickbank-offer-link-row"><a class="btn hidden" id="openClickBankOffer" target="_blank" rel="noopener noreferrer">Abrir oferta</a><p class="sub hidden" id="clickBankOfferUnavailable">Link disponível após uma nova captura com o plugin atualizado.</p></div></div>
           <div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button><div id="trendCountries" class="trends-country-actions"></div></div><span id="manualCountryMessage" role="status" aria-live="polite"></span></div>
@@ -85,6 +85,6 @@
     </main>
   </div>
   <script src="/sidebar-component.js?v=20261010-gurumedia"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=42"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=43"></script>
 <script type="module" src="/curadoria/sheet-escape.mjs?v=1"></script><script type="module" src="/curadoria/column-widths-page.mjs?v=1" data-curation-widths="clickbank"></script></body>
 </html>

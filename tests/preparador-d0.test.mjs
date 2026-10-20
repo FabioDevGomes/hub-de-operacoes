@@ -23,9 +23,8 @@ assert.ok(html.includes('O endereço localhost usa outra base local e não atual
 assert.ok(html.includes('const PANEL_DB_VERSION = HubDatabase.DB_VERSION;'),'Preparador MCC não participa da migração aditiva do Hub');
 for (const store of ['billing_sales','billing_movements','billing_audit','billing_meta']) assert.ok(infrastructure.includes(store),`Preparador MCC não cria a store aditiva ${store}`);
 assert.ok(infrastructure.includes("events: {keyPath:'event_id'}"),'Preparador MCC não cria o armazenamento append-only dos eventos');
-assert.ok(html.includes('transaction.objectStore(PANEL_EVENT_STORE).getAll()'),'Preparador MCC não mescla o Event Log ao ler a base compartilhada');
-assert.ok(html.includes('eventStore.add(event)'),'Preparador MCC não persiste eventos sem sobrescrever registros anteriores');
-assert.ok(html.includes("source:'preparador_mcc'"),'importação do Preparador MCC não identifica a origem dos eventos');
+assert.ok(!html.includes('PANEL_EVENT_STORE')&&!html.includes('transaction.objectStore(\'events\')'),'Preparador MCC não deve acessar a store legada de eventos');
+assert.ok(!html.includes('eventStore.add(event)')&&!html.includes("source:'preparador_mcc'"),'importação do Preparador MCC não deve produzir metadados de telemetria');
 const applyFlow=html.match(/async function applyManifestToPanel\(manifest\) \{[\s\S]*?\n    \}/)?.[0]||'';
 assert.ok(applyFlow.includes('const databaseApi = window.CampaignDatabase;'),'aplicação D0/D-1 deve usar o módulo central, não uma implementação paralela');
 assert.ok(applyFlow.includes('panelUsdBrlRateService.refresh({force:true})'),'cada confirmação MCC deve forçar a consulta PTAX antes de preparar conversões');

@@ -11,7 +11,7 @@ const personalSkills = [
   'painel-operacao-google-ads', 'preparacao-manifesto-mcc', 'presell-one-fold',
   'repo-change-commit-flow'
 ];
-const panelSkills = ['controle-gastos-pessoal', 'observabilidade-decisoria', 'painel-operacao-google-ads'];
+const panelSkills = ['controle-gastos-pessoal', 'painel-operacao-google-ads'];
 const helperPath = fileURLToPath(new URL('../scripts/knowledge-export.ps1', import.meta.url));
 const powershell = process.env.POWERSHELL_EXE || 'pwsh';
 
@@ -89,7 +89,7 @@ try {
   assert.equal(result.status, 0, result.stderr || 'PowerShell export test failed');
   const output = JSON.parse(result.stdout.trim());
   assert.equal(output.available, true);
-  assert.equal(output.entryCount, 30);
+  assert.equal(output.entryCount, 28);
   assert.ok(output.entries.includes('README.md'));
   assert.ok(output.entries.includes('MANIFEST.json'));
   assert.ok(output.entries.includes('panel/docs/knowledge-export.md'));

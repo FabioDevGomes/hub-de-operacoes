@@ -157,7 +157,7 @@ test('DTC associates a single-word product name without matching partial names o
 test('DTC matching update invalidates the complete browser import chain and publishes the domain',async()=>{
   const root=new URL('../',import.meta.url);
   const read=path=>readFile(new URL(path,root),'utf8');
-  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=42/);
+  assert.match(await read('src/curadoria/clickbank-top-offers/index.html'),/clickbank-top-offers-page\.mjs\?v=43/);
   const page=await read('src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs');
   assert.match(page,/extension-capture\.mjs\?v=6/);
   assert.match(page,/dtc-country-capture\.mjs\?v=5/);

@@ -4,6 +4,7 @@ export const DEFAULT_DECISION=DecisionUI.DEFAULT_DECISION;
 export const OPTIONS=Object.freeze([
   ...DecisionUI.DECISION_OPTIONS.slice(0,4),
   Object.freeze({value:'Solicitação Enviada',tone:'review'}),
+  Object.freeze({value:'Precisa de aprovação',tone:'review'}),
   ...DecisionUI.DECISION_OPTIONS.slice(4)
 ]);
 

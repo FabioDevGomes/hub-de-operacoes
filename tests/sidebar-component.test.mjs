@@ -42,9 +42,9 @@ for (const group of groupOrder) {
 }
 for (const label of [
   'Visão geral', 'Preparador MCC', 'Controle Macro', 'Faturamento', 'Análise por faixa de CPA', 'Mapa por conta',
-  'Observabilidade decisória', 'Observabilidade da Curadoria', 'Tracking ClickBank', 'Radar SpyHero', 'Lista de Gerente GM',
+  'Tracking ClickBank', 'Radar SpyHero', 'Lista de Gerente GM',
   'Plataforma Guru Media', 'Top Offers CB', 'Hot Offers MS', 'Asset Studio', 'Ficha e Presell', 'Meu Tempo', 'Controle de gastos',
-  'Produtos testados', 'Curadoria manual',
+  'Produtos testados', 'Contas', 'Curadoria manual',
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.doesNotMatch(source, /function productsMarkup|data-sidebar-toggle="products"|data-sidebar-group="products"/, 'Produtos testados deve ser um item direto, sem seção expansível Produtos');
 const operationStart = source.indexOf("{ id: 'operation'");
@@ -52,6 +52,7 @@ const analysisStart = source.indexOf("{ id: 'analysis'");
 const operationItems = source.slice(operationStart, analysisStart);
 assert.ok(operationItems.includes("key: 'tested'") && operationItems.indexOf("key: 'tested'") > operationItems.indexOf("key: 'preparer'"), 'Produtos testados deve ficar diretamente após Preparador MCC em Operação');
 const financeStart = source.indexOf("{ id: 'finance'");
+assert.ok(source.indexOf("key: 'account-directory'") > source.indexOf("key: 'accounts'"), 'Contas deve aparecer logo após Mapa por conta em Análises');
 const curationStart = source.indexOf("{ id: 'curation'");
 const financeItems = source.slice(financeStart, curationStart);
 assert.ok(!operationItems.includes("key: 'macro'"), 'Controle Macro não deve permanecer no grupo Operação');
@@ -62,7 +63,7 @@ const creationEnd = source.indexOf("{ id: 'personal'", creationStart);
 const creationItems = source.slice(creationStart, creationEnd);
 assert.ok(creationItems.indexOf("key: 'asset-studio'") < creationItems.indexOf("key: 'copy'"), 'Asset Studio deve aparecer antes de Ficha e Presell no grupo Criação de ofertas');
 assert.ok(!creationItems.includes("key: 'presell'"), 'Gerador de Pre-Sell não deve aparecer como tela separada');
-for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'observabilityNav', 'curationObservabilityNav', 'trackingNav', 'testedProductsNav', 'timeNav', 'copyFichaNav']) {
+for (const id of ['totalsNav', 'controlMacroNav', 'billingNav', 'cpaReportNav', 'accountReportNav', 'trackingNav', 'testedProductsNav', 'timeNav', 'copyFichaNav']) {
   assert.ok(viewRegistry.includes(id) || source.includes(id), `ID de navegação SPA ${id} não foi preservado no registro`);
 }
 const registryContext=vm.createContext({window:{},URLSearchParams,encodeURIComponent});

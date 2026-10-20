@@ -78,16 +78,16 @@ const lowerSnapshotRows=source=>[
   {date:source.metricas_D_menos_1.data.valor,period:'d1',cells:{A:{value:46278},B:{value:source.metricas_D_menos_1.impressoes.valor},C:{value:source.metricas_D_menos_1.cliques_google.valor}}},
   {date:source.metricas_D_zero.data.valor,period:'d0',cells:{A:{value:46279},B:{value:source.metricas_D_zero.impressoes.valor},C:{value:source.metricas_D_zero.cliques_google.valor}}}
 ];
-const largerSnapshots=db.importManifest(db.create(),lowerSnapshots(lowerSnapshotCampaign),lowerSnapshotRows,{source:'preparador_mcc'});
+const largerSnapshots=db.importManifest(db.create(),lowerSnapshots(lowerSnapshotCampaign),lowerSnapshotRows);
 const smallerManifest=lowerSnapshots(lowerSnapshotCampaign);
 smallerManifest.campanhas[0].metricas_D_menos_1.impressoes.valor=40;
 smallerManifest.campanhas[0].metricas_D_menos_1.cliques_google.valor=4;
 smallerManifest.campanhas[0].metricas_D_zero.impressoes.valor=250;
 smallerManifest.campanhas[0].metricas_D_zero.cliques_google.valor=22;
 const smallerRows=lowerSnapshotRows(smallerManifest.campanhas[0]);
-const previewSmallerSnapshots=db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows,{source:'preparador_mcc'});
+const previewSmallerSnapshots=db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows);
 const appliedSmallerSnapshots=previewSmallerSnapshots.conflicts.length
-  ?db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows,{source:'preparador_mcc',overwrite:true})
+  ?db.importManifest(largerSnapshots.base,smallerManifest,lowerSnapshotRows,{overwrite:true})
   :previewSmallerSnapshots;
 assert.equal(appliedSmallerSnapshots.conflicts.length,0,'o fluxo MCC confirmado aplica valores menores sem deixar conflito pendente');
 assert.equal(appliedSmallerSnapshots.base.manifesto_atual.campanhas[0].metricas_D_zero.impressoes.valor,250,'o último manifesto D0 deve ser a fonte atual, mesmo com total menor');
@@ -242,7 +242,7 @@ const differentSlim='30/09 - SlimQA 13 (GM-BB-SE) 90% - U$ 42';
 assert.equal(db.campaignNumberHistoryWarnings(twiceCorrected,dailyManifest('2026-09-30',[differentSlim])).length,1,'mudança além da data gera aviso histórico sem associação automática');
 assert.equal(db.campaignNumberReuseIssues(twiceCorrected,dailyManifest('2026-09-30',[nextSlim,differentSlim])).length,1,'nomes distintos presentes na coleta continuam bloqueados, mesmo com aliases históricos');
 assert.equal(slimApplied.campanhas[0].movimento_status,'manteve','renomear somente a data não cria uma campanha nova');
-assert.equal(slimApplied.event_log.filter(event=>event.event_type==='test_iteration_created').length,1,'renomear a data não cria nova iteração na observabilidade');
+assert.equal(slimApplied.event_log,undefined,'bases novas não geram Event Log operacional');
 assert.equal(slimApplied.diario.length,2);
 assert.equal(slimApplied.diario.find(row=>row.data==='2026-09-27').celulas.C.value,2);
 const slimCorrected=db.setCampaignStartDate(slimOriginal,slimCampaign.id,'2026-09-26');
@@ -430,7 +430,7 @@ const fullAccountManifest={separacao_temporal:{D_zero:{datas_detectadas:['2026-0
   nome_campanha_exato:'Campanha antiga A',
   metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Loja A .example.shop'},conta_id:{valor:'111-222-3333'}}
 }]};
-const linkedAccounts=db.importManifest(oldAccounts,fullAccountManifest,()=>[],{trackEvents:false}).base;
+const linkedAccounts=db.importManifest(oldAccounts,fullAccountManifest,()=>[]).base;
 assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-a').conta_id,'111-222-3333');
 assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-b').conta_id,'111-222-3333','campanha histórica da mesma conta ganha o ID completo');
 assert.equal(linkedAccounts.campanhas.find(item=>item.id==='old-other-domain').conta_id,undefined,'domínio histórico conflitante impede uma associação presumida');
@@ -439,33 +439,33 @@ assert.equal(linkedAccounts.diario.find(item=>item.campanha_id==='old-b').celula
 assert.equal(linkedAccounts.vendas_provisorias[0].conta,'111-222-3333','venda histórica ligada à campanha usa o ID completo');
 assert.equal(oldAccounts.campanhas[1].conta_id,undefined,'a importação não modifica a base de entrada');
 assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campanhas:[{...fullAccountManifest.campanhas[0],metricas_D_zero:{...fullAccountManifest.campanhas[0].metricas_D_zero,conta_id:{valor:'999-888-7777'}}}]},()=>[]),/outra conta completa/);
-assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha de outra conta',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Outra loja'},conta_id:{valor:'999-888-7777'}}}]},()=>[],{trackEvents:false}),/prefixo histórico 1234/,'um conflito posterior bloqueia associação histórica já estabelecida');
+assert.throws(()=>db.importManifest(linkedAccounts,{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha de outra conta',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Outra loja'},conta_id:{valor:'999-888-7777'}}}]},()=>[]),/prefixo histórico 1234/,'um conflito posterior bloqueia associação histórica já estabelecida');
 
-const noPrefix=db.importManifest(db.create(),{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha sem prefixo',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'Loja sem prefixo'},conta_id:{valor:'444-555-6666'}}}]},()=>[],{trackEvents:false}).base;
+const noPrefix=db.importManifest(db.create(),{...fullAccountManifest,campanhas:[{nome_campanha_exato:'Campanha sem prefixo',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'Loja sem prefixo'},conta_id:{valor:'444-555-6666'}}}]},()=>[]).base;
 assert.equal(noPrefix.campanhas[0].conta_id,'444-555-6666');
 assert.equal(noPrefix.campanhas[0].conta_sufixo,undefined,'novas contas não dependem do prefixo');
 
 const managerManifest={...fullAccountManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC e-com'},campanhas:[{...fullAccountManifest.campanhas[0],mcc_id:'888-777-6666',mcc_nome:'MCC e-com'}]};
-const managerLinked=db.importManifest(db.create(),managerManifest,()=>[],{trackEvents:false}).base;
+const managerLinked=db.importManifest(db.create(),managerManifest,()=>[]).base;
 assert.equal(managerLinked.campanhas[0].mcc_id,'888-777-6666','a campanha mantém separado o ID da MCC e da conta cliente');
 assert.deepEqual(managerLinked.mccs.map(item=>({id:item.id,nome:item.nome})),[{id:'888-777-6666',nome:'MCC e-com'}],'a base tem um catálogo compartilhado de MCCs para outras telas');
 assert.ok(Number.isFinite(Date.parse(managerLinked.mccs[0].ultima_importacao_em)),'a MCC registra a hora exata em que seu manifesto foi importado');
 managerLinked.mccs[0].ultima_importacao_em='2000-01-01T00:00:00.000Z';
-const renamedManager=db.importManifest(managerLinked,{...managerManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC atualizada'},campanhas:[{...managerManifest.campanhas[0],mcc_nome:'MCC atualizada'}]},()=>[],{trackEvents:false}).base;
+const renamedManager=db.importManifest(managerLinked,{...managerManifest,identificacao_mcc:{id:'888-777-6666',nome:'MCC atualizada'},campanhas:[{...managerManifest.campanhas[0],mcc_nome:'MCC atualizada'}]},()=>[]).base;
 assert.equal(renamedManager.campanhas[0].mcc_id,'888-777-6666');
 assert.equal(renamedManager.mccs[0].nome,'MCC atualizada','mudança de rótulo atualiza o catálogo sem perder a chave técnica');
 assert.ok(Date.parse(renamedManager.mccs[0].ultima_importacao_em)>Date.parse('2000-01-01T00:00:00.000Z'),'cada importação atualiza o horário da MCC');
 assert.deepEqual(JSON.parse(JSON.stringify(renamedManager.mccs[0].nomes_anteriores)),['MCC e-com'],'o catálogo preserva o rótulo anterior');
-const emptyManagerImport=db.importManifest(db.create(),{...managerManifest,campanhas:[]},()=>[],{trackEvents:false}).base;
+const emptyManagerImport=db.importManifest(db.create(),{...managerManifest,campanhas:[]},()=>[]).base;
 assert.equal(emptyManagerImport.mccs[0].nome,'MCC e-com','registra a MCC mesmo quando a importação válida não contém campanhas');
 assert.ok(Number.isFinite(Date.parse(emptyManagerImport.mccs[0].ultima_importacao_em)));
 assert.deepEqual(JSON.parse(JSON.stringify(db.normalize({...managerLinked,mccs:undefined}).mccs)),[],'base legada sem catálogo continua normalizável');
-assert.throws(()=>db.importManifest(db.create(),{...managerManifest,campanhas:[{...managerManifest.campanhas[0],mcc_id:'conta-inválida'}]},()=>[],{trackEvents:false}),/ID de MCC inválido/);
+assert.throws(()=>db.importManifest(db.create(),{...managerManifest,campanhas:[{...managerManifest.campanhas[0],mcc_id:'conta-inválida'}]},()=>[]),/ID de MCC inválido/);
 
 const ambiguousBase=db.create();
 ambiguousBase.campanhas.push({id:'old-c',nome_mcc:'Campanha antiga C',nome_exibicao:'Campanha antiga C',status:'pausada',conta_sufixo:'1234'});
 const ambiguousManifest={...fullAccountManifest,campanhas:[fullAccountManifest.campanhas[0],{nome_campanha_exato:'Campanha outra conta',metricas_D_zero:{data:{valor:'2026-09-29'},conta:{valor:'1234 - Outra loja'},conta_id:{valor:'999-888-7777'}}}]};
-const ambiguousResult=db.importManifest(ambiguousBase,ambiguousManifest,()=>[],{trackEvents:false}).base;
+const ambiguousResult=db.importManifest(ambiguousBase,ambiguousManifest,()=>[]).base;
 assert.equal(ambiguousResult.campanhas.find(item=>item.id==='old-c').conta_id,undefined,'prefixo ambíguo não reatribui campanha histórica');
 assert.equal(ambiguousResult.contas_identidade['1234'],undefined);
 console.log('database module ok');

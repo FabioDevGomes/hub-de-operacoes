@@ -15,7 +15,7 @@ test('overview campaign cells have another 10% less vertical padding without cha
   assert.ok(css.includes('table-layout:fixed;font-size:.78rem'));
   assert.ok(css.includes('min-height:50px;padding-block:6px'));
   for(const path of ['src/index.template.html','dist/index.html'])
-    assert.ok((await read(path)).includes('overview/overview.css?v=52'));
+    assert.ok((await read(path)).includes('overview/overview.css?v=53'));
 });
 
 test('only rows containing a corner test-limit link reserve space above the value and keep compact padding',async()=>{

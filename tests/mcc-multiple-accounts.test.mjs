@@ -22,7 +22,7 @@ test('alternating MCC accounts preserves campaigns, Diary, snapshots and Billing
   assert.equal(JSON.stringify(second.base.diario.filter(r=>r.campanha_id===oldCampaign.id)),JSON.stringify(oldDiary));
   assert.ok(second.mccBillingSales.every(s=>s.account==='444-555-6666'));
   assert.equal(second.movimentos.pausadas.length,0);
-  assert.ok(!second.events.some(e=>e.event_type==='campaign_pause_detected'));
+  assert.equal(second.events,undefined,'a importação não gera eventos de observabilidade');
   assert.equal(JSON.stringify(first),firstBefore,'importing only changes its returned copy');
 
   const third=db.importManifest(second.base,capture('2026-10-04','111-222-3333',['Produto A 01'],2),factory,{overwrite:true});

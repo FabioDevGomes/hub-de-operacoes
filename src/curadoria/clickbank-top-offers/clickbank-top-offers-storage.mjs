@@ -8,7 +8,53 @@ export const BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v3';
 export const LEGACY_BACKUP_V2_FORMAT = 'radar-clickbank-top-offers-backup-v2';
 export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
 
-const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Ocultar']);
+const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'Ocultar']);
+const MAX_TREND_SEARCH_HISTORY = 10000;
+
+function validTrendSearch(entry) {
+  return Boolean(entry && typeof entry.searchedAt === 'string' && Number.isFinite(Date.parse(entry.searchedAt)) &&
+    typeof entry.term === 'string' && entry.term.trim().length > 0 && entry.term.length <= 1000);
+}
+
+export function trendSearchHistory(record) {
+  const history = Array.isArray(record?.searchHistory) ? record.searchHistory.filter(validTrendSearch) : [];
+  if (typeof record?.lastSearchedAt === 'string' && Number.isFinite(Date.parse(record.lastSearchedAt)) &&
+    !history.some(entry => entry.searchedAt === record.lastSearchedAt)) {
+    history.push({searchedAt:record.lastSearchedAt,term:''});
+  }
+  return history.sort((a,b) => String(b.searchedAt).localeCompare(String(a.searchedAt)));
+}
+
+export function appendTrendSearch(record, searchedAt, term) {
+  const entry = {searchedAt,term:String(term ?? '').trim()};
+  if (!validTrendSearch(entry)) throw new Error('Busca de Google Trends inválida.');
+  return [entry,...trendSearchHistory(record).filter(item => item.term)].slice(0,MAX_TREND_SEARCH_HISTORY);
+}
+
+function mergeTrendSearchHistory(current, incoming) {
+  const merged = new Map();
+  for (const record of [current,incoming]) {
+    const counts = new Map();
+    for (const entry of trendSearchHistory(record).filter(item => item.term)) {
+      const key=JSON.stringify([entry.searchedAt,entry.term]);
+      counts.set(key,(counts.get(key)||0)+1);
+    }
+    for (const [key,count] of counts) {
+      const previous=merged.get(key);
+      if (!previous||count>previous.count) merged.set(key,{entry:JSON.parse(key),count});
+    }
+  }
+  return [...merged.values()].flatMap(({entry,count})=>Array.from({length:count},()=>({searchedAt:entry[0],term:entry[1]})))
+    .sort((a,b)=>String(b.searchedAt).localeCompare(String(a.searchedAt))).slice(0,MAX_TREND_SEARCH_HISTORY);
+}
+
+function preserveTrendSearchHistory(record, current) {
+  const searchHistory=mergeTrendSearchHistory(current,record);
+  const lastSearchedAt=[current?.lastSearchedAt,record.lastSearchedAt,searchHistory[0]?.searchedAt]
+    .filter(value=>typeof value==='string'&&Number.isFinite(Date.parse(value)))
+    .sort((a,b)=>Date.parse(b)-Date.parse(a))[0];
+  return searchHistory.length||lastSearchedAt?{...record,searchHistory,lastSearchedAt}:record;
+}
 
 export function openDB() {
   return new Promise((resolve, reject) => {
@@ -79,6 +125,8 @@ function validOfferRecord(storeName, record) {
     return Array.isArray(record.assessments) && record.assessments.length <= 10000 &&
       Array.isArray(record.keywordCandidates) && record.keywordCandidates.length <= 1000 &&
       record.keywordCandidates.every(value => typeof value === 'string' && value.trim().length > 0 && value.length <= 500) &&
+      (record.searchHistory == null || (Array.isArray(record.searchHistory) && record.searchHistory.length <= MAX_TREND_SEARCH_HISTORY && record.searchHistory.every(validTrendSearch))) &&
+      (record.lastSearchedAt == null || (typeof record.lastSearchedAt === 'string' && Number.isFinite(Date.parse(record.lastSearchedAt)))) &&
       record.assessments.every(item => item && typeof item.assessmentId === 'string' && item.assessmentId.length <= 160 &&
         ['up','stable','down','point_peak','low_volume','no_data','inconclusive'].includes(item.status) &&
         Array.isArray(item.countries) && item.countries.length <= 250 && item.countries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
@@ -109,8 +157,17 @@ export async function putOfferRecord(storeName, record) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
-    tx.objectStore(storeName).put(record);
-    tx.oncomplete = () => resolve(record);
+    const store=tx.objectStore(storeName);
+    let stored=record;
+    if(storeName===STORES.trends){
+      const request=store.get(record.offerKey);
+      request.onsuccess=()=>{
+        stored=preserveTrendSearchHistory(record,request.result);
+        if(!validOfferRecord(storeName,stored)){tx.abort();return;}
+        store.put(stored);
+      };
+    }else store.put(record);
+    tx.oncomplete = () => resolve(stored);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
@@ -146,8 +203,13 @@ export async function saveTrendPage(record,metadataPatch={}) {
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction([STORES.trends,STORES.offerMetadata],'readwrite');
-    let metadata;
-    tx.objectStore(STORES.trends).put(record);
+    let storedRecord,metadata;
+    const trendsStore=tx.objectStore(STORES.trends),trendRequest=trendsStore.get(record.offerKey);
+    trendRequest.onsuccess=()=>{
+      storedRecord=preserveTrendSearchHistory(record,trendRequest.result);
+      if(!validOfferRecord(STORES.trends,storedRecord)){tx.abort();return;}
+      trendsStore.put(storedRecord);
+    };
     if(Object.keys(metadataPatch).length){
       const store=tx.objectStore(STORES.offerMetadata),request=store.get(record.offerKey);
       request.onsuccess=()=>{
@@ -157,9 +219,34 @@ export async function saveTrendPage(record,metadataPatch={}) {
         store.put(metadata);
       };
     }
-    tx.oncomplete=()=>resolve({record,metadata});
+    tx.oncomplete=()=>resolve({record:storedRecord,metadata});
     tx.onerror=()=>reject(tx.error||new Error('Falha ao salvar ficha.'));
     tx.onabort=()=>reject(tx.error||new Error('Gravação da ficha cancelada.'));
+  });
+}
+
+// Add a successful search to the current record without touching assessments or candidates.
+export async function setTrendSearchTimestamp(identity, searchedAt, term) {
+  if (!identity || !validOfferRecord(STORES.trends,{...identity,assessments:[],keywordCandidates:[],searchHistory:[]})) {
+    throw new Error('Identidade da oferta ClickBank inválida.');
+  }
+  const initial={...identity,assessments:[],keywordCandidates:[]};
+  const nextEntry={searchedAt,term:String(term??'').trim()};
+  if (!validTrendSearch(nextEntry)) throw new Error('Busca de Google Trends inválida.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORES.trends,'readwrite'),store=tx.objectStore(STORES.trends);
+    let stored;
+    const request=store.get(identity.offerKey);
+    request.onsuccess=()=>{
+      const previous=request.result||initial;
+      stored={...previous,...identity,lastSearchedAt:searchedAt,searchHistory:appendTrendSearch(previous,searchedAt,nextEntry.term)};
+      if(!validOfferRecord(STORES.trends,stored)){tx.abort();return;}
+      store.put(stored);
+    };
+    tx.oncomplete=()=>resolve(stored);
+    tx.onerror=()=>reject(tx.error||new Error('Não foi possível salvar o histórico de buscas.'));
+    tx.onabort=()=>reject(tx.error||new Error('Não foi possível salvar o histórico de buscas.'));
   });
 }
 

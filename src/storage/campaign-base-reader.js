@@ -5,13 +5,11 @@
     const db = await openDatabase();
     try {
       return await new Promise((resolve, reject) => {
-        const stores = includeCatalog ? ['bases', 'events', 'catalogos'] : ['bases', 'events'];
+        const stores = includeCatalog ? ['bases', 'catalogos'] : ['bases'];
         const tx = db.transaction(stores, 'readonly');
-        const snapshot = {base:null, events:[], catalog:null};
+        const snapshot = {base:null, catalog:null};
         const base = tx.objectStore('bases').get('atual');
-        const events = tx.objectStore('events').getAll();
         base.onsuccess = () => { snapshot.base = base.result || null; };
-        events.onsuccess = () => { snapshot.events = events.result || []; };
         if (includeCatalog) {
           const catalog = tx.objectStore('catalogos').get('atual');
           catalog.onsuccess = () => { snapshot.catalog = catalog.result || null; };

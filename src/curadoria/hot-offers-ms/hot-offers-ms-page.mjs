@@ -5,7 +5,6 @@ import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
-import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=2';
 
@@ -42,22 +41,6 @@ function trendsFor(key) { return trends.find(item => item.offerKey === key) || {
 function imagesFor(key) { return images.find(item => item.offerKey === key) || {offerKey:key,assessments:[]}; }
 function glimpseFor(item) { return [...glimpse].filter(value => value.productKey === item.productKey).sort((a,b) => String(b.capturedAt).localeCompare(String(a.capturedAt)))[0] || null; }
 function currentOffer(key) { return offers.find(item => item.offerKey === key) || null; }
-function offerRefs(item) { return item ? [{origin:'hot-offers-ms',scope:item.scope,offerId:String(item.offerId)}] : []; }
-function subjectId(item) { return 'hot-offers-ms:' + item.scope + ':' + item.offerId; }
-function curationSnapshot(item) {
-  return {
-    offerId:String(item.offerId),scope:item.scope,productName:item.productName,category:item.category || null,
-    payment:item.payment || null,countriesVisible:[...(item.countriesVisible || [])],additionalCountryCount:item.additionalCountryCount || 0,
-    affiliationStatus:item.affiliationStatus || 'unknown',createdAt:item.createdAt || null,firstSeenAt:item.firstSeenAt || null,lastSeenAt:item.lastSeenAt || null,
-  };
-}
-function latestImagesSnapshot(record) {
-  const latest = Images.latestByCountry(record?.assessments || []);
-  return {currentByCountry:[...latest.values()]};
-}
-function fireObservability(promise) {
-  Promise.resolve(promise).catch(error => console.warn('Não foi possível registrar a observabilidade da Curadoria.',error));
-}
 async function refresh() {
   [offers,collections,snapshots,decisions,trends,images] = await Promise.all(Object.values(Storage.STORES).map(name => Storage.getAll(name)));
   glimpse = await GlimpseStorage.getAllAnalyses().catch(() => []);
@@ -145,12 +128,6 @@ async function saveDecision(offerKey,status,notes='') {
   await Storage.put(Storage.STORES.decisions,stored);
   decisions = [...decisions.filter(entry => entry.offerKey !== offerKey),stored];
   show();
-  const previousStatus = previous.history?.at(-1)?.status || Decisions.DEFAULT_DECISION;
-  fireObservability(CurationObservability.recordDecision({
-    origin:'hot-offers-ms',subjectId:subjectId(item),productKey:item.productKey,productName:item.productName,offerRefs:offerRefs(item),
-    offerSnapshot:curationSnapshot(item),trends:trendsFor(offerKey),images:latestImagesSnapshot(imagesFor(offerKey)),glimpse:glimpseFor(item),
-    decision:stored,previousStatus,
-  }));
   view.showToast('Decisão salva para esta oferta.');
   view.refreshOffer(item);
 }
@@ -166,7 +143,6 @@ async function saveTrend(offerKey,status,draft = {}) {
   await Storage.put(Storage.STORES.trends,stored);
   trends = [...trends.filter(entry => entry.offerKey !== offerKey),stored];
   show(); view.refreshOffer(item,'trends');
-  fireObservability(CurationObservability.recordAssessment({origin:'hot-offers-ms',subjectId:subjectId(item),productKey:item.productKey,productName:item.productName,offerRefs:offerRefs(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}}));
   view.showToast('Avaliação de Trends salva.');
   return true;
 }
@@ -223,7 +199,6 @@ async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=fa
   const stored = {...old,offerKey,offerId:item.offerId,productName:item.productName,searchTerm:assessment.searchTerm,assessments:Images.appendAssessment(old.assessments,assessment)};
   await Storage.put(Storage.STORES.images,stored); images = [...images.filter(entry => entry.offerKey !== offerKey),stored];
   show(); view.refreshOffer(item,'images');
-  fireObservability(CurationObservability.recordAssessment({origin:'hot-offers-ms',subjectId:subjectId(item),productKey:item.productKey,productName:item.productName,offerRefs:offerRefs(item),kind:'images',assessment,summary:{status:Images.resultLabel(status),country,searchTerm:assessment.searchTerm,sampleSize:20,negativeKeywordCandidates:assessment.negativeKeywordCandidates,capturedAt:assessment.capturedAt}}));
   view.showToast(candidateOnly ? 'Candidatas negativas salvas · ' + country + '.' : 'Avaliação visual salva: ' + Images.resultLabel(status) + ' · ' + country + '.');
 }
 async function saveImageSearchTerm(offerKey,term) {

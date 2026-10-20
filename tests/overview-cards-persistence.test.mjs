@@ -98,12 +98,12 @@ test('table-only adapter skips card projections and the MCC apply saves summary 
   assert.equal(JSON.stringify(persisted),before);assert.equal(notifications,2);assert.equal(closed,3);assert.equal(quoteCalls,3);
 });
 
-test('the real MCC write includes base and summary in one transaction, no separate cache store or write',async()=>{
+test('the real MCC write includes base and summary in one transaction without touching legacy events',async()=>{
   const html=await readFile(new URL('../src/preparador-MCC/index.html',import.meta.url),'utf8'),start=html.indexOf('    function writePanelBase('),end=html.indexOf('\n    }',start)+6;
-  const sandbox=vm.createContext({PANEL_BASE_STORE:'bases',PANEL_EVENT_STORE:'events',PANEL_BASE_KEY:'atual',panelClone:structuredClone});
+  const sandbox=vm.createContext({PANEL_BASE_STORE:'bases',PANEL_BASE_KEY:'atual',panelClone:structuredClone});
   vm.runInContext(html.slice(start,end),sandbox);
   let count=0,written;
-  const db={transaction(names,mode){count++;assert.deepEqual([...names],['bases','events']);assert.equal(mode,'readwrite');const request={result:[]},tx={objectStore(name){return name==='bases'?{put(base,key){written=base;assert.equal(key,'atual')}}:{getAllKeys(){return request},add(){}}}};queueMicrotask(()=>{request.onsuccess();tx.oncomplete()});return tx}};
-  const base=fixture();await sandbox.writePanelBase(db,base);
-  assert.equal(count,1);assert.deepEqual(json(written.overview_cards),json(base.overview_cards));assert.equal(written.event_log,undefined);
+  const db={transaction(names,mode){count++;assert.deepEqual([...names],['bases']);assert.equal(mode,'readwrite');const tx={objectStore(name){assert.equal(name,'bases');return{put(base,key){written=base;assert.equal(key,'atual')}}}};queueMicrotask(()=>tx.oncomplete());return tx}};
+  const base=fixture();base.event_log=[{event_id:'legacy-event',tipo:'preserved'}];await sandbox.writePanelBase(db,base);
+  assert.equal(count,1);assert.deepEqual(json(written.overview_cards),json(base.overview_cards));assert.deepEqual(json(written.event_log),json(base.event_log));
 });

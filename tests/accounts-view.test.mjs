@@ -26,9 +26,9 @@ const sample = (status='ativa', overrides={}) => ({
   domain:'.example.shop',totals:{investment:0,impressions:0,clicks:0,conversions:null},roi:null,...overrides
 });
 const format = {num:value=>value==null?'—':String(value),money:value=>value==null?'—':'$'+value,pct:String};
-function setup(rows=[sample(),sample('pausada')]) {
+function setup(rows=[sample(),sample('pausada')],accountStatuses={}) {
   const root=fakeRoot();
-  let snapshot={rows,period:'Synthetic period'};
+  let snapshot={rows,accountStatuses,period:'Synthetic period'};
   const controller=mount({root,getSnapshot:()=>snapshot,format});
   controller.render();
   return {root,controller,update(value){snapshot=value}};
@@ -80,6 +80,17 @@ test('matrix shows MCC above each account inside one header cell and escapes the
   assert.match(html,/<th><span class="account-matrix-mcc">MCC e-com<\/span><span class="account-matrix-account">Conta A<\/span><\/th>/);
   assert.match(html,/account-matrix-mcc">&lt;img src=x&gt;/);
   assert.doesNotMatch(html,/<img/);
+});
+
+test('matrix keeps a directory-active account visible with empty cells and no fabricated product',()=>{
+  const {root}=setup([sample()],{'333-444-5555':'active'});
+  assert.match(root.elements.accountReportAccount.innerHTML,/value="333-444-5555">333-444-5555/);
+  assert.match(root.elements.accountMatrixHead.innerHTML,/<th><span class="account-matrix-mcc">MCC não identificada<\/span><span class="account-matrix-account">Conta 333-444-5555<\/span><\/th>/);
+  assert.match(root.elements.accountMatrixBody.innerHTML,/title="">—<\/td>/);
+  assert.match(root.elements.accountReportKpis.innerHTML,/Contas identificadas/);
+
+  change(root,'accountReportStatus','pausada');
+  assert.match(root.elements.accountMatrixHead.innerHTML,/Conta 333-444-5555/,'campaign situation filters do not remove active directory account columns');
 });
 
 test('detail renders eleven aligned columns, safe domain links and missing values',()=>{

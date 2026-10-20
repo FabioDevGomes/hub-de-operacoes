@@ -5,11 +5,13 @@ import * as TopOffersDecision from '../src/curadoria/clickbank-top-offers/clickb
 
 assert.equal(TopOffersDecision.DEFAULT_DECISION,DEFAULT_DECISION);
 assert.deepEqual(DECISION_OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Ocultar']);
-assert.deepEqual(TopOffersDecision.OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Solicitação Enviada','Ocultar']);
+assert.deepEqual(TopOffersDecision.OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Solicitação Enviada','Precisa de aprovação','Ocultar']);
 assert.equal(TopOffersDecision.normalizeDecision('Solicitação Enviada'),'Solicitação Enviada');
 assert.equal(TopOffersDecision.normalizeDecision('valor desconhecido'),DEFAULT_DECISION);
 assert.equal(TopOffersDecision.rowClass('Solicitação Enviada'),'');
 assert.equal(TopOffersDecision.OPTIONS.find(option=>option.value==='Solicitação Enviada')?.tone,decisionTone('Revisar'));
+assert.equal(TopOffersDecision.normalizeDecision('Precisa de aprovação'),'Precisa de aprovação');
+assert.equal(TopOffersDecision.OPTIONS.find(option=>option.value==='Precisa de aprovação')?.tone,decisionTone('Revisar'));
 assert.match(TopOffersDecision.buttonHtml('Solicitação Enviada','data-decision-key','offer-1'),/decision-badge review/);
 assert.match(TopOffersDecision.buttonHtml('Solicitação Enviada','data-decision-key','offer-1'),/>Solicitação Enviada<\/button>/);
 assert.match(buttonHtml('Revisar','data-decision-key','offer-1'),/decision-badge review/);
@@ -36,6 +38,7 @@ try{
   assert.equal(shown,true,'o seletor local abre o diálogo');
   assert.deepEqual(buttons.map(button=>button.textContent),TopOffersDecision.OPTIONS.map(option=>option.value));
   assert.equal(buttons[4].className,'decision-option review','Solicitação Enviada usa o mesmo tom da opção Revisar no seletor');
+  assert.equal(buttons[5].className,'decision-option review','Precisa de aprovação usa o mesmo tom da opção Revisar no seletor');
   assert.match(buttons[3].className,/selected/,'a decisão atual continua selecionada');
 }finally{
   if(originalDocument===undefined)delete globalThis.document;
@@ -47,5 +50,5 @@ const controller=await readFile(new URL('../src/curadoria/clickbank-top-offers/c
 const storage=await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs',import.meta.url),'utf8');
 assert.ok(view.includes("DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus"),'a ficha abre o seletor estendido apenas na lista ClickBank');
 assert.ok(controller.includes('TopOffersDecision.normalizeDecision(status)'),'o salvamento normaliza a escolha local antes de gravá-la');
-assert.match(storage,/DECISION_VALUES = new Set\(\[[^\]]*'Solicitação Enviada'/,'a store e a validação de backups aceitam o novo status');
+assert.match(storage,/DECISION_VALUES = new Set\(\[[^\]]*'Precisa de aprovação'/,'a store e a validação de backups aceitam o novo status');
 console.log('clickbank top offers decisions ok');

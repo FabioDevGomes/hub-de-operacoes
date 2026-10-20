@@ -6,7 +6,6 @@ import * as Trends from '../trends-domain.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
-import * as CurationObservability from '../curation-observability.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=2';
 import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-notes-2';
 import {mountGlimpseReferenceBar} from '../glimpse-reference-bar.mjs?v=2';
@@ -27,11 +26,6 @@ function imagesFor(item) { const key=offerContext(item).offerKey;return images.f
 function countryCodes(item) { return [...new Set([...(item.geoTargets||[]),...(trendFor(item).manualCountries||[])].map(value=>String(value||'').trim().toUpperCase()).filter(value=>/^[A-Z]{2}$/.test(value)))]; }
 function show() { view.render({captures,trends,images,decisions,glimpse}); }
 function updateRecord(records, next) { return [...records.filter(record=>record.offerKey!==next.offerKey),next]; }
-function recordAssessment(kind,item,assessment) {
-  const context=offerContext(item),event=CurationObservability.recordAssessment({origin:'smartadv-offers',subjectId:`smartadv-offers:${context.offerId}`,productKey:context.productKey,productName:context.productName,offerRefs:[{origin:'smartadv-offers',offerId:context.offerId}],kind,assessment,summary:kind==='trends'?{status:Trends.resultLabel(assessment.status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}:{status:Images.resultLabel(assessment.status),country:assessment.country,searchTerm:assessment.searchTerm,sampleSize:20,negativeKeywordCandidates:assessment.negativeKeywordCandidates,capturedAt:assessment.capturedAt}});
-  Promise.resolve(event).catch(error=>console.warn('Não foi possível registrar a avaliação na Observabilidade da Curadoria.',error));
-}
-
 async function refresh() {
   [captures,trends,images,decisions]=await Promise.all([Storage.getAll(Storage.STORES.captures),Storage.getAll(Storage.STORES.trends),Storage.getAll(Storage.STORES.images),Storage.getAll(Storage.STORES.decisions)]);
   if(!captures.length){await Storage.seedInitialCaptureIfEmpty(createInitialCapture());captures=await Storage.getAll(Storage.STORES.captures)}
@@ -74,7 +68,7 @@ async function saveTrend(item,status,draft={}) {
   if(!status){const stored={...old,...context,pageDraft:{...draft,status:''}};await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();return true;}
   const assessment={assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries||[]).filter(value=>countryCodes(item).includes(value)))].slice(0,5),productAge:draft.productAge||null,searchTerm:String(draft.term||context.productName).trim(),date:Trends.localDateKey(),capturedAt:new Date().toISOString()};
   const stored={...old,...context,pageDraft:null,assessments:Trends.appendAssessment(old.assessments,assessment)};
-  try{await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();view.refreshOffer(item,'trends');recordAssessment('trends',item,assessment);view.showMessage('Avaliação de Google Trends salva.');return true}
+  try{await Storage.put(Storage.STORES.trends,stored);trends=updateRecord(trends,stored);show();view.refreshOffer(item,'trends');view.showMessage('Avaliação de Google Trends salva.');return true}
   catch(error){console.error(error);view.showMessage('Não foi possível salvar a avaliação de Google Trends.',{error:true});return false}
 }
 async function addTrendCandidate(item,value) {
@@ -103,7 +97,7 @@ function openTrends(term) { const tab=window.open(Trends.exploreUrl(term),'googl
 async function saveImage(item,country,status,candidates=[],{candidateOnly=false}={}) {
   const context=offerContext(item),old=imagesFor(item),assessment={assessmentId:crypto.randomUUID(),country,status,negativeKeywordCandidates:[...new Set(candidates.map(value=>String(value||'').trim()).filter(Boolean))],searchTerm:old.searchTerm||context.productName,date:Trends.localDateKey(),capturedAt:new Date().toISOString(),sampleSize:20,source:'google-images-manual'};
   const stored={...old,...context,searchTerm:assessment.searchTerm,assessments:Images.appendAssessment(old.assessments,assessment)};
-  try{await Storage.put(Storage.STORES.images,stored);images=updateRecord(images,stored);show();view.refreshOffer(item,'images');recordAssessment('images',item,assessment);view.showMessage(candidateOnly?`Candidatas negativas salvas · ${country}.`:`Avaliação visual salva: ${Images.resultLabel(status)} · ${country}.`);return true}
+  try{await Storage.put(Storage.STORES.images,stored);images=updateRecord(images,stored);show();view.refreshOffer(item,'images');view.showMessage(candidateOnly?`Candidatas negativas salvas · ${country}.`:`Avaliação visual salva: ${Images.resultLabel(status)} · ${country}.`);return true}
   catch(error){console.error(error);view.showMessage('Não foi possível salvar a avaliação de Google Imagens.',{error:true});throw error}
 }
 async function saveImageSearchTerm(item,term) {

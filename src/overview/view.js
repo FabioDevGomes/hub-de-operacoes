@@ -3,7 +3,7 @@
   function mount({root,state,getSnapshot,getCardSnapshot,getCardRevision,domain,format,actions,preferences}){
     const $=selector=>root.querySelector(selector),$$=selector=>[...root.querySelectorAll(selector)];
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
-    const columnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null,selectedCampaignDate='';
+    const columnPreferenceKey='hub:overview:visible-columns:v2',legacyColumnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null,selectedCampaignDate='';
     // Full adapter refreshes invalidate presentation caches; local sorting/filtering does not.
     let presentationSnapshot=null,renderedFilter=null,presentationRows=[];
     let cardSnapshot=null,cardRevision;
@@ -68,13 +68,17 @@
     picker.ontoggle=positionColumnMenu;
     viewport?.addEventListener('resize',positionColumnMenu);
     picker.onkeydown=event=>{if(event.key==='Escape'){picker.open=false;picker.querySelector('summary')?.focus()}};
-    try{const stored=JSON.parse(preferences?.getItem(columnPreferenceKey)||'null');if(Array.isArray(stored))selectedColumns=stored}catch{}
+    try{
+      const stored=JSON.parse(preferences?.getItem(columnPreferenceKey)||'null');
+      if(Array.isArray(stored))selectedColumns=stored;
+      else{const legacy=JSON.parse(preferences?.getItem(legacyColumnPreferenceKey)||'null');if(Array.isArray(legacy))selectedColumns=legacy.includes('mcc')?legacy:[...legacy,'mcc']}
+    }catch{}
     function saveColumns(){try{preferences?.setItem(columnPreferenceKey,JSON.stringify(selectedColumns));$('#overviewColumnsMessage').textContent=''}catch{$('#overviewColumnsMessage').textContent='Preferência válida nesta sessão; não foi possível salvá-la no navegador.'}}
     function renderColumnOptions(columns){
       $('#overviewColumnOptions').innerHTML=columns.map(([key,label])=>`<label><input type="checkbox" data-column-choice="${key}" ${key==='campaign'||selectedColumns==null||selectedColumns.includes(key)?'checked':''} ${key==='campaign'?'disabled':''}><span>${esc(label)}</span></label>`).join('');
       $$('[data-column-choice]').forEach(input=>input.onchange=()=>{const key=input.dataset.columnChoice,chosen=new Set(selectedColumns||columns.map(([key])=>key));input.checked?chosen.add(key):chosen.delete(key);chosen.add('campaign');selectedColumns=[...chosen];saveColumns();renderTotals();$(`[data-column-choice="${key}"]`)?.focus?.()});
     }
-    $('#overviewColumnsReset').onclick=()=>{selectedColumns=null;try{preferences?.removeItem(columnPreferenceKey);$('#overviewColumnsMessage').textContent=''}catch{$('#overviewColumnsMessage').textContent='Padrão restaurado somente nesta sessão.'}renderTotals()};
+    $('#overviewColumnsReset').onclick=()=>{selectedColumns=null;try{preferences?.removeItem(columnPreferenceKey);preferences?.removeItem(legacyColumnPreferenceKey);$('#overviewColumnsMessage').textContent=''}catch{$('#overviewColumnsMessage').textContent='Padrão restaurado somente nesta sessão.'}renderTotals()};
     function saleRoiCell(sale){
       const snapshot=sale?.snapshot,roi=snapshot?.roi_percent;
       const detail=snapshot?`ROI acumulado no registro (${dateLabel(snapshot.sale_date)}${snapshot.sale_time?' '+snapshot.sale_time:''}): investimento ${fmtMoney(snapshot.investment_brl)}; receita ${fmtMoney(snapshot.revenue_brl)}. ${snapshot.unavailable_reason||'Fotografia preservada; não muda com capturas futuras.'}`:'Sem fotografia de ROI para esta venda manual registrada.';
@@ -169,7 +173,7 @@
       const pending=Math.max(0,Number(snapshot.pendingSaleCount)||0),fractional=Math.max(0,Number(snapshot.fractionalSaleCount)||0),attention=pending+fractional,pendingTitle=fractional>0?(fractional===1?'Venda fracionária,':'Vendas fracionárias,'):(pending===1?'Venda provisória,':'Vendas provisórias,'),pendingStatus=fractional>0?`${fmtNum(fractional)} com valor real a confirmar${pending>0?` · ${fmtNum(pending)} pendente(s) de MCC`:''}`:pending===1?'pendente de confirmação':'pendentes de confirmação',pendingStatusMarkup=fractional>0?`<a class="overview-kpi-main-label overview-kpi-fractional-link" href="#" aria-haspopup="dialog" aria-controls="fractionalValueDialog">${esc(pendingStatus)}</a>`:`<span class="overview-kpi-main-label">${esc(pendingStatus)}</span>`,pendingDotClass=attention>0?'dot warn':'dot',tooltip=fractional>0?'A MCC reconheceu conversão(ões) fracionária(s), contada(s) como venda(s), mas o valor pode estar incompleto ou ausente. Clique no link para informar e confirmar o valor real.':'Vendas registradas manualmente permanecem provisórias até serem conciliadas com os dados da MCC.',updates=snapshot.mccImportUpdates||{},formatMccUpdate=(key,label)=>{const update=updates[key]||{},date=update.timestamp?new Date(update.timestamp):null,valid=date&&Number.isFinite(date.getTime()),formatted=valid?new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(date):'Sem registro',sourceSuffix=update.source==='capture'?' · captura':'',title=update.source==='capture'?'Horário da última captura da MCC; o histórico antigo não registra o horário individual de envio.':update.source==='import'?'Horário da última importação desta MCC.':'Nenhum horário de importação registrado para esta MCC.';return`<span title="${esc(title)}">${label}: ${esc(formatted+sourceSuffix)}</span>`};
       return`<section class="kpi overview-kpi overview-kpi-base" aria-label="Vendas provisórias e datas D−1 e D0"><div class="overview-kpi-heading"><span class="overview-kpi-pending-title"><span class="${pendingDotClass} overview-kpi-pending-dot" aria-hidden="true"></span><span class="kpi-label">${pendingTitle}</span></span><span class="overview-info-icon" role="img" aria-label="Informações sobre vendas provisórias e fracionárias" title="${esc(tooltip)}"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25"/><path d="M8 7.1v4.1M8 4.8h.01"/></svg></span></div><div class="overview-kpi-main overview-kpi-meta-main"><strong class="kpi-value">${fmtNum(attention)}</strong>${pendingStatusMarkup}</div><div class="overview-kpi-dates" aria-label="Datas D−1 e D0">${manifestPeriodMarkup(snapshot,'d1','D−1')}<span class="overview-manifest-separator" aria-hidden="true">·</span>${manifestPeriodMarkup(snapshot,'d0','D0')}</div></section>`;
     }
-    function renderRow({c,identity,totals,budget,testLimit,testRemaining,zeroDays,roi,profit,account,sales,adjustment,rejected,numberReuse,campaignId,policyLimitation,pausedAt,pauseConfirmedAt,diaryName,diarySource,saleHistory=[]},headers,referenceDate,remainingMinimum,remainingYellowMinimum){
+    function renderRow({c,identity,totals,budget,testLimit,testRemaining,zeroDays,roi,profit,account,mcc,sales,adjustment,rejected,numberReuse,campaignId,policyLimitation,pausedAt,pauseConfirmedAt,diaryName,diarySource,saleHistory=[]},headers,referenceDate,remainingMinimum,remainingYellowMinimum){
       const paused=c._status==='pausada',historical=c._status==='historico',reactivated=c._movement==='reativada',
         baseStatus=historical?(diarySource==='legacy'?'Resumo Totais':'Histórico'):paused?(rejected?'Pausada por reprovação':'Pausada'):rejected?'Ativa · Reprovada':reactivated?'Reativada':'Ativa',
         statusLabel=numberReuse?`${baseStatus} · Renumerar`:baseStatus,
@@ -199,6 +203,7 @@
         saleRoiSecond:saleRoiCell(saleHistory[1]),
         profit:`<td class="num ${profitClass}">${profit==null?'—':fmtMoney(profit)}</td>`,
         account:`<td class="num">${account?esc(account):'—'}</td>`,
+        mcc:`<td class="mcc-name" title="${esc(mcc||'MCC não identificada')}">${mcc?esc(mcc):'—'}</td>`,
         limit:`<td class="num hub-edit-host" title="${esc(budgetCaption)}">${limitContent}</td>`,
         remaining:`<td class="num ${remainingTone}" title="${esc(remainingTitle)}" data-remaining-value="${typeof remainingValue==='number'&&Number.isFinite(remainingValue)?remainingValue:''}">${budget?fmtMoney(testRemaining.value):displayCell(testRemaining)}</td>`,
         status:`<td><span class="status-tag ${statusClass}" title="${esc(statusTitle)}">${esc(statusLabel)}</span>${saleLabel?`<span class="status-tag sale-tag">${esc(saleLabel)}</span>`:''}${policyLimitation?`<span class="status-tag policy-limited" title="${esc(policyLimitation+'. Consulte “Detalhes da política” na tabela Anúncios para identificar a regra e o alcance da restrição.')}">Limitada pela política</span>`:''}</td>`};

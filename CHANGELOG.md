@@ -2,6 +2,98 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.26.3] - 2026-10-20
+
+- Adiciona ID de perfil de pagamento à lista de contas
+
+## [1.26.2] - 2026-10-20
+
+- Exibe e-mail de conta em texto simples com link discreto para editar
+
+## [1.26.1] - 2026-10-20
+
+- Adiciona cartões de status à tela Contas
+
+## [1.26.0] - 2026-10-20
+
+- Mantém contas ativas no Mapa por Conta
+
+## [1.25.0] - 2026-10-20
+
+- Adiciona cadastro manual de contas
+
+## [1.24.0] - 2026-10-20
+
+- Adiciona cadastro manual de e-mail às contas
+
+## [1.23.1] - 2026-10-20
+
+- Oculta faixa de indicadores na tela Contas
+
+## [1.23.0] - 2026-10-20
+
+- Adiciona status manual às contas
+
+## [1.22.19] - 2026-10-20
+
+- Adiciona coluna MCC à Visão Geral
+
+## [1.22.18] - 2026-10-20
+
+- Adiciona lista de contas com MCC e data inicial
+
+## [1.22.17] - 2026-10-20
+
+- Remove textos secundários da ficha Glimpse ClickBank
+
+## [1.22.16] - 2026-10-20
+
+- Reposiciona sinais emergentes na ficha Glimpse da ClickBank
+
+## [1.22.15] - 2026-10-20
+
+- Remover telas e instrumentação de observabilidade
+
+## [1.22.14] - 2026-10-20
+
+- Adiciona histórico de buscas Google Trends na ClickBank
+
+## [1.22.13] - 2026-10-20
+
+- Exibe atalho da oferta GuruMedia como link
+
+## [1.22.12] - 2026-10-20
+
+- Ajusta largura do histórico de buscas do Trends
+
+## [1.22.11] - 2026-10-20
+
+- Exibe apenas data e hora no histórico de busca do Trends
+
+## [1.22.10] - 2026-10-20
+
+- Reduz contraste de Trends não pesquisado na Top Offers CB
+
+## [1.22.9] - 2026-10-20
+
+- Adicionar decisão Precisa de aprovação em Top Offers CB
+
+## [1.22.8] - 2026-10-20
+
+- Atalho Abrir Top Offers adota formato de link sublinhado
+
+## [1.22.7] - 2026-10-20
+
+- Google Imagens usa somente países selecionados na análise
+
+## [1.22.6] - 2026-10-20
+
+- Histórico de buscas no Google Trends da Plataforma Guru Media
+
+## [1.22.5] - 2026-10-20
+
+- Adiciona link Abrir Top Offers no Marketplace
+
 ## [1.22.4] - 2026-10-18
 
 - Documenta consolidação do Faturamento no Controle Macro

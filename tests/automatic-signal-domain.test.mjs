@@ -54,13 +54,11 @@ assert.equal(lowConfidencePositive.classification,'favorable','confiança baixa 
 assert.equal(computeAutomaticSignal({images: {currentByCountry: [{status: 'dominant', country: 'US', capturedAt: '2026-09-20', refinementOf: 'consulta anterior'}]}}).components.images.dominanceContext, 'after_refinement');
 assert.equal(computeAutomaticSignal({trends: {assessments: [{status: 'up', capturedAt: '2026-09-20'}, {status: 'down', capturedAt: '2026-09-22'}]}}).components.trends.status, 'down', 'a avaliação mais recente prevalece mesmo se a ordem do histórico não for cronológica');
 
-const [observabilityDomain, manager, top, styles] = await Promise.all([
-  readFile(new URL('../src/curadoria/curation-observability-domain.mjs', import.meta.url), 'utf8'),
+const [manager, top, styles] = await Promise.all([
   readFile(new URL('../src/curadoria/gerentes/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../src/curadoria/top-performance/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../src/curadoria/trends-sheet.css', import.meta.url), 'utf8'),
 ]);
-assert.ok(observabilityDomain.includes('automatic_signal_version') && observabilityDomain.includes('automatic_signal_components'), 'snapshot decisao congela versão e componentes do sinal automático');
 assert.ok(manager.includes('automaticSignalBadge') && top.includes('automaticSignalBadge'), 'as duas listagens exibem a coluna automática');
 const badgeStyle = styles.match(/\.automatic-signal\{([^}]+)\}/)?.[1] || '';
 assert.ok(badgeStyle.includes('flex-direction:row') && badgeStyle.includes('white-space:nowrap'), 'resultado e cobertura do sinal automático devem ficar na mesma linha');

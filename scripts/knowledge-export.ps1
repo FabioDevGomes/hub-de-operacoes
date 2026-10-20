@@ -9,7 +9,6 @@ $script:KnowledgePersonalSkillNames = @(
 )
 $script:KnowledgePanelSkillNames = @(
     'controle-gastos-pessoal',
-    'observabilidade-decisoria',
     'painel-operacao-google-ads'
 )
 $script:KnowledgeIncludedExtensions = @(

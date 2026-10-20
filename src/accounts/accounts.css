@@ -90,6 +90,59 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-detail-controls select{background:#0a1627;border:1px solid var(--line);border-radius:9px;color:var(--text);outline:none}
 .account-detail-controls select:focus-visible{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,167,255,.12)}
 
+.account-directory-status-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,250px));gap:12px;max-width:520px;margin:0 0 12px}
+.account-directory-status-kpi{position:relative;display:grid;align-content:center;gap:7px;min-height:94px;padding:15px 18px 15px 21px;overflow:hidden;border-radius:16px;background:linear-gradient(145deg,#111f33,#0d192b);box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.account-directory-status-kpi::before{position:absolute;inset:0 auto 0 0;width:4px;background:var(--green);content:''}
+.account-directory-status-kpi.is-suspended::before{background:var(--red)}
+.account-directory-status-kpi span{color:#8eb0d3;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.account-directory-status-kpi strong{color:var(--green);font-size:1.18rem;line-height:1.1}
+.account-directory-status-kpi.is-suspended strong{color:#ff8191}
+.account-directory-panel{max-width:1050px}
+.account-directory-table{width:100%;border-collapse:collapse}
+.account-directory-table th,.account-directory-table td{padding:11px 14px;text-align:left;border-bottom:1px solid rgba(129,157,191,.16)}
+.account-directory-table th{color:#8eb0d3;font-size:.68rem;font-weight:500;white-space:nowrap}
+.account-directory-table td:first-child{font-weight:600}
+.account-directory-table tbody tr:last-child td{border-bottom:0}
+.account-directory-table .account-directory-date{white-space:nowrap}
+.account-directory-empty{text-align:center!important;color:var(--muted);padding:24px!important}
+.account-directory-head-actions{display:flex;align-items:center;gap:8px}
+.account-directory-add-button{min-height:34px;padding:7px 12px;border:1px solid #267456;border-radius:9px;background:#102d24;color:#63dda7;font:inherit;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.account-directory-add-button:hover{background:#153b2e}
+.account-directory-add-button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:560px){.account-directory-status-kpis{grid-template-columns:1fr 1fr;gap:8px}.account-directory-status-kpi{min-height:82px;padding:12px 10px 12px 15px}.account-directory-table th,.account-directory-table td{padding:10px 8px}.account-directory-table{font-size:.76rem}}
+main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
+.account-directory-status-cell{text-align:center!important;white-space:nowrap}
+.account-directory-status-button{display:inline-flex;align-items:center;justify-content:center;min-height:29px;min-width:104px;padding:5px 10px;border:1px solid #31506e;border-radius:999px;background:#17263a;color:#b9c9dc;font:inherit;font-size:.73rem;cursor:pointer;white-space:nowrap}
+.account-directory-email-cell{max-width:300px}
+.account-directory-payment-profile-cell{max-width:250px}
+.account-directory-email-value,.account-directory-payment-profile-value{display:block;max-width:calc(100% - 54px);overflow:hidden;padding-top:8px;text-overflow:ellipsis;white-space:nowrap}
+.account-directory-status-button[data-status="active"]{border-color:#267456;background:#102d24;color:#63dda7}
+.account-directory-status-button[data-status="suspended"]{border-color:#713943;background:#2b181d;color:#ff9aa5}
+.account-directory-status-button:focus-visible,.account-directory-status-choice:focus-visible,.account-directory-status-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.account-directory-status-dialog{width:min(560px,calc(100vw - 28px));padding:0;border:0;border-radius:18px;background:#0d192b;color:var(--text);box-shadow:0 18px 56px rgba(0,0,0,.55)}
+.account-directory-email-form,.account-directory-payment-profile-form,.account-directory-manual-account-form{margin:0}
+.account-directory-email-label,.account-directory-field-label{display:block;margin:0 0 6px;color:#b9c9dc;font-size:.76rem}
+.account-directory-email-input,.account-directory-payment-profile-input,.account-directory-account-input{box-sizing:border-box;width:100%;min-height:40px;padding:9px 11px;border:1px solid #31506e;border-radius:8px;background:#081525;color:var(--text);font:inherit;font-size:.82rem}
+.account-directory-email-input:focus-visible,.account-directory-payment-profile-input:focus-visible,.account-directory-account-input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.account-directory-email-actions,.account-directory-payment-profile-actions,.account-directory-account-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.account-directory-email-cancel{min-height:44px;border:1px solid #31506e;border-radius:10px;background:#132034;color:#c4d1e0;font:inherit;font-size:.82rem;cursor:pointer}
+.account-directory-email-cancel:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.account-directory-status-dialog::backdrop{background:rgba(2,8,18,.78);backdrop-filter:blur(3px)}
+.account-directory-status-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px;border-bottom:1px solid var(--line)}
+.account-directory-status-kicker{display:block;margin-bottom:6px;color:var(--green);font-size:.65rem;font-weight:850;letter-spacing:.09em}
+.account-directory-status-head h2{margin:0 0 4px;font-size:1.05rem}
+.account-directory-status-head p{margin:0;color:var(--muted);font-size:.78rem}
+.account-directory-status-close{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--muted);font-size:1.25rem;line-height:1;cursor:pointer}
+.account-directory-status-body{padding:17px 20px 20px}
+.account-directory-status-body>strong{display:block;margin-bottom:14px;color:#d4e4f6;font-size:.83rem}
+.account-directory-status-error{min-height:0;margin:0;color:#ff9aa5;font-size:.76rem}
+.account-directory-status-error:not(:empty){margin:0 0 12px;padding:8px 10px;border:1px solid rgba(255,111,125,.3);border-radius:8px;background:rgba(255,91,110,.08)}
+.account-directory-status-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.account-directory-status-choice{min-height:44px;border:1px solid #31506e;border-radius:10px;background:#132b44;color:#d3e5f7;font:inherit;font-size:.82rem;font-weight:750;cursor:pointer}
+.account-directory-status-choice.is-active{border-color:#267456;background:#102d24;color:#63dda7}
+.account-directory-status-choice.is-suspended{border-color:#713943;background:#2b181d;color:#ff9aa5}
+@media(max-width:560px){.account-directory-status-head,.account-directory-status-body{padding-left:15px;padding-right:15px}.account-directory-status-button{min-width:88px;padding-inline:6px}.account-directory-email-cell,.account-directory-payment-profile-cell{max-width:220px}.account-directory-status-actions,.account-directory-email-actions,.account-directory-payment-profile-actions,.account-directory-account-actions{gap:7px}.account-directory-head-actions{gap:6px}.account-directory-add-button{padding-inline:9px}}
+
 .account-domain-link{color:#8fc9ff;text-decoration:underline;text-decoration-color:rgba(143,201,255,.38);text-underline-offset:2px}
 .account-domain-link:hover{color:#b2ddff;text-decoration-color:currentColor}
 .account-domain-link:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}

@@ -67,6 +67,25 @@ test('removed option resets to all without persisting or mutating filters', () =
   assert.equal(filters.account,'deleted');
 });
 
+test('accounts marked active in the directory remain matrix columns without adding campaigns or KPI counts', () => {
+  const state=createAccountState();
+  const statuses={A:'active',C:'active',D:'suspended','Sem conta':'active','  E  ':'active'};
+  const report=buildAccountReport(rows,state,statuses);
+  assert.deepEqual(report.accounts,['A','B','C','E']);
+  assert.deepEqual(report.accountOptions,['A','B','C','E','Sem conta']);
+  assert.equal(report.kpis.campaigns,3);
+  assert.equal(report.kpis.accounts,2,'KPI remains a count of accounts with campaigns in the current campaign scope');
+
+  const paused=buildAccountReport(rows,{...state,status:'pausada'},statuses);
+  assert.ok(paused.accounts.includes('C'),'an active account remains a column even with the campaign filter set to Pausadas');
+  assert.deepEqual(paused.rows.map(item=>item.status),['pausada','pausada']);
+
+  const selected=buildAccountReport(rows,{...state,account:'C'},statuses);
+  assert.deepEqual(selected.accounts,['C'],'the active empty account remains selectable and visible by itself');
+  assert.equal(selected.products.length,0,'no campaign or product is fabricated for that account');
+  assert.equal(selected.kpis.accounts,0);
+});
+
 test('CPA product bars count unique products, preserve zero and missing ranges', () => {
   const bars = accountProductsByCpaRange([...rows,row('alpha','C','ativa',70),row('delta','A','ativa',0)]);
   assert.deepEqual(bars.map(x=>[x.range,x.count]),[[0,1],[70,1],[80,1],[90,1],[null,1]]);

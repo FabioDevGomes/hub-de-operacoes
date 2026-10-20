@@ -34,7 +34,7 @@ function storage(records, {outcome = 'complete', failTransaction = false} = {}) 
   }};
 }
 
-test('startup reads base, events and catalog together; waits for completion and closes', async () => {
+test('startup reads base and optional catalog without opening the legacy events store', async () => {
   const records = {bases:{schema:'synthetic'}, events:[{event_id:'one'}], catalogos:{schema:'catalog'}};
   const db = storage(records);
   let settled = false;
@@ -43,18 +43,18 @@ test('startup reads base, events and catalog together; waits for completion and 
   assert.equal(settled, false);
   assert.equal(db.calls.closes, 0);
   db.complete();
-  assert.deepEqual(await pending, {base:records.bases, events:records.events, catalog:records.catalogos});
+  assert.deepEqual(await pending, {base:records.bases, catalog:records.catalogos});
   assert.deepEqual(db.calls, {opens:1, closes:1,
-    transactions:[{stores:['bases','events','catalogos'],mode:'readonly'}],
-    reads:[['bases','atual'],['events','all'],['catalogos','atual']]});
+    transactions:[{stores:['bases','catalogos'],mode:'readonly'}],
+    reads:[['bases','atual'],['catalogos','atual']]});
 });
 
-test('later base refreshes retain full Event Log without rereading the catalog', async () => {
+test('later base refreshes read only the base and leave legacy events untouched', async () => {
   const db = storage({events:[{event_id:'two'}]});
   const pending = reader.read({openDatabase:db.openDatabase});
   await Promise.resolve(); db.complete();
-  assert.deepEqual(await pending, {base:null,events:[{event_id:'two'}],catalog:null});
-  assert.deepEqual(db.calls.transactions, [{stores:['bases','events'],mode:'readonly'}]);
+  assert.deepEqual(await pending, {base:null,catalog:null});
+  assert.deepEqual(db.calls.transactions, [{stores:['bases'],mode:'readonly'}]);
   assert.equal(db.calls.closes, 1);
 });
 
@@ -92,7 +92,7 @@ function adapter(records) {
   return {context,state,db,CampaignDatabase,ProductCatalog,cloneCount:() => clones};
 }
 
-test('adapter normalizes valid base once, retains/deduplicates events and leaves stored input unchanged', async () => {
+test('adapter normalizes base once and leaves opaque legacy event data unchanged', async () => {
   const setup = adapter({});
   const base = setup.CampaignDatabase.create();
   base.campanhas = [{id:'synthetic',nome_mcc:'Synthetic campaign'}];
@@ -106,8 +106,9 @@ test('adapter normalizes valid base once, retains/deduplicates events and leaves
   const pending = fixture.context.restoreLocalBase({persist:false,renderPage:false});
   await Promise.resolve(); fixture.db.complete();
   assert.equal(await pending, true);
-  assert.equal(fixture.cloneCount() - initialClones, 1, 'mergeEventLogs owns normalization; no redundant full-base clone');
-  assert.deepEqual(JSON.parse(JSON.stringify(fixture.state.database.event_log)), [first,second]);
+  assert.equal(fixture.cloneCount() - initialClones, 1, 'a local base is cloned once without merging the legacy events store');
+  assert.deepEqual(JSON.parse(JSON.stringify(fixture.state.database.event_log)), [first]);
+  assert.deepEqual(fixture.db.calls.reads, [['bases','atual']], 'the legacy events store is never read');
   assert.deepEqual(JSON.parse(JSON.stringify(base)), JSON.parse(JSON.stringify(original)));
   assert.notEqual(fixture.state.database, base);
   assert.equal(fixture.state.database.diario[0].celulas.O.value, 0);

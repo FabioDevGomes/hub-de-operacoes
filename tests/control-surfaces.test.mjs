@@ -28,7 +28,6 @@ const tableSearches = [
   ['src/overview/template.html', 'dist/overview/template.html', /id="search" class="search hub-search-filter"/],
   ['src/tested-products/template.html', 'dist/tested-products/template.html', /id="testedSearch" class="search hub-search-filter"/],
   ['src/billing/billing-view.mjs', 'dist/billing/billing-view.mjs', /id="billingSearch" class="search hub-search-filter hub-search-filter--fill"/],
-  ['src/curadoria/curation-observability-view.mjs', 'dist/curadoria/curation-observability-view.mjs', /class="search hub-search-filter hub-search-filter--fill" data-filter="productName"/],
   ['src/curadoria/index.html', 'dist/curadoria/index.html', /class="control hub-search-filter hub-search-filter--fill" id="search"/],
   ['src/curadoria/gerentes/index.html', 'dist/curadoria/gerentes/index.html', /class="control hub-search-filter hub-search-filter--fill" placeholder="Buscar produto, país ou categoria"/],
   ['src/curadoria/top-performance/index.html', 'dist/curadoria/top-performance/index.html', /class="control hub-search-filter hub-search-filter--fill" id="search"/],
@@ -41,8 +40,6 @@ const tableSelects = [
   ['src/accounts/accounts-view.mjs', 'dist/accounts/accounts-view.mjs', ['accountReportAccount','accountReportProduct','accountReportStatus','accountDetailStatusFilter','accountCpaCoverageStatus']],
   ['src/cpa/template.html', 'dist/cpa/template.html', ['cpaStatus','cpaAccount','cpaProduct','cpaCountry','cpaPlatform']],
   ['src/billing/billing-view.mjs', 'dist/billing/billing-view.mjs', ['billingPlatform','billingProduct','billingAccount','billingStatus','billingRecordState','billingDimension']],
-  ['src/index.template.html', 'dist/index.html', ['observabilityProductFilter','observabilityAccountFilter','observabilityCampaignFilter','observabilityTypeFilter']],
-  ['src/curadoria/curation-observability-view.mjs', 'dist/curadoria/curation-observability-view.mjs', ['origin','eventType','decisionStatus','correlationStatus'].map(value => `data-filter="${value}"`)],
   ['src/curadoria/index.html', 'dist/curadoria/index.html', ['movementFilter','autoFilter','statusFilter','networkFilter','clickbankFilter','landingFilter']],
   ['src/curadoria/gerentes/index.html', 'dist/curadoria/gerentes/index.html', ['dateFilter','movementFilter','visibilityFilter','countryFilter','imagesFilter','rulesFilter']],
   ['src/curadoria/top-performance/index.html', 'dist/curadoria/top-performance/index.html', ['badgeFilter','countryFilter','featureFilter','languageFilter','decisionFilter','movementFilter','presenceFilter','visibilityFilter']],
@@ -90,7 +87,7 @@ test('table dropdown filters use the shared Visão Geral surface in source and b
       count++;
     }
   }
-  assert.equal(count, 55, 'a varredura cobre os 55 filtros de tabela restantes após remover o filtro de meios da SmartAdv');
+  assert.equal(count, 47, 'a varredura cobre os filtros de tabela das telas restantes após remover os filtros exclusivos das telas de observabilidade');
   const [css, overviewStyles] = await Promise.all([read('src/control-surfaces.css'), read('src/overview/overview.css')]);
   assert.match(css, /select\.hub-table-filter/);
   assert.match(css, /select\.hub-table-filter\s*\{\s*border-radius:\s*9px/);

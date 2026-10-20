@@ -108,6 +108,7 @@
 #totalsView .totals-table th[data-column^="saleRoi"] .sort-arrow{position:absolute;top:50%;right:3px;min-width:0;margin:0;transform:translateY(-50%)}
 #totalsView .totals-table td[data-column="status"] .status-tag{max-width:100%;white-space:normal;overflow-wrap:anywhere;font-size:.66rem}
 #totalsView .totals-table td[data-column="account"]{padding-inline:4px;font-size:.72rem}
+#totalsView .totals-table td[data-column="mcc"]{padding-inline:6px;font-size:.72rem;text-align:left;white-space:normal;overflow-wrap:anywhere}
 #totalsView .totals-table th:first-child .sort-btn{padding-inline:6px}
 /* Mais 10% menos espaço vertical nas campanhas; fonte e padding horizontal preservados. */
 #totalsView .totals-table td{padding:6.48px 10px;border-bottom:1px solid #2a3c54;color:#e0e9f3;line-height:1.35;font-variant-numeric:tabular-nums}

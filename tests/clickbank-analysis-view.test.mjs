@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import {mountClickBankTopOffersView} from '../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs';
 
@@ -83,6 +84,36 @@ test('brand confirmation stays only in the header; other messages and errors rem
   assert.equal(f.node('#sheetMessage').classList.contains('error'),true);
   f.view.showMessage('Outro recurso salvo.');
   assert.equal(f.node('#sheetMessage').textContent,'Outro recurso salvo.','only the targeted confirmation is removed');
+});
+
+test('ClickBank Trends history shows only date/time and restores a prior term without searching',()=>{
+  const f=fixture();
+  f.state.trends=[{offerKey:'offer',assessments:[],keywordCandidates:[],searchHistory:[
+    {searchedAt:'2026-01-02T10:05:00.000Z',term:'older search term'},
+    {searchedAt:'2026-01-03T11:15:00.000Z',term:'newest search term'},
+  ]}];
+  f.view.render(f.state);
+  f.open('trends');
+  const history=f.node('#trendSearchHistory');
+  assert.equal(history.disabled,false);
+  assert.equal(history.value,'0','a busca mais recente fica selecionada');
+  assert.match(history.innerHTML,/2026|03\/01\/26|03\/01\/2026/,'as opções apresentam data e horário');
+  assert.doesNotMatch(history.innerHTML,/older search term|newest search term|Termo|Última busca/,'nenhum termo ou descrição extra aparece no combo');
+  history.value='1';history.onchange();
+  assert.equal(f.node('#trendsTerm').value,'older search term','selecionar o histórico apenas recupera o termo no campo');
+  assert.equal(f.calls.length,0,'selecionar uma entrada não abre uma pesquisa');
+});
+
+test('ClickBank Trends history selector is positioned beside the candidate input and tracks both search actions',async()=>{
+  const [page,controller,view]=await Promise.all([
+    readFile(new URL('../src/curadoria/clickbank-top-offers/index.html',import.meta.url),'utf8'),
+    readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs',import.meta.url),'utf8'),
+  ]);
+  const candidate=page.indexOf('id="trendCandidate"'),history=page.indexOf('id="trendSearchHistory"');
+  assert.ok(candidate>=0&&history>candidate,'o histórico fica à direita do campo de candidata na mesma faixa');
+  assert.match(controller,/async function openTrends\(term\)[\s\S]*?window\.open\(Trends\.exploreUrl\(searchedTerm\)[\s\S]*?Storage\.setTrendSearchTimestamp\(baseRecord\(item\),searchedAt,searchedTerm\)/,'a busca registra o histórico somente depois de abrir a aba do Google Trends');
+  assert.match(view,/onSearch:term=>actions\.openTrends\(term\)/,'os botões de candidatas usam o mesmo registro da pesquisa principal');
 });
 
 test('Brand bidding stays pending and is committed only by Save with the current Trends draft',async()=>{

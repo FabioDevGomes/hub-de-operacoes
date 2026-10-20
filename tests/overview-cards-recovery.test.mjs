@@ -75,9 +75,9 @@ test('repair is published and awaited before normalization/display; failure does
   const source=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
   assert.match(source,/overview\/cards-recovery\.js\?v=1/);
   const start=source.indexOf('    async function restoreLocalBase('),end=source.indexOf('    function validateProductCatalogBackup(',start),adapter=source.slice(start,end);
-  assert.ok(adapter.indexOf('await OverviewCardsRecovery.ensure')<adapter.indexOf('CampaignDatabase.mergeEventLogs'));
+  assert.ok(adapter.indexOf('await OverviewCardsRecovery.ensure')<adapter.indexOf('let base=payload.schema'));
   const db=storage(legacy()),state={productCatalog:{ocultos:[],aliases:{}},legacyTotalsMigrationReport:null};
-  const sandbox=vm.createContext({CampaignBaseReader:{read:async()=>({base:json(db.read()),events:[]})},OverviewCardsRecovery:recovery,openLocalDb:db.openDatabase,CampaignDatabase:database,state,embeddedManifest:null,renderLegacyMigrationNotice(){},render(){},toast(){throw new Error('unexpected repair failure')}});
+  const sandbox=vm.createContext({CampaignBaseReader:{read:async()=>({base:json(db.read()),catalog:null})},OverviewCardsRecovery:recovery,openLocalDb:db.openDatabase,CampaignDatabase:database,state,embeddedManifest:null,renderLegacyMigrationNotice(){},render(){},toast(){throw new Error('unexpected repair failure')}});
   vm.runInContext('let derivedCache;'+adapter,sandbox);await sandbox.restoreLocalBase({persist:false,renderPage:false});
   assert.equal(state.database.overview_cards.summary.d0.investment.value,21);assert.match(render(state.database),/BRL 21\.00/);
   let warned=false;sandbox.OverviewCardsRecovery={ensure:async()=>{throw new Error('synthetic failure')}};sandbox.toast=()=>{warned=true};

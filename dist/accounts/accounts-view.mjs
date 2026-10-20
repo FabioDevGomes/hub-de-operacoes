@@ -1,4 +1,4 @@
-import {createAccountState, buildAccountReport, accountDomainUrl} from './accounts-domain.mjs?v=2';
+import {createAccountState, buildAccountReport, accountDomainUrl} from './accounts-domain.mjs?v=3';
 
 // UI only. The Hub supplies read-only campaign projections and shared formatters.
 export const accountReportTemplate = `<div class="account-summary-row"><div class="account-filters">
@@ -142,7 +142,7 @@ export function mount({root, getSnapshot, format}) {
   }
 
   function render() {
-    const snapshot = getSnapshot(), report = buildAccountReport(snapshot.rows, state);
+    const snapshot = getSnapshot(), report = buildAccountReport(snapshot.rows, state, snapshot.accountStatuses);
     state.account = report.account; state.product = report.product; state.selected = report.selected;
     selectOptions('accountReportAccount',report.accountOptions,state.account,'Todas');
     selectOptions('accountReportProduct',report.productOptions,state.product,'Todos');

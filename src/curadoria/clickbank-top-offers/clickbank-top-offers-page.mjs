@@ -1,6 +1,6 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=10';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=36';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=11';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=37';
 import {mountExtensionCapture} from './extension-capture.mjs?v=6';
 import {mergeDtcCountries} from './dtc-country-capture.mjs?v=5';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
@@ -10,7 +10,6 @@ import {sameTrendAssessment} from '../trends-save-action.mjs?v=4';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
-import * as CurationObservability from '../curation-observability.mjs';
 import * as TopOffersDecision from './clickbank-top-offers-decision.mjs?v=1';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=4';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
@@ -63,7 +62,6 @@ async function refreshAfterGlimpseSave() {
     view.showMessage('A análise foi salva, mas não foi possível atualizar a tabela. Recarregue a tela.',{error:true});
   }
 }
-function fireObservability(promise) { Promise.resolve(promise).catch(error => console.warn('Não foi possível registrar a observabilidade da Curadoria.',error)); }
 async function saveDecision(offerKey,status,notes='') {
   const item=currentOffer(offerKey);if(!item)return;
   const previous=decisions.find(record=>record.offerKey===offerKey)||{offerKey,currentStatus:TopOffersDecision.DEFAULT_DECISION,notes:'',history:[]};
@@ -71,9 +69,6 @@ async function saveDecision(offerKey,status,notes='') {
   const stored={...previous,offerKey,currentStatus:normalized,notes:decisionNotes,updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,capturedAt,notes:decisionNotes}]};
   try{await Storage.putDecision(stored);decisions=[...decisions.filter(record=>record.offerKey!==offerKey),stored];show();view.showMessage(`Decisão salva somente em Top Offers CB: ${normalized}.`)}
   catch(error){console.error('Não foi possível salvar a decisão Top Offers CB.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true});throw error}
-}
-function observabilityContext(item) {
-  return {origin:'clickbank-top-offers',subjectId:`clickbank-top-offers:${item.offerKey}`,productKey:Glimpse.normalize(item.offerName),productName:item.offerName,offerRefs:[{origin:'clickbank-top-offers',offerKey:item.offerKey,seller:item.seller}]};
 }
 
 function validateImport(raw,extensionCapture=null) {
@@ -118,9 +113,21 @@ async function confirmImport(raw) {
   } finally { saving = false; }
 }
 
-function openTrends(term) {
-  const tab = window.open(Trends.exploreUrl(term),'google-trends-clickbank-top-offers');
-  if (tab) tab.focus(); else view.showMessage('O navegador bloqueou a aba. Libere pop-ups para este endereço local.',{error:true});
+async function openTrends(term) {
+  const searchedTerm=String(term??'').trim(),item=currentOffer(view.getActiveOfferKey());
+  if(!searchedTerm||!item){if(!searchedTerm)view.showMessage('Informe um termo de pesquisa antes de abrir o Google Trends.',{error:true});return;}
+  const tab=window.open(Trends.exploreUrl(searchedTerm),'google-trends-clickbank-top-offers');
+  if(!tab){view.showMessage('O navegador bloqueou a aba. Libere pop-ups para este endereço local.',{error:true});return;}
+  try{tab.focus();}catch{}
+  const searchedAt=new Date().toISOString();
+  try{
+    const stored=await Storage.setTrendSearchTimestamp(baseRecord(item),searchedAt,searchedTerm);
+    trends=replaceRecord(trends,stored);
+    view.updateTrendSearchHistory(stored);
+  }catch(error){
+    console.error('A pesquisa de Google Trends abriu, mas não foi possível salvar o histórico da ClickBank.',error);
+    view.showMessage('Busca aberta, mas não foi possível salvar o histórico.',{error:true});
+  }
 }
 async function saveTrend(offerKey,status,draft={}) {
   const item = currentOffer(offerKey); if (!item) return false;
@@ -130,7 +137,7 @@ async function saveTrend(offerKey,status,draft={}) {
     const stored={...old,...baseRecord(item),pageDraft:{...trendDraft,status:''}};
     const saved=await Storage.saveTrendPage(stored,metadataPatch);
     if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
-    trends=replaceRecord(trends,stored);show();return true;
+    trends=replaceRecord(trends,saved.record);show();return true;
   }
   const assessment = {
     assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries || []).filter(Boolean))].slice(0,5),
@@ -141,16 +148,14 @@ async function saveTrend(offerKey,status,draft={}) {
   try {
     const saved=await Storage.saveTrendPage(stored,metadataPatch);
     if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
+    trends=replaceRecord(trends,saved.record);
   }
   catch(error) {
     console.error('Não foi possível salvar a avaliação de Google Trends da ClickBank.',error);
     return false;
   }
-  trends=replaceRecord(trends,stored);
   try { show(); }
   catch(error) { console.error('A avaliação foi salva, mas a ficha ClickBank não pôde ser atualizada.',error); }
-  try { if(assessmentChanged)fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'trends',assessment,summary:{status:Trends.resultLabel(status),searchTerm:assessment.searchTerm,countries:assessment.countries,productAge:assessment.productAge,capturedAt:assessment.capturedAt}})); }
-  catch(error) { console.error('Não foi possível registrar a observabilidade da avaliação ClickBank.',error); }
   return true;
 }
 async function addTrendCandidate(offerKey,value) {
@@ -158,14 +163,14 @@ async function addTrendCandidate(offerKey,value) {
   const old=trendsFor(item),candidates=[...(old.keywordCandidates||[])];
   if(candidates.some(entry=>Domain.normalize(entry)===Domain.normalize(term))){view.showMessage('Essa candidata já está na lista.');return false;}
   const stored={...old,...baseRecord(item),keywordCandidates:[...candidates,term]};
-  try { await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,stored);show();view.showMessage('Candidata à palavra-chave adicionada.');return true; }
+  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);show();view.showMessage('Candidata à palavra-chave adicionada.');return true; }
   catch { view.showMessage('Não foi possível salvar a candidata.',{error:true});return false; }
 }
 async function removeTrendCandidate(offerKey,index) {
   const item=currentOffer(offerKey);if(!item)return false;
   const old=trendsFor(item),keywordCandidates=[...(old.keywordCandidates||[])];keywordCandidates.splice(index,1);
   const stored={...old,...baseRecord(item),keywordCandidates};
-  try { await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,stored);show();view.showMessage('Candidata à palavra-chave removida.');return true; }
+  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);show();view.showMessage('Candidata à palavra-chave removida.');return true; }
   catch { view.showMessage('Não foi possível remover a candidata.',{error:true});return false; }
 }
 async function addManualCountry(offerKey,value) {
@@ -238,7 +243,6 @@ async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=fa
   };
   const stored={...old,...baseRecord(item),searchTerm,assessments:Images.appendAssessment(old.assessments,assessment)};
   await Storage.putOfferRecord(Storage.STORES.images,stored);images=replaceRecord(images,stored);show();
-  fireObservability(CurationObservability.recordAssessment({...observabilityContext(item),kind:'images',assessment,summary:{status:Images.resultLabel(status),country,searchTerm,sampleSize:20,negativeKeywordCandidates:assessment.negativeKeywordCandidates,capturedAt:assessment.capturedAt}}));
   view.showMessage(candidateOnly?'Candidatas negativas salvas.':`Avaliação visual salva: ${Images.resultLabel(status)} · ${country}.`);
   return true;
 }

@@ -100,15 +100,23 @@ function sortAccountsByMcc(accounts, labels) {
     accountMccPriority(a, labels) - accountMccPriority(b, labels) || compare(a, b));
 }
 
-export function buildAccountReport(allRows, filters) {
+export function buildAccountReport(allRows, filters, accountStatuses = {}) {
+  const activeAccounts = accountStatuses && typeof accountStatuses === 'object' && !Array.isArray(accountStatuses)
+    ? [...new Set(Object.entries(accountStatuses)
+      .filter(([, status]) => status === 'active')
+      .map(([account]) => String(account ?? '').trim())
+      .filter(account => account && account !== 'Sem conta'))]
+    : [];
   const accountMccLabels = accountMccHeaderLabels(allRows);
-  const accountOptions = sortAccountsByMcc(new Set(allRows.map(row => row.account)), accountMccLabels);
+  for (const account of activeAccounts) if (!accountMccLabels.has(account)) accountMccLabels.set(account, 'MCC não identificada');
+  const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts]), accountMccLabels);
   const productOptions = [...new Set(allRows.map(row => row.product))].sort(compare);
   const account = accountOptions.includes(filters.account) ? filters.account : 'all';
   const product = productOptions.includes(filters.product) ? filters.product : 'all';
   const accountRows = filterAccountCpaCoverageRows(allRows, filters.status, account);
   const rows = accountRows.filter(row => product === 'all' || row.product === product);
-  const accounts = sortAccountsByMcc(new Set(rows.map(row => row.account)), accountMccLabels);
+  const activeAccountColumns = account === 'all' ? activeAccounts : activeAccounts.filter(value => value === account);
+  const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns]), accountMccLabels);
   const groups = new Map();
   for (const row of rows) {
     const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, rows:[]};
@@ -133,7 +141,7 @@ export function buildAccountReport(allRows, filters) {
     missingTotal:coverage.reduce((sum, item) => sum + item.missing.length, 0),
     kpis:{
       products:products.length, campaigns:rows.length, active:rows.length - paused, paused,
-      accounts:accounts.filter(value => value !== 'Sem conta').length,
+      accounts:new Set(rows.map(row => row.account).filter(value => value !== 'Sem conta')).size,
       multiAccount:products.filter(item => new Set(item.rows.map(row => row.account)).size > 1).length,
       missing:rows.filter(row => row.account === 'Sem conta').length
     }

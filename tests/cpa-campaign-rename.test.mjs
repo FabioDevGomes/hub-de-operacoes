@@ -38,7 +38,7 @@ assert.equal(updated.diario.length,2,'preserva o dia anterior e adiciona o novo 
 assert.equal(updated.diario.find(row=>row.data==='2026-10-01').celulas.N.value,'CPA 85%');
 assert.equal(updated.diario.find(row=>row.data==='2026-10-02').celulas.N.value,'CPA 80%');
 assert.equal(updated.campanhas[0].movimento_status,'manteve','mudança de percentual não parece campanha nova');
-assert.equal(updated.event_log.filter(event=>event.event_type==='test_iteration_created').length,1,'não registra uma segunda iteração');
+assert.equal(updated.event_log,undefined,'a atualização não cria um Event Log novo');
 
 assert.equal(db.campaignCpaChangeCandidates(first,manifest('2026-10-02',campaignName(80),{account:null})).length,0,'não associa sem número completo da conta');
 assert.equal(db.campaignCpaChangeCandidates(first,manifest('2026-10-02',campaignName(80),{alsoOld:true})).length,0,'não associa quando os dois títulos aparecem na mesma captura');

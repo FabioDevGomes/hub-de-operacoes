@@ -184,7 +184,7 @@ const databaseContext = vm.createContext({ window: {}, structuredClone });
 vm.runInContext(databaseSource, databaseContext);
 const CampaignDatabase = databaseContext.window.CampaignDatabase;
 const exported = JSON.stringify(legacyOnly.base);
-const restored = CampaignDatabase.mergeEventLogs(CampaignDatabase.normalize(JSON.parse(exported)), []);
+const restored = CampaignDatabase.normalize(JSON.parse(exported));
 assert.equal(restored.campanhas[0].legacy_totais.metrics.commission_brl.value, 145, 'backup/restore preserva resumo legado');
 assert.equal(restored.campanhas[0].registro_origem, 'legacy_totais');
 assert.equal(restored.legacy_totais_migration.version, 1, 'backup/restore preserva o marcador de idempotência');

@@ -11,8 +11,7 @@
     { id: 'analysis', label: 'Análises', items: [
       { key: 'cpa', label: 'Análise por faixa de CPA', view: 'cpa', href: '/?view=cpa' },
       { key: 'accounts', label: 'Mapa por conta', view: 'accounts', href: '/?view=accounts' },
-      { key: 'observability', label: 'Observabilidade decisória', view: 'observability', href: '/?view=observability' },
-      { key: 'curation-observability', label: 'Observabilidade da Curadoria', view: 'curation-observability', href: '/?view=curation-observability' },
+      { key: 'account-directory', label: 'Contas', view: 'account-directory', href: '/?view=account-directory' },
     ] },
     { id: 'finance', label: 'Financeiro', items: [
       { key: 'macro', label: 'Controle Macro', view: 'macro', href: '/?view=macro' },

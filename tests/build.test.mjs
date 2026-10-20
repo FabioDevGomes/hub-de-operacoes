@@ -49,6 +49,9 @@ assert.ok(overviewCss.includes('#totalsView .totals-table thead th{background:#1
 assert.ok(overviewCss.includes('#totalsView .panel-head{align-items:center;gap:18px;padding:10px 20px;background:#101D32;border-bottom:0}'),'faixa do título Campanhas deve usar a cor solicitada sem divisória inferior, preservando o cabeçalho das colunas');
 assert.ok(overviewCss.includes('#totalsView .panel-controls .view-toggle{background:var(--hub-input-bg)}')&&overviewCss.includes('#totalsView .panel-controls .view-toggle button.active{background:#1c3a5b;color:#f3f8ff}'),'grupo de período compartilha o fundo da busca e preserva o destaque da opção ativa');
 const accountView=await readFile(new URL('../dist/accounts/accounts-view.mjs',import.meta.url),'utf8');
+const accountListView=await readFile(new URL('../dist/accounts/accounts-list-view.mjs',import.meta.url),'utf8');
+const accountListDomain=await readFile(new URL('../dist/accounts/accounts-list-domain.mjs',import.meta.url),'utf8');
+const accountListStorage=await readFile(new URL('../dist/accounts/accounts-list-storage.mjs',import.meta.url),'utf8');
 const accountCss=await readFile(new URL('../dist/accounts/accounts.css',import.meta.url),'utf8');
 const timeViewModule=(await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8')).replaceAll('\r\n','\n');
 const timeDomainModule=await readFile(new URL('../dist/meu-tempo/meu-tempo-domain.mjs',import.meta.url),'utf8');
@@ -77,21 +80,10 @@ assert.ok(html.includes('data:image/png;base64,'),'favicon ausente');
 assert.ok(html.includes('Carregar base JSON'),'controle de base ausente');
 assert.ok(!html.includes('id="manifestInput"')&&!html.includes('Carregar manifesto')&&!html.includes('async function loadManifest(file)')&&!html.includes("source:'hub_manifest_upload'"),'importação manual de manifesto MCC pelo Hub deve ficar removida; usar o Preparador MCC');
 assert.ok(html.includes('Manifestos MCC são recebidos pela extensão no Preparador MCC.'),'arrastar um manifesto MCC no Hub deve direcionar o usuário ao fluxo da extensão');
-assert.ok(sidebarComponent.includes("key: 'observability'")&&sidebarComponent.includes('Observabilidade decisória'),'menu da observabilidade decisória ausente do componente compartilhado');
-assert.ok(html.includes('id="observabilityView"')&&html.includes('id="observabilityBody"'),'tela e tabela Event Log ausentes');
-assert.ok(html.includes('id="downloadObservability"')&&html.includes('Baixar JSON para IA'),'Event Log precisa oferecer exportação local para análise por IA');
-assert.ok(html.includes("format:'hub-event-log-ai-analysis-v1'")&&html.includes('filterObservabilityEvents(all,filters)')&&html.includes('JSON.stringify(payload,null,2)'),'exportação do Event Log deve incluir eventos filtrados e snapshots num JSON estruturado');
-const exportFilterSource=html.match(/function filterObservabilityEvents\(all,filters\)\{[^\n]+\}/)?.[0],exportPayloadSource=html.match(/function buildObservabilityAnalysisPayload\(all,filters,exportedAt\)\{[^\n]+\}/)?.[0];
-assert.ok(exportFilterSource&&exportPayloadSource,'exportação do Event Log precisa centralizar filtro e montagem do payload');
-const exportContext=vm.createContext({observabilityProductKey:event=>event.test_id||event.product_id||event.product_name||`campanha:${event.campaign_id||'sem-vínculo'}`});
-new vm.Script(`${exportFilterSource}\n${exportPayloadSource}\nglobalThis.buildPayload=buildObservabilityAnalysisPayload`).runInContext(exportContext);
-const analysisPayload=exportContext.buildPayload([{event_id:'event-1',test_id:'test-1',account_id:'123-456-7890',campaign_id:'campaign-1',event_type:'campaign_pause_detected',snapshot:{periods:{D_zero:{cpa_real:12.5}}},metadata:{pause_label:'Pausada'}},{event_id:'event-2',test_id:'test-2',account_id:'999-999-9999',campaign_id:'campaign-2',event_type:'campaign_status_changed',snapshot:{status:'Ativa'}}],{product:'test-1',account:'123-456-7890',campaign:'campaign-1',type:'campaign_pause_detected'},'2026-10-05T15:00:00.000Z');
-assert.equal(analysisPayload.event_count,1,'exportação deve respeitar todos os filtros ativos');
-assert.equal(analysisPayload.total_event_count,2,'exportação deve informar também o total disponível');
-assert.equal(analysisPayload.events[0].snapshot.periods.D_zero.cpa_real,12.5,'exportação deve preservar o snapshot completo do evento');
-assert.ok(sidebarComponent.includes("key: 'curation-observability'")&&sidebarComponent.includes('Observabilidade da Curadoria')&&html.includes('id="curationObservabilityView"'),'rota e menu independentes da Observabilidade da Curadoria ausentes');
-assert.ok(html.includes("query:'curation-observability'")&&html.includes("state.activeView==='curation-observability'"),'rota da Observabilidade da Curadoria não está registrada/renderizada');
-assert.ok(html.includes('curadoria/curation-observability.css?v=1')&&html.includes("import('./curadoria/curation-observability-view.mjs?v=1')"),'view ou CSS da Observabilidade da Curadoria não foi empacotado sob demanda');
+assert.ok(!sidebarComponent.includes("key: 'observability'")&&!sidebarComponent.includes('Observabilidade decisória'),'Observabilidade decisória ainda aparece no menu');
+assert.ok(!sidebarComponent.includes("key: 'curation-observability'")&&!sidebarComponent.includes('Observabilidade da Curadoria'),'Observabilidade da Curadoria ainda aparece no menu');
+assert.doesNotMatch(html,/observabilityView|observabilityBody|curationObservabilityView|curation-observability|renderObservability|buildObservabilityEvents/,'telas, rotas e coletores de observabilidade ainda estão no HTML');
+assert.doesNotMatch(html,/PANEL_EVENT_STORE|objectStore\('events'\)|restored\.events/,'o caminho normal da base ainda acessa a store legada de eventos');
 assert.ok(navigation.includes("closest('[data-sidebar-group]')")&&navigation.includes('HubSidebar?.setOpenGroup(group)'),'a navegação deve abrir o grupo real do item ativo, sem duplicar a configuração do menu');
 assert.ok(sidebarComponent.includes("key: 'macro'")&&(html+macroView).includes("navId:'controlMacroNav'"),'item do Controle Macro ausente do menu compartilhado/registro');
 const operationMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'operation'"),sidebarComponent.indexOf("{ id: 'analysis'"));
@@ -221,8 +213,8 @@ assert.ok(macroCss.includes('.macro-trend-panel')&&macroCss.includes('.macro-tre
 assert.ok((html+macroView).includes('function macroTrendPointLabels(')&&(html+macroView).includes('${pointLabels}${barLabels}')&&(html+macroView).includes('${dots}${labels}')&&macroCss.includes('.macro-chart-value'),'rótulos dos valores devem aparecer em todos os modos do gráfico do Controle Macro');
 assert.ok((html+macroView).includes("point.format==='finance'?fmtNum(point.value,2):macroTrendValue(point.value,point.format)"),'rótulos financeiros do gráfico devem mostrar números sem símbolo de moeda');
 assert.ok(html.includes('Importar histórico Excel')&&html.includes('Adicionar novos e manter atuais'),'importação histórica não tem prévia e política segura de conflitos');
-assert.ok(html.includes('Observabilidade Decisória Operacional'),'título da tela de observabilidade ausente');
-assert.ok(databaseModule.includes("create(){return{schema:SCHEMA")&&databaseModule.includes('event_log:[]'),'Event Log não inicializa em bases novas');
+assert.ok(databaseModule.includes("create(){return{schema:SCHEMA")&&!databaseModule.includes('event_log:[]'),'bases novas não devem criar registros de observabilidade');
+assert.ok(!databaseModule.includes('buildObservabilityEvents')&&!databaseModule.includes('mergeEventLogs'),'o módulo operacional não deve gerar nem mesclar eventos de observabilidade');
 assert.ok(html.includes('Registrar venda'),'registro provisório de venda ausente');
 assert.ok(html.includes('flowtracking-copy-guide.png'),'referência visual do FlowTracking ausente');
 assert.ok(html.includes('.sale-guide img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain'),'referência do FlowTracking não ocupa a largura disponível mantendo a proporção');
@@ -262,13 +254,13 @@ assert.ok(html.includes('sidebar-component.js')&&html.includes('sidebar-componen
 const personalGroupStart=sidebarComponent.indexOf("id: 'personal'");
 const personalGroupEnd=sidebarComponent.indexOf('\n  ];',personalGroupStart);
 const personalGroup=sidebarComponent.slice(personalGroupStart,personalGroupEnd);
-assert.ok(personalGroup.includes("key: 'time'")&&personalGroup.includes('Meu Tempo')&&personalGroup.includes("key: 'personal-finance'")&&personalGroup.includes('Controle de gastos')&&!personalGroup.includes('Observabilidade decisória'),'grupo Pessoal deve conter Meu Tempo e Controle de gastos sem repetir Observabilidade');
-assert.ok(sidebarComponent.includes("key: 'cpa'")&&sidebarComponent.includes('Observabilidade decisória')&&sidebarComponent.includes('Observabilidade da Curadoria')&&sidebarComponent.includes('Mapa por conta')&&sidebarComponent.includes('Análise por faixa de CPA'),'grupo Análises incompleto');
+assert.ok(personalGroup.includes("key: 'time'")&&personalGroup.includes('Meu Tempo')&&personalGroup.includes("key: 'personal-finance'")&&personalGroup.includes('Controle de gastos'),'grupo Pessoal deve conter Meu Tempo e Controle de gastos');
+assert.ok(sidebarComponent.includes("key: 'cpa'")&&!sidebarComponent.includes('Observabilidade decisória')&&!sidebarComponent.includes('Observabilidade da Curadoria')&&sidebarComponent.includes('Mapa por conta')&&sidebarComponent.includes('Análise por faixa de CPA'),'grupo Análises deve manter os relatórios sem as duas telas removidas');
 assert.ok(sidebarComponent.includes("key: 'tested'")&&!sidebarComponent.includes('Diário de campanha'),'grupo Produtos deve manter Produtos testados sem o acesso antigo ao Diário');
 assert.ok(panelSource.includes('<h2 id="productPanelTitle">Diário de campanha</h2>')&&panelSource.includes("$('#productPanelTitle').textContent='Resumo histórico legado'"),'o painel deve identificar o diário nativo e alternar para o resumo legado dentro da mesma tela');
 assert.ok(sidebarComponent.includes('activeGroupFor(root)')&&sidebarComponent.includes('routeView.id'),'a rota ativa não abre o grupo correspondente do menu');
 assert.ok(sidebarComponent.includes("id: 'curation'")&&sidebarComponent.includes('Plataforma Guru Media'),'grupo expansível Curadoria ausente');
-assert.ok(html.includes("'curation-observability':{render:renderCurationObservability}")&&navigation.includes("button.onclick=()=>safelyOpen(view.id,{source:'menu'})")&&navigation.includes('registry.urlFor(view.id,location.pathname)'),'Observabilidade da Curadoria deve usar o mesmo controlador de menu e URL das outras telas');
+assert.ok(!html.includes("'curation-observability':{render:renderCurationObservability}")&&navigation.includes("button.onclick=()=>safelyOpen(view.id,{source:'menu'})")&&navigation.includes('registry.urlFor(view.id,location.pathname)'),'o controlador de navegação deve permanecer íntegro após remover Observabilidade da Curadoria');
 assert.ok(!sidebarComponent.includes('data-sidebar-group="products"')&&sidebarComponent.includes("key: 'tested'"),'Produtos testados deve ser um acesso direto, não um grupo expansível');
 assert.ok(sidebarComponent.includes("const topName = name === 'products' ? 'operation' : name"),'chamadas antigas de Produtos devem continuar abrindo Operação');
 assert.ok(sidebarComponent.includes("id: 'creation'")&&sidebarComponent.includes('Asset Studio')&&sidebarComponent.includes('Ficha e Presell')&&!sidebarComponent.includes('Gerador de Pre-Sell'),'grupo Criação de ofertas incompleto ou com tela antiga duplicada');
@@ -332,15 +324,32 @@ assert.ok(timeViewModule.includes('Domain.SYMPTOM_SCALE_OPTIONS.map(option=>`<op
 assert.ok(timeCss.includes('.time-daily-summary{display:flex;align-items:end;gap:8px;flex-wrap:nowrap}'),'data e indicadores diários não estão organizados na mesma linha');
 // Accounts is now a separately built UI/domain/CSS module, not inline implementation.
 assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-view.mjs?v=2')") &&
-  html.includes('getSnapshot:accountReportSnapshot'), 'Mapa por Conta não está conectado ao adaptador do Hub');
-for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts.css']) {
+  html.includes("import('./accounts/accounts-view.mjs?v=3')") &&
+  html.includes('getSnapshot:()=>accountReportSnapshot(accountStatusStorage.read())'), 'Mapa por Conta não está conectado ao adaptador do Hub');
+assert.ok(html.includes('id="accountDirectoryView" class="hidden"></section>') &&
+  html.includes("import('./accounts/accounts-list-view.mjs?v=7')") &&
+  html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
+  sidebarComponent.includes("href: '/?view=account-directory'"), 'lista de contas não está conectada à sua rota do Hub');
+for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts-list-domain.mjs','accounts-list-view.mjs','accounts-list-storage.mjs','accounts.css']) {
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
-assert.ok(html.includes('accounts/accounts.css?v=2') && accountView.includes('./accounts-domain.mjs?v=2'),'dependências do Mapa por Conta não foram publicadas');
+assert.ok(html.includes('accounts/accounts.css?v=10') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountView.includes('./accounts-domain.mjs?v=3') &&
+  accountListView.includes('./accounts-list-domain.mjs?v=2') && accountListView.includes('./accounts-list-storage.mjs?v=4'),
+  'dependências do Mapa por Conta e da nova lista não foram publicadas ou a faixa global continua visível em Contas');
+assert.ok(accountListView.includes('Data de início') && accountListView.includes('Status</th>') &&
+  accountListView.includes('E-mail</th>') && accountListView.includes('ID de perfil de pagamento</th>') && accountListView.includes('data-account-email-open') &&
+  accountListView.includes('accountDirectoryPaymentProfileDialog') && accountListView.includes('data-account-payment-profile-open') &&
+  accountListView.includes('class="hub-corner-edit"') && accountListView.includes('account-directory-email-value') &&
+  accountListView.includes('data-account-status-choice="active"') && accountListView.includes('data-account-status-choice="suspended"') &&
+  accountListView.includes('data-account-create-open') && accountListView.includes('accountDirectoryManualAccountDialog') &&
+  accountListStorage.includes('hub:account-directory:manual-accounts:v1') && accountListStorage.includes('normalizeAccountDirectoryId(accountValue)') &&
+  accountListStorage.includes('hub:account-directory:manual-status:v1') && accountListStorage.includes('hub:account-directory:manual-email:v1') &&
+  accountListStorage.includes('hub:account-directory:manual-payment-profile-id:v1') && accountListStorage.includes('createAccountDirectoryPaymentProfileStorage') && accountListStorage.includes('storage.setItem(key, JSON.stringify(ids))') &&
+  accountListDomain.includes('snapshots') && accountListDomain.includes('startDate'), 'a lista deve mostrar conta, MCC, primeira data disponível e status manual persistido localmente');
 assert.ok(!(html+cpaView+cpaDomain+cpaCss).includes('function enhanceAccountReportDetail(') && !(html+cpaView+cpaDomain+cpaCss).includes('function accountCpaCoverage('),'implementações antigas do Mapa por Conta continuam duplicadas no painel');
-assert.ok(html.includes('function accountReportRows()') && html.includes('function accountReportSnapshot()') &&
+assert.ok(html.includes('function accountReportRows()') && html.includes('function accountReportSnapshot(accountStatuses={})') &&
+  html.includes("accounts-list-storage.mjs?v=3") && html.includes('accountStatusStorage.read()') &&
   html.includes('campaignZeroImpressionDays(campaign)') && html.includes('identity:campaignIdentity(row.campaign),cpa:cpaTitleInfo(row.campaign)'),
   'o adaptador não reutiliza as projeções e parsers existentes');
 assert.ok(html.includes('domain=campaignAccountDomain(c)||stored?.conta_dominio||domainByAccount.get(account)||null'),'origens do domínio de conta não foram preservadas');
@@ -366,9 +375,9 @@ assert.ok(accountCss.includes('.account-product-campaign-table th,.account-produ
 assert.ok(accountCss.includes('.account-domain-link:focus-visible') &&
   accountView.includes('target="_blank" rel="noopener noreferrer"'),'link de domínio deve manter foco e isolamento seguros');
 assert.ok(html.includes('function derivedContext()'),'contexto derivado reutilizável ausente');
-assert.ok(panelSource.includes('<link rel="stylesheet" href="overview/overview.css?v=52">')&&panelSource.includes('<script src="overview-domain.js?v=19"></script>')&&panelSource.includes('<script src="overview/view.js?v=31"></script>')&&panelSource.includes('OverviewDomain.deriveTestBudget('),'cálculo do limite de teste sem vendas não está integrado à Visão Geral');
+assert.ok(panelSource.includes('<link rel="stylesheet" href="overview/overview.css?v=53">')&&panelSource.includes('<script src="overview-domain.js?v=20"></script>')&&panelSource.includes('<script src="overview/view.js?v=32"></script>')&&panelSource.includes('OverviewDomain.deriveTestBudget('),'cálculo do limite de teste sem vendas não está integrado à Visão Geral');
 assert.ok(panelSource.includes('pausedCampaignNamesOnDate')&&panelSource.includes('id="pausedTodayDialog"')&&panelSource.includes('overview-kpi-detail-action'),'pausas do dia devem ser publicadas e acessíveis pelo cartão D0');
-assert.ok(overviewDomain.includes('campaign:330')&&overviewDomain.includes('account:100,limit:140,remaining:102')&&overviewCss.includes('#totalsView .totals-table td[data-column="campaign"]{white-space:nowrap;overflow-wrap:normal}'),'coluna Campanha deve aproveitar a largura das colunas Conta, Limite de teste e Valor restante e manter os nomes em uma linha');
+assert.ok(overviewDomain.includes('campaign:330')&&overviewDomain.includes('account:100,mcc:124,limit:140,remaining:102')&&overviewCss.includes('#totalsView .totals-table td[data-column="campaign"]{white-space:nowrap;overflow-wrap:normal}'),'coluna Campanha deve aproveitar as larguras Conta/MCC/Limite de teste/Valor restante e manter os nomes em uma linha');
 assert.ok(panelSource.includes('id="fractionalValueDialog"')&&panelSource.includes('id="fractionalValueList"')&&overviewView.includes('confirmFractionalValue(key,amount)')&&databaseModule.includes('function confirmFractionalConversionValue('),'confirmação de valor fracionário precisa ser publicada na Visão Geral e no banco de domínio');
 assert.ok(overviewCss.includes('#totalsView .panel-head{align-items:center;gap:18px;padding:10px 20px;')&&overviewView.includes("state.totalsMode==='d1'?`Retrato fechado de D−1${dates.d1?` · ${dateLabel(dates.d1)}`:''}`:''"),'cabeçalho da Visão Geral deve ficar compacto e ocultar a legenda no modo consolidado');
 assert.ok(overviewDomain.includes('function deriveTestBudget('),'módulo do cálculo do limite de teste não foi publicado no build');
@@ -427,7 +436,7 @@ assert.ok(panelSource.includes('.totals-table td{padding:7px 13px}'),'linhas da 
 assert.ok(overviewDomain.includes("['imp',`Impressões ${totalLabel}`]"),'total de impressões ausente');
 assert.ok(overviewDomain.includes("['clicks',`Cliques ${totalLabel}`]"),'total de cliques ausente');
 assert.ok(overviewDomain.includes("['conv',`Conversões ${totalLabel}`]"),'total de conversões ausente');
-assert.ok(overviewDomain.includes("['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['limit','Limite de teste']"),'ROIs das duas primeiras vendas devem acompanhar ROI atual; lucro permanece antes da Conta');
+assert.ok(overviewDomain.includes("['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste']"),'ROIs das duas primeiras vendas devem acompanhar ROI atual; MCC deve ficar após Conta e antes do Limite');
 assert.ok(overviewDomain.includes("function totalsColumns(mode,totalLabel='total')")&&!overviewDomain.includes("if(mode==='d1')return"),'D−1 deve preservar o mesmo formato de tabela das outras visões');
 assert.ok(overviewDomain.includes("return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões']"),'Data e Dias sem impressões devem manter a mesma ordem em todos os períodos');
 assert.ok(overviewDomain.includes("['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`]"),'métricas diárias, ROI e lucro devem manter a mesma ordem em todos os períodos');
@@ -453,7 +462,6 @@ assert.ok(sidebarComponent.includes('preparador-MCC/?v=20260923-sidebar'),'link 
 assert.ok(html.includes('Q:{value:campaignStatusObservation(m.status_campanha)}'),'status da MCC não é gravado nas observações diárias');
 assert.ok(panelSource.includes("rejected?'Ativa · Reprovada'"),'campanha reprovada não é sinalizada como ativa na Visão Geral');
 assert.ok(panelSource.includes("paused?(rejected?'Pausada por reprovação':'Pausada')")&&!panelSource.includes('Pausada por ausência'),'Visão Geral deve mostrar motivo de reprovação quando conhecido e apenas Pausada quando não houver motivo claro');
-assert.ok(html.includes("campaign_pause_detected:'Campanha ausente da coleta ativa'")&&html.includes("event.event_type==='campaign_pause_detected'")&&html.includes("event.metadata?.pause_label||'Pausada'"),'relatório de Observabilidade Decisória deve exibir eventos de pausa e o motivo conhecido');
 assert.ok(panelSource.includes("rejected?'rejected-row'"),'destaque visual da campanha reprovada ausente');
 assert.ok(html.includes('function campaignIdentity(value)'),'prefixo de data não é separado do nome da campanha');
 assert.ok(html.includes('stored?.data_inicio_ano_inferido||referenceYear'),'ano inferido na entrada da campanha deve permanecer estável na tela');

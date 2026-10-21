@@ -34,6 +34,24 @@ test('PTAX control shows the active rate, refreshes on click and marks stale quo
   assert.equal(s.get('#usdBrlRateButton').classList.contains('is-stale'),true);
   assert.match(s.get('#usdBrlRateButton').title,/offline/);
 });
+test('overview dims observed zero metrics only, including totals, without dimming rounded nonzero or missing values',()=>{
+  const zero=setup([row('Zerada','ativa',0)]);
+  zero.controller.render();
+  const zeroRow=zero.get('#totalsBody').innerHTML.match(/<tr[^>]*data-campaign="Zerada"[^>]*>(.*?)<\/tr>/)[1];
+  for(const column of ['imp','clicks','conv']){
+    assert.match(zeroRow,new RegExp(`data-column="${column}" class="num overview-zero-value">0<\\/td>`));
+    assert.match(zero.get('#totalsFoot').innerHTML,new RegExp(`data-column="${column}" class="num overview-zero-value"[^>]*>0<\\/td>`));
+  }
+
+  const other=setup([row('Outros','ativa',1,{totals:{investment:1,impressions:0.000001,clicks:2,conversions:null}})]);
+  other.controller.render();
+  const otherRow=other.get('#totalsBody').innerHTML.match(/<tr[^>]*data-campaign="Outros"[^>]*>(.*?)<\/tr>/)[1];
+  assert.match(otherRow,/data-column="imp" class="num">0<\/td>/,'pequeno valor não zero permanece realçado mesmo se a apresentação o arredonda');
+  assert.match(otherRow,/data-column="clicks" class="num">2<\/td>/);
+  assert.match(otherRow,/data-column="conv" class="num">—<\/td>/,'ausência não recebe o estilo de zero');
+  assert.doesNotMatch(other.get('#totalsFoot').innerHTML,/data-column="imp" class="num overview-zero-value"/);
+  assert.doesNotMatch(other.get('#totalsFoot').innerHTML,/data-column="conv" class="num overview-zero-value"/);
+});
 test('corner test-limit links follow ROI/commission presence, column visibility and period rerenders without mutation',()=>{
   const budget={limit:200,remaining:190,revenue:240,commissionBrl:100,minimumRoi:20,commissionTestPercent:65,cpaMinimumPercent:80};
   const extra=detail=>({budget:{...budget,...detail},testLimit:{value:200},testRemaining:{value:190}});

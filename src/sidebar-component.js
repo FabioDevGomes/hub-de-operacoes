@@ -6,6 +6,8 @@
       { key: 'overview', label: 'Visão geral', view: 'totals', href: '/' },
       { key: 'preparer', label: 'Preparador MCC', href: '/preparador-MCC/?v=20260923-sidebar' },
       { key: 'tested', label: 'Produtos testados', view: 'tested', href: '/?view=tested' },
+    ] },
+    { id: 'tracking', label: 'Tracking', items: [
       { key: 'tracking', label: 'Tracking ClickBank', view: 'tracking', href: '/?view=tracking' },
     ] },
     { id: 'analysis', label: 'Análises', items: [

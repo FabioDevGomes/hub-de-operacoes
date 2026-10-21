@@ -327,21 +327,22 @@ assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
   html.includes("import('./accounts/accounts-view.mjs?v=4')") &&
   html.includes('getSnapshot:()=>accountReportSnapshot(accountStatusStorage.read())'), 'Mapa por Conta não está conectado ao adaptador do Hub');
 assert.ok(html.includes('id="accountDirectoryView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-list-view.mjs?v=15')") &&
+  html.includes("import('./accounts/accounts-list-view.mjs?v=17')") &&
   html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('diario:state.database?.diario||[]') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
   sidebarComponent.includes("href: '/?view=account-directory'"), 'lista de contas não está conectada à sua rota do Hub');
 for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts-list-domain.mjs','accounts-list-view.mjs','accounts-list-storage.mjs','accounts.css']) {
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
-assert.ok(html.includes('accounts/accounts.css?v=21') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountView.includes('./accounts-domain.mjs?v=4') &&
-  accountListView.includes('./accounts-list-domain.mjs?v=6') && accountListView.includes('./accounts-list-storage.mjs?v=4') && accountListView.includes("clicks:'Cliques totais'") && accountListView.includes("campaignCount:'Total de campanhas'") && accountListView.includes('data-account-directory-sort'),
+assert.ok(html.includes('accounts/accounts.css?v=22') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountView.includes('./accounts-domain.mjs?v=4') &&
+  html.includes("accounts-list-view.mjs?v=17") && accountListView.includes('./accounts-list-domain.mjs?v=7') && accountListView.includes('./accounts-list-storage.mjs?v=5') && accountListView.includes("clicks:'Cliques totais'") && accountListView.includes("campaignCount:'Total de campanhas'") && accountListView.includes("conversions:'Conversões totais'") && accountListView.includes('data-account-directory-sort'),
   'dependências do Mapa por Conta e da nova lista não foram publicadas ou a faixa global continua visível em Contas');
 assert.ok(accountListView.includes("startDate:'Data de início'") && accountListView.includes("status:'Status'") &&
   accountListView.includes("email:'E-mail'") && accountListView.includes("paymentProfile:'ID de perfil de pagamento'") && accountListView.includes('data-account-column-resizer') &&
   accountListView.includes('hub:account-directory:column-widths:v1') && accountListView.includes('data-account-edit-open') &&
-  accountListView.includes('accountDirectoryEditDialog') && accountListView.includes('accountDirectoryEmailForm') &&
-  accountListView.includes('accountDirectoryPaymentProfileForm') && !accountListView.includes('accountDirectoryEmailDialog') &&
+  accountListView.includes('accountDirectoryEditDialog') && accountListView.includes('accountDirectoryEditForm') &&
+  accountListView.includes('createAccountDirectoryDetailsStorage') && !accountListView.includes('accountDirectoryEmailForm') &&
+  !accountListView.includes('accountDirectoryPaymentProfileForm') && !accountListView.includes('accountDirectoryEmailDialog') &&
   !accountListView.includes('accountDirectoryPaymentProfileDialog') && !accountListView.includes('data-account-edit-field') && !accountListView.includes('data-account-email-open') &&
   !accountListView.includes('data-account-payment-profile-open') && !accountListView.includes('class="hub-corner-edit"') && accountListView.includes('account-directory-email-value') &&
   accountListView.includes('data-account-status-choice="active"') && accountListView.includes('data-account-status-choice="suspended"') &&
@@ -378,7 +379,9 @@ assert.ok(accountCss.includes('.account-product-campaign-table th,.account-produ
 assert.ok(accountCss.includes('.account-domain-link:focus-visible') &&
   accountView.includes('target="_blank" rel="noopener noreferrer"'),'link de domínio deve manter foco e isolamento seguros');
 assert.ok(html.includes('function derivedContext()'),'contexto derivado reutilizável ausente');
-assert.ok(panelSource.includes('<link rel="stylesheet" href="overview/overview.css?v=53">')&&panelSource.includes('<script src="overview-domain.js?v=20"></script>')&&panelSource.includes('<script src="overview/view.js?v=32"></script>')&&panelSource.includes('OverviewDomain.deriveTestBudget('),'cálculo do limite de teste sem vendas não está integrado à Visão Geral');
+assert.ok(panelSource.includes('<link rel="stylesheet" href="overview/overview.css?v=56">')&&panelSource.includes('<script src="overview-domain.js?v=20"></script>')&&panelSource.includes('<script src="overview/view.js?v=33"></script>')&&panelSource.includes('OverviewDomain.deriveTestBudget('),'cálculo do limite de teste sem vendas não está integrado à Visão Geral');
+const overviewZeroRule='#totalsView .totals-table tbody tr:not(.policy-limited-row) td.overview-zero-value:not(.positive):not(.negative):not(.remaining-warning)';
+assert.ok(overviewView.includes('overview-zero-value')&&overviewCss.includes(overviewZeroRule)&&overviewCss.includes('#totalsView .totals-table tbody tr.policy-limited-row td.overview-zero-value')&&overviewCss.includes('#totalsView .totals-table tfoot td.overview-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 35%,var(--hub-table-row-bg))}')&&overviewCss.lastIndexOf(overviewZeroRule)>overviewCss.indexOf('#totalsView .totals-table tbody tr:not(.policy-limited-row) td:not(.positive):not(.negative):not(.remaining-warning)'),'contraste reduzido dos zeros deve prevalecer sobre a regra neutra da tabela, sem interferir em cores semânticas');
 assert.ok(panelSource.includes('pausedCampaignNamesOnDate')&&panelSource.includes('id="pausedTodayDialog"')&&panelSource.includes('overview-kpi-detail-action'),'pausas do dia devem ser publicadas e acessíveis pelo cartão D0');
 assert.ok(overviewDomain.includes('campaign:330')&&overviewDomain.includes('account:100,mcc:124,limit:140,remaining:102')&&overviewCss.includes('#totalsView .totals-table td[data-column="campaign"]{white-space:nowrap;overflow-wrap:normal}'),'coluna Campanha deve aproveitar as larguras Conta/MCC/Limite de teste/Valor restante e manter os nomes em uma linha');
 assert.ok(panelSource.includes('id="fractionalValueDialog"')&&panelSource.includes('id="fractionalValueList"')&&overviewView.includes('confirmFractionalValue(key,amount)')&&databaseModule.includes('function confirmFractionalConversionValue('),'confirmação de valor fracionário precisa ser publicada na Visão Geral e no banco de domínio');

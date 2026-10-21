@@ -160,6 +160,8 @@
 /* O lucro preserva a cor semântica mesmo em linhas pausadas, reprovadas ou limitadas. */
 #totalsView .totals-table tbody td[data-column="profit"].positive{color:var(--green)}
 #totalsView .totals-table tbody td[data-column="profit"].negative{color:var(--overview-alert-red)}
+/* Atenua somente zeros observados nas três métricas, sem reduzir a opacidade da célula. */
+#totalsView .totals-table tbody tr:not(.policy-limited-row) td.overview-zero-value:not(.positive):not(.negative):not(.remaining-warning),#totalsView .totals-table tbody tr.policy-limited-row td.overview-zero-value,#totalsView .totals-table tfoot td.overview-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 35%,var(--hub-table-row-bg))}
 /* Preferências são apenas apresentação; larguras seguem a identidade da coluna. */
 /* Divisória de arraste exclusiva da Visão Geral; não altera as colunas de outras telas. */
 #totalsView .totals-table th[data-column]{position:sticky;box-sizing:border-box;min-width:0;max-width:none}

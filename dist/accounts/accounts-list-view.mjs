@@ -1,19 +1,20 @@
-import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=6';
-import {createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=4';
+import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=7';
+import {createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=5';
 
 export const ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY = 'hub:account-directory:column-widths:v1';
-const accountColumns = ['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','status','edit'];
+const accountColumns = ['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','conversions','status','edit'];
 const accountSortableColumns = accountColumns.filter(key=>key !== 'edit');
 const previousAccountColumns = ['account','email','paymentProfile','mcc','startDate','status'];
-const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',startDate:'Data de início',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',status:'Status',edit:'Editar'};
-const accountColumnMinimums = {account:132,email:150,paymentProfile:190,mcc:144,startDate:124,impressions:150,clicks:130,campaignCount:158,status:136,edit:104};
+const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',startDate:'Data de início',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',conversions:'Conversões totais',status:'Status',edit:'Editar'};
+const accountColumnMinimums = {account:132,email:150,paymentProfile:190,mcc:144,startDate:124,impressions:150,clicks:130,campaignCount:158,conversions:154,status:136,edit:104};
+const accountConversionsFormatter = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:6});
 const accountColumnWidthMinimum = key => accountColumnMinimums[key] || 64;
 const clampAccountColumnWidth = (key,value) => Math.round(Math.min(1200,Math.max(accountColumnWidthMinimum(key),value)));
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-const accountColumnHeader = (key,label) => `<th scope="col" data-column="${key}"${key==='edit'?'': ' aria-sort="none"'}${key==='startDate'?' title="Primeira data encontrada no histórico de capturas"':key==='impressions'?' title="Soma das impressões diárias registradas no Diário de campanha para esta conta"':key==='clicks'?' title="Soma dos cliques diários registrados no Diário de campanha para esta conta"':key==='campaignCount'?' title="Quantidade de campanhas distintas registradas nesta conta"':''}>${key==='edit'?esc(label):`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnWidthMinimum(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
+const accountColumnHeader = (key,label) => `<th scope="col" data-column="${key}"${key==='edit'?'': ' aria-sort="none"'}${key==='startDate'?' title="Primeira data encontrada no histórico de capturas"':key==='impressions'?' title="Soma das impressões diárias registradas no Diário de campanha para esta conta"':key==='clicks'?' title="Soma dos cliques diários registrados no Diário de campanha para esta conta"':key==='campaignCount'?' title="Quantidade de campanhas distintas registradas nesta conta"':key==='conversions'?' title="Soma dos valores registrados nas células F do Diário de campanha; não inclui vendas provisórias"':''}>${key==='edit'?esc(label):`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnWidthMinimum(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
 
 export const accountsListTemplate = `<section class="account-directory-status-kpis" aria-label="Resumo do status das contas">
   <article class="account-directory-status-kpi is-active"><span>Contas ativas</span><strong id="accountDirectoryActiveCount" aria-live="polite">0</strong></article>
@@ -30,11 +31,11 @@ export const accountsListTemplate = `<section class="account-directory-status-kp
 </dialog>`;
 
 export const accountsListEditDialogTemplate = `<dialog id="accountDirectoryEditDialog" class="account-directory-status-dialog account-directory-edit-dialog" aria-labelledby="accountDirectoryEditTitle" aria-describedby="accountDirectoryEditDescription">
-  <header class="account-directory-status-head"><div><span class="account-directory-status-kicker">DADOS DA CONTA</span><h2 id="accountDirectoryEditTitle">Editar dados</h2><p id="accountDirectoryEditDescription">Os campos já estão disponíveis. Cada botão salva somente a informação correspondente.</p></div><button type="button" class="account-directory-status-close" aria-label="Fechar" data-account-edit-close>×</button></header>
-  <div class="account-directory-status-body"><strong id="accountDirectoryEditAccount"></strong><div class="account-directory-edit-fields">
-    <form id="accountDirectoryEmailForm" class="account-directory-edit-field-form"><label class="account-directory-email-label" for="accountDirectoryEmailInput">E-mail</label><input id="accountDirectoryEmailInput" class="account-directory-email-input" type="email" name="email" maxlength="254" autocomplete="off" placeholder="nome@dominio.com" required><p id="accountDirectoryEmailError" class="account-directory-status-error" role="alert" aria-live="assertive"></p><p id="accountDirectoryEmailSaved" class="account-directory-edit-saved" role="status" aria-live="polite"></p><div class="account-directory-edit-actions"><button type="submit" class="account-directory-status-choice is-active">Salvar e-mail</button></div></form>
-    <form id="accountDirectoryPaymentProfileForm" class="account-directory-edit-field-form"><label class="account-directory-email-label" for="accountDirectoryPaymentProfileInput">ID de perfil de pagamento</label><input id="accountDirectoryPaymentProfileInput" class="account-directory-payment-profile-input" type="text" name="payment-profile-id" maxlength="128" autocomplete="off" placeholder="Informe o ID do perfil" required><p id="accountDirectoryPaymentProfileError" class="account-directory-status-error" role="alert" aria-live="assertive"></p><p id="accountDirectoryPaymentProfileSaved" class="account-directory-edit-saved" role="status" aria-live="polite"></p><div class="account-directory-edit-actions"><button type="submit" class="account-directory-status-choice is-active">Salvar ID</button></div></form>
-  </div></div>
+  <header class="account-directory-status-head"><div><span class="account-directory-status-kicker">DADOS DA CONTA</span><h2 id="accountDirectoryEditTitle">Editar dados</h2><p id="accountDirectoryEditDescription">Edite os campos desejados e clique em Salvar. Apenas as alterações feitas serão atualizadas.</p></div><button type="button" class="account-directory-status-close" aria-label="Fechar" data-account-edit-close>×</button></header>
+  <form id="accountDirectoryEditForm" class="account-directory-edit-form" novalidate><div class="account-directory-status-body"><strong id="accountDirectoryEditAccount"></strong><div class="account-directory-edit-fields">
+    <div class="account-directory-edit-field"><label class="account-directory-email-label" for="accountDirectoryEmailInput">E-mail</label><input id="accountDirectoryEmailInput" class="account-directory-email-input" type="email" name="email" maxlength="254" autocomplete="off" placeholder="nome@dominio.com"><p id="accountDirectoryEmailError" class="account-directory-status-error" role="alert" aria-live="assertive"></p></div>
+    <div class="account-directory-edit-field"><label class="account-directory-email-label" for="accountDirectoryPaymentProfileInput">ID de perfil de pagamento</label><input id="accountDirectoryPaymentProfileInput" class="account-directory-payment-profile-input" type="text" name="payment-profile-id" maxlength="128" autocomplete="off" placeholder="Informe o ID do perfil"><p id="accountDirectoryPaymentProfileError" class="account-directory-status-error" role="alert" aria-live="assertive"></p></div>
+  </div><p id="accountDirectoryEditError" class="account-directory-status-error" role="alert" aria-live="assertive"></p><div class="account-directory-edit-actions"><button type="submit" class="account-directory-status-choice is-active">Salvar</button></div></div></form>
 </dialog>`;
 
 export const accountsListManualAccountDialogTemplate = `<dialog id="accountDirectoryManualAccountDialog" class="account-directory-status-dialog account-directory-manual-account-dialog" aria-labelledby="accountDirectoryManualAccountTitle" aria-describedby="accountDirectoryManualAccountDescription">
@@ -53,12 +54,14 @@ export function mount({root, getSnapshot, format, storage}) {
   const statusStorage = createAccountDirectoryStatusStorage(storage);
   const emailStorage = createAccountDirectoryEmailStorage(storage);
   const paymentProfileStorage = createAccountDirectoryPaymentProfileStorage(storage);
+  const detailsStorage = createAccountDirectoryDetailsStorage(storage);
   const manualAccountStorage = createAccountDirectoryManualAccountsStorage(storage);
   const dialog = by('accountDirectoryStatusDialog');
   const editDialog = by('accountDirectoryEditDialog');
   const manualAccountDialog = by('accountDirectoryManualAccountDialog');
   let selectedAccount = null;
   let selectedEditAccount = null;
+  let selectedEditOriginal = null;
   let sortKey = null;
   let sortDirection = 'asc';
   let columnWidths = {};
@@ -166,49 +169,51 @@ export function mount({root, getSnapshot, format, storage}) {
   function closeEditDialog() {
     if (editDialog.open) editDialog.close();
     selectedEditAccount = null;
+    selectedEditOriginal = null;
   }
 
   function openEditDialog(account) {
     selectedEditAccount = account;
+    const email = emailStorage.read()[account] || '';
+    const paymentProfileId = paymentProfileStorage.read()[account] || '';
+    selectedEditOriginal = {email,paymentProfileId};
     by('accountDirectoryEditAccount').textContent = `Conta ${account}`;
-    by('accountDirectoryEmailInput').value = emailStorage.read()[account] || '';
+    by('accountDirectoryEmailInput').value = email;
     by('accountDirectoryEmailError').textContent = '';
-    by('accountDirectoryEmailSaved').textContent = '';
-    by('accountDirectoryPaymentProfileInput').value = paymentProfileStorage.read()[account] || '';
+    by('accountDirectoryPaymentProfileInput').value = paymentProfileId;
     by('accountDirectoryPaymentProfileError').textContent = '';
-    by('accountDirectoryPaymentProfileSaved').textContent = '';
+    by('accountDirectoryEditError').textContent = '';
     editDialog.showModal();
     by('accountDirectoryEmailInput').focus?.({preventScroll:true});
   }
 
-  function saveEmail(event) {
+  function saveEditDetails(event) {
     event.preventDefault();
-    if (!selectedEditAccount) return;
+    if (!selectedEditAccount || !selectedEditOriginal) return;
     const account = selectedEditAccount;
-    try {
-      emailStorage.save(account, by('accountDirectoryEmailInput').value);
-    } catch (error) {
-      by('accountDirectoryEmailError').textContent = error?.message || 'Não foi possível salvar o e-mail neste navegador.';
-      return;
-    }
+    const email = String(by('accountDirectoryEmailInput').value ?? '').trim();
+    const paymentProfileId = String(by('accountDirectoryPaymentProfileInput').value ?? '').trim();
+    const patch = {};
+    if (email !== selectedEditOriginal.email) patch.email = email;
+    if (paymentProfileId !== selectedEditOriginal.paymentProfileId) patch.paymentProfileId = paymentProfileId;
     by('accountDirectoryEmailError').textContent = '';
-    by('accountDirectoryEmailSaved').textContent = 'E-mail salvo.';
-    render();
-  }
-
-  function savePaymentProfile(event) {
-    event.preventDefault();
-    if (!selectedEditAccount) return;
-    const account = selectedEditAccount;
+    by('accountDirectoryPaymentProfileError').textContent = '';
+    by('accountDirectoryEditError').textContent = '';
+    if (!Object.keys(patch).length) { closeEditDialog(); return; }
     try {
-      paymentProfileStorage.save(account, by('accountDirectoryPaymentProfileInput').value);
+      detailsStorage.save(account,patch);
     } catch (error) {
-      by('accountDirectoryPaymentProfileError').textContent = error?.message || 'Não foi possível salvar o ID do perfil de pagamento neste navegador.';
+      const message = error?.message || 'Não foi possível salvar os dados desta conta neste navegador.';
+      if (error?.field === 'email') by('accountDirectoryEmailError').textContent = message;
+      else if (error?.field === 'paymentProfileId') by('accountDirectoryPaymentProfileError').textContent = message;
+      else by('accountDirectoryEditError').textContent = message;
       return;
     }
-    by('accountDirectoryPaymentProfileError').textContent = '';
-    by('accountDirectoryPaymentProfileSaved').textContent = 'ID salvo.';
     render();
+    closeEditDialog();
+    const focusTarget = [...(root.querySelectorAll?.('[data-account-edit-open]') || [])]
+      .find(button => button.dataset.accountEditOpen === account);
+    focusTarget?.focus?.({preventScroll:true});
   }
 
   function closeManualAccountDialog() {
@@ -251,11 +256,10 @@ export function mount({root, getSnapshot, format, storage}) {
   }
 
   dialog.addEventListener('close', () => { selectedAccount = null; });
-  editDialog.addEventListener('close', () => { selectedEditAccount = null; });
-  by('accountDirectoryEmailForm').addEventListener('submit', saveEmail);
-  by('accountDirectoryPaymentProfileForm').addEventListener('submit', savePaymentProfile);
-  by('accountDirectoryEmailInput').addEventListener('input', () => { by('accountDirectoryEmailError').textContent = ''; by('accountDirectoryEmailSaved').textContent = ''; });
-  by('accountDirectoryPaymentProfileInput').addEventListener('input', () => { by('accountDirectoryPaymentProfileError').textContent = ''; by('accountDirectoryPaymentProfileSaved').textContent = ''; });
+  editDialog.addEventListener('close', () => { selectedEditAccount = null; selectedEditOriginal = null; });
+  by('accountDirectoryEditForm').addEventListener('submit', saveEditDetails);
+  by('accountDirectoryEmailInput').addEventListener('input', () => { by('accountDirectoryEmailError').textContent = ''; by('accountDirectoryEditError').textContent = ''; });
+  by('accountDirectoryPaymentProfileInput').addEventListener('input', () => { by('accountDirectoryPaymentProfileError').textContent = ''; by('accountDirectoryEditError').textContent = ''; });
   by('accountDirectoryManualAccountForm').addEventListener('submit', saveManualAccount);
   root.addEventListener('click', event => {
     const target = event.target;
@@ -347,8 +351,9 @@ export function mount({root, getSnapshot, format, storage}) {
       const impressions = row.impressions == null ? '—' : (format.num ? format.num(row.impressions) : new Intl.NumberFormat('pt-BR').format(row.impressions));
       const clicks = row.clicks == null ? '—' : (format.num ? format.num(row.clicks) : new Intl.NumberFormat('pt-BR').format(row.clicks));
       const campaignCount = format.num ? format.num(row.campaignCount) : new Intl.NumberFormat('pt-BR').format(row.campaignCount);
-      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
-    }).join('') : '<tr><td colspan="10" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>';
+      const conversions = row.conversions == null ? '—' : accountConversionsFormatter.format(row.conversions);
+      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="conversions" class="account-directory-conversions-cell">${esc(conversions)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
+    }).join('') : '<tr><td colspan="11" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>';
     applyColumnWidths();
   }
   return {render};

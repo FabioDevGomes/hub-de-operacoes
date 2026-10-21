@@ -174,6 +174,64 @@ export function createAccountDirectoryPaymentProfileStorage(storage, key = ACCOU
   return {read, save};
 }
 
+export function createAccountDirectoryDetailsStorage(storage) {
+  function save(accountValue, patch = {}) {
+    const account = String(accountValue ?? '').trim();
+    const hasEmail = Object.prototype.hasOwnProperty.call(patch,'email');
+    const hasPaymentProfile = Object.prototype.hasOwnProperty.call(patch,'paymentProfileId');
+    if (!account) throw new TypeError('A conta precisa estar identificada para salvar os dados.');
+    if (!hasEmail && !hasPaymentProfile) return {email:false,paymentProfile:false};
+
+    const email = hasEmail ? String(patch.email ?? '').trim() : '';
+    const paymentProfileId = hasPaymentProfile ? String(patch.paymentProfileId ?? '').trim() : '';
+    if (hasEmail && !validEmail(email)) throw Object.assign(new TypeError('Informe um e-mail válido.'),{field:'email'});
+    if (hasPaymentProfile && !validPaymentProfileId(paymentProfileId)) throw Object.assign(new TypeError('Informe um ID de perfil de pagamento com até 128 caracteres.'),{field:'paymentProfileId'});
+    if (typeof storage?.getItem !== 'function' || typeof storage?.setItem !== 'function') {
+      throw new Error('O armazenamento local não está disponível; os dados não foram alterados.');
+    }
+
+    let previousEmailRaw = null, previousPaymentProfileRaw = null, emails = null, paymentProfiles = null;
+    try {
+      if (hasEmail) { previousEmailRaw = storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY); emails = parseEmails(previousEmailRaw); }
+    } catch {
+      throw Object.assign(new Error('Os e-mails salvos neste navegador não puderam ser lidos e não foram substituídos.'),{field:'email'});
+    }
+    try {
+      if (hasPaymentProfile) { previousPaymentProfileRaw = storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY); paymentProfiles = parsePaymentProfileIds(previousPaymentProfileRaw); }
+    } catch {
+      throw Object.assign(new Error('Os IDs de perfil de pagamento salvos neste navegador não puderam ser lidos e não foram substituídos.'),{field:'paymentProfileId'});
+    }
+
+    if (hasEmail) emails[account] = email;
+    if (hasPaymentProfile) paymentProfiles[account] = paymentProfileId;
+    const writes = [];
+    try {
+      if (hasEmail) {
+        storage.setItem(ACCOUNT_DIRECTORY_EMAIL_KEY,JSON.stringify(emails));
+        writes.push({key:ACCOUNT_DIRECTORY_EMAIL_KEY,previous:previousEmailRaw});
+      }
+      if (hasPaymentProfile) {
+        storage.setItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY,JSON.stringify(paymentProfiles));
+        writes.push({key:ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY,previous:previousPaymentProfileRaw});
+      }
+    } catch {
+      let restored = true;
+      for (const write of writes.reverse()) {
+        try {
+          if (write.previous == null && typeof storage.removeItem === 'function') storage.removeItem(write.key);
+          else storage.setItem(write.key,write.previous ?? '');
+        } catch { restored = false; }
+      }
+      throw new Error(restored
+        ? 'Não foi possível salvar todas as alterações neste navegador. Nenhuma alteração ficou aplicada; tente novamente.'
+        : 'Não foi possível salvar todas as alterações neste navegador nem reverter uma gravação parcial. Revise os valores antes de tentar novamente.');
+    }
+    return {email:hasEmail,paymentProfile:hasPaymentProfile};
+  }
+
+  return {save};
+}
+
 function parseManualAccounts(raw) {
   if (raw == null || raw === '') return [];
   const parsed = JSON.parse(raw);

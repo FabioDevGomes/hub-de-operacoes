@@ -16,6 +16,10 @@ function makeRoot() {
     innerHTML: '',
     tokenField: { value: '' },
     rememberField: { checked: false },
+    domainTokenField: { value: '' },
+    domainNameField: { value: '' },
+    domainIncludeWwwField: { checked: false },
+    domainAdminTokenVisibleField: { checked: false },
     storageStatus,
     addEventListener(type, handler) { listeners.set(type, handler); },
     fire(type, event) { return listeners.get(type)?.(event); },
@@ -23,6 +27,10 @@ function makeRoot() {
       if (selector === '#trackingApiToken') return this.tokenField;
       if (selector === '#trackingRememberToken') return this.rememberField;
       if (selector === '#trackingTokenStorageStatus') return this.storageStatus;
+      if (selector === '#trackingDomainAdminToken') return this.domainTokenField;
+      if (selector === '#trackingDomainName') return this.domainNameField;
+      if (selector === '#trackingDomainIncludeWww') return this.domainIncludeWwwField;
+      if (selector === '#trackingDomainAdminTokenVisible') return this.domainAdminTokenVisibleField;
       return null;
     },
   };
@@ -207,7 +215,8 @@ test('restaura o token salvo entre montagens e permite apagar a persistência se
     await firstRoot.fire('input', { target: { id: 'trackingApiToken', value: token } });
     assert.equal(local.values.get(TRACKING_TOKEN_STORAGE_KEY), token);
     assert.doesNotMatch(firstRoot.innerHTML, new RegExp(token));
-    assert.match(firstRoot.innerHTML, /~\/domains\/travenzo\.shop\/tracking-config\.php/);
+    assert.match(firstRoot.innerHTML, /~\/tracking-config\.php/);
+    assert.doesNotMatch(firstRoot.innerHTML, /~\/domains\/travenzo\.shop\/tracking-config\.php/);
     assert.match(firstRoot.innerHTML, /tracking_hub_api_token/);
 
     const secondRoot = makeRoot();
@@ -316,6 +325,42 @@ test('consulta a trilha INS v8, mostra itens multi-produto e só cria CSV após 
     globalThis.window = saved.window;
     globalThis.URL = saved.URL;
     globalThis.Blob = saved.Blob;
+    local.restore();
+  }
+});
+
+test('cadastra novo domínio pela tela Tracking com token admin efêmero e permissão opcional de www', async () => {
+  const savedFetch = globalThis.fetch;
+  const local = installLocalStorage();
+  const requests = [];
+  const adminToken = 'd'.repeat(64);
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => ({ ok: true, added: ['presell.example', 'www.presell.example'], already_allowed: [] }) };
+  };
+  try {
+    const root = makeRoot();
+    mount({ root });
+    assert.match(root.innerHTML, /Domínios de pre-sell/);
+    assert.match(root.innerHTML, /tracking-domain-admin-config\.php/);
+    assert.match(root.innerHTML, /fora de <code>public_html/);
+
+    await root.fire('input', { target: { id: 'trackingDomainAdminToken', value: adminToken } });
+    await root.fire('input', { target: { id: 'trackingDomainName', value: 'Presell.Example' } });
+    await root.fire('change', { target: { id: 'trackingDomainIncludeWww', checked: true } });
+    await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'add-domain' } }) } });
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, 'https://track.travenzo.shop/tracking-domains.php');
+    assert.equal(requests[0].options.method, 'POST');
+    assert.equal(requests[0].options.headers.Authorization, `Bearer ${adminToken}`);
+    assert.equal(requests[0].options.body, JSON.stringify({ domain: 'presell.example', include_www: true }));
+    assert.equal(local.values.size, 0, 'the administrative token is never stored in localStorage');
+    assert.match(root.innerHTML, /Liberado: presell\.example, www\.presell\.example/);
+    assert.match(root.innerHTML, /presell\.example/);
+    assert.doesNotMatch(root.innerHTML, new RegExp(adminToken));
+  } finally {
+    globalThis.fetch = savedFetch;
     local.restore();
   }
 });

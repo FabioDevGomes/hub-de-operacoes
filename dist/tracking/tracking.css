@@ -119,6 +119,66 @@
   line-height: 1.45;
 }
 
+.tracking-domain-panel { display: grid; gap: 12px; }
+.tracking-domain-heading { margin: 0; }
+
+.tracking-domain-token-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 9px 14px;
+  padding: 13px 0;
+  border-top: 1px solid rgba(157, 178, 205, .16);
+  border-bottom: 1px solid rgba(157, 178, 205, .16);
+}
+
+.tracking-domain-token-grid .tracking-connection-note { grid-column: 1 / -1; }
+.tracking-domain-token-actions,
+.tracking-domain-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tracking-domain-token-actions .btn,
+.tracking-domain-actions .btn { justify-content: center; }
+.tracking-domain-token-grid > .tracking-remember-token { grid-column: 1 / -1; }
+
+.tracking-domain-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px 14px;
+}
+
+.tracking-domain-message,
+.tracking-domain-empty {
+  margin: 0;
+  color: var(--muted, #91a1b8);
+  font-size: .76rem;
+  line-height: 1.5;
+}
+
+.tracking-domain-message.is-error { color: #ffbf67; }
+.tracking-domain-empty { padding: 10px 0 0; }
+
+.tracking-domain-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tracking-domain-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(157, 178, 205, .14);
+  color: var(--muted, #91a1b8);
+  font-size: .75rem;
+}
+
+.tracking-domain-list code { color: var(--hub-primary-text, #c3cede); overflow-wrap: anywhere; }
+.tracking-domain-list span { overflow-wrap: anywhere; text-align: right; }
+
 .tracking-token-storage-status {
   grid-column: 1 / -1;
   margin: -5px 0 0;
@@ -297,6 +357,8 @@
   .tracking-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tracking-intro-head { align-items: flex-start; flex-direction: column; }
   .tracking-connection-actions { justify-content: flex-start; }
+  .tracking-domain-token-grid,
+  .tracking-domain-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 600px) {
@@ -307,4 +369,6 @@
   .tracking-actions .btn { justify-content: center; }
   .tracking-summary { grid-template-columns: minmax(0, 1fr); }
   .tracking-table-heading { align-items: start; flex-direction: column; }
+  .tracking-domain-list li { align-items: flex-start; flex-direction: column; }
+  .tracking-domain-list span { text-align: left; }
 }

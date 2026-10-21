@@ -4,6 +4,7 @@
     const $=selector=>root.querySelector(selector),$$=selector=>[...root.querySelectorAll(selector)];
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
     const columnPreferenceKey='hub:overview:visible-columns:v2',legacyColumnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null,selectedCampaignDate='';
+    const overviewMetricZeroClass=value=>typeof value==='number'&&Number.isFinite(value)&&value===0?' overview-zero-value':'';
     // Full adapter refreshes invalidate presentation caches; local sorting/filtering does not.
     let presentationSnapshot=null,renderedFilter=null,presentationRows=[];
     let cardSnapshot=null,cardRevision;
@@ -195,9 +196,9 @@
         campaign:`<td class="name" title="${esc(c.nome_campanha_exato)}">${esc(identity.name)}</td>`,
         zeroDays:`<td class="num ${zeroDays>0?'negative':'muted'}" title="${zeroDays==null?'Sem histórico diário suficiente':zeroDays===0?'A campanha teve impressões no dia mais recente':`${zeroDays} dia${zeroDays===1?'':'s'} consecutivo${zeroDays===1?'':'s'} sem impressões`}">${zeroDays==null?'—':zeroDays}</td>`,
         current:`<td class="num">${fmtMoney(totals?.investment??null)}</td>`,
-        imp:`<td class="num">${fmtNum(totals?.impressions??null)}</td>`,
-        clicks:`<td class="num">${fmtNum(totals?.clicks??null)}</td>`,
-        conv:`<td class="num">${fmtNum(totals?.conversions??null)}</td>`,
+        imp:`<td class="num${overviewMetricZeroClass(totals?.impressions)}">${fmtNum(totals?.impressions??null)}</td>`,
+        clicks:`<td class="num${overviewMetricZeroClass(totals?.clicks)}">${fmtNum(totals?.clicks??null)}</td>`,
+        conv:`<td class="num${overviewMetricZeroClass(totals?.conversions)}">${fmtNum(totals?.conversions??null)}</td>`,
         roi:`<td class="num">${roi==null?'—':fmtPct(roi)}</td>`,
         saleRoiFirst:saleRoiCell(saleHistory[0]),
         saleRoiSecond:saleRoiCell(saleHistory[1]),
@@ -217,9 +218,10 @@
         if(key==='campaign')return'<th scope="row" data-column="campaign">Totais</th>';
         const field=fields[key],total=totals[field],value=total?.value;
         const tone=key==='profit'&&value!=null?(value<0?' negative':value>0?' positive':''):'';
+        const zeroClass=['imp','clicks','conv'].includes(key)?overviewMetricZeroClass(value):'';
         const title=total?`Soma das campanhas filtradas: ${total.observedCount} de ${total.totalCount} com valor observado.`:'';
         const text=field?(['investment','profit'].includes(field)?fmtMoney(value):fmtNum(value,field==='conversions'&&value%1?2:0)):'—';
-        return`<td data-column="${key}" class="num${tone}"${title?` title="${esc(title)}"`:''}>${text}</td>`;
+        return`<td data-column="${key}" class="num${tone}${zeroClass}"${title?` title="${esc(title)}"`:''}>${text}</td>`;
       }).join('')+'</tr>';
     }
     // Preserve mounted cards and controls, patching only changed text/attributes.

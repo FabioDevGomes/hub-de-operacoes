@@ -118,7 +118,7 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-directory-table td:first-child{font-weight:600}
 .account-directory-table tbody tr:last-child td{border-bottom:0}
 .account-directory-table .account-directory-date{white-space:nowrap}
-.account-directory-table .account-directory-impressions-cell,.account-directory-table .account-directory-clicks-cell,.account-directory-table .account-directory-campaign-count-cell{text-align:center!important;font-variant-numeric:tabular-nums}
+.account-directory-table .account-directory-impressions-cell,.account-directory-table .account-directory-clicks-cell,.account-directory-table .account-directory-campaign-count-cell,.account-directory-table .account-directory-conversions-cell{text-align:center!important;font-variant-numeric:tabular-nums}
 .account-directory-empty{text-align:center!important;color:var(--muted);padding:24px!important}
 .account-directory-head-actions{display:flex;align-items:center;gap:8px}
 @media(max-width:560px){.account-directory-status-kpis{grid-template-columns:1fr 1fr;gap:8px}.account-directory-status-kpi{min-height:82px;padding:12px 10px 12px 15px}.account-directory-table th,.account-directory-table td{padding:10px 8px}.account-directory-table{font-size:.76rem}}
@@ -136,12 +136,11 @@ main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
 .account-directory-edit-button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-directory-status-button:focus-visible,.account-directory-status-choice:focus-visible,.account-directory-status-close:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .account-directory-status-dialog{width:min(560px,calc(100vw - 28px));padding:0;border:0;border-radius:18px;background:#0d192b;color:var(--text);box-shadow:0 18px 56px rgba(0,0,0,.55)}
-.account-directory-edit-field-form,.account-directory-manual-account-form{margin:0}
+.account-directory-edit-form,.account-directory-manual-account-form{margin:0}
 .account-directory-edit-fields{display:grid;gap:15px}
-.account-directory-edit-field-form{display:grid;gap:6px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-.account-directory-edit-field-form:last-child{padding-bottom:0;border-bottom:0}
+.account-directory-edit-field{display:grid;gap:6px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.account-directory-edit-field:last-child{padding-bottom:0;border-bottom:0}
 .account-directory-edit-actions{display:flex;justify-content:flex-end;margin-top:4px}
-.account-directory-edit-saved{min-height:0;margin:0;color:#63dda7;font-size:.76rem}
 .account-directory-edit-actions .account-directory-status-choice{min-width:150px}
 .account-directory-email-label,.account-directory-field-label{display:block;margin:0 0 6px;color:#b9c9dc;font-size:.76rem}
 .account-directory-email-input,.account-directory-payment-profile-input,.account-directory-account-input{box-sizing:border-box;width:100%;min-height:40px;padding:9px 11px;border:1px solid #31506e;border-radius:8px;background:#081525;color:var(--text);font:inherit;font-size:.82rem}

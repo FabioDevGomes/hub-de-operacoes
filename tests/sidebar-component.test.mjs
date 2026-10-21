@@ -33,7 +33,7 @@ for (const [name, path, mode] of pages) {
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
 }
 
-const groupOrder = ['operation', 'analysis', 'finance', 'curation', 'creation', 'personal'];
+const groupOrder = ['operation', 'tracking', 'analysis', 'finance', 'curation', 'creation', 'personal'];
 let previous = -1;
 for (const group of groupOrder) {
   const index = source.indexOf(`id: '${group}'`);
@@ -48,9 +48,13 @@ for (const label of [
 ]) assert.ok(source.includes(label), `item ${label} ausente da configuração compartilhada`);
 assert.doesNotMatch(source, /function productsMarkup|data-sidebar-toggle="products"|data-sidebar-group="products"/, 'Produtos testados deve ser um item direto, sem seção expansível Produtos');
 const operationStart = source.indexOf("{ id: 'operation'");
+const trackingStart = source.indexOf("{ id: 'tracking'");
 const analysisStart = source.indexOf("{ id: 'analysis'");
-const operationItems = source.slice(operationStart, analysisStart);
+const operationItems = source.slice(operationStart, trackingStart);
 assert.ok(operationItems.includes("key: 'tested'") && operationItems.indexOf("key: 'tested'") > operationItems.indexOf("key: 'preparer'"), 'Produtos testados deve ficar diretamente após Preparador MCC em Operação');
+assert.ok(!operationItems.includes("key: 'tracking'"), 'Tracking ClickBank não deve permanecer no grupo Operação');
+const trackingItems = source.slice(trackingStart, analysisStart);
+assert.ok(trackingItems.includes("label: 'Tracking'") && trackingItems.includes("key: 'tracking'") && trackingItems.includes("view: 'tracking'") && trackingItems.includes("href: '/?view=tracking'"), 'o grupo Tracking deve manter Tracking ClickBank e sua rota existente');
 const financeStart = source.indexOf("{ id: 'finance'");
 assert.ok(source.indexOf("key: 'account-directory'") > source.indexOf("key: 'accounts'"), 'Contas deve aparecer logo após Mapa por conta em Análises');
 const curationStart = source.indexOf("{ id: 'curation'");

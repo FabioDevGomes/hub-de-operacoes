@@ -3,7 +3,9 @@ import test from 'node:test';
 import {
   downloadClickBankInsV8Csv,
   downloadTrackingCsv,
+  addTrackingDomain,
   fetchClickBankInsV8Report,
+  fetchTrackingDomains,
   fetchTrackingReport,
   TRACKING_API_ENDPOINTS,
 } from '../src/tracking/tracking-service.mjs';
@@ -145,4 +147,35 @@ test('consulta e baixa somente os endpoints dedicados ao INS v8 com o token no h
   await downloadClickBankInsV8Csv(token, { fetchImpl });
   assert.equal(requests[1].url, TRACKING_API_ENDPOINTS.insV8Csv);
   assert.equal(requests[1].options.credentials, 'omit');
+});
+
+test('lê e cadastra domínios pela API administrativa usando token separado, HTTPS e payload normalizado', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    if (options.method === 'GET') {
+      return { ok: true, json: async () => ({ ok: true, domains: [
+        { page_host: 'example.com', origin: 'https://example.com', created_at_utc: '2026-10-21 12:00:00' },
+      ] }) };
+    }
+    return { ok: true, json: async () => ({ ok: true, added: ['example.com', 'www.example.com'], already_allowed: [] }) };
+  };
+  const domains = await fetchTrackingDomains(token, { fetchImpl });
+  assert.equal(domains[0].hostname, 'example.com');
+  assert.equal(requests[0].url, TRACKING_API_ENDPOINTS.domains);
+  assert.equal(requests[0].options.method, 'GET');
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${token}`);
+
+  const saved = await addTrackingDomain(token, 'Example.com', { includeWww: true, fetchImpl });
+  assert.deepEqual(saved, { added: ['example.com', 'www.example.com'], alreadyAllowed: [] });
+  assert.equal(requests[1].url, TRACKING_API_ENDPOINTS.domains);
+  assert.equal(requests[1].options.method, 'POST');
+  assert.equal(requests[1].options.headers['Content-Type'], 'application/json');
+  assert.equal(requests[1].options.body, JSON.stringify({ domain: 'example.com', include_www: true }));
+  assert.doesNotMatch(requests[1].url, /[?&](?:token|auth)=/i);
+
+  let called = false;
+  assert.throws(() => addTrackingDomain(token, 'http://example.com', { fetchImpl: async () => { called = true; } }), /HTTPS/i);
+  assert.equal(called, false, 'invalid domain input must be rejected before a request');
 });

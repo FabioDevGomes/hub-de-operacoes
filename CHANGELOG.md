@@ -2,6 +2,42 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.34.4] - 2026-10-21
+
+- Documenta 35% como padrão de redução de contraste
+
+## [1.34.3] - 2026-10-21
+
+- Reduz contraste dos zeros da Visão Geral para 35%
+
+## [1.34.2] - 2026-10-21
+
+- Corrige a precedência visual do contraste dos zeros na Visão Geral
+
+## [1.34.1] - 2026-10-21
+
+- Reduz contraste dos zeros nas métricas da Visão Geral
+
+## [1.34.0] - 2026-10-21
+
+- Adiciona conversões totais por conta
+
+## [1.33.0] - 2026-10-21
+
+- Adiciona grupo Tracking ao menu lateral
+
+## [1.32.2] - 2026-10-21
+
+- Invalida o cache da tela Tracking ClickBank
+
+## [1.32.1] - 2026-10-21
+
+- Corrige caminho do token INS v8 no Hostinger
+
+## [1.32.0] - 2026-10-21
+
+- Unifica o salvamento dos dados de conta
+
 ## [1.31.4] - 2026-10-20
 
 - Padroniza a ordem dos quadros Glimpse

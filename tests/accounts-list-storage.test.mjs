@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {ACCOUNT_DIRECTORY_EMAIL_KEY, ACCOUNT_DIRECTORY_MANUAL_ACCOUNTS_KEY, ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY, ACCOUNT_DIRECTORY_STATUS_KEY, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from '../src/accounts/accounts-list-storage.mjs';
+import {ACCOUNT_DIRECTORY_EMAIL_KEY, ACCOUNT_DIRECTORY_MANUAL_ACCOUNTS_KEY, ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY, ACCOUNT_DIRECTORY_STATUS_KEY, createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from '../src/accounts/accounts-list-storage.mjs';
 
 function memoryStorage(initial = null) {
   const values = new Map(initial == null ? [] : [[ACCOUNT_DIRECTORY_STATUS_KEY, initial]]);
@@ -120,6 +120,46 @@ test('payment profile ID validation and failed writes preserve local data', () =
   assert.throws(()=>unavailable.save('111-222-3333','profile-123'),/armazenamento local não está disponível/);
   const denied = {getItem(){return null;},setItem(){throw new Error('quota');}};
   assert.throws(()=>createAccountDirectoryPaymentProfileStorage(denied).save('111-222-3333','profile-123'),/Não foi possível salvar o ID do perfil de pagamento/);
+});
+
+test('account details save only changed fields to existing keys and validate the batch before writing',()=>{
+  const storage=memoryStorage();
+  storage.setItem(ACCOUNT_DIRECTORY_EMAIL_KEY,JSON.stringify({'444-555-6666':'existing@example.com'}));
+  storage.setItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY,JSON.stringify({'444-555-6666':'profile-existing'}));
+  const details=createAccountDirectoryDetailsStorage(storage);
+
+  assert.deepEqual(details.save('111-222-3333',{email:' owner+ads@example.com ',paymentProfileId:' profile-123456789012 '}),{email:true,paymentProfile:true});
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['111-222-3333'],'owner+ads@example.com');
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['444-555-6666'],'existing@example.com');
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY))['111-222-3333'],'profile-123456789012');
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY))['444-555-6666'],'profile-existing');
+
+  details.save('111-222-3333',{email:'updated@example.com'});
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY))['111-222-3333'],'updated@example.com');
+  assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY))['111-222-3333'],'profile-123456789012','campos omitidos permanecem inalterados');
+  const beforeEmail=storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY),beforeProfile=storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY);
+  assert.throws(()=>details.save('111-222-3333',{email:'not-an-email',paymentProfileId:'profile-new'}),error=>error.field==='email'&&/e-mail válido/.test(error.message));
+  assert.equal(storage.getItem(ACCOUNT_DIRECTORY_EMAIL_KEY),beforeEmail);
+  assert.equal(storage.getItem(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY),beforeProfile,'um campo inválido impede qualquer gravação do lote');
+  assert.deepEqual(details.save('111-222-3333',{}),{email:false,paymentProfile:false});
+});
+
+test('account details roll back the first local write if the second one fails',()=>{
+  const values=new Map([
+    [ACCOUNT_DIRECTORY_EMAIL_KEY,JSON.stringify({'444-555-6666':'existing@example.com'})],
+    [ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY,JSON.stringify({'444-555-6666':'profile-existing'})]
+  ]);
+  let writeCount=0;
+  const storage={
+    getItem(key){return values.get(key)??null;},
+    setItem(key,value){writeCount+=1;if(writeCount===2)throw new Error('quota');values.set(key,String(value));},
+    removeItem(key){values.delete(key);}
+  };
+  const originalEmail=values.get(ACCOUNT_DIRECTORY_EMAIL_KEY);
+  const details=createAccountDirectoryDetailsStorage(storage);
+  assert.throws(()=>details.save('111-222-3333',{email:'owner@example.com',paymentProfileId:'profile-123456789012'}),/Nenhuma alteração ficou aplicada/);
+  assert.equal(values.get(ACCOUNT_DIRECTORY_EMAIL_KEY),originalEmail,'a primeira chave volta ao conteúdo anterior');
+  assert.equal(values.get(ACCOUNT_DIRECTORY_PAYMENT_PROFILE_KEY),JSON.stringify({'444-555-6666':'profile-existing'}));
 });
 
 test('manual account registry is additive, normalized and independent from MCC and annotations', () => {

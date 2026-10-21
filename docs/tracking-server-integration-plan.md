@@ -10,7 +10,7 @@ O Test IPN foi aceito no receptor instalado e o usuário confirmou uma linha `TE
 
 - **Postback legado / macros:** `google-ads-report.php` e `google-ads-csv.php` consultam `clickbank_postback_events`, não conhecem produto/item e mantêm o comportamento anterior. Os botões antigos continuam disponíveis, identificados como postbacks legados.
 - **INS v8:** `clickbank-ins-v8-report.php` e `clickbank-ins-v8-csv.php` consultam somente `clickbank_ins_v8_transactions` e `clickbank_ins_v8_line_items`. Nenhuma consulta usa `clickbank_postback_events` como fallback.
-- Ambos usam o token `tracking_hub_api_token`, a lista exata `tracking_hub_allowed_origins` e o nome de ação `tracking_hub_conversion_name` no `tracking-config.php` privado. O token que a tela pode lembrar fica em `localStorage` da origem local, chave `hub:tracking:api-token:v1`; não é criptografado, não entra na IndexedDB ou no backup JSON, e é enviado somente no header `Authorization: Bearer ...`.
+- Ambos usam o token `tracking_hub_api_token`, a lista exata `tracking_hub_allowed_origins` e o nome de ação `tracking_hub_conversion_name` no `tracking-config.php` privado. Na instalação mostrada pelo usuário, esse arquivo fica em `~/tracking-config.php`, na raiz da conta Hostinger e fora de `public_html`. O token que a tela pode lembrar fica em `localStorage` da origem local, chave `hub:tracking:api-token:v1`; não é criptografado, não entra na IndexedDB ou no backup JSON, e é enviado somente no header `Authorization: Bearer ...`.
 
 ## Contrato INS v8 no Hub
 
@@ -27,6 +27,12 @@ O CSV é produzido em memória no servidor e baixado apenas quando o usuário cl
 Os wrappers públicos são instalados em `public_html/track/`; o serviço fica em `private-tools/`, fora de `public_html/`. Os endpoints aceitam apenas GET/OPTIONS, rejeitam query string, exigem HTTPS em uso e token Bearer de 64 hexadecimais, autorizam somente a origem local exata configurada e retornam `Cache-Control: no-store`. O endpoint JSON não devolve GCLID ou recibo completos; somente o download CSV autenticado os contém. O serviço executa somente `SELECT`, não grava arquivos ou registros e não acessa tabelas de tentativas/payload.
 
 Arquivos/caminhos e o procedimento de backup estão em `tracking-mvp/deploy/staging/clickbank-ins-v8-api/README.md`. O pacote é separado de `deploy/current/` e do staging do receptor. Ele não inclui SQL, `tracking-config.php`, tokens, chaves INS ou credenciais. Não é necessária nova migração: as três tabelas v8 já foram criadas e conferidas pelo usuário.
+
+## Cadastro de domínios de pre-sell — fase 1
+
+A tela Tracking agora tem um painel local de **Domínios de pre-sell**. Ele chama `https://track.travenzo.shop/tracking-domains.php` por GET/POST, autenticado com um token administrativo diferente do token de consulta/download de vendas. O Hub gera 32 bytes aleatórios criptográficos e baixa `tracking-domain-admin-config.php`; esse arquivo precisa ser enviado pelo usuário à mesma pasta privada do `tracking-config.php`, fora de `public_html`. O token administrativo permanece somente na memória da aba.
+
+O POST autoriza um hostname HTTPS explícito e, opcionalmente, a variante `www`. A tabela aditiva `tracking_allowed_domains` guarda origem e hostname normalizados; o `collect.php` atualizado aceita tanto essa tabela quanto a allowlist legada. O endpoint é somente aditivo nesta versão, sem remoção de domínios. O pacote local `tracking-mvp/deploy/staging/tracking-domain-allowlist/` ainda aguarda backup, upload manual, migração SQL e validação no servidor. Não altera os dois atributos dos links nem registra uma métrica de cliques; isso fica para as fases 2 e 3.
 
 ## Validação
 

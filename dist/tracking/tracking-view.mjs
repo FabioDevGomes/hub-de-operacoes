@@ -5,11 +5,19 @@ import {
   trackingIssueLabel,
 } from './tracking-domain.mjs?v=3';
 import {
+  addTrackingDomain,
   downloadClickBankInsV8Csv,
   downloadTrackingCsv,
   fetchClickBankInsV8Report,
+  fetchTrackingDomains,
   fetchTrackingReport,
-} from './tracking-service.mjs?v=3';
+} from './tracking-service.mjs?v=4';
+import {
+  createTrackingDomainAdminToken,
+  normalizeTrackingDomainInput,
+  trackingDomainAdminConfigPhp,
+  TRACKING_DOMAIN_ADMIN_CONFIG_FILE,
+} from './tracking-domain-admin.mjs?v=1';
 import {
   clearTrackingHubToken,
   readTrackingHubToken,
@@ -54,6 +62,8 @@ export function mount({ root }) {
     rememberToken: true,
     tokenStorageStatus: !savedToken.available ? 'unavailable' : savedToken.invalid ? 'invalid' : savedToken.token ? 'saved' : 'empty',
     serverPending: false, feedback: '', feedbackError: false,
+    domainAdminToken: '', domainAdminTokenVisible: false, domainName: '', domainIncludeWww: false,
+    domainRows: [], domainPending: false, domainAction: '', domainMessage: '', domainError: false,
   };
 
   function tokenStorageMessage() {
@@ -226,6 +236,9 @@ export function mount({ root }) {
       ? 'Solicita ao servidor um CSV atualizado, sem salvar o arquivo no servidor.'
       : 'Baixa o CSV original sem alterar os valores.';
     const tokenStorageWarning = ['unavailable', 'invalid'].includes(state.tokenStorageStatus);
+    const domainRows = state.domainRows.length
+      ? `<ul class="tracking-domain-list">${state.domainRows.map(row => `<li><code>${escapeHtml(row.hostname)}</code><span>${escapeHtml(row.origin)}</span></li>`).join('')}</ul>`
+      : '<p class="tracking-domain-empty">A lista ainda não foi carregada ou não há domínios cadastrados por esta tela. Domínios legados da configuração privada não aparecem aqui.</p>';
     root.innerHTML = `<div class="tracking-session">
       <section class="tracking-panel tracking-intro">
         <div class="tracking-intro-head">
@@ -241,7 +254,7 @@ export function mount({ root }) {
             <label class="tracking-token-field" for="trackingApiToken"><span>Token de acesso do Hub</span><input id="trackingApiToken" type="password" autocomplete="new-password" spellcheck="false" inputmode="text" aria-describedby="trackingTokenNote trackingTokenStorageStatus" placeholder="64 caracteres hexadecimais"></label>
             <label class="tracking-remember-token"><input id="trackingRememberToken" type="checkbox"${state.rememberToken ? ' checked' : ''}><span>Lembrar token neste navegador</span></label>
           </div>
-          <p id="trackingTokenNote" class="tracking-connection-note">No servidor: <code>~/domains/travenzo.shop/tracking-config.php</code> (fora de <code>public_html</code>), campo <code>tracking_hub_api_token</code>. É diferente do token de postback do ClickBank. Quando marcado, fica no armazenamento local deste perfil do navegador, sem criptografia; não entra na IndexedDB nem no backup JSON do Hub. A requisição usa HTTPS e envia o token somente no cabeçalho Authorization. Origem autorizada: <code>http://127.0.0.1:8765</code>.</p>
+          <p id="trackingTokenNote" class="tracking-connection-note">No servidor: <code>~/tracking-config.php</code> (na raiz da conta, fora de <code>public_html</code>), campo <code>tracking_hub_api_token</code>. É diferente do token de postback do ClickBank. Quando marcado, fica no armazenamento local deste perfil do navegador, sem criptografia; não entra na IndexedDB nem no backup JSON do Hub. A requisição usa HTTPS e envia o token somente no cabeçalho Authorization. Origem autorizada: <code>http://127.0.0.1:8765</code>.</p>
           <p id="trackingTokenStorageStatus" class="tracking-token-storage-status${tokenStorageWarning ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(tokenStorageMessage())}</p>
         </div>
         <div class="tracking-actions">
@@ -252,12 +265,43 @@ export function mount({ root }) {
         ${statusMarkup()}
         <p class="tracking-scope-note">O Hub não grava a base operacional nem envia conversões ao Google Ads. A Flow Tracking continua intacta; o CSV INS v8 é somente preparado e baixado manualmente. Não reenvie linhas já aceitas.</p>
       </section>
+      <section class="tracking-panel tracking-domain-panel" aria-label="Domínios autorizados de pre-sell">
+        <div class="tracking-table-heading tracking-domain-heading"><div><h2>Domínios de pre-sell</h2><p>Autorize um hostname para o coletor atual sem alterar manualmente a allowlist antiga. Cada domínio fica explícito; curingas não são aceitos.</p></div><span class="tracking-count">${state.domainRows.length} domínio(s) na tabela</span></div>
+        <div class="tracking-domain-token-grid">
+          <label class="tracking-token-field" for="trackingDomainAdminToken"><span>Token administrativo de domínios · separado do token de vendas</span><input id="trackingDomainAdminToken" type="${state.domainAdminTokenVisible ? 'text' : 'password'}" autocomplete="off" spellcheck="false" inputmode="text" placeholder="64 caracteres hexadecimais"></label>
+          <div class="tracking-domain-token-actions">
+            <button type="button" class="btn" data-tracking-action="generate-domain-token"${state.domainPending ? ' disabled' : ''}>Gerar token seguro</button>
+            <button type="button" class="btn" data-tracking-action="download-domain-config"${state.domainPending ? ' disabled' : ''}>Baixar configuração privada</button>
+            <button type="button" class="btn" data-tracking-action="clear-domain-token"${state.domainAdminToken ? '' : ' disabled'}>Esquecer token</button>
+          </div>
+          <label class="tracking-remember-token"><input id="trackingDomainAdminTokenVisible" type="checkbox"${state.domainAdminTokenVisible ? ' checked' : ''}><span>Mostrar token nesta tela</span></label>
+          <p class="tracking-connection-note">O token fica somente nesta aba e é enviado no cabeçalho Authorization por HTTPS. Para configurar o servidor uma vez, gere o token, baixe o PHP e envie <code>${TRACKING_DOMAIN_ADMIN_CONFIG_FILE}</code> para a mesma pasta privada do <code>tracking-config.php</code>, fora de <code>public_html</code>. Não coloque esse arquivo na pasta pública nem o compartilhe.</p>
+        </div>
+        <div class="tracking-domain-form">
+          <label class="tracking-token-field" for="trackingDomainName"><span>Domínio HTTPS da pre-sell</span><input id="trackingDomainName" type="text" autocomplete="url" spellcheck="false" placeholder="exemplo.com ou https://exemplo.com/"></label>
+          <label class="tracking-remember-token"><input id="trackingDomainIncludeWww" type="checkbox"${state.domainIncludeWww ? ' checked' : ''}><span>Autorizar também a variante www</span></label>
+          <div class="tracking-domain-actions">
+            <button type="button" class="btn" data-tracking-action="load-domains"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'load' ? 'Consultando…' : 'Atualizar lista'}</button>
+            <button type="button" class="btn primary" data-tracking-action="add-domain"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'add' ? 'Autorizando…' : 'Autorizar domínio'}</button>
+          </div>
+        </div>
+        <p class="tracking-domain-message${state.domainError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.domainMessage || 'A API administrativa precisa estar instalada e configurada no servidor antes de cadastrar domínios.')}</p>
+        ${domainRows}
+      </section>
       <section class="tracking-panel tracking-results" aria-label="Dados do CSV">${previewMarkup()}</section>
     </div>`;
     const tokenField = root.querySelector?.('#trackingApiToken');
     if (tokenField) tokenField.value = state.apiToken;
     const rememberField = root.querySelector?.('#trackingRememberToken');
     if (rememberField) rememberField.checked = state.rememberToken;
+    const domainTokenField = root.querySelector?.('#trackingDomainAdminToken');
+    if (domainTokenField) domainTokenField.value = state.domainAdminToken;
+    const domainNameField = root.querySelector?.('#trackingDomainName');
+    if (domainNameField) domainNameField.value = state.domainName;
+    const domainIncludeWwwField = root.querySelector?.('#trackingDomainIncludeWww');
+    if (domainIncludeWwwField) domainIncludeWwwField.checked = state.domainIncludeWww;
+    const domainTokenVisibleField = root.querySelector?.('#trackingDomainAdminTokenVisible');
+    if (domainTokenVisibleField) domainTokenVisibleField.checked = state.domainAdminTokenVisible;
     updateTokenStorageStatus();
   }
 
@@ -409,6 +453,95 @@ export function mount({ root }) {
     }
   }
 
+  function setDomainMessage(message, isError = false) {
+    state.domainMessage = message;
+    state.domainError = isError;
+  }
+
+  function downloadDomainAdminConfig() {
+    try {
+      const content = trackingDomainAdminConfigPhp(state.domainAdminToken);
+      triggerBlobDownload(new Blob([content], { type: 'application/x-php;charset=utf-8' }), TRACKING_DOMAIN_ADMIN_CONFIG_FILE);
+      setDomainMessage(`Arquivo ${TRACKING_DOMAIN_ADMIN_CONFIG_FILE} baixado. Envie-o para a mesma pasta privada do tracking-config.php, fora de public_html.`);
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : 'Não foi possível gerar a configuração privada.', true);
+    }
+    render();
+  }
+
+  function generateDomainAdminToken() {
+    try {
+      state.domainAdminToken = createTrackingDomainAdminToken();
+      state.domainAdminTokenVisible = false;
+      setDomainMessage('Token seguro gerado nesta aba. Baixe a configuração privada e envie-a ao servidor antes de usar o cadastro. Guarde o token para digitá-lo novamente se recarregar a tela.');
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : 'Não foi possível gerar o token.', true);
+    }
+    render();
+  }
+
+  async function loadDomainList() {
+    if (!state.domainAdminToken) {
+      setDomainMessage('Informe o token administrativo separado do token de acesso às vendas.', true);
+      render();
+      return;
+    }
+    state.domainPending = true;
+    state.domainAction = 'load';
+    setDomainMessage('Consultando a lista autenticada de domínios…');
+    render();
+    try {
+      state.domainRows = await fetchTrackingDomains(state.domainAdminToken);
+      setDomainMessage(`${state.domainRows.length} domínio(s) cadastrado(s) nesta tabela. Domínios da allowlist legada permanecem autorizados, mas não são listados aqui.`);
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : 'Não foi possível consultar os domínios.', true);
+    } finally {
+      state.domainPending = false;
+      state.domainAction = '';
+      render();
+    }
+  }
+
+  async function saveDomain() {
+    if (!state.domainAdminToken) {
+      setDomainMessage('Informe o token administrativo separado do token de acesso às vendas.', true);
+      render();
+      return;
+    }
+    let hostname;
+    try {
+      hostname = normalizeTrackingDomainInput(state.domainName);
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : 'Informe um domínio HTTPS válido.', true);
+      render();
+      return;
+    }
+    state.domainPending = true;
+    state.domainAction = 'add';
+    setDomainMessage('Enviando autorização aditiva ao servidor…');
+    render();
+    try {
+      const result = await addTrackingDomain(state.domainAdminToken, hostname, { includeWww: state.domainIncludeWww });
+      const affectedHosts = [...result.added, ...result.alreadyAllowed];
+      const existingHosts = new Set(state.domainRows.map(row => row.hostname));
+      state.domainRows = [...state.domainRows, ...affectedHosts
+        .filter(host => !existingHosts.has(host))
+        .map(host => ({ hostname: host, origin: `https://${host}`, createdAtUtc: '' }))]
+        .sort((left, right) => left.hostname.localeCompare(right.hostname));
+      const parts = [];
+      if (result.added.length) parts.push(`Liberado: ${result.added.join(', ')}.`);
+      if (result.alreadyAllowed.length) parts.push(`Já estava liberado: ${result.alreadyAllowed.join(', ')}.`);
+      setDomainMessage(parts.join(' ') || 'A API não retornou domínios liberados.', !parts.length);
+      state.domainName = '';
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : 'Não foi possível autorizar o domínio.', true);
+    } finally {
+      state.domainPending = false;
+      state.domainAction = '';
+      render();
+    }
+  }
+
   async function handleAction(action) {
     if (action === 'download') {
       if (['server', 'server-ins-v8'].includes(state.source)) return downloadFromServer();
@@ -416,6 +549,17 @@ export function mount({ root }) {
     }
     if (action === 'refresh-server') return refreshFromServer();
     if (action === 'refresh-ins-v8') return refreshInsV8FromServer();
+    if (action === 'generate-domain-token') return generateDomainAdminToken();
+    if (action === 'download-domain-config') return downloadDomainAdminConfig();
+    if (action === 'clear-domain-token') {
+      state.domainAdminToken = '';
+      state.domainAdminTokenVisible = false;
+      setDomainMessage('Token administrativo removido somente desta aba.');
+      render();
+      return;
+    }
+    if (action === 'load-domains') return loadDomainList();
+    if (action === 'add-domain') return saveDomain();
     if (action === 'disconnect') {
       const removal = clearTrackingHubToken();
       state.apiToken = '';
@@ -448,12 +592,19 @@ export function mount({ root }) {
       state.apiToken = String(event.target.value ?? '').trim();
       syncTokenStorage();
     }
+    if (event.target?.id === 'trackingDomainAdminToken') state.domainAdminToken = String(event.target.value ?? '').trim();
+    if (event.target?.id === 'trackingDomainName') state.domainName = String(event.target.value ?? '');
   });
   root.addEventListener('change', event => {
     if (event.target?.id === 'trackingCsvFile') return importFile(event.target.files?.[0]);
     if (event.target?.id === 'trackingRememberToken') {
       state.rememberToken = Boolean(event.target.checked);
       syncTokenStorage();
+      render();
+    }
+    if (event.target?.id === 'trackingDomainIncludeWww') state.domainIncludeWww = Boolean(event.target.checked);
+    if (event.target?.id === 'trackingDomainAdminTokenVisible') {
+      state.domainAdminTokenVisible = Boolean(event.target.checked);
       render();
     }
   });

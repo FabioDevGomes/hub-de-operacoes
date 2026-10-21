@@ -15,8 +15,15 @@ function metricCellValue(cell) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-const accountDirectorySortKeys = new Set(['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','status']);
-const accountDirectoryNumericSortKeys = new Set(['impressions','clicks','campaignCount']);
+function conversionCellValue(cell) {
+  const raw = cell && typeof cell === 'object' && Object.hasOwn(cell, 'value') ? cell.value : valueOf(cell);
+  if (raw == null || (typeof raw === 'string' && !raw.trim())) return null;
+  const value = typeof raw === 'number' ? raw : Number(String(raw).trim());
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+const accountDirectorySortKeys = new Set(['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','conversions','status']);
+const accountDirectoryNumericSortKeys = new Set(['impressions','clicks','campaignCount','conversions']);
 
 function accountDirectorySortValue(value, key) {
   if (value == null || (typeof value === 'string' && !value.trim())) return null;
@@ -141,6 +148,7 @@ export function buildAccountDirectory({campaigns=[], managers=[], manifest=null,
 
   const impressionsByAccount = new Map();
   const clicksByAccount = new Map();
+  const conversionsByAccount = new Map();
   const campaignsByAccount = new Map();
   for (const campaign of campaigns || []) {
     const aliases = campaignAliases(campaign);
@@ -162,8 +170,10 @@ export function buildAccountDirectory({campaigns=[], managers=[], manifest=null,
     if (!account) continue;
     const impressions = metricCellValue(row?.celulas?.B);
     const clicks = metricCellValue(row?.celulas?.C);
+    const conversions = conversionCellValue(row?.celulas?.F);
     if (impressions != null) impressionsByAccount.set(account, (impressionsByAccount.get(account) || 0) + impressions);
     if (clicks != null) clicksByAccount.set(account, (clicksByAccount.get(account) || 0) + clicks);
+    if (conversions != null) conversionsByAccount.set(account, (conversionsByAccount.get(account) || 0) + conversions);
   }
 
   return [...directory.byAccount.values()].map(row => {
@@ -175,7 +185,8 @@ export function buildAccountDirectory({campaigns=[], managers=[], manifest=null,
       startDate:row.dates.length ? row.dates.sort()[0] : null,
       impressions:impressionsByAccount.get(row.account) ?? null,
       clicks:clicksByAccount.get(row.account) ?? null,
-      campaignCount:campaignsByAccount.get(row.account)?.size ?? 0
+      campaignCount:campaignsByAccount.get(row.account)?.size ?? 0,
+      conversions:conversionsByAccount.get(row.account) ?? null
     };
   }).sort((a, b) => compare(a.mcc, b.mcc) || compare(a.account, b.account));
 }

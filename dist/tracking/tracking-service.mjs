@@ -1,10 +1,16 @@
 import { normalizeClickBankInsV8Report, normalizeTrackingApiReport } from './tracking-domain.mjs?v=3';
+import {
+  normalizeTrackingDomainInput,
+  normalizeTrackingDomainList,
+  normalizeTrackingDomainSave,
+} from './tracking-domain-admin.mjs?v=1';
 
 export const TRACKING_API_ENDPOINTS = Object.freeze({
   report: 'https://track.travenzo.shop/google-ads-report.php',
   csv: 'https://track.travenzo.shop/google-ads-csv.php',
   insV8Report: 'https://track.travenzo.shop/clickbank-ins-v8-report.php',
   insV8Csv: 'https://track.travenzo.shop/clickbank-ins-v8-csv.php',
+  domains: 'https://track.travenzo.shop/tracking-domains.php',
 });
 
 const ERROR_MESSAGES = Object.freeze({
@@ -18,6 +24,11 @@ const ERROR_MESSAGES = Object.freeze({
   query_not_supported: 'A API não aceita parâmetros na URL; recarregue o Hub e tente novamente.',
   private_service_unavailable: 'O serviço privado do Tracking não foi encontrado ao lado da pasta pública.',
   server_error: 'O servidor não conseguiu concluir a leitura. Nenhum evento foi alterado.',
+  domain_registry_unavailable: 'A tabela de domínios ainda não está disponível. Confirme a migração SQL e tente novamente.',
+  invalid_domain: 'Informe um domínio HTTPS válido, sem caminho ou parâmetros.',
+  unsupported_content_type: 'A API de domínios aceita somente JSON.',
+  invalid_payload: 'Os dados enviados para o cadastro de domínio são inválidos.',
+  payload_too_large: 'A solicitação de domínio excedeu o limite permitido.',
 });
 
 function readToken(token) {
@@ -79,4 +90,62 @@ export function fetchClickBankInsV8Report(token, { fetchImpl = globalThis.fetch 
 
 export function downloadClickBankInsV8Csv(token, { fetchImpl = globalThis.fetch } = {}) {
   return withTrackingRequest(TRACKING_API_ENDPOINTS.insV8Csv, token, fetchImpl, true);
+}
+
+async function withDomainRequest(token, { method, body, fetchImpl }) {
+  if (typeof fetchImpl !== 'function') throw new Error('A conexão com o servidor não está disponível neste navegador.');
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 15000);
+  try {
+    const options = {
+      method,
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${readToken(token)}`,
+      },
+      signal: controller.signal,
+    };
+    if (body !== undefined) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetchImpl(TRACKING_API_ENDPOINTS.domains, options);
+    let payload = null;
+    try { payload = await response?.json?.(); } catch {}
+    if (!response?.ok) {
+      const code = payload?.error || '';
+      if (code === 'api_not_configured') {
+        throw new Error('O endpoint de domínios ainda não está instalado ou o token administrativo ainda não foi configurado.');
+      }
+      if (code === 'origin_not_allowed') {
+        throw new Error('A origem local do Hub não está autorizada na API administrativa.');
+      }
+      if (code === 'not_authorized') throw new Error('Token administrativo inválido. Confira o token separado do acesso às vendas.');
+      throw new Error(ERROR_MESSAGES[code] || `O servidor respondeu com erro HTTP ${Number(response?.status) || 'desconhecido'}.`);
+    }
+    return method === 'GET' ? normalizeTrackingDomainList(payload) : normalizeTrackingDomainSave(payload);
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('A operação de domínios excedeu 15 segundos. Tente novamente.');
+    if (error instanceof TypeError) throw new Error('Não foi possível conectar. Confira internet, HTTPS e o CORS da API administrativa.');
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
+export function fetchTrackingDomains(token, { fetchImpl = globalThis.fetch } = {}) {
+  return withDomainRequest(token, { method: 'GET', fetchImpl });
+}
+
+export function addTrackingDomain(token, domain, { includeWww = false, fetchImpl = globalThis.fetch } = {}) {
+  const normalizedDomain = normalizeTrackingDomainInput(domain);
+  return withDomainRequest(token, {
+    method: 'POST',
+    body: { domain: normalizedDomain, include_www: Boolean(includeWww) },
+    fetchImpl,
+  });
 }

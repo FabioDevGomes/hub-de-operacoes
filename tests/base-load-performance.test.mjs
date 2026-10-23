@@ -162,7 +162,8 @@ test('built startup wires the unified read and settles notice only after restora
     assert.match(source, /id="notice"[^>]*aria-busy="true">Carregando base local…/);
     assert.match(source, /storage\/campaign-base-reader\.js\?v=1/);
     assert.match(source, /overview\/base-load-notice\.js\?v=1/);
-    assert.match(source, /if\(cachedOverviewBase\)baseLoadNotice\.ready\(\);\s*else restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)\.then\(\(\)=>\{baseLoadNotice\.ready\(\);render\(\)\}\)\.catch\(\(\)=>\{baseLoadNotice\.fail\(/);
+    assert.match(source, /if\(cachedOverviewBase\)\{baseLoadNotice\.ready\(\);reconcileCancelledManualSalesToBase\(\)\.then\(changed=>\{if\(changed\)render\(\)\}\)/);
+    assert.match(source, /else restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)\.then\(async\(\)=>\{baseLoadNotice\.ready\(\);try\{await reconcileCancelledManualSalesToBase\(\)\}/);
     assert.doesNotMatch(source, /restoreProductCatalog\(\)\.then\(restoreLocalBase\)/);
   }
 });

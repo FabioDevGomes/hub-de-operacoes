@@ -7,7 +7,6 @@
 .macro-kpi small{display:block;margin-top:2px;color:#8298b2;font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .macro-header-status{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;max-width:60%}
 .macro-header-status #macroBillingStatus{white-space:normal;text-align:right}
-.macro-billing-detail{color:#78c7ff;font-size:.66rem;display:block;margin-top:2px}
 #macroBillingStatus.billing-error{color:#ff9a9a}
 .macro-table-wrap{overflow-x:auto;overflow-y:visible;max-height:none}
 .macro-table{min-width:1000px}

@@ -77,7 +77,7 @@ test('Mês atual no Controle de gastos compartilha somente o acabamento escuro d
   assert.match(view,/class="btn hub-standard-action" type="button" data-action="toggle-create-month">Criar outro mês/);
   assert.match(view,/const currentPeriodLabel = isQuarter \? 'Trimestre atual' : isConsolidated \? 'Começar no mês atual' : 'Mês atual'/);
   assert.ok(view.includes("else if (action === 'current-period') { state.monthKey = localMonth(new Date()); state.createMonthOpen = false; await loadMonth(); }"));
-  assert.ok(app.includes('personal-finance-view.mjs?v=99'));
+  assert.ok(app.includes('personal-finance-view.mjs?v=101'));
   assert.ok(css.includes('box-shadow:0 4px 9px rgba(0,0,0,.55)'));
   assert.ok(css.includes('box-shadow:0 5px 12px rgba(0,0,0,.65)'));
   assert.doesNotMatch(localCss,/\.hub-month-current[^{}]*\{/,'sem duplicar sombras ou alterar os outros navegadores');

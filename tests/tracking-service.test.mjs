@@ -5,8 +5,10 @@ import {
   downloadTrackingCsv,
   addTrackingDomain,
   fetchClickBankInsV8Report,
+  fetchTrackingClicksReport,
   fetchTrackingDomains,
   fetchTrackingReport,
+  fetchTrackingSalesPage,
   TRACKING_API_ENDPOINTS,
 } from '../src/tracking/tracking-service.mjs';
 
@@ -144,9 +146,13 @@ test('consulta e baixa somente os endpoints dedicados ao INS v8 com o token no h
   assert.equal(requests[0].options.cache, 'no-store');
   assert.doesNotMatch(requests[0].url, /[?&](?:token|auth)=/i);
 
-  await downloadClickBankInsV8Csv(token, { fetchImpl });
+  await downloadClickBankInsV8Csv(token, { conversionName: 'Ação MCC A', fetchImpl });
   assert.equal(requests[1].url, TRACKING_API_ENDPOINTS.insV8Csv);
   assert.equal(requests[1].options.credentials, 'omit');
+  assert.equal(requests[1].options.method, 'POST');
+  assert.equal(requests[1].options.headers['Content-Type'], 'application/json');
+  assert.equal(requests[1].options.body, JSON.stringify({ conversion_name: 'Ação MCC A' }));
+  assert.throws(() => downloadClickBankInsV8Csv(token, { fetchImpl }), /nome exato da ação/i);
 });
 
 test('lê e cadastra domínios pela API administrativa usando token separado, HTTPS e payload normalizado', async () => {
@@ -155,27 +161,119 @@ test('lê e cadastra domínios pela API administrativa usando token separado, HT
     requests.push({ url, options });
     if (options.method === 'GET') {
       return { ok: true, json: async () => ({ ok: true, domains: [
-        { page_host: 'example.com', origin: 'https://example.com', created_at_utc: '2026-10-21 12:00:00' },
+        { page_host: 'example.com', origin: 'https://example.com', product_key: 'product-a', created_at_utc: '2026-10-21 12:00:00' },
       ] }) };
     }
-    return { ok: true, json: async () => ({ ok: true, added: ['example.com', 'www.example.com'], already_allowed: [] }) };
+      return { ok: true, json: async () => ({ ok: true, product_key: 'product-a', product_label: 'Product A', added: ['example.com', 'www.example.com'], updated: [], already_allowed: [] }) };
   };
   const domains = await fetchTrackingDomains(token, { fetchImpl });
   assert.equal(domains[0].hostname, 'example.com');
+  assert.equal(domains[0].productKey, 'product-a');
   assert.equal(requests[0].url, TRACKING_API_ENDPOINTS.domains);
   assert.equal(requests[0].options.method, 'GET');
   assert.equal(requests[0].options.credentials, 'omit');
   assert.equal(requests[0].options.headers.Authorization, `Bearer ${token}`);
 
-  const saved = await addTrackingDomain(token, 'Example.com', { includeWww: true, fetchImpl });
-  assert.deepEqual(saved, { added: ['example.com', 'www.example.com'], alreadyAllowed: [] });
+  const saved = await addTrackingDomain(token, 'Example.com', { includeWww: true, productKey: 'product-a', productLabel: 'Product A', fetchImpl });
+  assert.deepEqual(saved, { added: ['example.com', 'www.example.com'], updated: [], alreadyAllowed: [], productKey: 'product-a', productLabel: 'Product A' });
   assert.equal(requests[1].url, TRACKING_API_ENDPOINTS.domains);
   assert.equal(requests[1].options.method, 'POST');
   assert.equal(requests[1].options.headers['Content-Type'], 'application/json');
-  assert.equal(requests[1].options.body, JSON.stringify({ domain: 'example.com', include_www: true }));
+  assert.equal(requests[1].options.body, JSON.stringify({ domain: 'example.com', include_www: true, product_key: 'product-a', product_label: 'Product A' }));
   assert.doesNotMatch(requests[1].url, /[?&](?:token|auth)=/i);
 
   let called = false;
   assert.throws(() => addTrackingDomain(token, 'http://example.com', { fetchImpl: async () => { called = true; } }), /HTTPS/i);
+  assert.throws(() => addTrackingDomain(token, 'example.com', { productKey: 'bad@code', fetchImpl: async () => { called = true; } }));
   assert.equal(called, false, 'invalid domain input must be rejected before a request');
+});
+
+test('consulta relatório agregado de cliques por POST JSON, token Bearer e sem dados de visitante', async () => {
+  const requests = [];
+  const range = { startDate: '2026-10-01', endDate: '2026-10-31' };
+  const payload = {
+    ok: true,
+    schema_version: 1,
+    generated_at_utc: '2026-10-21T20:00:00Z',
+    start_date: range.startDate,
+    end_date: range.endDate,
+    count_semantics: 'events_not_unique_visitors',
+    rows: [{ date_utc: '2026-10-21', product_key: 'metabo-zinvero', presell_host: 'metabo.zinvero.shop', page_views: 3, outbound_clicks: 1 }],
+  };
+  const report = await fetchTrackingClicksReport(token, range, {
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => payload };
+    },
+  });
+  assert.deepEqual(report.rows[0], {
+    dateUtc: '2026-10-21', productKey: 'metabo-zinvero', presellHost: 'metabo.zinvero.shop', pageViews: 3, outboundClicks: 1,
+  });
+  assert.equal(requests[0].url, TRACKING_API_ENDPOINTS.clicksReport);
+  assert.equal(requests[0].options.method, 'POST');
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${token}`);
+  assert.equal(requests[0].options.headers['Content-Type'], 'application/json');
+  assert.equal(requests[0].options.body, JSON.stringify({ start_date: range.startDate, end_date: range.endDate }));
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(requests[0].options.cache, 'no-store');
+  assert.doesNotMatch(requests[0].url, /[?&](?:token|auth)=/i);
+
+  let called = false;
+  assert.throws(() => fetchTrackingClicksReport(token, { startDate: 'bad', endDate: range.endDate }, {
+    fetchImpl: async () => { called = true; },
+  }), /UTC válido/i);
+  assert.equal(called, false, 'An invalid range is rejected before the network request.');
+
+  const unexpectedData = structuredClone(payload);
+  unexpectedData.rows[0].gclid = 'must-not-be-returned';
+  await assert.rejects(fetchTrackingClicksReport(token, range, {
+    fetchImpl: async () => ({ ok: true, json: async () => unexpectedData }),
+  }), /campos não permitidos/i);
+});
+
+test('consulta páginas de vendas por POST autenticado e valida vínculo sem enviar cursor na URL', async () => {
+  const requests = [];
+  const payload = {
+    ok: true,
+    schema_version: 1,
+    snapshot_max_id: '20',
+    after_id: '10',
+    next_after_id: '12',
+    has_more: false,
+    generated_at_utc: '2026-10-20T12:02:00Z',
+    sales: [{
+      transaction_id: '12',
+      transaction_time_utc: '2026-10-20T12:00:00.123Z',
+      attribution_status: 'matched',
+      presell_host: 'buy.example.com',
+      product_key: 'product-a',
+    }],
+  };
+  const page = await fetchTrackingSalesPage(token, {
+    afterId: '10',
+    snapshotMaxId: null,
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => payload };
+    },
+  });
+  assert.equal(page.sales[0].transactionId, '12');
+  assert.equal(page.sales[0].presellHost, 'buy.example.com');
+  assert.equal(requests[0].url, TRACKING_API_ENDPOINTS.sales);
+  assert.equal(requests[0].options.method, 'POST');
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${token}`);
+  assert.equal(requests[0].options.headers['Content-Type'], 'application/json');
+  assert.equal(requests[0].options.body, JSON.stringify({ after_id: '10', snapshot_max_id: null }));
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(requests[0].options.cache, 'no-store');
+  assert.doesNotMatch(requests[0].url, /[?&](?:token|auth|cursor)=/i);
+  const unexpected = structuredClone(payload);
+  unexpected.sales[0].extclid = 'private';
+  await assert.rejects(fetchTrackingSalesPage(token, {
+    afterId: '10', fetchImpl: async () => ({ ok: true, json: async () => unexpected }),
+  }), /campos inesperados/i);
+  let called = false;
+  assert.throws(() => fetchTrackingSalesPage(token, { afterId: 10, fetchImpl: async () => { called = true; } }), /cursor de vendas/i);
+  assert.throws(() => fetchTrackingSalesPage(token, { afterId: '18446744073709551616', fetchImpl: async () => { called = true; } }), /cursor de vendas/i);
+  assert.equal(called, false);
 });

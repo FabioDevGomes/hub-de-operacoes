@@ -1,10 +1,39 @@
 export const TRACKING_DOMAIN_ADMIN_CONFIG_FILE = 'tracking-domain-admin-config.php';
+const TRACKING_SCRIPT_URL = 'https://track.travenzo.shop/track.js';
+const TRACKING_COLLECTOR_URL = 'https://track.travenzo.shop/collect.php';
 
 const HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/i;
 
 function validHost(value) {
   return typeof value === 'string' && HOST_PATTERN.test(value) && !/^\d+(?:\.\d+){3}$/.test(value);
+}
+
+export function normalizeTrackingProductKey(value) {
+  const label = String(value ?? '');
+  if (!label.trim() || label.length > 253 || /[\x00-\x1f\x7f]/.test(label)) {
+    throw new Error('Informe um nome de produto com até 253 caracteres.');
+  }
+  const key = label.trim().toLowerCase().replace(/[\s-]+/g, '-');
+  if (!key || key.length > 253 || !/^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/.test(key) || key.includes('..')) {
+    throw new Error('O identificador deve começar e terminar com letra ou número. Use letras sem acento, números, ponto, hífen ou sublinhado; não use pontos consecutivos. Espaços e hífens consecutivos viram um único hífen.');
+  }
+  return key;
+}
+
+export function normalizeTrackingProductLabel(value) {
+  const label = String(value ?? '');
+  if (!label.trim() || label.length > 253 || /[\x00-\x1f\x7f]/.test(label)) {
+    throw new Error('Informe um nome de produto com até 253 caracteres.');
+  }
+  normalizeTrackingProductKey(label);
+  return label;
+}
+
+export function buildTrackingPresellScriptTag(productKey, presellHost) {
+  const key = normalizeTrackingProductKey(productKey);
+  const hostname = normalizeTrackingDomainInput(presellHost);
+  return `<script src="${TRACKING_SCRIPT_URL}" data-endpoint="${TRACKING_COLLECTOR_URL}" data-product-key="${key}" data-presell-host="${hostname}" async></script>`;
 }
 
 export function normalizeTrackingDomainInput(value) {
@@ -33,9 +62,18 @@ export function normalizeTrackingDomainList(payload) {
     if (!validHost(hostname) || row?.origin !== `https://${hostname}`) {
       throw new Error('O servidor retornou um domínio com formato inválido.');
     }
+    const rawProductLabel = row.product_label;
+    if (rawProductLabel != null && typeof rawProductLabel !== 'string') {
+      throw new Error('O servidor retornou um nome de Track com formato inválido.');
+    }
+    const productLabel = rawProductLabel == null
+      ? null
+      : normalizeTrackingProductLabel(rawProductLabel).trim();
     return {
       hostname,
       origin: row.origin,
+      productKey: normalizeTrackingProductKey(row.product_key ?? hostname),
+      productLabel,
       createdAtUtc: typeof row.created_at_utc === 'string' ? row.created_at_utc : '',
     };
   });
@@ -51,7 +89,18 @@ export function normalizeTrackingDomainSave(payload) {
     if (!validHost(host)) throw new Error('O servidor retornou um resultado de cadastro inválido.');
     return host;
   });
-  return { added: validate(payload.added), alreadyAllowed: validate(payload.already_allowed) };
+  const rawProductKey = payload.product_key;
+  const rawProductLabel = payload.product_label;
+  if (rawProductLabel != null && typeof rawProductLabel !== 'string') {
+    throw new Error('O servidor retornou uma confirmação com nome de Track inválido.');
+  }
+  return {
+    added: validate(payload.added),
+    updated: validate(Array.isArray(payload.updated) ? payload.updated : []),
+    alreadyAllowed: validate(payload.already_allowed),
+    productKey: rawProductKey == null ? null : normalizeTrackingProductKey(rawProductKey),
+    productLabel: rawProductLabel == null ? null : normalizeTrackingProductLabel(rawProductLabel).trim(),
+  };
 }
 
 export function createTrackingDomainAdminToken(cryptoImpl = globalThis.crypto) {

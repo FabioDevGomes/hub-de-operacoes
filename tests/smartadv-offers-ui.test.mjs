@@ -17,7 +17,7 @@ const appRootEnd = page.indexOf('</main>', appRootStart);
 const importDialogStart = page.indexOf('<dialog id="importDialog"');
 assert.ok(importDialogStart > appRootStart && importDialogStart < appRootEnd, 'o diálogo de importação deve ficar dentro da raiz da interface');
 assert.ok(page.includes('data-hub-sidebar-active="smartadv-offers"'));
-assert.ok(page.includes('../trends-sheet.css?v=20261016-trends-keyword-candidates-flat'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
+assert.ok(page.includes('../trends-sheet.css?v=20261021-curation-low-contrast'), 'SmartAdv carrega a folha compartilhada de ações do cabeçalho');
 assert.ok(page.includes('/table-edit-actions.css?v=3'), 'SmartAdv carrega o padrão compartilhado das ações discretas de tabela');
 assert.match(page, /<select class="control hub-table-filter" id="visibilityFilter"[^>]*><option value="visible">Itens visíveis<\/option><option value="hidden">Itens ocultos<\/option><option value="all">Todos os itens<\/option><\/select>/);
 assert.ok(page.includes('Curadoria · SmartAdv') && page.includes('Ofertas SmartAdv'));

@@ -7,7 +7,7 @@ const phaseLabels={
   ficha:'Conferência da ficha'
 };
 const checkLabels={
-  'validator-output':'Saída técnica do validador',
+  'validator-output':'Falha técnica ao executar o validador',
   'validator-stderr':'Mensagem técnica do validador',
   'validator-exit-code':'Código de saída do validador',
   'destination':'Pasta de destino',
@@ -36,7 +36,7 @@ export function reportHtml(report){
   const hasUnreadableReport=phases.some(phase=>(phase.report?.checks||[]).some(check=>check.name==='validator-output'));
   const summary=overall==='BLOCKED'
     ?hasUnreadableReport
-      ?'A validação terminou com uma falha técnica e não confirmou o conteúdo. Não publique até executar novamente e obter um resultado conclusivo.'
+      ?'A validação falhou por um erro interno ao chamar o PowerShell e não gerou um relatório confiável. Isso não aponta erro na ficha, e alterar os campos não evita a falha. Não publique; é necessário corrigir a chamada do validador e repetir a conferência.'
       :'Há verificações que precisam ser corrigidas antes de liberar a página para publicação.'
     :overall==='PASS_WITH_WARNINGS'
       ?'A validação terminou com avisos. Revise-os antes de publicar.'

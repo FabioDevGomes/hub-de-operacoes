@@ -8,7 +8,7 @@ test('existing tabbed offer sheets share the documented bar and blue Save finish
     const html=await read('src/curadoria/'+page+'/index.html');
     assert.ok(html.includes('analysis-sheet-bar.css?v=3'),page);
     assert.ok(html.includes('white-button.css?v=6'),page);
-    assert.ok(html.includes('trends-sheet.css?v=20261016-trends-keyword-candidates-flat'),page);
+    assert.ok(html.includes('trends-sheet.css?v=20261021-curation-low-contrast'),page);
     assert.equal(publishedPage(html),await read('dist/curadoria/'+page+'/index.html'));
   }
   const css=await read('src/curadoria/analysis-sheet-bar.css');

@@ -22,7 +22,7 @@ function conversionCellValue(cell) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-const accountDirectorySortKeys = new Set(['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','conversions','status']);
+const accountDirectorySortKeys = new Set(['account','email','paymentProfile','mcc','startDate','creationDate','impressions','clicks','campaignCount','conversions','status']);
 const accountDirectoryNumericSortKeys = new Set(['impressions','clicks','campaignCount','conversions']);
 
 function accountDirectorySortValue(value, key) {
@@ -31,7 +31,7 @@ function accountDirectorySortValue(value, key) {
     const number = typeof value === 'number' ? value : Number(String(value).trim());
     return Number.isFinite(number) ? number : null;
   }
-  if (key === 'startDate') return validDate(value);
+  if (key === 'startDate' || key === 'creationDate') return validDate(value);
   return String(value).trim();
 }
 
@@ -183,6 +183,7 @@ export function buildAccountDirectory({campaigns=[], managers=[], manifest=null,
       account:row.account,
       mcc:managerLabels.length ? managerLabels.join(' · ') : 'Não identificada',
       startDate:row.dates.length ? row.dates.sort()[0] : null,
+      creationDate:null,
       impressions:impressionsByAccount.get(row.account) ?? null,
       clicks:clicksByAccount.get(row.account) ?? null,
       campaignCount:campaignsByAccount.get(row.account)?.size ?? 0,

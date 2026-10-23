@@ -3,29 +3,75 @@ import {
   maskTrackingIdentifier,
   parseGoogleAdsCsv,
   trackingIssueLabel,
-} from './tracking-domain.mjs?v=3';
+} from './tracking-domain.mjs?v=4';
 import {
   addTrackingDomain,
   downloadClickBankInsV8Csv,
   downloadTrackingCsv,
   fetchClickBankInsV8Report,
+  fetchTrackingClicksReport,
   fetchTrackingDomains,
   fetchTrackingReport,
-} from './tracking-service.mjs?v=4';
+  fetchTrackingSalesPage,
+} from './tracking-service.mjs?v=11';
 import {
   createTrackingDomainAdminToken,
+  buildTrackingPresellScriptTag,
   normalizeTrackingDomainInput,
+  normalizeTrackingProductKey,
+  normalizeTrackingProductLabel,
   trackingDomainAdminConfigPhp,
   TRACKING_DOMAIN_ADMIN_CONFIG_FILE,
-} from './tracking-domain-admin.mjs?v=1';
+} from './tracking-domain-admin.mjs?v=7';
+import {
+  readTrackingProductLabels,
+  saveTrackingProductLabel,
+} from './tracking-domain-label-storage.mjs?v=2';
+import {
+  readTrackingDomainList,
+  saveTrackingDomainList,
+} from './tracking-domain-list-storage.mjs?v=3';
+import {
+  formatTrackingDatePtBr,
+  parseTrackingDatePtBr,
+  resolveTrackingClicksCache,
+  summarizeTrackingClicks,
+  trackingClicksDefaultDateRange,
+  trackingClicksRate,
+  validateTrackingClicksDateRange,
+} from './tracking-clicks-domain.mjs?v=3';
+
+const CLICKBANK_INS_V8_INSTANT_NOTIFICATION_URL = 'https://track.travenzo.shop/clickbank-ins-v8.php';
+import {
+  appendTrackingClicksSnapshot,
+  readTrackingClicksSnapshots,
+} from './tracking-clicks-storage.mjs?v=1';
+import { summarizeTrackingSales, TRACKING_SALES_MAX_SYNC_PAGES, TRACKING_SALES_MAX_SYNC_RECORDS } from './tracking-sales-domain.mjs?v=1';
+import { readTrackingSalesSnapshot, replaceTrackingSalesSnapshot } from './tracking-sales-storage.mjs?v=1';
 import {
   clearTrackingHubToken,
   readTrackingHubToken,
   saveTrackingHubToken,
-} from './tracking-token-storage.mjs?v=1';
+  clearTrackingDomainAdminToken,
+  readTrackingDomainAdminToken,
+  saveTrackingDomainAdminToken,
+} from './tracking-token-storage.mjs?v=2';
+import {
+  newTrackingConversionProfileId,
+  normalizeTrackingConversionProfile,
+  readTrackingConversionProfiles,
+  saveTrackingConversionProfiles,
+} from './tracking-conversion-profiles-storage.mjs?v=1';
+import {
+  normalizeTrackingEmailConfig,
+  trackingEmailConfigPhp,
+  TRACKING_EMAIL_CONFIG_FILE,
+} from './tracking-email-config.mjs?v=1';
 
 const mountedRoots = new WeakMap();
 const PREVIEW_LIMIT = 100;
+export const TRACKING_CLICKS_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+export const TRACKING_SALES_AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -34,6 +80,17 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character =>
 function fileNameForDownload(value) {
   const name = String(value || '').split(/[\\/]/).pop() || 'clickbank-google-ads.csv';
   return name.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 120) || 'clickbank-google-ads.csv';
+}
+
+function profileCsvFilename(label) {
+  const suffix = String(label || 'conta')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'conta';
+  return `clickbank-ins-v8-${suffix}.csv`;
 }
 
 function formatCurrencyTotals(summary) {
@@ -48,7 +105,18 @@ function formatCurrencyTotals(summary) {
   }).join(' · ');
 }
 
-export function mount({ root }) {
+export function mount({
+  root,
+  clipboard = globalThis.navigator?.clipboard,
+  clicksStorage = { read: readTrackingClicksSnapshots, append: appendTrackingClicksSnapshot },
+  salesStorage = { read: readTrackingSalesSnapshot, replace: replaceTrackingSalesSnapshot },
+  setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
+  clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis),
+  scheduleAutoRefreshFn = globalThis.setTimeout?.bind(globalThis),
+  clearAutoRefreshFn = globalThis.clearTimeout?.bind(globalThis),
+  isTrackingViewVisibleFn = null,
+  nowFn = () => new Date(),
+}) {
   if (!root) throw new Error('A área da sessão Tracking não foi encontrada.');
   const existing = mountedRoots.get(root);
   if (existing) {
@@ -57,14 +125,180 @@ export function mount({ root }) {
   }
 
   const savedToken = readTrackingHubToken();
+  const savedDomainAdminToken = readTrackingDomainAdminToken();
+  const savedConversionProfiles = readTrackingConversionProfiles();
+  const initialConversionProfile = savedConversionProfiles.profiles.find(profile => profile.id === savedConversionProfiles.selectedProfileId) || null;
+  const savedProductLabels = readTrackingProductLabels();
+  const savedDomainList = readTrackingDomainList();
+  const cachedDomainRows = savedDomainList.loaded
+    ? savedDomainList.rows.map(row => ({
+      ...row,
+      productLabel: row.productLabel || savedProductLabels.labels.get(row.productKey) || row.productKey,
+    }))
+    : [];
+  const defaultClicksRange = trackingClicksDefaultDateRange();
   const state = {
     fileName: '', importedAt: '', report: null, source: '', apiToken: savedToken.token,
     rememberToken: true,
+    clicksReport: null, clicksPending: false, clicksFeedback: '', clicksError: false,
+    clicksLastServerRefreshAtUtc: null, clicksAutoOnlyData: false,
+    clicksSnapshots: [], clicksCacheLoaded: false, clicksCacheLoading: true, clicksCacheAvailable: true, clicksCacheMeta: null,
+    salesRows: [], salesCacheLoaded: false, salesCacheAvailable: true, salesSyncMeta: null,
+    salesDataLoaded: false, salesLastServerRefreshAtUtc: null, salesAutoOnlyData: false,
+    salesPending: false, salesFeedback: '', salesError: false,
+    clicksStartDateInput: formatTrackingDatePtBr(defaultClicksRange.startDate),
+    clicksEndDateInput: formatTrackingDatePtBr(defaultClicksRange.endDate),
+    clicksProductFilter: '', clicksHostFilter: '',
     tokenStorageStatus: !savedToken.available ? 'unavailable' : savedToken.invalid ? 'invalid' : savedToken.token ? 'saved' : 'empty',
     serverPending: false, feedback: '', feedbackError: false,
-    domainAdminToken: '', domainAdminTokenVisible: false, domainName: '', domainIncludeWww: false,
-    domainRows: [], domainPending: false, domainAction: '', domainMessage: '', domainError: false,
+    connectionConfigExpanded: false,
+    instructionsVisible: false,
+    domainAdminToken: savedDomainAdminToken.token, domainAdminTokenVisible: false,
+    rememberDomainAdminToken: true,
+    domainTokenStorageStatus: !savedDomainAdminToken.available ? 'unavailable' : savedDomainAdminToken.invalid ? 'invalid' : savedDomainAdminToken.token ? 'saved' : 'empty',
+    domainName: '', domainProductKey: '', domainIncludeWww: false,
+    domainAdminConfigExpanded: false,
+    productLabels: savedProductLabels.labels,
+    tagDialogHost: '',
+    domainRows: cachedDomainRows,
+    highlightedDomainHosts: [],
+    domainHighlightTimer: null,
+    domainListLoaded: savedDomainList.loaded,
+    domainListUpdatedAtUtc: savedDomainList.updatedAtUtc,
+    domainListCacheStatus: !savedDomainList.available ? 'unavailable' : savedDomainList.invalid ? 'invalid' : savedDomainList.loaded ? 'saved' : 'empty',
+    domainPending: false, domainAction: '',
+    domainMessage: savedDomainList.loaded ? 'Lista restaurada do navegador; clique em Atualizar lista para verificar alterações no servidor.' : '',
+    domainError: false,
+    conversionProfiles: savedConversionProfiles.profiles,
+    selectedConversionProfileId: savedConversionProfiles.selectedProfileId,
+    editingConversionProfileId: initialConversionProfile?.id || '',
+    conversionProfileLabelInput: initialConversionProfile?.label || '',
+    conversionProfileActionInput: initialConversionProfile?.conversionName || '',
+    conversionProfileStorageStatus: !savedConversionProfiles.available ? 'unavailable' : savedConversionProfiles.invalid ? 'invalid' : initialConversionProfile ? 'saved' : 'empty',
+    conversionProfileMessage: savedConversionProfiles.invalid
+      ? 'A configuração local dos perfis não pôde ser lida. Cadastre os perfis novamente.'
+      : initialConversionProfile
+        ? 'Perfil de exportação restaurado deste navegador.'
+        : 'Cadastre um perfil para cada conta/MCC e informe o nome exato da ação de conversão.',
+    conversionProfileError: Boolean(savedConversionProfiles.invalid),
+    emailConfig: {
+      toEmail: '', fromEmail: '', smtpHost: '', smtpPort: '465', smtpSecurity: 'ssl', smtpUsername: '', smtpPassword: '',
+    },
+    emailConfigExpanded: false,
+    emailConfigMessage: 'Preencha os dados da caixa remetente depois de criá-la. Os campos ficam somente nesta aba.',
+    emailConfigError: false,
   };
+
+  const autoRefreshTimers = { clicks: null, sales: null };
+  let autoRefreshActive = false;
+  let autoRefreshRequested = false;
+  let cacheReadyPromise = Promise.resolve();
+  let trackingViewObserver = null;
+  const trackingDocument = root.ownerDocument || globalThis.document || null;
+
+  function hasValidHubToken() {
+    return /^[a-f0-9]{64}$/i.test(state.apiToken);
+  }
+
+  function isTrackingRouteVisible() {
+    if (typeof isTrackingViewVisibleFn === 'function') {
+      try { return Boolean(isTrackingViewVisibleFn()); } catch { return false; }
+    }
+    const trackingSection = root.closest?.('#trackingView')
+      || trackingDocument?.getElementById?.('trackingView')
+      || null;
+    if (trackingSection && (trackingSection.hidden || trackingSection.classList?.contains('hidden'))) return false;
+    return true;
+  }
+
+  function isTrackingViewVisible() {
+    if (!isTrackingRouteVisible()) return false;
+    const doc = trackingDocument;
+    return doc?.hidden !== true && doc?.visibilityState !== 'hidden';
+  }
+
+  function clearAutoRefreshTimer(kind) {
+    const timer = autoRefreshTimers[kind];
+    if (timer === null) return;
+    clearAutoRefreshFn?.(timer);
+    autoRefreshTimers[kind] = null;
+  }
+
+  function stopAutoRefresh({ preserveRequest = false } = {}) {
+    autoRefreshActive = false;
+    clearAutoRefreshTimer('clicks');
+    clearAutoRefreshTimer('sales');
+    if (!preserveRequest) autoRefreshRequested = false;
+  }
+
+  async function runAutomaticRefresh(kind) {
+    if (!autoRefreshActive || !isTrackingViewVisible() || !hasValidHubToken()) return;
+    if (kind === 'clicks') await refreshTrackingClicks({ automatic: true });
+    else await refreshTrackSales({ automatic: true });
+  }
+
+  function scheduleAutoRefresh(kind, delay) {
+    if (!autoRefreshActive || typeof scheduleAutoRefreshFn !== 'function') return;
+    clearAutoRefreshTimer(kind);
+    autoRefreshTimers[kind] = scheduleAutoRefreshFn(async () => {
+      autoRefreshTimers[kind] = null;
+      if (!autoRefreshActive) return;
+      if (!isTrackingViewVisible()) {
+        stopAutoRefresh({ preserveRequest: isTrackingRouteVisible() });
+        return;
+      }
+      await runAutomaticRefresh(kind);
+      scheduleAutoRefresh(kind, delay);
+    }, delay);
+    autoRefreshTimers[kind]?.unref?.();
+  }
+
+  function activateAutoRefresh() {
+    if (!isTrackingViewVisible()) {
+      stopAutoRefresh({ preserveRequest: isTrackingRouteVisible() });
+      return cacheReadyPromise;
+    }
+    autoRefreshRequested = true;
+    if (autoRefreshActive) return cacheReadyPromise;
+    autoRefreshActive = true;
+    return cacheReadyPromise.then(async () => {
+      if (!autoRefreshActive || !isTrackingViewVisible()) return;
+      if (hasValidHubToken()) {
+        await Promise.all([
+          runAutomaticRefresh('clicks'),
+          runAutomaticRefresh('sales'),
+        ]);
+      }
+      scheduleAutoRefresh('clicks', TRACKING_CLICKS_AUTO_REFRESH_INTERVAL_MS);
+      scheduleAutoRefresh('sales', TRACKING_SALES_AUTO_REFRESH_INTERVAL_MS);
+    });
+  }
+
+  function handleAutoRefreshVisibility() {
+    if (!isTrackingRouteVisible()) {
+      stopAutoRefresh();
+      return;
+    }
+    if (!isTrackingViewVisible()) {
+      stopAutoRefresh({ preserveRequest: true });
+      return;
+    }
+    void activateAutoRefresh();
+  }
+
+  function bindAutoRefreshLifecycle() {
+    const trackingSection = root.closest?.('#trackingView')
+      || trackingDocument?.getElementById?.('trackingView')
+      || null;
+    const MutationObserverImpl = trackingDocument?.defaultView?.MutationObserver || globalThis.MutationObserver;
+    if (trackingSection && typeof MutationObserverImpl === 'function') {
+      trackingViewObserver = new MutationObserverImpl(handleAutoRefreshVisibility);
+      trackingViewObserver.observe(trackingSection, { attributes: true, attributeFilter: ['class', 'hidden'] });
+    }
+    trackingDocument?.addEventListener?.('visibilitychange', handleAutoRefreshVisibility);
+    trackingDocument?.defaultView?.addEventListener?.('pagehide', stopAutoRefresh);
+    trackingDocument?.defaultView?.addEventListener?.('pageshow', handleAutoRefreshVisibility);
+  }
 
   function tokenStorageMessage() {
     if (state.tokenStorageStatus === 'saved') return 'Token lembrado neste navegador.';
@@ -96,9 +330,36 @@ export function mount({ root }) {
     updateTokenStorageStatus();
   }
 
+  function domainTokenStorageMessage() {
+    if (state.domainTokenStorageStatus === 'saved') return 'Token administrativo lembrado neste navegador.';
+    if (state.domainTokenStorageStatus === 'unavailable') return 'O navegador não permitiu salvar/apagar o token; ele só ficará nesta aba.';
+    if (state.domainTokenStorageStatus === 'invalid') return 'O valor salvo não tem o formato esperado. Informe novamente o token administrativo.';
+    if (state.domainTokenStorageStatus === 'disabled') return 'Opção desativada: o token administrativo fica somente nesta aba.';
+    if (state.domainTokenStorageStatus === 'incomplete') return 'O token será lembrado depois que os 64 caracteres hexadecimais válidos forem informados.';
+    return 'Informe o token administrativo; com a opção marcada, ele será lembrado neste navegador.';
+  }
+
+  function syncDomainAdminTokenStorage() {
+    if (!state.rememberDomainAdminToken) {
+      const result = clearTrackingDomainAdminToken();
+      state.domainTokenStorageStatus = result.removed ? 'disabled' : 'unavailable';
+    } else if (!/^[a-f0-9]{64}$/i.test(state.domainAdminToken)) {
+      const result = clearTrackingDomainAdminToken();
+      state.domainTokenStorageStatus = result.removed ? 'incomplete' : 'unavailable';
+    } else {
+      const result = saveTrackingDomainAdminToken(state.domainAdminToken);
+      state.domainTokenStorageStatus = result.saved ? 'saved' : result.available ? 'incomplete' : 'unavailable';
+    }
+    const status = root.querySelector?.('#trackingDomainTokenStorageStatus');
+    if (status) {
+      status.textContent = domainTokenStorageMessage();
+      status.classList?.toggle('is-error', ['unavailable', 'invalid'].includes(state.domainTokenStorageStatus));
+    }
+  }
+
   function statusMarkup() {
     if (state.feedback) return `<p class="tracking-message${state.feedbackError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.feedback)}</p>`;
-    if (!state.report) return '<p class="tracking-message" role="status" aria-live="polite">Nenhum CSV carregado. O arquivo fica somente nesta sessão do Hub; nada é gravado na base de campanhas.</p>';
+    if (!state.report) return '<p class="tracking-message tracking-instruction" role="status" aria-live="polite">Nenhum CSV carregado. O arquivo fica somente nesta sessão do Hub; nada é gravado na base de campanhas.</p>';
     if (state.source === 'server') {
       const report = state.report;
       return `<p class="tracking-message" role="status" aria-live="polite">Servidor atualizado: ${report.candidateCount} postback(s) avaliados, ${report.eligibleCount} conversão(ões) elegível(is), ${report.ignoredCount} ignorado(s). Relatório UTC: <strong>${escapeHtml(report.generatedAtUtc)}</strong>.</p>`;
@@ -133,7 +394,7 @@ export function mount({ root }) {
     if (!state.report) {
       return `<div class="tracking-empty">
         <h2>Aguardando CSV</h2>
-        <p>Informe o token separado do postback e escolha <strong>Consultar vendas INS v8</strong>, ou importe um CSV já baixado. A leitura é somente para conferência e preparação; a Flow Tracking continua intacta e o Hub não envia dados ao Google Ads.</p>
+        <p class="tracking-instruction">Informe o token separado do postback e escolha <strong>Consultar vendas INS v8</strong>, ou importe um CSV já baixado. A leitura é somente para conferência e preparação; o Hub não envia dados ao Google Ads.</p>
       </div>`;
     }
     if (state.source === 'server-ins-v8') return insV8PreviewMarkup(state.report);
@@ -142,7 +403,7 @@ export function mount({ root }) {
     const visibleRows = rows.slice(0, PREVIEW_LIMIT);
     const names = summary.conversionNames.length ? summary.conversionNames.map(escapeHtml).join(', ') : '—';
     const omitted = rows.length > visibleRows.length
-      ? `<p class="tracking-table-note">Mostrando as primeiras ${visibleRows.length} de ${rows.length} linhas, na ordem do arquivo.</p>` : '';
+      ? `<p class="tracking-table-note tracking-instruction">Mostrando as primeiras ${visibleRows.length} de ${rows.length} linhas, na ordem do arquivo.</p>` : '';
     const skipped = Object.entries(summary.skippedByReason).map(([reason, count]) => `${count} ${escapeHtml(trackingIssueLabel(reason))}`).join(' · ');
     return `<div class="tracking-summary" aria-label="Resumo do CSV">
         <article class="tracking-kpi"><span>Registros no arquivo</span><strong>${summary.totalRows}</strong></article>
@@ -161,7 +422,7 @@ export function mount({ root }) {
       .map(([reason, count]) => `${count} ${escapeHtml(trackingIssueLabel(reason))}`).join(' · ');
     const rows = report.preview.slice(0, PREVIEW_LIMIT);
     const omitted = report.eligibleCount > rows.length
-      ? `<p class="tracking-table-note">Mostrando as primeiras ${rows.length} de ${report.eligibleCount} conversões elegíveis.</p>` : '';
+      ? `<p class="tracking-table-note tracking-instruction">Mostrando as primeiras ${rows.length} de ${report.eligibleCount} conversões elegíveis.</p>` : '';
     return `<div class="tracking-summary" aria-label="Resumo do servidor">
         <article class="tracking-kpi"><span>Postbacks avaliados · 90 dias</span><strong>${report.candidateCount}</strong></article>
         <article class="tracking-kpi"><span>Conversões elegíveis</span><strong>${report.eligibleCount}</strong></article>
@@ -170,12 +431,16 @@ export function mount({ root }) {
       </div>
       <div class="tracking-file-details"><span><strong>Ação:</strong> ${escapeHtml(report.conversionName)}</span><span><strong>Abrangência:</strong> todos os produtos rastreados</span><span><strong>Gerado em UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span></div>
       ${skipped ? `<p class="tracking-warning-note">Motivos ignorados: ${skipped}.</p>` : ''}
-      <p class="tracking-scope-note">A base atual não identifica o produto na tabela de postbacks; por isso esta prévia é agregada. O GCLID completo não é retornado pelo endpoint JSON.</p>
-      <div class="tracking-table-heading"><div><h2>Prévia das conversões elegíveis</h2><p>Identificadores mascarados. O download autenticado gera o CSV atual com GCLIDs integrais para o upload manual.</p></div><span class="tracking-count">${report.eligibleCount} conversão(ões)</span></div>
+      <p class="tracking-scope-note tracking-instruction">A base atual não identifica o produto na tabela de postbacks; por isso esta prévia é agregada. O GCLID completo não é retornado pelo endpoint JSON.</p>
+      <div class="tracking-table-heading"><div><h2>Prévia das conversões elegíveis</h2><p class="tracking-instruction">Identificadores mascarados. O download autenticado gera o CSV atual com GCLIDs integrais para o upload manual.</p></div><span class="tracking-count">${report.eligibleCount} conversão(ões)</span></div>
       ${rows.length ? `<div class="tracking-table-wrap"><table class="tracking-table"><thead><tr><th>Data/hora</th><th>Ação de conversão</th><th>Comissão</th><th>Moeda</th><th>GCLID</th><th>Order ID</th><th>Validação</th></tr></thead><tbody>${rows.map(row => `<tr>
         <td>${escapeHtml(row.conversionTime)}</td><td>${escapeHtml(row.conversionName)}</td><td class="tracking-number">${escapeHtml(row.conversionValue)}</td><td>${escapeHtml(row.currency)}</td>
         <td><span title="GCLID mascarado; o CSV autenticado contém o valor integral.">${escapeHtml(row.gclidMasked)}</span></td><td><span title="Order ID mascarado.">${escapeHtml(row.orderIdMasked)}</span></td><td><span class="tracking-row-status">Elegível</span></td>
-      </tr>`).join('')}</tbody></table></div>${omitted}` : '<div class="tracking-empty"><p>Nenhuma conversão elegível ainda. GCLIDs fictícios/de teste e postbacks sem clique correspondente são ignorados.</p></div>'}`;
+      </tr>`).join('')}</tbody></table></div>${omitted}` : '<div class="tracking-empty"><p class="tracking-instruction">Nenhuma conversão elegível ainda. GCLIDs fictícios/de teste e postbacks sem clique correspondente são ignorados.</p></div>'}`;
+  }
+
+  function activeConversionProfile() {
+    return state.conversionProfiles.find(profile => profile.id === state.selectedConversionProfileId) || null;
   }
 
   function insV8PreviewMarkup(report) {
@@ -183,7 +448,7 @@ export function mount({ root }) {
       .map(([reason, count]) => `${count} ${escapeHtml(trackingIssueLabel(reason))}`).join(' · ');
     const rows = report.preview.slice(0, PREVIEW_LIMIT);
     const omitted = report.candidateCount > rows.length
-      ? `<p class="tracking-table-note">Mostrando as ${rows.length} transações mais recentes de ${report.candidateCount} capturadas.</p>` : '';
+      ? `<p class="tracking-table-note tracking-instruction">Mostrando as ${rows.length} transações mais recentes de ${report.candidateCount} capturadas.</p>` : '';
     const valueTotals = formatCurrencyTotals({ valueByCurrency: report.valueByCurrency });
     const body = rows.map(row => {
       const items = row.lineItems.length
@@ -201,11 +466,17 @@ export function mount({ root }) {
         ? '<span class="tracking-row-status">Elegível para CSV</span>'
         : `<span class="tracking-row-status is-error">${escapeHtml(trackingIssueLabel(row.ineligibilityReason))}</span>`;
       const transactionTime = row.transactionTime || '—';
+      const saleCountry = formatSaleCountry(row.customerCountry);
+      const conversionName = row.eligible
+        ? (activeConversionProfile()?.conversionName || 'Selecione um perfil')
+        : '—';
       const commission = row.commissionTotal === null ? '—' : `${escapeHtml(row.currency || '—')} ${escapeHtml(row.commissionTotal.replace('.', ','))}`;
       const gross = row.saleGrossTotal === null ? '—' : `${escapeHtml(row.currency || '—')} ${escapeHtml(row.saleGrossTotal.replace('.', ','))}`;
       return `<tr>
         <td>${escapeHtml(transactionTime)}</td>
         <td>${escapeHtml(row.transactionType)}${row.isTest ? '<small class="tracking-test-tag">TEST IPN</small>' : ''}</td>
+        <td>${escapeHtml(saleCountry)}</td>
+        <td>${escapeHtml(conversionName)}</td>
         <td>${items}</td>
         <td class="tracking-number">${commission}</td>
         <td class="tracking-number">${gross}</td>
@@ -222,71 +493,384 @@ export function mount({ root }) {
         <article class="tracking-kpi"><span>Vendas afiliadas · sem teste</span><strong>${report.saleCount}</strong></article>
         <article class="tracking-kpi"><span>Elegíveis para CSV manual</span><strong>${report.eligibleCount}</strong></article>
       </div>
-      <div class="tracking-file-details"><span><strong>Ação:</strong> ${escapeHtml(report.conversionName)}</span><span><strong>Comissão elegível:</strong> ${valueTotals}</span><span><strong>Atualizado UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span></div>
+      <div class="tracking-file-details"><span><strong>Perfil para o próximo CSV:</strong> ${escapeHtml(activeConversionProfile() ? `${activeConversionProfile().label} · ${activeConversionProfile().conversionName}` : 'Nenhum selecionado')}</span><span><strong>Comissão elegível:</strong> ${valueTotals}</span><span><strong>Atualizado UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span></div>
       ${skipped ? `<p class="tracking-warning-note">Fora do CSV: ${skipped}.</p>` : ''}
-      <p class="tracking-scope-note">Cada transação SALE elegível gera uma linha com a comissão total do afiliado. Os itens permanecem detalhados abaixo. Testes, reembolsos, GCLIDs sem atribuição confirmada, recibos repetidos e comissões divergentes não entram no arquivo. A Flow Tracking permanece como remetente atual; este Hub apenas consulta e prepara o CSV.</p>
-      <div class="tracking-table-heading"><div><h2>Transações recebidas pela INS v8</h2><p>Recibo e GCLID ficam mascarados nesta tela. A lista também mostra eventos de teste e eventos não exportáveis para diagnóstico.</p></div><span class="tracking-count">${report.candidateCount} transação(ões)</span></div>
-      ${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-ins-v8-table"><thead><tr><th>Horário UTC</th><th>Evento</th><th>Produtos e comissão por item</th><th>Comissão total</th><th>Total bruto</th><th>Origem GCLID</th><th>Conciliação</th><th>Recibo</th><th>GCLID</th><th>CSV</th></tr></thead><tbody>${body}</tbody></table></div>${omitted}` : '<div class="tracking-empty"><h2>Nenhuma notificação recebida</h2><p>Quando o endpoint v8 receber um evento, ele aparecerá aqui. O Test IPN também pode ser usado para confirmar a captura; eventos de teste nunca entram no CSV.</p></div>'}`;
+      <p class="tracking-scope-note tracking-instruction">Cada transação SALE elegível gera uma linha com a comissão total do afiliado. Os itens permanecem detalhados abaixo. Testes, reembolsos, GCLIDs sem atribuição confirmada, recibos repetidos e comissões divergentes não entram no arquivo. O país é o informado no endereço de cobrança à ClickBank, não uma geolocalização. O perfil selecionado define o nome da ação somente no CSV gerado; essa escolha não é gravada na transação. Confira a conta/MCC correspondente antes de enviar manualmente.</p>
+      <div class="tracking-table-heading"><div><h2>Transações recebidas pela INS v8</h2><p class="tracking-instruction">Recibo e GCLID ficam mascarados nesta tela. A lista também mostra eventos de teste e eventos não exportáveis para diagnóstico.</p></div><span class="tracking-count">${report.candidateCount} transação(ões)</span></div>
+      ${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-ins-v8-table"><thead><tr><th>Horário UTC</th><th>Evento</th><th>País (cobrança)</th><th>Ação de conversão</th><th>Produtos e comissão por item</th><th>Comissão total</th><th>Total bruto</th><th>Origem GCLID</th><th>Conciliação</th><th>Recibo</th><th>GCLID</th><th>CSV</th></tr></thead><tbody>${body}</tbody></table></div>${omitted}` : '<div class="tracking-empty"><h2>Nenhuma notificação recebida</h2><p class="tracking-instruction">Quando o endpoint v8 receber um evento, ele aparecerá aqui. O Test IPN também pode ser usado para confirmar a captura; eventos de teste nunca entram no CSV.</p></div>'}`;
+  }
+
+  function formatSaleCountry(countryCode) {
+    if (!countryCode) return 'Não informado';
+    try {
+      const countryName = new Intl.DisplayNames(['pt-BR'], { type: 'region' }).of(countryCode);
+      if (countryName && countryName !== countryCode) return `${countryName} (${countryCode})`;
+    } catch {
+      // Fall back to the safe two-letter code in older browsers without Intl.DisplayNames.
+    }
+    return countryCode;
+  }
+
+  function clickPercent(value) {
+    return value === null ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value)}%`;
+  }
+
+  function formatTrackingCacheTimestamp(value) {
+    if (!value) return '';
+    const timestamp = new Date(value);
+    return Number.isFinite(timestamp.getTime())
+      ? timestamp.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC')
+      : String(value);
+  }
+
+  function selectedClicksRange() {
+    const startDate = parseTrackingDatePtBr(state.clicksStartDateInput);
+    const endDate = parseTrackingDatePtBr(state.clicksEndDateInput);
+    if (!startDate || !endDate) return null;
+    try { return validateTrackingClicksDateRange(startDate, endDate); } catch { return null; }
+  }
+
+  function setClicksCacheForSelectedRange() {
+    const range = selectedClicksRange();
+    if (!range || !state.clicksCacheLoaded || !state.clicksCacheAvailable) return false;
+    const cached = resolveTrackingClicksCache(state.clicksSnapshots, range);
+    state.clicksReport = cached.report;
+    state.clicksCacheMeta = cached.meta;
+    state.clicksLastServerRefreshAtUtc = cached.meta.cacheUpdatedAtUtc;
+    state.clicksAutoOnlyData = false;
+    state.clicksProductFilter = '';
+    state.clicksHostFilter = '';
+    state.clicksError = false;
+    if (!cached.report) {
+      state.clicksFeedback = `Nenhum cache local para ${range.startDate} a ${range.endDate} UTC. Clique em Atualizar do servidor para carregar esse período.`;
+    } else if (cached.meta.coveredDays < cached.meta.totalDays) {
+      state.clicksFeedback = `Cache local parcial: ${cached.meta.coveredDays} de ${cached.meta.totalDays} dias cobertos. Atualize do servidor para completar o período.`;
+    } else {
+      state.clicksFeedback = `Cache local carregado: ${cached.meta.snapshotCount} consulta(s) cobrem todo o período.`;
+    }
+    return true;
+  }
+
+  async function loadTrackingClicksCache() {
+    try {
+      const snapshots = await clicksStorage.read();
+      state.clicksSnapshots = Array.isArray(snapshots) ? snapshots : [];
+      state.clicksCacheAvailable = true;
+      const range = selectedClicksRange();
+      if (range) {
+        const cached = resolveTrackingClicksCache(state.clicksSnapshots, range);
+        state.clicksLastServerRefreshAtUtc = cached.meta.cacheUpdatedAtUtc;
+      }
+    } catch (error) {
+      state.clicksSnapshots = [];
+      state.clicksCacheAvailable = false;
+      state.clicksReport = null;
+      state.clicksCacheMeta = null;
+      state.clicksFeedback = `Não foi possível ler o cache local (${error instanceof Error ? error.message : 'erro de armazenamento'}). Você ainda pode consultar o servidor, mas talvez os dados não possam ser salvos neste navegador.`;
+      state.clicksError = true;
+    } finally {
+      state.clicksCacheLoaded = true;
+      state.clicksCacheLoading = false;
+      if (state.clicksCacheAvailable) setClicksCacheForSelectedRange();
+      render();
+    }
+  }
+
+  async function loadTrackingSalesCache() {
+    try {
+      const cached = await salesStorage.read();
+      state.salesRows = Array.isArray(cached?.sales) ? cached.sales : [];
+      state.salesSyncMeta = cached?.metadata || null;
+      state.salesDataLoaded = Boolean(cached?.metadata);
+      state.salesLastServerRefreshAtUtc = cached?.metadata?.lastSyncedAtUtc || null;
+      state.salesAutoOnlyData = false;
+      state.salesCacheAvailable = true;
+    } catch (error) {
+      state.salesRows = [];
+      state.salesSyncMeta = null;
+      state.salesDataLoaded = false;
+      state.salesLastServerRefreshAtUtc = null;
+      state.salesAutoOnlyData = false;
+      state.salesCacheAvailable = false;
+      state.salesFeedback = `Não foi possível ler o cache local de vendas (${error instanceof Error ? error.message : 'erro de armazenamento'}).`;
+      state.salesError = true;
+    } finally {
+      state.salesCacheLoaded = true;
+      render();
+    }
+  }
+
+  async function refreshTrackSales({ automatic = false } = {}) {
+    if (!state.apiToken) {
+      if (automatic) return;
+      state.connectionConfigExpanded = true;
+      state.salesFeedback = 'Informe o token de acesso do Hub na seção Conversões ClickBank → Google Ads para atualizar as vendas.';
+      state.salesError = true;
+      render();
+      root.querySelector?.('#trackingApiToken')?.focus?.();
+      return;
+    }
+    if (state.salesPending) return;
+    if (!automatic && state.rememberToken) syncTokenStorage();
+    state.salesPending = true;
+    state.salesFeedback = automatic
+      ? 'Atualizando vendas automaticamente em lotes…'
+      : 'Lendo as vendas INS v8 do servidor em lotes…';
+    state.salesError = false;
+    render();
+
+    const allSales = [];
+    const ids = new Set();
+    let afterId = '0';
+    let snapshotMaxId = null;
+    let generatedAtUtc = '';
+    try {
+      let hasMore = true;
+      let pageNumber = 0;
+      while (hasMore) {
+        pageNumber += 1;
+        if (pageNumber > TRACKING_SALES_MAX_SYNC_PAGES) {
+          throw new Error(`A base ultrapassa o limite desta sincronização (${TRACKING_SALES_MAX_SYNC_RECORDS.toLocaleString('pt-BR')} vendas). O cache anterior foi mantido.`);
+        }
+        const page = await fetchTrackingSalesPage(state.apiToken, { afterId, snapshotMaxId });
+        if (snapshotMaxId === null) {
+          snapshotMaxId = page.snapshotMaxId;
+          generatedAtUtc = page.generatedAtUtc;
+        } else if (snapshotMaxId !== page.snapshotMaxId) {
+          throw new Error('O snapshot do servidor mudou no meio da leitura. O cache anterior foi mantido; atualize novamente.');
+        }
+        for (const sale of page.sales) {
+          if (ids.has(sale.transactionId)) throw new Error('O servidor repetiu um ID de venda entre páginas. O cache anterior foi mantido.');
+          ids.add(sale.transactionId);
+          allSales.push(sale);
+        }
+        if (allSales.length > TRACKING_SALES_MAX_SYNC_RECORDS) {
+          throw new Error(`A base ultrapassa o limite desta sincronização (${TRACKING_SALES_MAX_SYNC_RECORDS.toLocaleString('pt-BR')} vendas). O cache anterior foi mantido.`);
+        }
+        afterId = page.nextAfterId;
+        hasMore = page.hasMore;
+        if (hasMore) {
+          state.salesFeedback = `Lendo vendas do servidor: ${allSales.length.toLocaleString('pt-BR')} registro(s) em ${pageNumber} lote(s)…`;
+          render();
+        }
+      }
+
+      if (automatic) {
+        state.salesRows = allSales;
+        state.salesDataLoaded = true;
+        state.salesLastServerRefreshAtUtc = nowFn().toISOString();
+        state.salesAutoOnlyData = true;
+      } else {
+        const saved = await salesStorage.replace(allSales, { snapshotMaxId, generatedAtUtc });
+        state.salesRows = saved.sales;
+        state.salesSyncMeta = saved.metadata;
+        state.salesDataLoaded = true;
+        state.salesLastServerRefreshAtUtc = saved.metadata.lastSyncedAtUtc;
+        state.salesAutoOnlyData = false;
+        state.salesCacheAvailable = true;
+      }
+      const summary = summarizeTrackingSales(state.salesRows, state.domainRows);
+      state.salesFeedback = `${automatic ? 'Busca automática concluída' : 'Atualização concluída'}: ${summary.matchedCount.toLocaleString('pt-BR')} venda(s) associada(s) a uma Track; ${summary.unmatchedCount.toLocaleString('pt-BR')} sem clique correspondente e ${summary.ambiguousCount.toLocaleString('pt-BR')} com mais de uma Track possível. Atualizado em ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}.${automatic ? ' Os dados desta consulta ficam nesta tela; use Atualizar vendas para salvar no cache local.' : ''}`;
+      state.salesError = false;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Não foi possível sincronizar as vendas.';
+      state.salesFeedback = state.salesDataLoaded
+        ? automatic
+          ? `A busca automática falhou: ${reason} Os dados exibidos anteriormente foram mantidos.`
+          : `Falha ao atualizar: ${reason} O cache local anterior, de ${formatTrackingCacheTimestamp(state.salesSyncMeta?.lastSyncedAtUtc || state.salesLastServerRefreshAtUtc)}, foi mantido.`
+        : reason;
+      state.salesError = true;
+    } finally {
+      state.salesPending = false;
+      render();
+    }
+  }
+
+  function trackingClicksPreviewMarkup() {
+    const report = state.clicksReport;
+    if (!report) {
+      return '<div class="tracking-empty"><h2>Relatório ainda não consultado</h2><p class="tracking-instruction">Sem dados locais para este período. Clique em Atualizar do servidor para consultar os totais agregados e salvá-los neste navegador. Isso não altera vendas, CSV ou campanhas.</p></div>';
+    }
+    const rows = report.rows.filter(row =>
+      (!state.clicksProductFilter || (state.clicksProductFilter === 'p:unknown' ? !row.productKey : row.productKey === state.clicksProductFilter.slice(2)))
+      && (!state.clicksHostFilter || (state.clicksHostFilter === 'h:unknown' ? !row.presellHost : row.presellHost === state.clicksHostFilter.slice(2))));
+    const totals = summarizeTrackingClicks(rows);
+    const products = [...new Set(report.rows.map(row => row.productKey))].sort((left, right) => String(left || '').localeCompare(String(right || '')));
+    const hosts = [...new Set(report.rows.map(row => row.presellHost))].sort((left, right) => String(left || '').localeCompare(String(right || '')));
+    const body = rows.map(row => `<tr>
+      <td>${escapeHtml(row.dateUtc)}</td>
+      <td>${escapeHtml(row.productKey ? productLabel(row.productKey) : 'Produto não identificado')}${row.productKey ? `<small class="tracking-muted-value"><code>${escapeHtml(row.productKey)}</code></small>` : ''}</td>
+      <td>${escapeHtml(row.presellHost || 'Domínio não identificado')}</td>
+      <td class="tracking-number">${new Intl.NumberFormat('pt-BR').format(row.pageViews)}</td>
+      <td class="tracking-number">${new Intl.NumberFormat('pt-BR').format(row.outboundClicks)}</td>
+      <td class="tracking-number">${clickPercent(trackingClicksRate(row.outboundClicks, row.pageViews))}</td>
+    </tr>`).join('');
+    return `<div class="tracking-clicks-results">
+      <div class="tracking-summary" aria-label="Resumo agregado de cliques">
+        <article class="tracking-kpi"><span>Eventos de visita · page_view</span><strong>${new Intl.NumberFormat('pt-BR').format(totals.pageViews)}</strong></article>
+        <article class="tracking-kpi"><span>Eventos de saída · outbound_click</span><strong>${new Intl.NumberFormat('pt-BR').format(totals.outboundClicks)}</strong></article>
+        <article class="tracking-kpi"><span>Saídas ÷ visitas · taxa de eventos</span><strong>${clickPercent(trackingClicksRate(totals.outboundClicks, totals.pageViews))}</strong></article>
+        <article class="tracking-kpi"><span>Combinações no recorte</span><strong>${rows.length}</strong></article>
+      </div>
+      <div class="tracking-file-details"><span><strong>Período UTC:</strong> ${escapeHtml(report.startDate)} a ${escapeHtml(report.endDate)}</span><span><strong>Relatório gerado UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span>${state.clicksCacheMeta?.cacheUpdatedAtUtc ? `<span><strong>Cache local atualizado:</strong> ${escapeHtml(formatTrackingCacheTimestamp(state.clicksCacheMeta.cacheUpdatedAtUtc))} · ${state.clicksCacheMeta.coveredDays}/${state.clicksCacheMeta.totalDays} dias cobertos</span><span><strong>Consultas usadas:</strong> ${state.clicksCacheMeta.snapshotCount}</span>` : ''}</div>
+      <p class="tracking-scope-note tracking-instruction">São contados eventos, não visitantes únicos: recargas podem contar como novas visitas e um visitante pode clicar mais de uma vez. Os filtros abaixo só reorganizam os totais já consultados.</p>
+      <div class="tracking-clicks-filters">
+        <label class="tracking-token-field" for="trackingClicksProductFilter"><span>Produto</span><select id="trackingClicksProductFilter"><option value="">Todos os produtos</option>${products.map(key => `<option value="${key ? `p:${escapeHtml(key)}` : 'p:unknown'}"${state.clicksProductFilter === (key ? `p:${key}` : 'p:unknown') ? ' selected' : ''}>${escapeHtml(key ? `${productLabel(key)} (${key})` : 'Não identificado')}</option>`).join('')}</select></label>
+        <label class="tracking-token-field" for="trackingClicksHostFilter"><span>Pre-sell</span><select id="trackingClicksHostFilter"><option value="">Todos os domínios</option>${hosts.map(host => `<option value="${host ? `h:${escapeHtml(host)}` : 'h:unknown'}"${state.clicksHostFilter === (host ? `h:${host}` : 'h:unknown') ? ' selected' : ''}>${escapeHtml(host || 'Não identificado')}</option>`).join('')}</select></label>
+      </div>
+      <div class="tracking-table-heading"><div><h3>Visitas e cliques por dia, produto e pre-sell</h3><p class="tracking-instruction">Taxa de eventos = outbound_click ÷ page_view; não é CTR de usuários únicos.</p></div><span class="tracking-count">${rows.length} linha(s)</span></div>
+      ${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-clicks-table"><thead><tr><th>Data UTC</th><th>Produto</th><th>Pre-sell</th><th>Visitas · page_view</th><th>Cliques de saída · outbound_click</th><th>Taxa de eventos</th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="tracking-empty"><p class="tracking-instruction">Não há eventos para os filtros selecionados neste período.</p></div>'}
+    </div>`;
   }
 
   function render() {
     const report = state.report;
-    const canDownload = ['server', 'server-ins-v8'].includes(state.source) ? Boolean(report?.downloadAvailable) : Boolean(report?.downloadable);
+    const canDownload = state.source === 'server-ins-v8'
+      ? Boolean(report?.downloadAvailable && activeConversionProfile())
+      : state.source === 'server'
+        ? Boolean(report?.downloadAvailable)
+        : Boolean(report?.downloadable);
     const downloadTitle = ['server', 'server-ins-v8'].includes(state.source)
       ? 'Solicita ao servidor um CSV atualizado, sem salvar o arquivo no servidor.'
       : 'Baixa o CSV original sem alterar os valores.';
     const tokenStorageWarning = ['unavailable', 'invalid'].includes(state.tokenStorageStatus);
-    const domainRows = state.domainRows.length
-      ? `<ul class="tracking-domain-list">${state.domainRows.map(row => `<li><code>${escapeHtml(row.hostname)}</code><span>${escapeHtml(row.origin)}</span></li>`).join('')}</ul>`
-      : '<p class="tracking-domain-empty">A lista ainda não foi carregada ou não há domínios cadastrados por esta tela. Domínios legados da configuração privada não aparecem aqui.</p>';
-    root.innerHTML = `<div class="tracking-session">
+    const selectedProfile = activeConversionProfile();
+    const tagDialogRow = state.domainRows.find(row => row.hostname === state.tagDialogHost) || null;
+    const salesSummary = summarizeTrackingSales(state.salesRows, state.domainRows);
+    const saleCountForTrack = row => salesSummary.countsByTrack.get(JSON.stringify([row.hostname, row.productKey])) || 0;
+    const domainRows = `<div class="tracking-table-wrap"><table class="tracking-table tracking-domain-table" aria-label="Tracks cadastradas, domínio, nome do Track e vendas"><thead><tr><th>Domínio</th><th>Nome do Track</th><th class="tracking-sales-count">Vendas (SALE)</th><th>Tag</th></tr></thead><tbody>${state.domainRows.length
+      ? state.domainRows.map(row => `<tr${state.highlightedDomainHosts.includes(row.hostname) ? ' class="tracking-new-track-pulse"' : ''}><td><code>${escapeHtml(row.hostname)}</code></td><td>${escapeHtml(row.productLabel || productLabel(row.productKey))}</td><td class="tracking-number tracking-sales-count"${state.salesDataLoaded ? ` title="${saleCountForTrack(row)} venda(s) associada(s) por extclid a esta combinação exata de domínio e produto"` : ' title="Sincronize as vendas para preencher esta contagem"'}>${state.salesDataLoaded ? new Intl.NumberFormat('pt-BR').format(saleCountForTrack(row)) : '—'}</td><td><button type="button" class="btn primary tracking-domain-show-tag" data-tracking-action="show-presell-tag" data-presell-host="${escapeHtml(row.hostname)}" aria-label="Exibir tag para ${escapeHtml(row.hostname)}">Exibir tag</button></td></tr>`).join('')
+      : `<tr><td colspan="4" class="tracking-domain-empty">${state.domainListLoaded ? 'A lista não contém domínios cadastrados por esta tela. Clique em Atualizar lista para verificar alterações no servidor.' : 'A lista ainda não foi consultada. Clique em Atualizar lista para carregar os domínios; os domínios legados não aparecem nesta tabela.'}</td></tr>`}</tbody></table></div>`;
+    const salesCacheSummary = state.salesDataLoaded
+      ? `Dados de vendas: ${salesSummary.totalCount.toLocaleString('pt-BR')} SALE(s) real(is) de afiliado; ${salesSummary.matchedCount.toLocaleString('pt-BR')} associada(s) a uma única Track, ${salesSummary.unmatchedCount.toLocaleString('pt-BR')} sem clique correspondente e ${salesSummary.ambiguousCount.toLocaleString('pt-BR')} com associação ambígua. ${salesSummary.historicalCount ? `${salesSummary.historicalCount.toLocaleString('pt-BR')} pertence(m) a combinações históricas não presentes na lista atual. ` : ''}Última atualização: ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}. ${state.salesAutoOnlyData ? 'O resultado automático está só nesta tela; Atualizar vendas salva a sincronização no cache local.' : 'A sincronização está salva no cache local deste navegador.'}`
+      : state.salesCacheAvailable
+        ? 'As vendas ainda não foram sincronizadas neste navegador. A busca automática tentará carregar o histórico; Atualizar vendas também inicia uma consulta e salva o resultado no cache local.'
+        : 'O cache local das vendas não está disponível neste navegador; tente atualizar do servidor novamente.';
+    const salesAutoRefreshStatus = `Busca automática ao abrir Tracking e a cada 30 minutos enquanto esta tela estiver ativa. Última consulta: ${state.salesLastServerRefreshAtUtc ? formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc) : 'ainda não consultado'}${hasValidHubToken() ? '' : ' · informe um token válido do Hub para ativar'}.`;
+    const clicksAutoRefreshStatus = `Busca automática ao abrir Tracking e a cada 5 minutos enquanto esta tela estiver ativa. Última consulta: ${state.clicksLastServerRefreshAtUtc ? formatTrackingCacheTimestamp(state.clicksLastServerRefreshAtUtc) : 'ainda não consultado'}${hasValidHubToken() ? '' : ' · informe um token válido do Hub para ativar'}. A busca automática atualiza esta tela; Atualizar do servidor salva no cache local.`;
+    const tagDialog = tagDialogRow ? `<div class="tracking-tag-dialog-backdrop"><section id="trackingTagDialog" class="tracking-tag-dialog" role="dialog" aria-modal="true" aria-labelledby="trackingTagDialogTitle" tabindex="-1">
+      <div class="tracking-tag-dialog-head"><div><h2 id="trackingTagDialogTitle">Tag da pre-sell</h2><p>${escapeHtml(tagDialogRow.hostname)} · ${escapeHtml(tagDialogRow.productLabel || productLabel(tagDialogRow.productKey))}</p></div><button type="button" class="btn" data-tracking-action="close-presell-tag" aria-label="Fechar">×</button></div>
+      <label class="tracking-token-field" for="trackingPresellScript"><span>Tag de instalação</span><textarea id="trackingPresellScript" rows="3" readonly spellcheck="false" aria-label="Tag de instalação de ${escapeHtml(tagDialogRow.hostname)}">${escapeHtml(buildTrackingPresellScriptTag(tagDialogRow.productKey, tagDialogRow.hostname))}</textarea></label>
+      <p class="tracking-connection-note tracking-instruction">Cole uma vez na página. Use o mesmo código quando várias pre-sells venderem o mesmo produto; o hostname separa as páginas. A tag não contém token, não usa <code>crossorigin</code> e preserva parâmetros dos HopLinks, inclusive <code>extclid</code>.</p>
+      <div class="tracking-tag-dialog-actions"><button type="button" class="btn primary" data-tracking-action="copy-presell-script">Copiar tag</button><button type="button" class="btn" data-tracking-action="close-presell-tag">Fechar</button></div>
+    </section></div>` : '';
+    root.innerHTML = `<div id="trackingInstructionalText" class="tracking-session${state.instructionsVisible ? ' tracking-instructions-visible' : ' tracking-instructions-hidden'}">
       <section class="tracking-panel tracking-intro">
         <div class="tracking-intro-head">
-          <div class="tracking-intro-copy"><h2>Conversões ClickBank → Google Ads</h2><p>Consulte vendas INS v8 capturadas em paralelo à Flow Tracking, ou confira um CSV já baixado antes do upload manual na MCC.</p></div>
+          <div class="tracking-intro-copy"><h2>Conversões ClickBank → Google Ads</h2><p class="tracking-instruction">Consulte as vendas INS v8 recebidas pelo servidor ou confira um CSV já baixado antes do upload manual na MCC.</p></div>
+          <div class="tracking-intro-head-actions"><button type="button" class="btn tracking-instruction-toggle" data-tracking-action="toggle-instructions" aria-label="${state.instructionsVisible ? 'Ocultar instruções' : 'Exibir instruções'}" aria-controls="trackingInstructionalText" aria-pressed="${state.instructionsVisible ? 'true' : 'false'}" title="${state.instructionsVisible ? 'Ocultar textos explicativos' : 'Exibir textos explicativos'}"><svg class="tracking-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${state.instructionsVisible ? '<path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z"/><circle cx="12" cy="12" r="3"/>' : '<path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c6 0 9.5 7 9.5 7a17.4 17.4 0 0 1-3.1 3.8M6.2 6.2C3.8 7.7 2.5 12 2.5 12s3.5 7 9.5 7c1 0 1.9-.2 2.8-.5"/>'}</svg></button><button type="button" class="btn tracking-connection-config-toggle" data-tracking-action="toggle-connection-config" aria-controls="trackingConnectionConfig" aria-expanded="${state.connectionConfigExpanded ? 'true' : 'false'}" title="Mostrar ou recolher token, ações de conexão e perfil de conversão">${state.connectionConfigExpanded ? 'Recolher configurações' : 'Exibir configurações'}</button></div>
+        </div>
+        <div id="trackingConnectionConfig" class="tracking-connection-config"${state.connectionConfigExpanded ? '' : ' hidden'}>
           <div class="tracking-connection-actions">
             <button type="button" class="btn primary" data-tracking-action="refresh-ins-v8"${state.serverPending ? ' disabled' : ''}>${state.serverPending ? 'Consultando INS v8…' : 'Consultar vendas INS v8'}</button>
             <button type="button" class="btn" data-tracking-action="refresh-server"${state.serverPending ? ' disabled' : ''}>${state.serverPending ? 'Atualizando…' : 'Atualizar do servidor · postbacks antigos'}</button>
             <button type="button" class="btn" data-tracking-action="disconnect"${state.apiToken ? '' : ' disabled'}>Desconectar</button>
           </div>
-        </div>
-        <div class="tracking-connection">
-          <div class="tracking-token-entry">
-            <label class="tracking-token-field" for="trackingApiToken"><span>Token de acesso do Hub</span><input id="trackingApiToken" type="password" autocomplete="new-password" spellcheck="false" inputmode="text" aria-describedby="trackingTokenNote trackingTokenStorageStatus" placeholder="64 caracteres hexadecimais"></label>
-            <label class="tracking-remember-token"><input id="trackingRememberToken" type="checkbox"${state.rememberToken ? ' checked' : ''}><span>Lembrar token neste navegador</span></label>
+          <div class="tracking-connection">
+            <div class="tracking-token-entry">
+              <label class="tracking-token-field" for="trackingApiToken"><span>Token de acesso do Hub</span><input id="trackingApiToken" type="password" autocomplete="new-password" spellcheck="false" inputmode="text" aria-describedby="trackingTokenNote trackingTokenStorageStatus" placeholder="64 caracteres hexadecimais"></label>
+              <label class="tracking-remember-token"><input id="trackingRememberToken" type="checkbox"${state.rememberToken ? ' checked' : ''}><span>Lembrar token neste navegador</span></label>
+            </div>
+            <p id="trackingTokenNote" class="tracking-connection-note tracking-instruction">No servidor: <code>~/tracking-config.php</code> (na raiz da conta, fora de <code>public_html</code>), campo <code>tracking_hub_api_token</code>.</p>
+            <p id="trackingTokenStorageStatus" class="tracking-token-storage-status${tokenStorageWarning ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(tokenStorageMessage())}</p>
           </div>
-          <p id="trackingTokenNote" class="tracking-connection-note">No servidor: <code>~/tracking-config.php</code> (na raiz da conta, fora de <code>public_html</code>), campo <code>tracking_hub_api_token</code>. É diferente do token de postback do ClickBank. Quando marcado, fica no armazenamento local deste perfil do navegador, sem criptografia; não entra na IndexedDB nem no backup JSON do Hub. A requisição usa HTTPS e envia o token somente no cabeçalho Authorization. Origem autorizada: <code>http://127.0.0.1:8765</code>.</p>
-          <p id="trackingTokenStorageStatus" class="tracking-token-storage-status${tokenStorageWarning ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(tokenStorageMessage())}</p>
+        <section class="tracking-conversion-profile" aria-label="Perfil de ação de conversão para CSV">
+          <div class="tracking-table-heading"><div><h3>Ação de conversão · vendas INS v8</h3><p>Cadastre um perfil para cada conta/MCC. O rótulo ajuda a identificar o destino; a ação deve corresponder exatamente ao nome no Google Ads. Isso se aplica somente ao CSV INS v8.</p></div></div>
+          <div class="tracking-conversion-profile-grid">
+            <label class="tracking-token-field" for="trackingConversionProfileSelect"><span>Perfil selecionado para exportação</span><select id="trackingConversionProfileSelect"><option value="">Selecione um perfil</option>${state.conversionProfiles.map(profile => `<option value="${escapeHtml(profile.id)}"${profile.id === state.selectedConversionProfileId ? ' selected' : ''}>${escapeHtml(profile.label)} · ${escapeHtml(profile.conversionName)}</option>`).join('')}</select></label>
+            <label class="tracking-token-field" for="trackingConversionProfileLabel"><span>Conta/MCC · rótulo local</span><input id="trackingConversionProfileLabel" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="ex.: MCC principal"></label>
+            <label class="tracking-token-field" for="trackingConversionActionName"><span>Nome exato da ação no Google Ads</span><input id="trackingConversionActionName" type="text" maxlength="255" autocomplete="off" spellcheck="false" placeholder="ex.: Compra ClickBank"></label>
+            <div class="tracking-domain-actions">
+              <button type="button" class="btn" data-tracking-action="new-conversion-profile">Novo perfil</button>
+              <button type="button" class="btn primary" data-tracking-action="save-conversion-profile">Salvar perfil</button>
+              <button type="button" class="btn" data-tracking-action="remove-conversion-profile"${selectedProfile ? '' : ' disabled'}>Remover selecionado</button>
+            </div>
+          </div>
+          <p id="trackingConversionProfileMessage" class="tracking-conversion-profile-message${state.conversionProfileError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.conversionProfileMessage)}</p>
+          <p class="tracking-connection-note tracking-instruction">Perfis e nomes de ações ficam no <code>localStorage</code> deste navegador/origem, sem criptografia e fora dos backups JSON do Hub; não são enviados em consultas, apenas o nome da ação selecionada segue no POST autenticado ao gerar o CSV. O rótulo da conta/MCC não é enviado. A seleção não escolhe a conta no Google Ads: confirme a MCC de destino antes do upload.</p>
+        </section>
         </div>
         <div class="tracking-actions">
           <label class="btn tracking-file-button" for="trackingCsvFile"><input id="trackingCsvFile" class="tracking-file-input" type="file" accept=".csv,text/csv"><span>Importar CSV já baixado</span></label>
-          <button type="button" class="btn primary" data-tracking-action="download"${canDownload && !state.serverPending ? '' : ' disabled'} title="${downloadTitle}">Baixar CSV para Google Ads</button>
+          <button type="button" class="btn primary" data-tracking-action="download"${canDownload && !state.serverPending ? '' : ' disabled'} title="${downloadTitle}">${state.source === 'server-ins-v8' && !selectedProfile ? 'Selecione o perfil para baixar CSV' : 'Baixar CSV para Google Ads'}</button>
           <button type="button" class="btn" data-tracking-action="clear"${report ? '' : ' disabled'}>Limpar leitura</button>
         </div>
         ${statusMarkup()}
-        <p class="tracking-scope-note">O Hub não grava a base operacional nem envia conversões ao Google Ads. A Flow Tracking continua intacta; o CSV INS v8 é somente preparado e baixado manualmente. Não reenvie linhas já aceitas.</p>
+        <p class="tracking-scope-note tracking-instruction">O Hub não grava a base operacional nem envia conversões ao Google Ads. O CSV INS v8 é somente preparado e baixado manualmente. Não reenvie linhas já aceitas.</p>
       </section>
-      <section class="tracking-panel tracking-domain-panel" aria-label="Domínios autorizados de pre-sell">
-        <div class="tracking-table-heading tracking-domain-heading"><div><h2>Domínios de pre-sell</h2><p>Autorize um hostname para o coletor atual sem alterar manualmente a allowlist antiga. Cada domínio fica explícito; curingas não são aceitos.</p></div><span class="tracking-count">${state.domainRows.length} domínio(s) na tabela</span></div>
+      <section class="tracking-panel tracking-domain-panel" aria-label="Tracks cadastradas">
+        <div class="tracking-table-heading tracking-domain-heading"><div><h2>Tracks</h2><p>Cada Track associa um domínio (hostname) de pre-sell a um produto; a URL da página continua identificando cada pre-sell.</p></div><div class="tracking-domain-heading-actions"><span class="tracking-count">${state.domainRows.length} ${state.domainRows.length === 1 ? 'Track' : 'Tracks'} na tabela</span><button type="button" class="btn" data-tracking-action="refresh-track-sales" title="Consulta todas as vendas SALE reais de afiliado, exclui TEST e associa somente por extclid quando há uma única combinação de domínio e produto. Rele o histórico completo e salva a atualização localmente; não envia conversões ao Google Ads."${state.salesPending ? ' disabled' : ''}>${state.salesPending ? 'Atualizando vendas…' : 'Atualizar vendas'}</button><button type="button" class="btn tracking-domain-config-toggle" data-tracking-action="toggle-domain-config" aria-controls="trackingDomainAdminConfig" aria-expanded="${state.domainAdminConfigExpanded ? 'true' : 'false'}" title="O token atual também serve para cadastrar domínios; só é preciso substituir a configuração privada ao trocar o token ou migrar o servidor.">${state.domainAdminConfigExpanded ? 'Recolher configurações' : 'Exibir configurações'}</button></div></div>
+        <p class="tracking-auto-refresh-note">${escapeHtml(salesAutoRefreshStatus)}</p>
+        <div id="trackingDomainAdminConfig" class="tracking-domain-admin-config"${state.domainAdminConfigExpanded ? '' : ' hidden'}>
         <div class="tracking-domain-token-grid">
-          <label class="tracking-token-field" for="trackingDomainAdminToken"><span>Token administrativo de domínios · separado do token de vendas</span><input id="trackingDomainAdminToken" type="${state.domainAdminTokenVisible ? 'text' : 'password'}" autocomplete="off" spellcheck="false" inputmode="text" placeholder="64 caracteres hexadecimais"></label>
+          <label class="tracking-token-field" for="trackingDomainAdminToken"><span>Token administrativo de domínios · separado do token de vendas</span><input id="trackingDomainAdminToken" type="${state.domainAdminTokenVisible ? 'text' : 'password'}" autocomplete="off" spellcheck="false" inputmode="text" aria-describedby="trackingDomainTokenStorageStatus trackingDomainTokenSecurityNote" placeholder="64 caracteres hexadecimais"></label>
           <div class="tracking-domain-token-actions">
-            <button type="button" class="btn" data-tracking-action="generate-domain-token"${state.domainPending ? ' disabled' : ''}>Gerar token seguro</button>
+          <button type="button" class="btn" data-tracking-action="generate-domain-token"${state.domainPending ? ' disabled' : ''}>Gerar / trocar token</button>
             <button type="button" class="btn" data-tracking-action="download-domain-config"${state.domainPending ? ' disabled' : ''}>Baixar configuração privada</button>
-            <button type="button" class="btn" data-tracking-action="clear-domain-token"${state.domainAdminToken ? '' : ' disabled'}>Esquecer token</button>
+            <button type="button" class="btn" data-tracking-action="clear-domain-token"${state.domainAdminToken || state.domainTokenStorageStatus === 'invalid' ? '' : ' disabled'}>Esquecer token</button>
           </div>
           <label class="tracking-remember-token"><input id="trackingDomainAdminTokenVisible" type="checkbox"${state.domainAdminTokenVisible ? ' checked' : ''}><span>Mostrar token nesta tela</span></label>
-          <p class="tracking-connection-note">O token fica somente nesta aba e é enviado no cabeçalho Authorization por HTTPS. Para configurar o servidor uma vez, gere o token, baixe o PHP e envie <code>${TRACKING_DOMAIN_ADMIN_CONFIG_FILE}</code> para a mesma pasta privada do <code>tracking-config.php</code>, fora de <code>public_html</code>. Não coloque esse arquivo na pasta pública nem o compartilhe.</p>
+          <label class="tracking-remember-token"><input id="trackingRememberDomainAdminToken" type="checkbox"${state.rememberDomainAdminToken ? ' checked' : ''}><span>Lembrar token administrativo neste navegador</span></label>
+          <p id="trackingDomainTokenStorageStatus" class="tracking-token-storage-status${['unavailable', 'invalid'].includes(state.domainTokenStorageStatus) ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(domainTokenStorageMessage())}</p>
+          <p id="trackingDomainTokenSecurityNote" class="tracking-connection-note tracking-instruction">O token salvo fica no <code>localStorage</code> deste navegador/origem, sem criptografia; não é sincronizado nem entra na IndexedDB ou nos backups JSON. Evite em computador compartilhado. A configuração PHP do servidor é enviada uma vez; gerar/trocar o token exige baixar e substituir o arquivo privado <code>${TRACKING_DOMAIN_ADMIN_CONFIG_FILE}</code> junto ao <code>tracking-config.php</code>, fora de <code>public_html</code>. Não compartilhe esses arquivos.</p>
+        </div>
+        <div class="tracking-ins-v8-url" aria-label="Configuração da ClickBank">
+          <span>Instant Notification URL · ClickBank (INS v8)</span>
+          <code>${escapeHtml(CLICKBANK_INS_V8_INSTANT_NOTIFICATION_URL)}</code>
+          <small>Este é o receptor INS v8 próprio configurado em Vendor Settings → My Site → Advanced Tools. É diferente do Custom Postback/Pixels.</small>
+        </div>
         </div>
         <div class="tracking-domain-form">
           <label class="tracking-token-field" for="trackingDomainName"><span>Domínio HTTPS da pre-sell</span><input id="trackingDomainName" type="text" autocomplete="url" spellcheck="false" placeholder="exemplo.com ou https://exemplo.com/"></label>
+          <label class="tracking-token-field" for="trackingDomainProductKey"><span>Nome do Track</span><input id="trackingDomainProductKey" type="text" autocomplete="off" spellcheck="false" maxlength="253" placeholder="ex.: Metabo Drops"><small id="trackingDomainProductKeyPreview" class="tracking-domain-product-preview">${escapeHtml(productIdentifierPreview())}</small></label>
           <label class="tracking-remember-token"><input id="trackingDomainIncludeWww" type="checkbox"${state.domainIncludeWww ? ' checked' : ''}><span>Autorizar também a variante www</span></label>
           <div class="tracking-domain-actions">
-            <button type="button" class="btn" data-tracking-action="load-domains"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'load' ? 'Consultando…' : 'Atualizar lista'}</button>
-            <button type="button" class="btn primary" data-tracking-action="add-domain"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'add' ? 'Autorizando…' : 'Autorizar domínio'}</button>
+            <button type="button" class="btn" data-tracking-action="load-domains" title="Consulta no servidor a lista autorizada de Tracks (domínios e produtos), atualiza a tabela e o cache local. Não cadastra nem altera domínios."${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'load' ? 'Consultando…' : 'Atualizar lista'}</button>
+            <button type="button" class="btn primary" data-tracking-action="add-domain"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'add' ? 'Salvando…' : 'Salvar domínio e produto'}</button>
           </div>
         </div>
-        <p class="tracking-domain-message${state.domainError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.domainMessage || 'A API administrativa precisa estar instalada e configurada no servidor antes de cadastrar domínios.')}</p>
         ${domainRows}
+        <p class="tracking-connection-note${state.salesCacheAvailable || state.salesAutoOnlyData ? '' : ' is-error'}">${escapeHtml(salesCacheSummary)}</p>
+        ${state.salesFeedback ? `<p class="tracking-domain-message${state.salesError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.salesFeedback)}</p>` : ''}
+        <p id="trackingDomainMessage" class="tracking-domain-message${state.domainError ? ' is-error' : ''}${!state.domainMessage || state.domainMessage.startsWith('Lista restaurada do navegador;') ? ' tracking-instruction' : ''}" role="status" aria-live="polite">${escapeHtml(state.domainMessage || (state.domainListLoaded ? 'Lista carregada do navegador.' : 'A lista ainda não foi consultada. Clique em Atualizar lista para buscar os domínios do servidor.'))}</p>
+        <p id="trackingDomainListCacheStatus" class="tracking-connection-note${['write-failed', 'invalid', 'unavailable'].includes(state.domainListCacheStatus) ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(domainListCacheMessage())}</p>
+        ${tagDialog}
+      </section>
+      <section class="tracking-panel tracking-email-panel" aria-label="Notificações de venda por e-mail">
+        <div class="tracking-table-heading tracking-domain-heading tracking-email-heading"><div><h2>Notificações de venda por e-mail</h2>${state.emailConfigExpanded ? '<p>Gere uma configuração privada para o servidor enviar aviso de novas vendas afiliadas e eventos de teste da ClickBank.</p>' : ''}</div><button type="button" class="btn tracking-email-toggle" data-tracking-action="toggle-email-config" aria-controls="trackingEmailConfigFields" aria-expanded="${state.emailConfigExpanded ? 'true' : 'false'}" title="Mostrar ou recolher as configurações de e-mail">${state.emailConfigExpanded ? 'Recolher' : 'Configurar'}</button></div>
+        <div id="trackingEmailConfigFields" class="tracking-email-config-body"${state.emailConfigExpanded ? '' : ' hidden'}>
+        <div class="tracking-email-grid">
+          <label class="tracking-token-field" for="trackingEmailRecipient"><span>Destinatário</span><input id="trackingEmailRecipient" type="email" maxlength="254" autocomplete="email" placeholder="seu e-mail para receber os avisos"></label>
+          <label class="tracking-token-field" for="trackingEmailSender"><span>Remetente (caixa criada no provedor)</span><input id="trackingEmailSender" type="email" maxlength="254" autocomplete="email" placeholder="ex.: alertas@seu-dominio.com"></label>
+          <label class="tracking-token-field" for="trackingEmailSmtpHost"><span>Servidor SMTP</span><input id="trackingEmailSmtpHost" type="text" maxlength="253" autocomplete="off" placeholder="ex.: smtp.hostinger.com"></label>
+          <label class="tracking-token-field" for="trackingEmailSmtpPort"><span>Porta</span><input id="trackingEmailSmtpPort" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="${escapeHtml(state.emailConfig.smtpPort)}"></label>
+          <label class="tracking-token-field" for="trackingEmailSmtpSecurity"><span>Segurança</span><select id="trackingEmailSmtpSecurity"><option value="ssl"${state.emailConfig.smtpSecurity === 'ssl' ? ' selected' : ''}>SSL/TLS</option><option value="starttls"${state.emailConfig.smtpSecurity === 'starttls' ? ' selected' : ''}>STARTTLS</option></select></label>
+          <label class="tracking-token-field" for="trackingEmailSmtpUsername"><span>Usuário SMTP</span><input id="trackingEmailSmtpUsername" type="text" maxlength="320" autocomplete="off" placeholder="normalmente o e-mail remetente"></label>
+          <label class="tracking-token-field" for="trackingEmailSmtpPassword"><span>Senha SMTP</span><input id="trackingEmailSmtpPassword" type="password" maxlength="1024" autocomplete="new-password" spellcheck="false" placeholder="não será salva no navegador"></label>
+          <div class="tracking-domain-actions">
+            <button type="button" class="btn primary" data-tracking-action="download-email-config">Baixar configuração privada</button>
+            <button type="button" class="btn" data-tracking-action="clear-email-config">Limpar campos</button>
+          </div>
+        </div>
+        <p class="tracking-conversion-profile-message${state.emailConfigError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.emailConfigMessage)}</p>
+        <p class="tracking-connection-note">O Hub não envia esses dados a nenhum endpoint e não os grava em <code>localStorage</code>, IndexedDB ou backup; eles ficam apenas na memória desta aba. O PHP baixado contém a senha SMTP: mantenha-o privado, fora de <code>public_html</code> e do Git. A fila envia o e-mail fora do postback da ClickBank e tenta novamente falhas temporárias.</p>
+        <p class="tracking-connection-note">Avisos de teste vêm marcados como <strong>TESTE</strong> e informam que não entram no CSV. Vendas reais avisam para revisar a elegibilidade no Hub; o envio não altera nem envia conversões ao Google Ads. Para Hostinger Email, confirme host/porta no hPanel; esta configuração pode ser refeita em outra hospedagem.</p>
+        </div>
+      </section>
+      <section class="tracking-panel tracking-clicks-panel" aria-label="Relatório de visitas e cliques da pre-sell">
+        <div class="tracking-intro-head tracking-clicks-head">
+          <div class="tracking-intro-copy"><h2>Tracking de visitas e cliques</h2><p>Veja o cache local ou atualize os eventos agregados por dia, produto e hostname no servidor. O relatório não retorna GCLID, extclid, URL completa ou identificadores de visitante.</p></div>
+          <div class="tracking-connection-actions"><button type="button" class="btn primary" data-tracking-action="refresh-clicks"${state.clicksPending || state.clicksCacheLoading ? ' disabled' : ''}>${state.clicksCacheLoading ? 'Lendo cache local…' : state.clicksPending ? 'Atualizando…' : 'Atualizar do servidor'}</button></div>
+        </div>
+        <p class="tracking-auto-refresh-note">${escapeHtml(clicksAutoRefreshStatus)}</p>
+        <div class="tracking-clicks-date-range">
+          <label class="tracking-token-field" for="trackingClicksStartDate"><span>De · data UTC</span><input id="trackingClicksStartDate" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="10" placeholder="dd/mm/aaaa" aria-label="Data inicial em formato dd/mm/aaaa, considerada em UTC" value="${escapeHtml(state.clicksStartDateInput)}"${state.clicksPending ? ' disabled' : ''}></label>
+          <label class="tracking-token-field" for="trackingClicksEndDate"><span>Até · data UTC</span><input id="trackingClicksEndDate" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="10" placeholder="dd/mm/aaaa" aria-label="Data final em formato dd/mm/aaaa, considerada em UTC" value="${escapeHtml(state.clicksEndDateInput)}"${state.clicksPending ? ' disabled' : ''}></label>
+        </div>
+        <p class="tracking-date-format-note tracking-instruction">Formato brasileiro: <strong>dd/mm/aaaa</strong>. O período consultado continua sendo interpretado em UTC.</p>
+        ${state.clicksFeedback ? `<p class="tracking-message${state.clicksError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.clicksFeedback)}</p>` : ''}
+      <p class="tracking-connection-note tracking-instruction">O botão manual salva o relatório no IndexedDB local deste navegador/origem; a busca automática atualiza somente esta tela e não grava snapshots. Somente contagens agregadas, produto, domínio e horários são salvos no cache. Token, GCLID, extclid, URL completa e dados de visitante não entram nele. O cache não faz parte do backup geral do Hub.</p>
+        ${trackingClicksPreviewMarkup()}
       </section>
       <section class="tracking-panel tracking-results" aria-label="Dados do CSV">${previewMarkup()}</section>
     </div>`;
@@ -296,12 +880,51 @@ export function mount({ root }) {
     if (rememberField) rememberField.checked = state.rememberToken;
     const domainTokenField = root.querySelector?.('#trackingDomainAdminToken');
     if (domainTokenField) domainTokenField.value = state.domainAdminToken;
+    const rememberDomainTokenField = root.querySelector?.('#trackingRememberDomainAdminToken');
+    if (rememberDomainTokenField) rememberDomainTokenField.checked = state.rememberDomainAdminToken;
     const domainNameField = root.querySelector?.('#trackingDomainName');
     if (domainNameField) domainNameField.value = state.domainName;
+    const productKeyField = root.querySelector?.('#trackingDomainProductKey');
+    if (productKeyField) productKeyField.value = state.domainProductKey;
     const domainIncludeWwwField = root.querySelector?.('#trackingDomainIncludeWww');
     if (domainIncludeWwwField) domainIncludeWwwField.checked = state.domainIncludeWww;
     const domainTokenVisibleField = root.querySelector?.('#trackingDomainAdminTokenVisible');
     if (domainTokenVisibleField) domainTokenVisibleField.checked = state.domainAdminTokenVisible;
+    const clicksStartField = root.querySelector?.('#trackingClicksStartDate');
+    if (clicksStartField) clicksStartField.value = state.clicksStartDateInput;
+    const clicksEndField = root.querySelector?.('#trackingClicksEndDate');
+    if (clicksEndField) clicksEndField.value = state.clicksEndDateInput;
+    const clicksProductField = root.querySelector?.('#trackingClicksProductFilter');
+    if (clicksProductField) clicksProductField.value = state.clicksProductFilter;
+    const clicksHostField = root.querySelector?.('#trackingClicksHostFilter');
+    if (clicksHostField) clicksHostField.value = state.clicksHostFilter;
+    const conversionProfileSelect = root.querySelector?.('#trackingConversionProfileSelect');
+    if (conversionProfileSelect) conversionProfileSelect.value = state.selectedConversionProfileId;
+    const conversionProfileLabel = root.querySelector?.('#trackingConversionProfileLabel');
+    if (conversionProfileLabel) conversionProfileLabel.value = state.conversionProfileLabelInput;
+    const conversionActionName = root.querySelector?.('#trackingConversionActionName');
+    if (conversionActionName) conversionActionName.value = state.conversionProfileActionInput;
+    const emailFields = {
+      trackingEmailRecipient: 'toEmail',
+      trackingEmailSender: 'fromEmail',
+      trackingEmailSmtpHost: 'smtpHost',
+      trackingEmailSmtpPort: 'smtpPort',
+      trackingEmailSmtpSecurity: 'smtpSecurity',
+      trackingEmailSmtpUsername: 'smtpUsername',
+      trackingEmailSmtpPassword: 'smtpPassword',
+    };
+    for (const [id, key] of Object.entries(emailFields)) {
+      const field = root.querySelector?.(`#${id}`);
+      if (field) field.value = state.emailConfig[key];
+    }
+    if (state.tagDialogNeedsFocus) {
+      root.querySelector?.('#trackingTagDialog')?.focus?.();
+      state.tagDialogNeedsFocus = false;
+    }
+    if (state.tagDialogRestoreFocus) {
+      root.querySelector?.('[data-tracking-action="show-presell-tag"]')?.focus?.();
+      state.tagDialogRestoreFocus = false;
+    }
     updateTokenStorageStatus();
   }
 
@@ -430,19 +1053,98 @@ export function mount({ root }) {
     }
   }
 
+  async function refreshTrackingClicks({ automatic = false } = {}) {
+    if (!state.apiToken) {
+      if (automatic) return;
+      state.clicksFeedback = 'Informe o token de acesso do Hub acima para consultar o relatório.';
+      state.clicksError = true;
+      render();
+      return;
+    }
+    if (state.clicksPending) return;
+    let range;
+    try {
+      const startDate = parseTrackingDatePtBr(state.clicksStartDateInput);
+      const endDate = parseTrackingDatePtBr(state.clicksEndDateInput);
+      if (!startDate || !endDate) throw new Error('Informe as duas datas válidas no formato dd/mm/aaaa.');
+      range = validateTrackingClicksDateRange(startDate, endDate);
+    } catch (error) {
+      state.clicksFeedback = error instanceof Error ? error.message : 'Confira o período informado.';
+      state.clicksError = true;
+      render();
+      return;
+    }
+    if (!automatic && state.rememberToken) syncTokenStorage();
+    state.clicksPending = true;
+    state.clicksFeedback = automatic
+      ? 'Atualizando automaticamente somente os totais agregados…'
+      : 'Atualizando no servidor somente os totais agregados…';
+    state.clicksError = false;
+    render();
+    try {
+      const serverReport = await fetchTrackingClicksReport(state.apiToken, range);
+      state.clicksProductFilter = '';
+      state.clicksHostFilter = '';
+      state.clicksReport = serverReport;
+      const refreshedAtUtc = nowFn().toISOString();
+      state.clicksLastServerRefreshAtUtc = refreshedAtUtc;
+      state.clicksAutoOnlyData = automatic;
+      if (automatic) {
+        state.clicksFeedback = `Busca automática concluída: ${serverReport.rows.length} combinação(ões) agregada(s). Os dados desta consulta ficam nesta tela; use Atualizar do servidor para salvar no cache local.`;
+        state.clicksError = false;
+        return;
+      }
+      try {
+        await clicksStorage.append(serverReport);
+        state.clicksSnapshots = await clicksStorage.read();
+        state.clicksCacheAvailable = true;
+        const cached = resolveTrackingClicksCache(state.clicksSnapshots, range);
+        state.clicksReport = cached.report || serverReport;
+        state.clicksCacheMeta = cached.meta;
+        state.clicksLastServerRefreshAtUtc = cached.meta.cacheUpdatedAtUtc || refreshedAtUtc;
+        state.clicksFeedback = `Atualização salva no cache local: ${serverReport.rows.length} combinação(ões) agregada(s); ${cached.meta.coveredDays} de ${cached.meta.totalDays} dias cobertos.`;
+        state.clicksError = false;
+      } catch (error) {
+        state.clicksCacheAvailable = false;
+        state.clicksCacheMeta = null;
+        state.clicksAutoOnlyData = true;
+        state.clicksFeedback = `Consulta concluída, mas não foi possível salvar/ler o cache local (${error instanceof Error ? error.message : 'erro de armazenamento'}). O relatório ficará visível somente nesta aba.`;
+        state.clicksError = true;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Não foi possível consultar os cliques.';
+      state.clicksFeedback = state.clicksReport
+        ? `${automatic ? 'A busca automática falhou' : 'Falha ao atualizar'}: ${reason} Os dados exibidos anteriormente foram mantidos.`
+        : reason;
+      state.clicksError = true;
+    } finally {
+      state.clicksPending = false;
+      render();
+    }
+  }
+
   async function downloadFromServer() {
     if (!state.report?.downloadAvailable || !['server', 'server-ins-v8'].includes(state.source) || state.serverPending) return;
     const isInsV8 = state.source === 'server-ins-v8';
+    const conversionProfile = isInsV8 ? activeConversionProfile() : null;
+    if (isInsV8 && !conversionProfile) {
+      state.feedback = 'Selecione e salve o perfil da conta/MCC antes de gerar o CSV.';
+      state.feedbackError = true;
+      render();
+      return;
+    }
     state.serverPending = true;
     state.feedback = isInsV8 ? 'Preparando o CSV com as vendas INS v8 elegíveis…' : 'Solicitando o CSV atualizado ao servidor…';
     state.feedbackError = false;
     render();
     try {
       const blob = isInsV8
-        ? await downloadClickBankInsV8Csv(state.apiToken)
+        ? await downloadClickBankInsV8Csv(state.apiToken, { conversionName: conversionProfile.conversionName })
         : await downloadTrackingCsv(state.apiToken);
-      triggerBlobDownload(blob, isInsV8 ? 'clickbank-ins-v8-google-ads.csv' : 'clickbank-google-ads.csv');
-      state.feedback = 'Download iniciado. Revise o arquivo. Ele não foi enviado ao Google Ads; faça upload manual somente quando decidir interromper a Flow Tracking.';
+      triggerBlobDownload(blob, isInsV8 ? profileCsvFilename(conversionProfile.label) : 'clickbank-google-ads.csv');
+      state.feedback = isInsV8
+        ? `CSV preparado para “${conversionProfile.label}” com a ação “${conversionProfile.conversionName}”. Confira a MCC de destino; o arquivo não foi enviado ao Google Ads.`
+        : 'Download iniciado. Revise o arquivo. Ele não foi enviado ao Google Ads; o envio manual fica a seu critério.';
       state.feedbackError = false;
     } catch (error) {
       state.feedback = error instanceof Error ? error.message : 'Não foi possível baixar o CSV do servidor.';
@@ -453,9 +1155,183 @@ export function mount({ root }) {
     }
   }
 
+  function setConversionProfileMessage(message, isError = false) {
+    state.conversionProfileMessage = message;
+    state.conversionProfileError = isError;
+  }
+
+  function selectConversionProfile(profileId) {
+    const profile = state.conversionProfiles.find(item => item.id === profileId) || null;
+    state.selectedConversionProfileId = profile?.id || '';
+    state.editingConversionProfileId = profile?.id || '';
+    state.conversionProfileLabelInput = profile?.label || '';
+    state.conversionProfileActionInput = profile?.conversionName || '';
+    const saved = saveTrackingConversionProfiles(state.conversionProfiles, state.selectedConversionProfileId);
+    state.conversionProfileStorageStatus = saved.saved ? 'saved' : 'unavailable';
+    setConversionProfileMessage(profile
+      ? `Perfil “${profile.label}” selecionado para o próximo CSV.${saved.saved ? ' Seleção salva neste navegador.' : ' A seleção vale somente nesta aba.'}`
+      : 'Nenhum perfil selecionado; o CSV INS v8 ficará desabilitado até escolher uma conta/MCC.', !saved.saved && state.conversionProfiles.length > 0);
+    render();
+  }
+
+  function startNewConversionProfile() {
+    if (state.conversionProfiles.length >= 20) {
+      setConversionProfileMessage('Limite de 20 perfis atingido. Remova um perfil antes de criar outro.', true);
+      render();
+      return;
+    }
+    state.selectedConversionProfileId = '';
+    const selectionSaved = saveTrackingConversionProfiles(state.conversionProfiles, '');
+    state.conversionProfileStorageStatus = selectionSaved.saved ? 'saved' : 'unavailable';
+    state.editingConversionProfileId = newTrackingConversionProfileId();
+    state.conversionProfileLabelInput = '';
+    state.conversionProfileActionInput = '';
+    setConversionProfileMessage('Preencha o rótulo da conta/MCC e o nome exato da ação; depois clique em Salvar perfil.');
+    render();
+  }
+
+  function saveConversionProfile() {
+    try {
+      const profile = normalizeTrackingConversionProfile({
+        id: state.editingConversionProfileId || newTrackingConversionProfileId(),
+        label: state.conversionProfileLabelInput,
+        conversionName: state.conversionProfileActionInput,
+      });
+      const exists = state.conversionProfiles.some(item => item.id === profile.id);
+      if (!exists && state.conversionProfiles.length >= 20) throw new Error('profile_limit');
+      state.conversionProfiles = exists
+        ? state.conversionProfiles.map(item => item.id === profile.id ? profile : item)
+        : [...state.conversionProfiles, profile];
+      state.selectedConversionProfileId = profile.id;
+      state.editingConversionProfileId = profile.id;
+      state.conversionProfileLabelInput = profile.label;
+      state.conversionProfileActionInput = profile.conversionName;
+      const saved = saveTrackingConversionProfiles(state.conversionProfiles, profile.id);
+      state.conversionProfileStorageStatus = saved.saved ? 'saved' : 'unavailable';
+      setConversionProfileMessage(saved.saved
+        ? `Perfil “${profile.label}” salvo e selecionado neste navegador.`
+        : `Perfil “${profile.label}” ativo somente nesta aba; o navegador não permitiu salvá-lo.`, !saved.saved);
+    } catch (error) {
+      const message = error?.message === 'profile_limit'
+        ? 'Limite de 20 perfis atingido. Remova um perfil antes de criar outro.'
+        : error?.message === 'invalid_profile_label'
+          ? 'Informe um rótulo de conta/MCC de até 120 bytes, sem caracteres de controle.'
+          : error?.message === 'invalid_conversion_name'
+            ? 'Informe o nome exato da ação (até 255 bytes), sem caracteres de controle.'
+            : 'Não foi possível validar o perfil de conversão.';
+      setConversionProfileMessage(message, true);
+    }
+    render();
+  }
+
+  function removeConversionProfile() {
+    const profile = activeConversionProfile();
+    if (!profile) {
+      setConversionProfileMessage('Selecione um perfil salvo para removê-lo.', true);
+      render();
+      return;
+    }
+    state.conversionProfiles = state.conversionProfiles.filter(item => item.id !== profile.id);
+    const next = state.conversionProfiles[0] || null;
+    state.selectedConversionProfileId = next?.id || '';
+    state.editingConversionProfileId = next?.id || '';
+    state.conversionProfileLabelInput = next?.label || '';
+    state.conversionProfileActionInput = next?.conversionName || '';
+    const saved = saveTrackingConversionProfiles(state.conversionProfiles, state.selectedConversionProfileId);
+    state.conversionProfileStorageStatus = saved.saved ? 'saved' : 'unavailable';
+    setConversionProfileMessage(saved.saved
+      ? `Perfil “${profile.label}” removido deste navegador.${next ? ` “${next.label}” ficou selecionado.` : ' Cadastre o perfil da conta/MCC para habilitar o CSV.'}`
+      : `Perfil “${profile.label}” removido apenas desta aba; não foi possível atualizar o armazenamento local.`, !saved.saved);
+    render();
+  }
+
   function setDomainMessage(message, isError = false) {
     state.domainMessage = message;
     state.domainError = isError;
+  }
+
+  function productLabel(productKey) {
+    return state.productLabels.get(productKey) || productKey;
+  }
+
+  function withProductLabels(rows) {
+    return rows.map(row => ({ ...row, productLabel: row.productLabel || productLabel(row.productKey) }));
+  }
+
+  function domainListCacheMessage() {
+    const savedAt = state.domainListUpdatedAtUtc
+      ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(state.domainListUpdatedAtUtc))
+      : '';
+    if (state.domainListCacheStatus === 'saved' && savedAt) {
+      return `Cache local atualizado em ${savedAt} (horário deste navegador). Clique em Atualizar lista para verificar mudanças no servidor. O cache contém domínios, códigos técnicos e nomes dos Tracks, sem token; fica no localStorage sem criptografia e fora dos backups.`;
+    }
+    if (state.domainListCacheStatus === 'write-failed') {
+      return savedAt
+        ? `Não foi possível salvar a atualização mais recente. O cache anterior é de ${savedAt}; a lista atual permanece nesta aba até recarregar.`
+        : 'Não foi possível salvar a lista no navegador; ela permanece disponível somente nesta aba.';
+    }
+    if (state.domainListCacheStatus === 'invalid') {
+      return 'O cache local da lista está inválido. Clique em Atualizar lista para carregar e substituir por uma cópia válida.';
+    }
+    if (state.domainListCacheStatus === 'unavailable') {
+      return 'O armazenamento local não está disponível; a lista consultada ficará somente nesta aba. Nenhum token é incluído no cache.';
+    }
+    return 'Após Atualizar lista, os domínios e códigos de produto serão salvos neste navegador, sem token, para reaparecerem após recarregar a tela.';
+  }
+
+  function persistDomainListCache() {
+    const result = saveTrackingDomainList(state.domainRows);
+    if (result.saved) {
+      state.domainListCacheStatus = 'saved';
+      state.domainListUpdatedAtUtc = result.updatedAtUtc;
+      return true;
+    }
+    state.domainListCacheStatus = 'write-failed';
+    return false;
+  }
+
+  function productIdentifierPreview() {
+    if (!state.domainProductKey) return 'Espaços serão convertidos em hífens no identificador técnico.';
+    try { return `Identificador técnico: ${normalizeTrackingProductKey(state.domainProductKey)}`; }
+    catch (error) { return error instanceof Error ? error.message : 'Confira o nome do produto.'; }
+  }
+
+  function updateProductIdentifierPreview() {
+    const preview = root.querySelector?.('#trackingDomainProductKeyPreview');
+    if (preview) preview.textContent = productIdentifierPreview();
+  }
+
+  async function copyPresellScript() {
+    const field = root.querySelector?.('#trackingPresellScript');
+    const selected = state.domainRows.find(row => row.hostname === state.tagDialogHost);
+    if (!selected) {
+      setDomainMessage('Abra a tag de uma pre-sell cadastrada antes de copiar.', true);
+      const status = root.querySelector?.('#trackingDomainMessage');
+      if (status) status.textContent = state.domainMessage;
+      return;
+    }
+    const scriptTag = buildTrackingPresellScriptTag(selected.productKey, selected.hostname);
+    try {
+      if (!clipboard || typeof clipboard.writeText !== 'function') throw new Error('clipboard_unavailable');
+      await clipboard.writeText(scriptTag);
+      setDomainMessage(`Tag copiada para ${selected.productLabel || productLabel(selected.productKey)} (ID ${selected.productKey}). Cole-a uma vez em ${selected.hostname}.`);
+    } catch {
+      field?.focus?.();
+      field?.select?.();
+      setDomainMessage('Não foi possível copiar automaticamente. A tag foi selecionada; use Ctrl+C e cole-a uma vez na pre-sell.');
+    }
+    const status = root.querySelector?.('#trackingDomainMessage');
+    if (status) {
+      status.textContent = state.domainMessage;
+      status.classList?.toggle('is-error', state.domainError);
+    }
+  }
+
+  function closePresellTag({ restoreFocus = true, renderView = true } = {}) {
+    if (!state.tagDialogHost) return;
+    state.tagDialogHost = '';
+    state.tagDialogRestoreFocus = restoreFocus;
+    if (renderView) render();
   }
 
   function downloadDomainAdminConfig() {
@@ -469,11 +1345,36 @@ export function mount({ root }) {
     render();
   }
 
+  function downloadEmailConfig() {
+    try {
+      normalizeTrackingEmailConfig(state.emailConfig);
+      const content = trackingEmailConfigPhp(state.emailConfig);
+      triggerBlobDownload(new Blob([content], { type: 'application/x-php;charset=utf-8' }), TRACKING_EMAIL_CONFIG_FILE);
+      state.emailConfig.smtpPassword = '';
+      state.emailConfigMessage = `${TRACKING_EMAIL_CONFIG_FILE} baixado. Ele contém a senha SMTP; envie-o somente para private-tools, fora de public_html, e guarde a cópia com segurança.`;
+      state.emailConfigError = false;
+    } catch (error) {
+      state.emailConfigMessage = error instanceof Error ? error.message : 'Não foi possível validar a configuração de e-mail.';
+      state.emailConfigError = true;
+    }
+    render();
+  }
+
+  function clearEmailConfig() {
+    state.emailConfig = {
+      toEmail: '', fromEmail: '', smtpHost: '', smtpPort: '465', smtpSecurity: 'ssl', smtpUsername: '', smtpPassword: '',
+    };
+    state.emailConfigMessage = 'Campos limpos desta aba; nada havia sido salvo pelo Hub.';
+    state.emailConfigError = false;
+    render();
+  }
+
   function generateDomainAdminToken() {
     try {
       state.domainAdminToken = createTrackingDomainAdminToken();
       state.domainAdminTokenVisible = false;
-      setDomainMessage('Token seguro gerado nesta aba. Baixe a configuração privada e envie-a ao servidor antes de usar o cadastro. Guarde o token para digitá-lo novamente se recarregar a tela.');
+      syncDomainAdminTokenStorage();
+      setDomainMessage('Novo token gerado. Para usá-lo, baixe e substitua a configuração privada no servidor. Não gere outro token ao cadastrar cada domínio.');
     } catch (error) {
       setDomainMessage(error instanceof Error ? error.message : 'Não foi possível gerar o token.', true);
     }
@@ -482,6 +1383,7 @@ export function mount({ root }) {
 
   async function loadDomainList() {
     if (!state.domainAdminToken) {
+      state.domainAdminConfigExpanded = true;
       setDomainMessage('Informe o token administrativo separado do token de acesso às vendas.', true);
       render();
       return;
@@ -491,7 +1393,10 @@ export function mount({ root }) {
     setDomainMessage('Consultando a lista autenticada de domínios…');
     render();
     try {
-      state.domainRows = await fetchTrackingDomains(state.domainAdminToken);
+      state.domainRows = withProductLabels(await fetchTrackingDomains(state.domainAdminToken));
+      state.domainListLoaded = true;
+      persistDomainListCache();
+      if (!state.domainRows.some(row => row.hostname === state.tagDialogHost)) closePresellTag({ restoreFocus: false, renderView: false });
       setDomainMessage(`${state.domainRows.length} domínio(s) cadastrado(s) nesta tabela. Domínios da allowlist legada permanecem autorizados, mas não são listados aqui.`);
     } catch (error) {
       setDomainMessage(error instanceof Error ? error.message : 'Não foi possível consultar os domínios.', true);
@@ -504,15 +1409,20 @@ export function mount({ root }) {
 
   async function saveDomain() {
     if (!state.domainAdminToken) {
+      state.domainAdminConfigExpanded = true;
       setDomainMessage('Informe o token administrativo separado do token de acesso às vendas.', true);
       render();
       return;
     }
     let hostname;
+    let productKey;
+    let displayLabel;
     try {
       hostname = normalizeTrackingDomainInput(state.domainName);
+      displayLabel = normalizeTrackingProductLabel(state.domainProductKey);
+      productKey = normalizeTrackingProductKey(state.domainProductKey);
     } catch (error) {
-      setDomainMessage(error instanceof Error ? error.message : 'Informe um domínio HTTPS válido.', true);
+      setDomainMessage(error instanceof Error ? error.message : 'Confira o domínio e o código de produto.', true);
       render();
       return;
     }
@@ -521,18 +1431,49 @@ export function mount({ root }) {
     setDomainMessage('Enviando autorização aditiva ao servidor…');
     render();
     try {
-      const result = await addTrackingDomain(state.domainAdminToken, hostname, { includeWww: state.domainIncludeWww });
-      const affectedHosts = [...result.added, ...result.alreadyAllowed];
-      const existingHosts = new Set(state.domainRows.map(row => row.hostname));
-      state.domainRows = [...state.domainRows, ...affectedHosts
-        .filter(host => !existingHosts.has(host))
-        .map(host => ({ hostname: host, origin: `https://${host}`, createdAtUtc: '' }))]
-        .sort((left, right) => left.hostname.localeCompare(right.hostname));
+      const result = await addTrackingDomain(state.domainAdminToken, hostname, {
+        includeWww: state.domainIncludeWww,
+        productKey,
+        productLabel: displayLabel,
+      });
+      const registeredProductKey = result.productKey || productKey;
+      const registeredProductLabel = result.productLabel || displayLabel.trim();
+      const labelSave = saveTrackingProductLabel(registeredProductKey, registeredProductLabel);
+      state.productLabels.set(registeredProductKey, registeredProductLabel);
+      const affectedHosts = [...new Set([...result.added, ...result.updated, ...result.alreadyAllowed])];
+      const rowsByHost = new Map(state.domainRows.map(row => [row.hostname, row]));
+      for (const host of affectedHosts) {
+        const previous = rowsByHost.get(host);
+        rowsByHost.set(host, {
+          hostname: host,
+          origin: `https://${host}`,
+          productKey: registeredProductKey,
+          productLabel: registeredProductLabel,
+          createdAtUtc: previous?.createdAtUtc || '',
+        });
+      }
+      state.domainRows = [...rowsByHost.values()].sort((left, right) => left.hostname.localeCompare(right.hostname));
+      if (affectedHosts.length) {
+        if (state.domainHighlightTimer !== null) clearTimeoutFn?.(state.domainHighlightTimer);
+        state.highlightedDomainHosts = affectedHosts;
+        state.domainHighlightTimer = setTimeoutFn?.(() => {
+          state.highlightedDomainHosts = [];
+          state.domainHighlightTimer = null;
+          render();
+        }, 2250) ?? null;
+      }
+      state.tagDialogHost = '';
+      if (state.domainListLoaded) persistDomainListCache();
       const parts = [];
       if (result.added.length) parts.push(`Liberado: ${result.added.join(', ')}.`);
-      if (result.alreadyAllowed.length) parts.push(`Já estava liberado: ${result.alreadyAllowed.join(', ')}.`);
-      setDomainMessage(parts.join(' ') || 'A API não retornou domínios liberados.', !parts.length);
+      if (result.updated.length) parts.push(`Track atualizada: ${result.updated.join(', ')}.`);
+      if (result.alreadyAllowed.length) parts.push(`Domínio/produto já estavam cadastrados: ${result.alreadyAllowed.join(', ')}.`);
+      const labelNotice = labelSave.saved
+        ? ` Nome do Track “${registeredProductLabel}” salvo no servidor e sincronizado neste navegador.`
+        : ` Nome do Track “${registeredProductLabel}” salvo no servidor; será recuperado ao atualizar a lista.`;
+      setDomainMessage((parts.join(' ') || 'A API não retornou domínios liberados.') + labelNotice, !parts.length);
       state.domainName = '';
+      state.domainProductKey = '';
     } catch (error) {
       setDomainMessage(error instanceof Error ? error.message : 'Não foi possível autorizar o domínio.', true);
     } finally {
@@ -543,28 +1484,67 @@ export function mount({ root }) {
   }
 
   async function handleAction(action) {
+    if (action === 'toggle-instructions') {
+      state.instructionsVisible = !state.instructionsVisible;
+      render();
+      return;
+    }
+    if (action === 'new-conversion-profile') return startNewConversionProfile();
+    if (action === 'save-conversion-profile') return saveConversionProfile();
+    if (action === 'remove-conversion-profile') return removeConversionProfile();
     if (action === 'download') {
       if (['server', 'server-ins-v8'].includes(state.source)) return downloadFromServer();
       return downloadOriginal();
     }
     if (action === 'refresh-server') return refreshFromServer();
     if (action === 'refresh-ins-v8') return refreshInsV8FromServer();
+    if (action === 'toggle-connection-config') {
+      state.connectionConfigExpanded = !state.connectionConfigExpanded;
+      render();
+      return;
+    }
+    if (action === 'refresh-clicks') return refreshTrackingClicks();
+    if (action === 'refresh-track-sales') return refreshTrackSales();
     if (action === 'generate-domain-token') return generateDomainAdminToken();
+    if (action === 'toggle-domain-config') {
+      state.domainAdminConfigExpanded = !state.domainAdminConfigExpanded;
+      render();
+      return;
+    }
     if (action === 'download-domain-config') return downloadDomainAdminConfig();
+    if (action === 'download-email-config') return downloadEmailConfig();
+    if (action === 'clear-email-config') return clearEmailConfig();
+    if (action === 'toggle-email-config') {
+      state.emailConfigExpanded = !state.emailConfigExpanded;
+      render();
+      return;
+    }
     if (action === 'clear-domain-token') {
       state.domainAdminToken = '';
       state.domainAdminTokenVisible = false;
-      setDomainMessage('Token administrativo removido somente desta aba.');
+      state.rememberDomainAdminToken = false;
+      const removal = clearTrackingDomainAdminToken();
+      state.domainTokenStorageStatus = removal.removed ? 'disabled' : 'unavailable';
+      setDomainMessage(removal.removed
+        ? 'Token administrativo removido desta aba e do armazenamento local deste navegador.'
+        : 'Token removido desta aba, mas o navegador não permitiu apagar a cópia local.');
       render();
       return;
     }
     if (action === 'load-domains') return loadDomainList();
     if (action === 'add-domain') return saveDomain();
+    if (action === 'copy-presell-script') return copyPresellScript();
+    if (action === 'close-presell-tag') return closePresellTag();
     if (action === 'disconnect') {
+      stopAutoRefresh({ preserveRequest: true });
       const removal = clearTrackingHubToken();
       state.apiToken = '';
       state.rememberToken = false;
       state.tokenStorageStatus = removal.removed ? 'empty' : 'unavailable';
+      state.clicksReport = null;
+      state.clicksCacheMeta = null;
+      state.clicksFeedback = '';
+      state.clicksError = false;
       if (['server', 'server-ins-v8'].includes(state.source)) {
         state.report = null;
         state.source = '';
@@ -589,32 +1569,113 @@ export function mount({ root }) {
 
   root.addEventListener('input', event => {
     if (event.target?.id === 'trackingApiToken') {
+      const hadValidToken = hasValidHubToken();
       state.apiToken = String(event.target.value ?? '').trim();
       syncTokenStorage();
+      if (autoRefreshRequested && !hadValidToken && hasValidHubToken() && isTrackingViewVisible()) {
+        stopAutoRefresh({ preserveRequest: true });
+        void activateAutoRefresh();
+      }
     }
-    if (event.target?.id === 'trackingDomainAdminToken') state.domainAdminToken = String(event.target.value ?? '').trim();
+    if (event.target?.id === 'trackingDomainAdminToken') {
+      state.domainAdminToken = String(event.target.value ?? '').trim();
+      syncDomainAdminTokenStorage();
+    }
     if (event.target?.id === 'trackingDomainName') state.domainName = String(event.target.value ?? '');
+    if (event.target?.id === 'trackingDomainProductKey') {
+      state.domainProductKey = String(event.target.value ?? '');
+      updateProductIdentifierPreview();
+    }
+    if (event.target?.id === 'trackingConversionProfileLabel') state.conversionProfileLabelInput = String(event.target.value ?? '');
+    if (event.target?.id === 'trackingConversionActionName') state.conversionProfileActionInput = String(event.target.value ?? '');
+    if (event.target?.id === 'trackingClicksStartDate') state.clicksStartDateInput = String(event.target.value ?? '');
+    if (event.target?.id === 'trackingClicksEndDate') state.clicksEndDateInput = String(event.target.value ?? '');
+    const emailInputKeys = {
+      trackingEmailRecipient: 'toEmail',
+      trackingEmailSender: 'fromEmail',
+      trackingEmailSmtpHost: 'smtpHost',
+      trackingEmailSmtpPort: 'smtpPort',
+      trackingEmailSmtpUsername: 'smtpUsername',
+      trackingEmailSmtpPassword: 'smtpPassword',
+    };
+    const emailInputKey = emailInputKeys[event.target?.id];
+    if (emailInputKey) state.emailConfig[emailInputKey] = String(event.target.value ?? '');
   });
   root.addEventListener('change', event => {
     if (event.target?.id === 'trackingCsvFile') return importFile(event.target.files?.[0]);
+    if (['trackingClicksStartDate', 'trackingClicksEndDate'].includes(event.target?.id)) {
+      if (setClicksCacheForSelectedRange()) render();
+      return;
+    }
+    if (event.target?.id === 'trackingClicksProductFilter') {
+      state.clicksProductFilter = String(event.target.value ?? '');
+      render();
+    }
+    if (event.target?.id === 'trackingClicksHostFilter') {
+      state.clicksHostFilter = String(event.target.value ?? '');
+      render();
+    }
     if (event.target?.id === 'trackingRememberToken') {
       state.rememberToken = Boolean(event.target.checked);
       syncTokenStorage();
       render();
     }
+    if (event.target?.id === 'trackingRememberDomainAdminToken') {
+      state.rememberDomainAdminToken = Boolean(event.target.checked);
+      syncDomainAdminTokenStorage();
+      render();
+    }
     if (event.target?.id === 'trackingDomainIncludeWww') state.domainIncludeWww = Boolean(event.target.checked);
+    if (event.target?.id === 'trackingConversionProfileSelect') {
+      selectConversionProfile(String(event.target.value ?? ''));
+    }
+    if (event.target?.id === 'trackingEmailSmtpSecurity') state.emailConfig.smtpSecurity = String(event.target.value ?? '');
     if (event.target?.id === 'trackingDomainAdminTokenVisible') {
       state.domainAdminTokenVisible = Boolean(event.target.checked);
       render();
     }
   });
   root.addEventListener('click', event => {
-    const action = event.target?.closest?.('[data-tracking-action]')?.dataset?.trackingAction;
+    const actionElement = event.target?.closest?.('[data-tracking-action]');
+    const action = actionElement?.dataset?.trackingAction;
+    if (action === 'show-presell-tag') {
+      const host = String(actionElement?.dataset?.presellHost || '');
+      if (state.domainRows.some(row => row.hostname === host)) {
+        state.tagDialogHost = host;
+        state.tagDialogNeedsFocus = true;
+        render();
+      }
+      return;
+    }
     if (action) return handleAction(action);
   });
+  root.addEventListener('keydown', event => {
+    if (!state.tagDialogHost) return;
+    if (event.key === 'Escape') {
+      event.preventDefault?.();
+      closePresellTag();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const dialog = root.querySelector?.('#trackingTagDialog');
+    const focusable = [...(dialog?.querySelectorAll?.('button:not([disabled]), textarea, [href], [tabindex]:not([tabindex="-1"])') || [])];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = dialog?.ownerDocument?.activeElement;
+    if (event.shiftKey && (active === first || active === dialog)) {
+      event.preventDefault?.();
+      last.focus?.();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault?.();
+      first.focus?.();
+    }
+  });
 
-  const controller = Object.freeze({ render });
+  cacheReadyPromise = Promise.all([loadTrackingClicksCache(), loadTrackingSalesCache()]);
+  const controller = Object.freeze({ render, ready: cacheReadyPromise, activate: activateAutoRefresh });
   mountedRoots.set(root, controller);
+  bindAutoRefreshLifecycle();
   render();
   return controller;
 }

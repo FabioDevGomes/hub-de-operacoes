@@ -27,12 +27,12 @@ function harness(initial = [], gate = null) {
       });
     }
   };
-  const handlers = new Function('Domain', 'Storage', 'itemMap', 'selectedDate', 'refresh', 'setMessage', 'TIME_ENTRY_TOAST_DURATION_MS', 'addValue', 'runDailyAction', 'clearDailyDraftField', `${functionLine('submitManualOnEnter')}\n${functionLine('addManualDuration')}\nreturn {submitManualOnEnter, addManualDuration};`)(
+  const handlers = new Function('Domain', 'Storage', 'itemMap', 'selectedDate', 'refresh', 'setMessage', 'TIME_ENTRY_TOAST_DURATION_MS', 'addValue', 'runDailyAction', 'clearDailyDraftField', 'saveDurationLaunch', `${functionLine('submitManualOnEnter')}\n${functionLine('addManualDuration')}\nreturn {submitManualOnEnter, addManualDuration};`)(
     Domain, Storage, () => new Map([[item.id,item]]), selectedDate,
     async (message, options) => refreshed.push({message, options}),
     (message, error) => messages.push({message,error}), 7200,
     async () => {throw new Error('Ajuste temporal não deve usar o handler de valores.');},
-    async work => work(), () => {}
+    async work => work(), () => {}, async entry => Storage.saveEntry(entry)
   );
   return {...handlers, saved, removed, messages, refreshed, get entries(){return entries;}};
 }

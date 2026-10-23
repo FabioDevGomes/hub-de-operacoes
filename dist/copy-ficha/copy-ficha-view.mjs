@@ -4,7 +4,7 @@ import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-
 import {renderTemplate} from './copy-ficha-template.mjs?v=6';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=1';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=1';
-import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=2';
+import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=3';
 import {readClipboardText} from './copy-ficha-clipboard.mjs?v=1';
 
 let mounted=false,creatingPresell=false;
@@ -393,7 +393,7 @@ async function generateFichaAndCreatePresell(root,toast){
   const validatorOutputFailed=productionReport?.phases?.some(phase=>(phase.report?.checks||[]).some(check=>check.name==='validator-output'));
   const status=finalStatus==='BLOCKED'
     ?validatorOutputFailed
-      ?'A Presell foi criada, mas a validação técnica não conseguiu concluir a conferência da ficha. O conteúdo não foi aprovado nem reprovado; não publique até repetir a validação e obter um resultado conclusivo.'
+      ?'Os arquivos da Presell foram criados, mas a validação falhou por um erro interno do Hub ao chamar os validadores do PowerShell. Isso não é uma reprovação da ficha e você não precisa alterar os campos para tentar corrigir. Não crie novamente nem publique: o Hub precisa corrigir a chamada e validar os arquivos existentes.'
       :'A Presell foi criada, mas a validação final encontrou bloqueios. Corrija os itens indicados antes de publicar.'
     :`Presell criada. A ficha passou pela validação e ${ficha.faqs.length} FAQs foram processadas.`;
   by(root,'copyPresellStatus').textContent=status;

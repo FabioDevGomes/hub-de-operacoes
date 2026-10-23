@@ -10,7 +10,7 @@ test('Blue Save retains cream bevel geometry with a blue-only palette', async()=
   assert.equal(trends,await read('dist/curadoria/trends-sheet.css'));
   assert.equal(publishedPage(page),await read('dist/curadoria/top-performance/index.html'));
   assert.ok(page.includes('/white-button.css?v=6'));
-  assert.ok(page.includes('trends-sheet.css?v=20261016-trends-keyword-candidates-flat'));
+  assert.ok(page.includes('trends-sheet.css?v=20261021-curation-low-contrast'));
   const target='body[data-hub-green-actions] .sheet-tab-bar .sheet-bar-actions>.btn.primary';
   const variant=css.split(target+'{')[1]?.split('}')[0];
   assert.ok(variant,'only the scoped Save controls adopt the automatic variant');
@@ -23,7 +23,7 @@ test('Blue Save retains cream bevel geometry with a blue-only palette', async()=
   assert.ok(css.includes('rgba(var(--hub-bevel-rim,255,250,239),.95)')&&css.includes('rgba(var(--hub-bevel-shine,255,255,255),.7)'),'hover and active inherit the blue palette');
   assert.ok(css.includes('.5px 1px 0 var(--hub-bevel-base,#b5a68e)'),'disabled uses the same palette');
   const cb=await read('src/curadoria/clickbank-top-offers/index.html');
-  assert.ok(cb.includes('/white-button.css?v=6')&&cb.includes('trends-keyword-candidates-flat'));
+  assert.ok(cb.includes('/white-button.css?v=6')&&cb.includes('20261021-curation-low-contrast'));
   assert.equal(publishedPage(cb),await read('dist/curadoria/clickbank-top-offers/index.html'));
   assert.ok(trends.includes('.glimpse-host-finish:not(:where('+target+')){border:0!important'));
   assert.ok(trends.includes('background:linear-gradient(135deg,#278de9,#38b9c5)!important'),'other origins retain their prior blue design');

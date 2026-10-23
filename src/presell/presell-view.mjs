@@ -1,7 +1,7 @@
-import {reportHtml} from './presell-report.mjs?v=2';
+import {reportHtml} from './presell-report.mjs?v=3';
 import {parseFicha,callApi} from './presell-service.mjs?v=1';
 // Compatibility entry points for legacy consumers.
-export {reportHtml} from './presell-report.mjs?v=2';
+export {reportHtml} from './presell-report.mjs?v=3';
 export {parseFicha,createPresellFromFicha} from './presell-service.mjs?v=1';
 
 export async function mount({root,toast}){

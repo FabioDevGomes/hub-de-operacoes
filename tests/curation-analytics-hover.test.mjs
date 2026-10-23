@@ -23,7 +23,7 @@ assert.match(sharedCss, /html body :is\(\.glimpse-badge,\.table-action\[data-act
   'a informação da coluna Glimpse não mantém borda nem fundo de botão');
 
 for (const [name, page] of [['E-commerce GM', ecommerce], ['Hot Offers MS', hotPage], ['SmartAdv', smartPage], ['Top Offers CB', clickbankPage]]) {
-  const version='20261016-trends-keyword-candidates-flat';
+  const version='20261021-curation-low-contrast';
   assert.ok(page.includes(`trends-sheet.css?v=${version}`), `${name} invalida o cache do estilo compartilhado atualizado`);
 }
 

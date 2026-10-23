@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {normalizeSale,summarizeCompetence,monthlyFinancialSeries} from '../src/billing/billing-domain.mjs';
-import { adjacentRecordedMonth, correctProvisionalSaleValuesToTransaction, ensureBillingStores, linkManualSaleAccountsFromDiaryToTransaction, linkProvisionalSaleAccountsToCampaignsToTransaction, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, updateMccConversionValues, updateMccConversionValuesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
+import { adjacentRecordedMonth, cancelSaleToTransaction, correctProvisionalSaleValuesToTransaction, ensureBillingStores, linkManualSaleAccountsFromDiaryToTransaction, linkProvisionalSaleAccountsToCampaignsToTransaction, migrateAccountAliasesToTransaction, planSeedImport, syncEditedProvisionalSalesToTransaction, updateMccConversionValues, updateMccConversionValuesToTransaction, upsertMccConversionSalesToTransaction, upsertProvisionalSalesToTransaction, validateBillingBundle, writeBillingBundleToTransaction } from '../src/billing/billing-storage.mjs';
 
 class Names {
   constructor() { this.values = new Set(); }
@@ -33,6 +33,8 @@ assert.match(storageSource, /IDBKeyRange\.upperBound\(`\$\{month\}-01`, true\)[\
   'navegação deve consultar meses anteriores e posteriores pelo intervalo de datas');
 assert.match(storageSource, /export async function updateSale[\s\S]*?makeAudit\(action, 'sale', saleId, changes/,
   'atualizar o status da venda registra alterações com antes/depois na auditoria');
+assert.match(storageSource, /export function cancelSaleToTransaction[\s\S]*?makeAudit\('sale_cancelled', 'sale', saleId, changes/,
+  'cancelamento atômico atualiza a venda e registra o motivo na auditoria');
 assert.match(storageSource, /export function updateMccConversionValuesToTransaction[\s\S]*?prior\.source !== 'mcc_conversion_aggregate'[\s\S]*?mcc_conversion_value_corrected/,
   'a correção da conversão só aceita agregados MCC e grava auditoria');
 const originalIndexedDB = globalThis.indexedDB;
@@ -106,6 +108,21 @@ assert.equal(targetStores.get('billing_sales').rows.length, 1);
 assert.equal(targetStores.get('billing_movements').rows[0].effective_date, null);
 assert.equal(targetStores.get('billing_audit').rows.length, 1);
 
+const cancelAt='2026-10-22T15:00:00.000Z',cancelledSale=normalizeSale({sale_id:'manual-cancel-test',sale_date:'2026-10-22',source:'hub_manual_capture',source_ref:'sale-cancel-test',active:true,value_brl:137.45,product:'Synthetic sale',payment_status:'pending'});
+const cancellationSales={row:cancelledSale,get(id){const request={};queueMicrotask(()=>{request.result=id===this.row.sale_id?this.row:undefined;request.onsuccess?.()});return request},put(row){this.row=row}};
+const cancellationAudits=[];
+const cancellationTransaction={objectStore(name){return name==='billing_sales'?cancellationSales:{add(row){cancellationAudits.push(row)}}},abort(){this.aborted=true}};
+const cancellation=cancelSaleToTransaction(cancellationTransaction,cancelledSale.sale_id,'Duplicado confirmado pela MCC',{now:cancelAt});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(cancellation.updated.active,false,'cancelamento preserva a venda como registro inativo');
+assert.equal(cancellation.updated.cancelled_at,cancelAt);
+assert.equal(cancellation.updated.cancellation_reason,'Duplicado confirmado pela MCC');
+assert.equal(cancellation.updated.value_brl,137.45,'cancelamento preserva o valor original para auditoria');
+assert.equal(cancellationAudits[0].action,'sale_cancelled');
+assert.ok(cancellationAudits[0].changes.some(change=>change.field==='active'&&change.old_value===true&&change.new_value===false));
+assert.ok(cancellationAudits[0].changes.some(change=>change.field==='cancellation_reason'&&change.new_value==='Duplicado confirmado pela MCC'));
+assert.throws(()=>cancelSaleToTransaction(cancellationTransaction,cancelledSale.sale_id,'  '),/Informe o motivo/,'cancelamento sem motivo não agenda gravação');
+
 const accountRows=[
   {sale_id:'linked',campaign_id:'cmp-1',account:'1234',value_brl:90,payment_status:'paid'},
   {sale_id:'unlinked',campaign_id:'cmp-2',account:'1234',value_brl:40,payment_status:'pending'}
@@ -172,6 +189,14 @@ assert.equal(editedBillingSale.confirmation_status,'confirmed');
 assert.equal(editedBillingSale.payment_status,'paid','editar dados da venda não altera o status de recebimento');
 assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'provisional_sale_updated');
 assert.ok(syncStores.get('billing_audit').rows.at(-1).changes.some(change=>change.field==='value_brl'&&change.old_value===235.12&&change.new_value===250),'a auditoria registra a alteração financeira');
+const relinkedD0Provisional={...editedProvisional,campanha_id:'cmp-3',conta:'8568',data:'2026-09-26',status:'conciliada',conciliacao_origem:'mcc_d0',conciliada_em:'2026-09-26T12:00:00Z'};
+syncEditedProvisionalSalesToTransaction(syncTx,[relinkedD0Provisional]);
+await new Promise(resolve=>setImmediate(resolve));
+const relinkedD0BillingSale=syncStores.get('billing_sales').rows[0];
+assert.equal(relinkedD0BillingSale.campaign_id,'cmp-3','o relink MCC atualiza a campanha no mesmo espelho financeiro');
+assert.equal(relinkedD0BillingSale.confirmation_source,'MCC D0 · captura parcial','o espelho identifica que a venda foi confirmada por D0');
+assert.equal(relinkedD0BillingSale.payment_status,'paid','o relink preserva o status de recebimento já informado');
+assert.equal(syncStores.get('billing_audit').rows.at(-1).action,'manual_sale_linked_to_mcc_d0','o vínculo manual explícito recebe auditoria específica de origem D0');
 const legacyManual={id:'sale_legacy42',campanha_id:'cmp-1',data:'2026-09-24',produto:'Produto A',plataforma:'FlowTracking',conta:'',valor_brl:233.18,status:'conciliada',conciliacao_origem:'mcc_d1',conciliada_em:'2026-09-25T12:00:00Z'};
 assert.equal(upsertProvisionalSalesToTransaction(syncTx,[legacyManual]),1,'registro legado recebe vínculo de Faturamento determinístico a partir do ID local');
 await new Promise(resolve=>setImmediate(resolve));
@@ -369,6 +394,6 @@ assert.equal(syncStores.get('billing_sales').rows.find(row=>row.sale_id===confir
 
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 assert.match(template, /function loadBase\(file\)[\s\S]*?Object\.hasOwn\(parsed,'billing'\)/, 'backup antigo sem faturamento preserva as stores financeiras');
-assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\],mccConversionCorrections=\[\]\}=\{\}\)/, 'edição da base compartilhada e da linha financeira usa uma transação local');
+assert.match(template, /function persistLocalBase\(\{billingBundle=null,personalFinanceBundle=null,productCatalogBundle=null,provisionalBillingSales=\[\],correctedProvisionalBillingSales=\[\],updatedProvisionalBillingSales=\[\],mccBillingSales=\[\],mccConversionCorrections=\[\],billingSaleCancellation=null\}=\{\}\)/, 'edição da base compartilhada e da linha financeira usa uma transação local');
 assert.match(template, /await persistLocalBase\(\{provisionalBillingSales:\[result\.sale\]\}\)/, 'venda manual D0 é espelhada em Faturamento no mesmo salvamento');
 console.log('billing storage and backup ok');

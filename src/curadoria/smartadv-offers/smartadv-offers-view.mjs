@@ -79,11 +79,11 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   }
   function trendsBadge(item) {
     const latest = Trends.latestAssessment(trendsFor(item).assessments);
-    return `<button type="button" class="table-action trends-badge ${escape(latest?.status || '')}" data-action="trends" data-key="${escape(item.offerId)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(Trends.resultLabel(latest?.status))}</button>`;
+    return `<button type="button" class="table-action trends-badge ${escape(latest?.status || 'unsearched')}" data-action="trends" data-key="${escape(item.offerId)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(Trends.resultLabel(latest?.status))}</button>`;
   }
   function glimpseBadge(item) {
     const analysis = latestGlimpse(item);
-    return `<button type="button" class="table-action glimpse-badge ${analysis ? 'saved' : ''}" data-action="glimpse" data-key="${escape(item.offerId)}" data-curation-focus="glimpse" title="${escape(analysis ? 'Última análise ' + dateTime(analysis.capturedAt) : 'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
+    return `<button type="button" class="table-action glimpse-badge ${analysis ? 'saved' : 'unsearched'}" data-action="glimpse" data-key="${escape(item.offerId)}" data-curation-focus="glimpse" title="${escape(analysis ? 'Última análise ' + dateTime(analysis.capturedAt) : 'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
   }
   function imagesBadge(item) {
     const record = imagesFor(item), progress = Images.progress(record.assessments, countriesFor(item));
@@ -91,7 +91,8 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     const text = progress.total ? `${progress.done}/${progress.total}` : countriesFor(item).length ? Images.resultLabel(latest?.status) : 'Definir GEO';
     const hasCandidates = [...progress.latest.values()].some(assessment => (assessment?.negativeKeywordCandidates || assessment?.relatedProducts || []).some(value => String(value ?? '').trim()));
     const marker = KeywordCandidatesUI.keywordCandidateMarkerHtml(hasCandidates ? 1 : 0, 'negative');
-    return `<button type="button" class="table-action image-badge ${escape(latest?.status || '')}" data-action="images" data-key="${escape(item.offerId)}" data-curation-focus="images" title="Abrir Google Imagens">${escape(text)}${marker}</button>`;
+    const stateClass = text === 'Não verificado' ? 'unverified' : latest?.status || '';
+    return `<button type="button" class="table-action image-badge ${escape(stateClass)}" data-action="images" data-key="${escape(item.offerId)}" data-curation-focus="images" title="Abrir Google Imagens">${escape(text)}${marker}</button>`;
   }
   function renderTable() {
     const query = $('#search', root).value.trim().toLocaleLowerCase();

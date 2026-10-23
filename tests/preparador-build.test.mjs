@@ -29,7 +29,7 @@ test('Preparador published page matches canonical source and preserves executabl
     'class="button ghost hub-panel-action" id="clear-all"','class="button primary hub-panel-action" id="apply-manifest"',
     'const PANEL_DB_VERSION = HubDatabase.DB_VERSION;','const PANEL_DB_NAME = HubDatabase.DB_NAME;','/database.js',
     '/sidebar-component.js','/sidebar-component.css','/table-headers.css',
-    "import('../billing/billing-storage.mjs?v=12')"]){
+    "import('../billing/billing-storage.mjs?v=14')"]){
     assert.ok(html.includes(contract),'existing contract missing: '+contract);
   }
   assert.match(html,/h1\s*\{[^}]*font-size:\s*clamp\(\.93rem,\s*1\.8vw,\s*1\.41rem\)/,'título do Preparador deve seguir a escala compacta compartilhada do Hub');

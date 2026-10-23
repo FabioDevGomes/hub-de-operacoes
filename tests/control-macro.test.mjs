@@ -180,6 +180,14 @@ assert.equal(macroHigher.rows[0].sales,2,'a conferência é não destrutiva e pr
 assert.equal(macroHigher.rows[0].revenue,200,'receita histórica maior é alinhada à fonte Faturamento');
 assert.equal(macroHigher.check.macroAheadSalesDates,1);
 assert.equal(macroHigher.check.macroAheadRevenueDates,1);
+const staleMacroBase={vendas_provisorias:[{id:'manual-cancelled',status:'provisoria'},{id:'manual-active',status:'provisoria'}]};
+const cancellationProjection=domain.excludeCancelledBillingManualSales(staleMacroBase,[
+  {sale_id:'cancelled',source:'hub_manual_capture',source_ref:'manual-cancelled',active:false,cancelled_at:'2026-10-22T19:00:00.000Z'},
+  {sale_id:'inactive-unrelated',source:'mcc_conversion_aggregate',source_ref:'campaign|2026-10-22',active:false,cancelled_at:'2026-10-22T19:00:00.000Z'},
+]);
+assert.equal(cancellationProjection.excludedCount,1,'o Macro reconhece cancelamento da venda manual vinculada pelo source_ref');
+assert.deepEqual(cancellationProjection.database.vendas_provisorias.map(sale=>sale.id),['manual-active']);
+assert.equal(staleMacroBase.vendas_provisorias[0].status,'provisoria','a projeção de cancelamentos não altera a base local');
 const mixedBillingSales=[
   {sale_id:'confirmed-alpha',sale_date:'2026-10-19',source:'hub_manual_capture',confirmation_status:'confirmed',campaign_id:'campaign-alpha',conversion_count:1,value_brl:22,product:'Alpha — nome completo'},
   {sale_id:'usd-beta',sale_date:'2026-10-19',source:'mcc_conversion_aggregate',campaign_id:'campaign-beta',conversion_count:1,value_usd:60,product:'Beta'},

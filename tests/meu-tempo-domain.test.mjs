@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{PRE_WORK_COUNTER_PAUSE_PREFIX,preWorkCounterPauseKey,preWorkCounterState}from'../src/meu-tempo/meu-tempo-domain.mjs';
+import{PRE_WORK_COUNTER_PAUSE_PREFIX,preWorkCounterPauseKey,preWorkCounterState,isEligibleProductiveLaunchForPreWorkPause,shouldAutoPausePreWorkCounter}from'../src/meu-tempo/meu-tempo-domain.mjs';
 import{aggregateDay,BOOLEAN_ITEM_IDS,booleanHistoryValue,comparisonMatrix,DEFAULT_CATEGORIES,DEFAULT_ITEMS,dailyDurationLaunchHistory,dailyLaunchHistory,formatBrazilianDate,minutesBetween,parseBrazilianDate,parseLocalizedNumber,parseQuickDuration,PARTIALLY_PRODUCTIVE_ITEM_ID,PARTIAL_PRODUCTIVE_RATE,planDurationRemoval,PRE_WORK_ITEM_IDS,productivityLabel,productiveContributionMinutes,registeredIntervalUntil,SYMPTOM_SCALE_ITEM_IDS,SYMPTOM_SCALE_OPTIONS,symptomScaleHistoryValue,totalDurationForCategory,totalPreWorkDuration,totalProductiveDuration,waterUnitsToMl}from'../src/meu-tempo/meu-tempo-domain.mjs';
 
 assert.deepEqual(DEFAULT_CATEGORIES.map(({id,name})=>({id,name})),[{id:'cat-exemplos',name:'Exemplos'}],'o código compartilhado só fornece uma categoria neutra de exemplo');
@@ -127,6 +127,18 @@ assert.equal(preWorkPauseKey,`${PRE_WORK_COUNTER_PAUSE_PREFIX}2026-10-02`,'a pau
 assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{}),{minutes:62,paused:false,pausedAt:null},'sem pausa a métrica continua usando os lançamentos atuais');
 assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{[preWorkPauseKey]:{minutes:42,pausedAt:'2026-10-02T12:00:00.000Z'}}),{minutes:42,paused:true,pausedAt:'2026-10-02T12:00:00.000Z'},'a pausa congela o valor salvo mesmo que os lançamentos atuais sejam diferentes');
 assert.deepEqual(preWorkCounterState(preWorkEntries,'2026-10-02',{[preWorkPauseKey]:{minutes:-1}}),{minutes:62,paused:false,pausedAt:null},'um valor pausado inválido não substitui o cálculo válido');
+const productiveLaunchItem={id:'ads',name:'Ads — aplicando',type:'duration',productive:true},trainingLaunchItem={id:'gym',name:'Treino academia',type:'duration',productive:true},mentalizationLaunchItem={id:'mind',name:'Mentalização / autossugestão',type:'duration',productive:true};
+assert.equal(isEligibleProductiveLaunchForPreWorkPause(productiveLaunchItem),true,'atividade de duração produtiva participa da parada automática');
+assert.equal(isEligibleProductiveLaunchForPreWorkPause(trainingLaunchItem),false,'Treino academia é uma exceção pelo nome normalizado');
+assert.equal(isEligibleProductiveLaunchForPreWorkPause(mentalizationLaunchItem),false,'Mentalização / autossugestão é uma exceção pelo nome normalizado');
+assert.equal(isEligibleProductiveLaunchForPreWorkPause({id:'neutral',name:'Atividade não produtiva',type:'duration',productive:false}),false,'atividade não marcada como produtiva não participa');
+const kakashiLaunchItem={id:PARTIALLY_PRODUCTIVE_ITEM_ID,name:'Kakashi',type:'duration',productive:false};
+assert.equal(isEligibleProductiveLaunchForPreWorkPause(kakashiLaunchItem),false,'Kakashi mantém seus 10% produtivos, mas não é elegível para o pop-up de parada automática');
+assert.equal(shouldAutoPausePreWorkCounter(productiveLaunchItem,[],[productiveLaunchItem],'2026-10-02',{}),true,'o primeiro lançamento elegível ativa a confirmação enquanto o contador segue em execução');
+assert.equal(shouldAutoPausePreWorkCounter(productiveLaunchItem,[{date:'2026-10-02',itemId:'ads',type:'duration',minutes:5,productiveSnapshot:true}],[productiveLaunchItem],'2026-10-02',{}),false,'um lançamento elegível já existente consome o gatilho diário');
+assert.equal(shouldAutoPausePreWorkCounter(kakashiLaunchItem,[],[kakashiLaunchItem],'2026-10-02',{}),false,'Kakashi não aciona o pop-up quando lançado primeiro');
+assert.equal(shouldAutoPausePreWorkCounter(productiveLaunchItem,[{date:'2026-10-02',itemId:PARTIALLY_PRODUCTIVE_ITEM_ID,type:'duration',minutes:8,productiveSnapshot:false}],[productiveLaunchItem,kakashiLaunchItem],'2026-10-02',{}),true,'um lançamento anterior de Kakashi não consome o gatilho diário de outra atividade produtiva');
+assert.equal(shouldAutoPausePreWorkCounter(productiveLaunchItem,[],[productiveLaunchItem],'2026-10-02',{[preWorkPauseKey]:{minutes:20}}),false,'o contador já pausado não aciona a confirmação automática');
 const kakashiEntries=[
   {id:'k1',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:120,productiveSnapshot:false},
   {id:'k2',date:'2026-09-19',itemId:'item-kakashi',type:'duration',minutes:30,productiveSnapshot:true},

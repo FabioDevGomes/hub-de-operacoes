@@ -446,6 +446,41 @@ test('overview alerts coexist, user text is escaped and absent metrics never bec
   assert.match(html,/policy-limited-row/);assert.match(html,/&lt;Oferta&gt;/);assert.match(html,/&quot;política&quot;/);
   assert.doesNotMatch(html,/<Oferta>/);assert.match(html,/<td data-column="current" class="num">—<\/td>/);assert.match(html,/num negative">BRL -30.00/);
 });
+test('overview D0 button resets to impressions descending, including when that column is hidden',()=>{
+  const rows=[
+    row('Menor','ativa',10,{totals:{investment:10,impressions:2,clicks:0,conversions:0}}),
+    row('Maior','ativa',10,{totals:{investment:10,impressions:25,clicks:0,conversions:0}})
+  ];
+  const s=setup(rows);s.state.sortKey='profit';s.state.sortDir='asc';s.controller.render();
+  s.get('#totalsD0').onclick();
+  assert.equal(s.state.totalsMode,'d0');assert.equal(s.state.sortKey,'imp');assert.equal(s.state.sortDir,'desc');
+  assert.match(s.get('#totalsHead').innerHTML,/data-sort="imp"[^>]*>Impressões D zero<span class="sort-arrow">↓<\/span>/);
+  const ordered=s.get('#totalsBody').innerHTML;
+  assert.ok(ordered.indexOf('data-campaign="Maior"')<ordered.indexOf('data-campaign="Menor"'));
+
+  const values=new Map([['hub:overview:visible-columns:v2',JSON.stringify(['campaign'])]]),preferences={getItem:key=>values.get(key)};
+  const hidden=setup(rows,preferences);hidden.state.sortKey='profit';hidden.controller.render();hidden.get('#totalsD0').onclick();
+  assert.equal(hidden.state.sortKey,'imp');assert.doesNotMatch(hidden.get('#totalsHead').innerHTML,/data-column="imp"/);
+  const hiddenOrder=hidden.get('#totalsBody').innerHTML;
+  assert.ok(hiddenOrder.indexOf('data-campaign="Maior"')<hiddenOrder.indexOf('data-campaign="Menor"'));
+});
+test('overview remembers explicit sort and direction across remounts without writing on render',()=>{
+  const values=new Map(),writes=[],preferences={getItem:key=>values.get(key),setItem:(key,value)=>{writes.push(key);values.set(key,value)}};
+  const rows=[row('Menor','ativa',10,{profit:-1}),row('Maior','ativa',20,{profit:5})],s=setup(rows,preferences);
+  s.setList('.sort-btn',[{sort:'profit'}]);s.controller.render();assert.equal(writes.length,0);
+  s.root.querySelectorAll('.sort-btn')[0].onclick();
+  assert.deepEqual(JSON.parse(values.get('hub:overview:sort:v1')),{key:'profit',direction:'asc'});assert.equal(writes.length,1);
+
+  const remounted=setup(rows,preferences);assert.equal(remounted.state.sortKey,'profit');assert.equal(remounted.state.sortDir,'asc');
+  remounted.controller.render();assert.match(remounted.get('#totalsHead').innerHTML,/class="sort-btn num active" data-sort="profit"[^>]*>[\s\S]*?sort-arrow">↑<\/span>/);
+  assert.equal(writes.length,1,'remontar/renderizar não regrava a preferência');
+  remounted.get('#totalsD0').onclick();
+  assert.deepEqual(JSON.parse(values.get('hub:overview:sort:v1')),{key:'imp',direction:'desc'});assert.equal(writes.length,2);
+  const d0Remounted=setup(rows,preferences);assert.equal(d0Remounted.state.sortKey,'imp');assert.equal(d0Remounted.state.sortDir,'desc');
+
+  const unavailable=setup(rows,{getItem:()=>null,setItem(){throw Error('blocked')}});unavailable.setList('.sort-btn',[{sort:'profit'}]);
+  unavailable.controller.render();assert.doesNotThrow(()=>unavailable.root.querySelectorAll('.sort-btn')[0].onclick());assert.equal(unavailable.state.sortKey,'profit');
+});
 test('overview ROI dialog synchronizes budget and percentage; saves only after explicit confirmation',()=>{
   const s=setup([row('Oferta exata','ativa',10)]);s.setList('.sort-btn',[{sort:'campaign'}]);
   s.setList('#totalsBody tr',[{campaign:'Oferta exata',source:'manifest',campaignId:'stable-id'}]);
@@ -534,7 +569,7 @@ test('column choices persist locally, keep campaign identifiable and maintain vi
   assert.match(s.get('#totalsBody').innerHTML,/data-column="campaign"[^>]*title="Oferta"/);assert.match(s.get('#totalsBody').innerHTML,/data-column="saleRoiFirst"/);
   s.get('#totalsD0').onclick();assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/);
   const next=setup([row('Oferta','ativa',10)],preferences);next.controller.render();assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="current"/);
-  next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.size,0);
+  next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.has('hub:overview:visible-columns:v2'),false);assert.deepEqual(JSON.parse(values.get('hub:overview:sort:v1')),{key:'imp',direction:'desc'});
   const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,16);
 });
 

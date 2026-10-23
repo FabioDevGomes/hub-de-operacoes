@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ensurePersonalFinanceStores, recordReserveMovement, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
+import { ensurePersonalFinanceStores, recordReserveMovement, saveNubankReserveBalance, STORE_NAMES, STORES, writeBundleToTransaction } from '../src/personal-finance/personal-finance-storage.mjs';
 
 class NameList {
   constructor() { this.values = new Set(); }
@@ -71,6 +71,8 @@ const originalIndexedDB = globalThis.indexedDB, originalIDBKeyRange = globalThis
 const reserveRows = new Map([
   ['2026-08:cdi', { snapshot_id:'2026-08:cdi', item_id:'cdi', month_key:'2026-08', name:'CDI', amount:16254, currency:'BRL', type:'reserve' }],
   ['2026-09:cdi', { snapshot_id:'2026-09:cdi', item_id:'cdi', month_key:'2026-09', name:'CDI', amount:16254, currency:'BRL', type:'reserve' }],
+  ['2026-08:nubank', { snapshot_id:'2026-08:nubank', item_id:'nubank', month_key:'2026-08', name:'Saldo Nubank', amount:689, currency:'BRL', type:'reserve' }],
+  ['2026-09:nubank', { snapshot_id:'2026-09:nubank', item_id:'nubank', month_key:'2026-09', name:'Saldo Nubank', amount:689, currency:'BRL', type:'reserve' }],
 ]);
 const reserveStore = {
   index() { return { openCursor(range) {
@@ -105,9 +107,20 @@ try {
   assert.deepEqual(latestCdi.reserve_movements.map(movement => movement.type), ['withdrawal', 'tax'], 'resgates e impostos são anexados ao snapshot mais recente como histórico');
   const { summarizeGlobalReserve } = await import('../src/personal-finance/personal-finance-domain.mjs');
   const reserveSummary = summarizeGlobalReserve([], [...reserveRows.values()], '2026-09');
-  assert.equal(reserveSummary.balances.BRL, 15654, 'os movimentos persistidos diminuem a reserva geral sem duplicar snapshots');
+  assert.equal(reserveSummary.balances.BRL, 16343, 'os movimentos persistidos diminuem a reserva geral sem duplicar snapshots e incluem a reserva Nubank ainda sem ajuste');
   await assert.rejects(recordReserveMovement('cdi', 'withdrawal', 20000, '2026-10-18T13:00:00.000Z'), /excede o saldo disponível/);
   assert.equal(reserveRows.get('2026-09:cdi').reserve_movements.length, 2, 'uma tentativa acima do saldo aborta sem registrar histórico parcial');
+  await saveNubankReserveBalance({ snapshot_id:'2026-09:nubank', item_id:'nubank', month_key:'2026-09', name:'Saldo Nubank', amount:600, currency:'BRL', type:'reserve' }, '2026-10-22T12:00:00.000Z');
+  const latestNubank = reserveRows.get('2026-09:nubank');
+  assert.equal(reserveRows.get('2026-08:nubank').amount, 689, 'o saldo bruto consolidado permanece consistente nos snapshots anteriores');
+  assert.deepEqual(latestNubank.reserve_movements.map(({ type, amount }) => ({ type, amount })), [{ type:'expense', amount:89 }], 'reduzir R$ 689 para R$ 600 grava R$ 89 como gasto no histórico do snapshot mais recente');
+  const afterNubankReduction = summarizeGlobalReserve([], [...reserveRows.values()], '2026-09');
+  assert.equal(afterNubankReduction.contributions.find(item => item.item_id === 'nubank').amount, 600, 'o saldo Nubank líquido após a gravação é R$ 600');
+  assert.deepEqual(afterNubankReduction.expenses, { BRL:89, USD:0 }, 'o gasto fica contabilizado na moeda da reserva');
+  assert.equal(afterNubankReduction.balances.BRL, 16254, 'o total da reserva considera R$ 600 do Nubank e as demais deduções');
+  await saveNubankReserveBalance({ snapshot_id:'2026-09:nubank', item_id:'nubank', month_key:'2026-09', name:'Saldo Nubank', amount:700, currency:'BRL', type:'reserve' }, '2026-10-22T13:00:00.000Z');
+  assert.equal(reserveRows.get('2026-09:nubank').reserve_movements.length, 1, 'aumentar o saldo não cria gasto nem apaga o histórico anterior');
+  assert.equal(summarizeGlobalReserve([], [...reserveRows.values()], '2026-09').contributions.find(item => item.item_id === 'nubank').amount, 700, 'o aumento atualiza corretamente o saldo líquido Nubank');
 } finally {
   if (originalIndexedDB === undefined) delete globalThis.indexedDB; else globalThis.indexedDB = originalIndexedDB;
   if (originalIDBKeyRange === undefined) delete globalThis.IDBKeyRange; else globalThis.IDBKeyRange = originalIDBKeyRange;

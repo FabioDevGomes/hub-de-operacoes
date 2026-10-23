@@ -2,6 +2,238 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.48.0] - 2026-10-23
+
+- Automatiza consultas de Tracking no Hub
+
+## [1.47.2] - 2026-10-23
+
+- Destaca Tracks também após atualização
+
+## [1.47.1] - 2026-10-23
+
+- Compara o fechamento D−1 com D0 da mesma data e MCC
+
+## [1.47.0] - 2026-10-23
+
+- Salva o nome do Track no servidor e nos avisos de checkout
+
+## [1.46.10] - 2026-10-22
+
+- Destaca Tracks novas após cadastro
+
+## [1.46.9] - 2026-10-22
+
+- Adiciona controle global para exibir ou ocultar instruções no Tracking
+
+## [1.46.8] - 2026-10-22
+
+- Ajusta altura da tabela na tela Contas
+
+## [1.46.7] - 2026-10-22
+
+- Reduz largura mínima do ID de perfil de pagamento em Contas
+
+## [1.46.6] - 2026-10-22
+
+- Adiciona a coluna Data de criação em Contas
+
+## [1.46.5] - 2026-10-22
+
+- Compacta cards de status da tela Contas
+
+## [1.46.4] - 2026-10-22
+
+- Quebra títulos nas colunas estreitas de Contas
+
+## [1.46.3] - 2026-10-22
+
+- Permite reduzir colunas métricas de Contas
+
+## [1.46.2] - 2026-10-22
+
+- Esclarece falha técnica na validação da Presell
+
+## [1.46.1] - 2026-10-22
+
+- Centraliza a coluna de vendas na tabela Tracks
+
+## [1.46.0] - 2026-10-22
+
+- Persiste vendas INS v8 e associa contagens às Tracks
+
+## [1.45.3] - 2026-10-22
+
+- Corrige cancelamentos provisórios na contagem do Controle Macro
+
+## [1.45.2] - 2026-10-22
+
+- Corrige propagação do cancelamento de vendas manuais para a Visão Geral
+
+## [1.45.1] - 2026-10-22
+
+- Renomeia painel de pre-sell para Tracks e documenta vínculo de vendas
+
+## [1.45.0] - 2026-10-22
+
+- Revisão de vínculo manual com conversão MCC e confirmação D0
+
+## [1.44.8] - 2026-10-22
+
+- Recolhe o perfil de conversão nas configurações do Tracking
+
+## [1.44.7] - 2026-10-22
+
+- Persiste ordenação da Visão geral
+
+## [1.44.6] - 2026-10-22
+
+- Consolida documentação do Tracking ClickBank
+
+## [1.44.5] - 2026-10-22
+
+- Recolhe os controles de conexão do Tracking
+
+## [1.44.4] - 2026-10-22
+
+- Exibe a URL INS v8 nas configurações ClickBank
+
+## [1.44.3] - 2026-10-22
+
+- Reduz a largura dos campos de data do relatório de cliques
+
+## [1.44.2] - 2026-10-22
+
+- Centraliza verticalmente o título das notificações de e-mail
+
+## [1.44.1] - 2026-10-22
+
+- Alinha os campos do formulário de domínio do Tracking
+
+## [1.44.0] - 2026-10-22
+
+- Recolhe configurações administrativas de domínios no Tracking
+
+## [1.43.0] - 2026-10-22
+
+- Adiciona cache local ao relatório de cliques do Tracking
+
+## [1.42.12] - 2026-10-22
+
+- Ordena D0 por impressões decrescentes
+
+## [1.42.11] - 2026-10-22
+
+- Remove anotação de vendas do Faturamento na tabela do Controle Macro
+
+## [1.42.10] - 2026-10-22
+
+- Recolhe painel de configuração de e-mail
+
+## [1.42.9] - 2026-10-22
+
+- Explica a ação Atualizar lista de domínios
+
+## [1.42.8] - 2026-10-22
+
+- Organiza domínios de pre-sell em tabela com tag sob demanda
+
+## [1.42.7] - 2026-10-22
+
+- Corrige cartões após venda manual
+
+## [1.42.6] - 2026-10-22
+
+- Esclarece regras do identificador de produto
+
+## [1.42.5] - 2026-10-22
+
+- Documenta planejamento futuro da integração Google Ads API
+
+## [1.42.4] - 2026-10-22
+
+- Corrige atualização da Visão Geral após vendas manuais
+
+## [1.42.3] - 2026-10-22
+
+- Ajusta o fluxo do histórico de gastos do Saldo Nubank
+
+## [1.42.2] - 2026-10-22
+
+- Registra a diferença de saldo como gasto no histórico do Saldo Nubank
+
+## [1.42.1] - 2026-10-22
+
+- Exclui Kakashi do gatilho do pop-up de parada automática, preservando os 10% de produtividade
+
+## [1.42.0] - 2026-10-21
+
+- Adiciona notificações ClickBank por e-mail
+
+## [1.41.1] - 2026-10-21
+
+- Propaga baixo contraste neutro nas listas de Curadoria
+
+## [1.41.0] - 2026-10-21
+
+- Adiciona perfis de ação de conversão por conta/MCC
+
+## [1.40.2] - 2026-10-21
+
+- Remove menções à Flow Tracking da tela Tracking
+
+## [1.40.1] - 2026-10-21
+
+- Remove aviso redundante sobre a Flow Tracking
+
+## [1.40.0] - 2026-10-21
+
+- Salva a lista de domínios no navegador
+
+## [1.39.4] - 2026-10-21
+
+- Alinha colunas do relatório de cliques à esquerda
+
+## [1.39.3] - 2026-10-21
+
+- Remove frase do aviso do CSV
+
+## [1.39.2] - 2026-10-21
+
+- Encurta a orientação do token na tela Tracking
+
+## [1.39.1] - 2026-10-21
+
+- Exibe datas do relatório de cliques em formato brasileiro
+
+## [1.39.0] - 2026-10-21
+
+- Adiciona relatório agregado de visitas e cliques
+
+## [1.38.0] - 2026-10-21
+
+- Aceita nomes de produto com espaços no Tracking
+
+## [1.37.0] - 2026-10-21
+
+- Lembra token administrativo de domínios no navegador
+
+## [1.36.0] - 2026-10-21
+
+- Vincula tags de pre-sell a produto e hostname
+
+## [1.35.2] - 2026-10-21
+
+- Parada automática confirmável no primeiro lançamento produtivo elegível do Meu Tempo
+
+## [1.35.1] - 2026-10-21
+
+- Aplica baixo contraste aos estados neutros da Top Offers CB
+
+## [1.35.0] - 2026-10-21
+
+- Adiciona script único para pre-sells ClickBank
+
 ## [1.34.4] - 2026-10-21
 
 - Documenta 35% como padrão de redução de contraste

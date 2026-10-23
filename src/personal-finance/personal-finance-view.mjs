@@ -1,5 +1,5 @@
-import * as Domain from './personal-finance-domain.mjs?v=35';
-import * as Storage from './personal-finance-storage.mjs?v=24';
+import * as Domain from './personal-finance-domain.mjs?v=36';
+import * as Storage from './personal-finance-storage.mjs?v=25';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
@@ -537,23 +537,30 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     } else if (type === 'debt' || type === 'fund' || type === 'reserve') {
       const collection = type === 'debt' ? state.debts : type === 'reserve' ? state.funds.filter(value => value.type === 'reserve') : state.funds.filter(value => value.type === 'available');
       const item = id ? collection.find(value => value.item_id === id) : null;
+      const isNubankReserve = Domain.isNubankReserve(item);
       state.modal.title = type === 'debt'
         ? item ? 'Editar dívida do mês' : 'Adicionar dívida'
         : type === 'reserve' ? item ? 'Editar aporte da reserva global' : 'Adicionar à reserva global'
           : item ? 'Editar saldo disponível do mês' : 'Adicionar saldo disponível';
       const reserveOperations = type === 'reserve' && item ? reserveOperationsMarkup(item) : '';
       const currencyLocked = type === 'reserve' && item?.reserve_movements?.length;
-      state.modal.body = `<label>Nome<input name="name" required maxlength="100" value="${esc(item?.name || '')}"></label><div class="pf-form-row"><label>Valor<input name="amount" inputmode="decimal" required value="${item ? amount(item.amount) : ''}"></label><label>Moeda<select name="currency" ${currencyLocked ? 'disabled title="A moeda não pode ser alterada depois de registrar movimentações."' : ''}><option value="BRL" ${item?.currency !== 'USD' ? 'selected' : ''}>BRL · Real</option><option value="USD" ${item?.currency === 'USD' ? 'selected' : ''}>USD · Dólar</option></select></label></div>${type === 'debt' ? `<label>Situação<select name="status"><option value="open" ${item?.status !== 'paid' ? 'selected' : ''}>Em aberto</option><option value="paid" ${item?.status === 'paid' ? 'selected' : ''}>Paga</option></select></label>` : type === 'reserve' ? `<p class="pf-form-note">Aportes aumentam a reserva global. Resgates e impostos registrados aqui são descontados do saldo; gastos comuns não são abatidos automaticamente.</p>${reserveOperations}${currencyLocked ? '<p class="pf-form-note">A moeda fica bloqueada porque já existem movimentações neste histórico.</p>' : ''}` : '<input type="hidden" name="type" value="available">'}<label>Observações<textarea name="notes" rows="2" maxlength="300">${esc(item?.notes || '')}</textarea></label>`;
+      state.modal.body = `<label>Nome<input name="name" required maxlength="100" value="${esc(item?.name || '')}"></label><div class="pf-form-row"><label>Valor<input name="amount" inputmode="decimal" required value="${item ? amount(item.amount) : ''}"></label><label>Moeda<select name="currency" ${currencyLocked ? 'disabled title="A moeda não pode ser alterada depois de registrar movimentações."' : ''}><option value="BRL" ${item?.currency !== 'USD' ? 'selected' : ''}>BRL · Real</option><option value="USD" ${item?.currency === 'USD' ? 'selected' : ''}>USD · Dólar</option></select></label></div>${type === 'debt' ? `<label>Situação<select name="status"><option value="open" ${item?.status !== 'paid' ? 'selected' : ''}>Em aberto</option><option value="paid" ${item?.status === 'paid' ? 'selected' : ''}>Paga</option></select></label>` : type === 'reserve' ? `${isNubankReserve ? '' : '<p class="pf-form-note">Aportes aumentam a reserva global. Resgates e impostos registrados aqui são descontados do saldo; gastos comuns não são abatidos automaticamente.</p>'}${reserveOperations}${currencyLocked ? '<p class="pf-form-note">A moeda fica bloqueada porque já existem movimentações neste histórico.</p>' : ''}` : '<input type="hidden" name="type" value="available">'}<label>Observações<textarea name="notes" rows="2" maxlength="300">${esc(item?.notes || '')}</textarea></label>`;
     }
     render();
     root.querySelector('.pf-modal input')?.focus();
   }
   function reserveOperationsMarkup(item) {
     const movements = [...(item.reserve_movements || [])].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.movement_id.localeCompare(a.movement_id));
+    const isNubankReserve = Domain.isNubankReserve(item);
     const history = movements.length
-      ? `<ol class="pf-reserve-history-list">${movements.map(movement => `<li><span>${movement.type === 'withdrawal' ? 'Resgate' : 'Prejuízo: imposto menos lucro'}</span><strong>${money(movement.amount, movement.currency)}</strong><time datetime="${esc(movement.created_at)}">${esc(new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(movement.created_at)))}</time></li>`).join('')}</ol>`
-      : '<p class="pf-empty-inline">Nenhum resgate ou imposto registrado.</p>';
-    return `<section class="pf-reserve-operations" aria-label="Resgates e impostos desta reserva"><h3>Resgates e impostos</h3><div class="pf-reserve-operation-row"><label>Valor do resgate<input name="withdrawal_amount" data-reserve-field="withdrawal" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-withdraw" data-id="${esc(item.item_id)}">Resgatar</button></div><div class="pf-reserve-operation-row"><label>Prejuízo: imposto menos lucro<input name="tax_amount" data-reserve-field="tax" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-deduct-tax" data-id="${esc(item.item_id)}">Deduzir impostos</button></div><div class="pf-reserve-history"><h4>Histórico</h4>${history}</div></section>`;
+      ? `<ol class="pf-reserve-history-list">${movements.map(movement => `<li class="${movement.type === 'expense' ? 'is-expense' : ''}"><span>${movement.type === 'withdrawal' ? 'Resgate' : movement.type === 'expense' ? 'Gasto' : 'Prejuízo: imposto menos lucro'}</span><strong>${money(movement.amount, movement.currency)}</strong><time datetime="${esc(movement.created_at)}">${esc(new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(movement.created_at)))}</time></li>`).join('')}</ol>`
+      : `<p class="pf-empty-inline">Nenhum ${isNubankReserve ? 'gasto' : 'resgate ou imposto'} registrado.</p>`;
+    const operationsLabel = isNubankReserve ? 'Histórico do Saldo Nubank' : 'Resgates e impostos desta reserva';
+    const operations = isNubankReserve
+      ? '<label class="pf-nubank-rule-indicator"><input type="checkbox" checked disabled aria-label="Regra de registrar reduções como gasto no histórico ativa">Reduções do saldo são registradas como Gasto no histórico</label>'
+      : `<h3>Resgates e impostos</h3><div class="pf-reserve-operation-row"><label>Valor do resgate<input name="withdrawal_amount" data-reserve-field="withdrawal" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-withdraw" data-id="${esc(item.item_id)}">Resgatar</button></div><div class="pf-reserve-operation-row"><label>Prejuízo: imposto menos lucro<input name="tax_amount" data-reserve-field="tax" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-deduct-tax" data-id="${esc(item.item_id)}">Deduzir impostos</button></div>`;
+    const historyTitle = isNubankReserve ? 'Histórico de gastos' : 'Histórico';
+    return `<section class="pf-reserve-operations" aria-label="${operationsLabel}">${operations}<div class="pf-reserve-history"><h4>${historyTitle}</h4>${history}</div></section>`;
   }
   state.modal = null;
 
@@ -604,6 +611,54 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       throw error;
     }
   }
+
+  async function applyNubankBalanceFromEnter(form, itemId) {
+    if (form.dataset.balanceApplying === 'true' || form.dataset.saving === 'true') return;
+    const existing = state.funds.find(item => item.item_id === itemId && item.type === 'reserve');
+    if (!Domain.isNubankReserve(existing)) throw new Error('A regra de atualização por Enter está disponível somente para a reserva Saldo Nubank.');
+    const selectedCurrency = form.elements.namedItem('currency')?.value || existing.currency;
+    if (selectedCurrency !== existing.currency) throw new Error('Salve a alteração de moeda antes de atualizar o saldo pelo Enter.');
+    const targetBalance = parseAmount(form.elements.namedItem('amount')?.value);
+    if (targetBalance == null) throw new Error('Informe um saldo válido antes de pressionar Enter.');
+    const draftName = form.elements.namedItem('name')?.value ?? existing.name;
+    const draftNotes = form.elements.namedItem('notes')?.value ?? existing.notes;
+    form.dataset.balanceApplying = 'true';
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    let balanceSaved = false;
+    try {
+      const result = await Storage.saveNubankReserveBalance({ ...existing, amount:targetBalance, name:existing.name, notes:existing.notes, currency:existing.currency });
+      balanceSaved = true;
+      await loadMonth();
+      openModal('reserve', itemId);
+      const refreshedForm = root.querySelector('form[data-form="reserve"]');
+      if (refreshedForm) {
+        refreshedForm.elements.namedItem('name').value = draftName;
+        refreshedForm.elements.namedItem('notes').value = draftNotes;
+        refreshedForm.elements.namedItem('amount')?.focus();
+      }
+      toast(result.movement
+        ? `Gasto de ${money(result.movement.amount, result.movement.currency)} incluído no histórico. O popup permaneceu aberto; clique em Salvar para fechar.`
+        : 'Saldo atualizado sem redução; nenhum gasto novo foi incluído. O popup permaneceu aberto.');
+    } catch (error) {
+      form.dataset.balanceApplying = 'false';
+      if (!balanceSaved && submitButton) submitButton.disabled = false;
+      if (balanceSaved) {
+        toast('O saldo e o histórico foram gravados, mas a tela não atualizou. Reabra o Saldo Nubank para conferir.', true);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  root.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    const input = event.target.closest?.('input[name="amount"]');
+    const form = input?.closest('form[data-form="reserve"]');
+    if (!form || !Domain.isNubankReserve(state.funds.find(item => item.item_id === form.dataset.id && item.type === 'reserve'))) return;
+    event.preventDefault();
+    applyNubankBalanceFromEnter(form, form.dataset.id).catch(error => toast(error.message || 'Não foi possível atualizar o saldo Nubank.', true));
+  });
 
   root.addEventListener('click', async event => {
     const button = event.target.closest('[data-action]');
@@ -704,7 +759,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const form = event.target.closest('[data-form]');
     if (!form) return;
     event.preventDefault();
-    if (form.dataset.saving === 'true') return;
+    if (form.dataset.saving === 'true' || form.dataset.balanceApplying === 'true') return;
     form.dataset.saving = 'true';
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
@@ -733,8 +788,10 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         const displayedAmount = parseAmount(values.amount);
         const deductions = (existing?.reserve_movements || []).filter(movement => movement.currency === currency).reduce((total, movement) => total + movement.amount, 0);
         const amount = existing ? Math.round(((displayedAmount ?? 0) + deductions + Number.EPSILON) * 100) / 100 : displayedAmount;
-        const fund = { snapshot_id: existing?.snapshot_id || `${state.monthKey}:${itemId}`, month_key: existing?.month_key || state.monthKey, item_id: itemId, name: values.name, amount, currency, type:'reserve', notes: values.notes };
-        if (existing) await Storage.saveReserveContribution(fund); else await Storage.createFund(fund);
+        const fund = { snapshot_id: existing?.snapshot_id || `${state.monthKey}:${itemId}`, month_key: existing?.month_key || state.monthKey, item_id: itemId, name: values.name, amount:Domain.isNubankReserve(existing) && currency === existing.currency ? displayedAmount : amount, currency, type:'reserve', notes: values.notes };
+        if (existing && Domain.isNubankReserve(existing) && currency === existing.currency) await Storage.saveNubankReserveBalance(fund);
+        else if (existing) await Storage.saveReserveContribution(fund);
+        else await Storage.createFund(fund);
       } else throw new Error('Formulário de lançamento não reconhecido.');
       state.modal = null;
       await loadMonth();

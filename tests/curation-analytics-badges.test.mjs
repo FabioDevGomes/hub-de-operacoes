@@ -19,13 +19,13 @@ function badgeRenderer(source, name, state) {
   const context = vm.createContext({
     escape, dateTime: value => value,
     Trends: {latestAssessment: () => state.trend, resultLabel: status => status || 'Não pesquisado'},
-    Images: {progress: () => ({done:state.image?1:0,total:1,latest:new Map(state.image?[['US',state.image]]:[])}),resultLabel: status => status || 'Não pesquisado'},
+    Images: {progress: () => ({done:state.image?1:0,total:state.image?1:0,latest:new Map(state.image?[['US',state.image]]:[])}),resultLabel: status => status || 'Não verificado'},
     Glimpse: {compactSummary: analysis => analysis?'4K · Positivo':'Pesquisar'},
     KeywordCandidatesUI: {keywordCandidateMarkerHtml: count => count?' <span>· !</span>':''},
-    Domain: {offerCountryCodes: () => ['US']},
+    Domain: {offerCountryCodes: () => state.image ? ['US'] : []},
     trendsFor: () => ({assessments:[],keywordCandidates:[]}), trendLatest: () => state.trend,
-    imagesFor: () => ({assessments:[]}), countriesFor: () => ['US'],
-    imageProgress: () => ({done:state.image?1:0,total:1,latest:new Map(state.image?[['US',state.image]]:[])}),
+    imagesFor: () => ({assessments:[]}), countriesFor: () => state.image ? ['US'] : [],
+    imageProgress: () => ({done:state.image?1:0,total:state.image?1:0,latest:new Map(state.image?[['US',state.image]]:[])}),
     glimpseFor: () => state.analysis, latestGlimpse: () => state.analysis,
   });
   vm.runInContext(fn+'; this.renderBadge='+name,context);
@@ -47,9 +47,9 @@ for (const [label,path,trendName,imageName,glimpseName] of consumers) {
       assert.match(html,/· !/,'marcador de negativas preservado');
       assert.doesNotMatch(html,/\bsaved\b/);
     }
-    assert.match(badgeRenderer(source,trendName,{}),/class="table-action trends-badge (?:unsearched)?"/);
-    assert.match(badgeRenderer(source,imageName,{}),/class="table-action image-badge "/);
-    assert.match(badgeRenderer(source,glimpseName,{}),/class="table-action glimpse-badge "/);
+    assert.match(badgeRenderer(source,trendName,{}),/class="table-action trends-badge unsearched"/);
+    if(label!=='SmartAdv') assert.match(badgeRenderer(source,imageName,{}),/class="table-action image-badge unverified"/);
+    assert.match(badgeRenderer(source,glimpseName,{}),/class="table-action glimpse-badge unsearched"/);
     assert.match(badgeRenderer(source,glimpseName,{analysis:{capturedAt:'2026-01-01'}}),/class="table-action glimpse-badge saved"/);
     assert.match(badgeRenderer(source,trendName,{trend:{status:'"><img src=x>'}}),/trends-badge &quot;&gt;&lt;img src=x&gt;/,'status externo escapado');
   });
@@ -67,18 +67,21 @@ test('paleta E-commerce GM, sombra suave e alinhamento têm uma fonte compartilh
   assert.match(css,/html body \.glimpse-badge\{background:transparent;color:#c9c9ff\}/);
   assert.match(css,/html body \.glimpse-badge\.saved\{background:transparent;color:#83e5bb\}/);
 });
-test('os três estados ainda não pesquisados usam o mesmo fundo neutro sem apagar estados avaliados', () => {
-  assert.match(css,/\.trends-badge:not\(\.up\):not\(\.stable\):not\(\.down\):not\(\.low_volume\):not\(\.point_peak\):not\(\.inconclusive\)/);
-  assert.match(css,/\.image-badge:not\(\.dominant\):not\(\.mixed\):not\(\.scarce\):not\(\.absent\):not\(\.ambiguous\):not\(\.inconclusive\)/);
-  assert.match(css,/\.glimpse-badge:not\(\.saved\)/);
-  assert.match(css,/background:#182337;color:#ccd4df/);
+test('somente estados explicitamente sem pesquisa usam baixo contraste sem apagar estados avaliados', () => {
+  assert.match(css,/button\.trends-badge\.unsearched[^}]*background:#182337;color:#8794a5/);
+  assert.match(css,/\.glimpse-badge\.unsearched[^}]*background:#182337;color:#8794a5/);
+  assert.match(css,/button\.image-badge\.unverified[^}]*background:#182337;color:#8794a5/);
+  assert.match(css,/button\.decision-badge\.undefined\{color:#8794a5\}/);
+  assert.doesNotMatch(css,/\.trends-badge:not\(\.up\).*color:#8794a5/,'Sem dados e outros resultados não entram por exclusão genérica');
   for (const state of ['up','stable','down','low_volume','point_peak','inconclusive','dominant','mixed','scarce','absent','ambiguous','saved']) {
     assert.ok(css.includes('.'+state), 'estado semântico preservado: '+state);
   }
 });
-test('todos os consumidores carregam a mesma folha atualizada', async () => {
-  for (const path of ['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html']) {
-    const page=await readFile(new URL(path,root),'utf8'),version='20261016-trends-keyword-candidates-flat';
+test('todas as listas da Curadoria carregam a mesma folha atualizada', async () => {
+  for (const path of ['index.html','gerentes/index.html','top-performance/index.html','hot-offers-ms/index.html','smartadv-offers/index.html','clickbank-top-offers/index.html','manual/index.html']) {
+    const page=await readFile(new URL(path,root),'utf8'),version='20261021-curation-low-contrast';
     assert.ok(page.includes(`trends-sheet.css?v=${version}`));
   }
+  const topPerformance=await readFile(new URL('top-performance/index.html',root),'utf8');
+  assert.ok(topPerformance.includes('curation-low-contrast-states.mjs?v=1'),'a tabela inline sincroniza classes nos quatro botões após renderização');
 });

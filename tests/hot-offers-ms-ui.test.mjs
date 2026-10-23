@@ -110,7 +110,7 @@ test('Limpar filtros e Colunas usam o padrão de sombra preta sem borda e mantê
 });
 
 test('o botão de decisão da Hot Offers MS segue o badge compartilhado da E-commerce GM', () => {
-  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
+  assert.match(html,/href="\.\.\/trends-sheet\.css\?v=20261021-curation-low-contrast/,'a página deve carregar o CSS compartilhado de hover e sombra da decisão');
   assert.match(html,/hot-offers-ms-page\.mjs\?v=\d+/,'a página invalida o cache após atualizar o retorno da decisão');
   assert.match(html,/hot-offers-ms\.css\?v=20261007-discreet-hide/,'o CSS local atualizado preserva a centralização de Pagamento e Movimento');
   assert.match(page,/hot-offers-ms-view\.mjs\?v=20261014-decision-notes/,'a view corrigida deve receber uma URL nova para não reutilizar o módulo em cache');
@@ -129,7 +129,8 @@ test('a coluna Imagens da Hot Offers MS sinaliza candidatas negativas no padrão
   assert.match(badge,/\[\.\.\.progress\.latest\.values\(\)\]\.some/,'a presença é verificada nas avaliações mais recentes por país');
   assert.match(badge,/keywordCandidateMarkerHtml\(hasCandidates \? 1 : 0,'negative'\)/,'o marcador deve usar o componente compartilhado e sua variante negativa');
   assert.match(badge,/escape\(text\) \+ marker/,'a exclamação deve aparecer junto ao progresso no mesmo badge');
-  assert.doesNotMatch(badge,/verificados?/,'a coluna Hot Offers mantém o formato compacto numérico');
+  assert.match(badge,/const text = progress\.total \? progress\.done \+ ' de ' \+ progress\.total : Images\.resultLabel/,'a coluna Hot Offers mantém o formato compacto numérico');
+  assert.match(badge,/text==='Não verificado'\?'unverified'/,'somente o rótulo Não verificado recebe classe neutra');
 });
 
 test('o cabeçalho usa a convenção de título das telas de Curadoria', () => {
@@ -183,7 +184,7 @@ test('Google Trends oferece link da oferta na MediaScalers usando somente Offer 
   assert.match(view,/trends-offer-link[^`]*Abrir oferta #\$\{escape\(offerId\)\}/,'a ação mostra o Offer ID no mesmo formato compacto da E-commerce GM');
   assert.match(view,/target="_blank" rel="noopener noreferrer" aria-label="Abrir oferta \$\{escape\(offerId\)\} na MediaScalers"/,'o link mantém acesso externo seguro e rótulo acessível');
   assert.match(view,/mediaScalersOfferUrl\(offerId\)/,'o destino continua validado e específico à MediaScalers');
-  assert.match(html,/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,'a ficha carrega a folha compartilhada com sombra de decisão');
+  assert.match(html,/trends-sheet\.css\?v=20261021-curation-low-contrast/,'a ficha carrega a folha compartilhada com sombra de decisão');
   assert.match(sharedCurationCss,/,\.trends-offer-links-group\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px\}/,'a ação reutiliza a apresentação compacta da E-commerce GM');
   assert.match(sharedCurationCss,/,\.trends-offer-link\{display:inline-flex;align-items:center;padding:6px 9px;font-size:\.74rem;text-decoration:none\}/,'o botão de oferta mantém o mesmo tamanho do padrão');
   assert.match(sharedCurationCss,/\.image-country-list>\.image-country-card\{margin:0;padding:12px 14px\}/,'os cartões de países mantêm o mesmo espaçamento mesmo com estilos locais');

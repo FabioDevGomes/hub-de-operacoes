@@ -27,7 +27,7 @@ assert.ok(glimpseBadge.includes('<a class="glimpse-badge hub-table-button-appear
 assert.ok(glimpseBadge.includes('href="${safe(href)}"')&&glimpseBadge.includes('data-open-manager-glimpse="${safe(href)}"')&&glimpseBadge.includes('data-curation-focus="glimpse"'),'o Glimpse preserva a URL, a abertura e a identidade de retorno');
 assert.ok(!glimpseBadge.includes('role="button"')&&!glimpseBadge.includes('<button'),'o atalho Glimpse deve continuar semanticamente um link');
 assert.equal((html.match(/hub-table-button-appearance/g)||[]).length,1,'o opt-in deve ficar restrito à coluna Glimpse, sem mudar outros links');
-assert.ok(html.includes('trends-sheet.css?v=20261016-trends-keyword-candidates-flat'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
+assert.ok(html.includes('trends-sheet.css?v=20261021-curation-low-contrast'),'Lista de Gerente não carrega os estilos compartilhados atualizados');
 assert.ok(html.includes('analysis-sheet-bar.css?v=4')&&html.includes('glimpse-embed-host.css?v=2'),'ficha da Lista de Gerente não carrega a barra e o host Glimpse compartilhados');
 const sheetBar=html.indexOf('<nav class="sheet-tab-bar"'),sheetTitle=html.indexOf('<header class="sheettop sheet-top"');
 assert.ok(sheetBar>=0&&sheetBar<sheetTitle,'barra com abas e ações deve preceder o título da ficha');

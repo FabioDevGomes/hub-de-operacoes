@@ -68,12 +68,14 @@ test('Overview, Macro, CPA and Tested Products retain per-account dates after th
   const cache={latestSnapshots:snapshots,snapshotsByCampaignName,dailyByCampaign,salesAdjustments:new Map()};
   const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
   const adapter=name=>template.split('\n').find(line=>line.trimStart().startsWith('function '+name+'('));
+  const macroRefreshStart=template.indexOf('    function refreshControlMacroCache(){'),macroRefreshEnd=template.indexOf('    function macroAllRows(',macroRefreshStart);
+  assert.ok(macroRefreshStart>=0&&macroRefreshEnd>macroRefreshStart,'Macro refresh adapter is present');
   const productName=c=>c.nome_mcc||c.nome_campanha_exato;
   const sandbox=vm.createContext({window:{},state:{database:base,manifest,rate:1,productCatalog:{},controlMacroRows:null},derivedContext:()=>cache,
     OverviewDomain:overview,databaseCampaign:name=>base.campanhas.find(c=>c.nome_mcc===name),manifestDates:()=>({d0:'2026-10-04',d1:'2026-10-03'}),valueOf:field=>field?.valor??null,currentCost:()=>{throw Error('stale D0 must not be used')},
     ProductCatalog:{normalize:()=>({aliases:{}})},CampaignDatabase:db,accountProductIdentity:c=>({label:productName(c)}),macroHistory:()=>[]});
   vm.runInContext(await readFile(new URL('../src/control-macro/domain.js',import.meta.url),'utf8'),sandbox);
-  vm.runInContext(['d0Totals','d1Totals','cpaPeriodTotals','refreshControlMacroCache'].map(adapter).join('\n'),sandbox);
+  vm.runInContext(['d0Totals','d1Totals','cpaPeriodTotals'].map(adapter).concat(template.slice(macroRefreshStart,macroRefreshEnd)).join('\n'),sandbox);
   const sourceA=sources.find(c=>c.nome_campanha_exato==='Produto A');
   assert.equal(sandbox.d0Totals(sourceA).investment,null,'yesterday capture is not relabelled as today D0');
   assert.equal(sandbox.d0Totals(sourceA).date,'2026-10-04');

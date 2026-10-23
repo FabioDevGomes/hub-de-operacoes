@@ -69,9 +69,10 @@ test('storage failures disable the session shortcut without breaking normal data
   assert.equal(cache.save({database:{schema:'base_campanhas_v1',campanhas:[],diario:[]},productCatalog:{schema:'catalogo_produtos_v1'}}),false);
 });
 
-test('the Overview bypasses IndexedDB only on a valid cache and every base writer invalidates it',()=>{
+test('the Overview uses a valid base cache and reconciles legacy billing cancellations idempotently',()=>{
   assert.match(template,/const cachedOverviewBase=overviewBaseSessionCache\.restore\(\)/);
-  assert.match(template,/if\(cachedOverviewBase\)baseLoadNotice\.ready\(\);\s*else restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)/);
+  assert.match(template,/if\(cachedOverviewBase\)\{baseLoadNotice\.ready\(\);reconcileCancelledManualSalesToBase\(\)\.then\(changed=>\{if\(changed\)render\(\)\}\)/);
+  assert.match(template,/else restoreLocalBase\(\{includeCatalog:true,renderPage:false\}\)\.then\(async\(\)=>\{baseLoadNotice\.ready\(\);try\{await reconcileCancelledManualSalesToBase\(\)\}/);
   assert.match(template,/window\.addEventListener\('pagehide',\(\)=>overviewBaseSessionCache\.flush\(\)\)/);
   for(const functionName of ['editRemainingAlert','editTestLimitSettings','saveDiaryObservation','persistProductCatalog']){
     const start=template.indexOf(`function ${functionName}(`);

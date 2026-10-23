@@ -4,6 +4,8 @@ export const PARTIALLY_PRODUCTIVE_ITEM_ID='item-kakashi';
 export const PARTIAL_PRODUCTIVE_RATE=0.1;
 export const PRE_WORK_ITEM_IDS=Object.freeze(['item-cama-acordar','item-preparo-levantar','item-cafe',PARTIALLY_PRODUCTIVE_ITEM_ID]);
 export const PRE_WORK_COUNTER_PAUSE_PREFIX='preWorkCounterPaused:';
+export const AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_IDS=Object.freeze([PARTIALLY_PRODUCTIVE_ITEM_ID]);
+export const AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_NAMES=Object.freeze(['treino academia','mentalizacao autossugestao']);
 export function preWorkCounterPauseKey(date){return`${PRE_WORK_COUNTER_PAUSE_PREFIX}${date}`}
 export const SYMPTOM_SCALE_ITEM_IDS=Object.freeze(['item-garganta','item-rim','item-metalico']);
 export const SYMPTOM_SCALE_OPTIONS=Object.freeze([
@@ -190,6 +192,26 @@ export function preWorkCounterState(entries,date,settings={}){
   const saved=settings?.[preWorkCounterPauseKey(date)],minutes=saved?.minutes;
   if(saved&&typeof minutes==='number'&&Number.isFinite(minutes)&&minutes>=0)return{minutes,paused:true,pausedAt:saved.pausedAt||null};
   return{minutes:totalPreWorkDuration(entries,date),paused:false,pausedAt:null};
+}
+
+export function isEligibleProductiveLaunchForPreWorkPause(item){
+  const name=normalizedName(item?.name);
+  return item?.type==='duration'&&!AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_IDS.includes(item?.id)&&!AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_NAMES.includes(name)&&(Boolean(item.productive)||item.id===PARTIALLY_PRODUCTIVE_ITEM_ID);
+}
+
+export function hasPriorEligibleProductiveLaunch(entries,items,date){
+  const itemById=new Map(items.map(item=>[item.id,item]));
+  return entries.some(entry=>{
+    if(entry?.date!==date||entry?.type!=='duration'||!(Number(entry.minutes)>0))return false;
+    if(AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_IDS.includes(entry.itemId))return false;
+    const item=itemById.get(entry.itemId),name=normalizedName(entry.itemNameSnapshot||item?.name);
+    if(AUTO_PRE_WORK_PAUSE_EXCLUDED_ITEM_NAMES.includes(name))return false;
+    return entry.itemId===PARTIALLY_PRODUCTIVE_ITEM_ID||Boolean(entry.productiveSnapshot??item?.productive);
+  });
+}
+
+export function shouldAutoPausePreWorkCounter(item,entries,items,date,settings={}){
+  return isEligibleProductiveLaunchForPreWorkPause(item)&&!preWorkCounterState(entries,date,settings).paused&&!hasPriorEligibleProductiveLaunch(entries,items,date);
 }
 
 export function productiveContributionMinutes(entry){

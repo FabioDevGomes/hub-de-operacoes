@@ -3,7 +3,9 @@
   function mount({root,state,getSnapshot,getCardSnapshot,getCardRevision,domain,format,actions,preferences}){
     const $=selector=>root.querySelector(selector),$$=selector=>[...root.querySelectorAll(selector)];
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
-    const columnPreferenceKey='hub:overview:visible-columns:v2',legacyColumnPreferenceKey='hub:overview:visible-columns:v1';let selectedColumns=null,selectedCampaignDate='';
+    const columnPreferenceKey='hub:overview:visible-columns:v2',legacyColumnPreferenceKey='hub:overview:visible-columns:v1',sortPreferenceKey='hub:overview:sort:v1',validSortKeys=new Set(OverviewDomain.totalsColumns('consolidated').map(([key])=>key));let selectedColumns=null,selectedCampaignDate='';
+    try{const saved=JSON.parse(preferences?.getItem(sortPreferenceKey)||'null');if(saved&&validSortKeys.has(saved.key)&&['asc','desc'].includes(saved.direction)){state.sortKey=saved.key;state.sortDir=saved.direction}}catch{}
+    function saveSortPreference(){try{preferences?.setItem(sortPreferenceKey,JSON.stringify({key:state.sortKey,direction:state.sortDir}))}catch{}}
     const overviewMetricZeroClass=value=>typeof value==='number'&&Number.isFinite(value)&&value===0?' overview-zero-value':'';
     // Full adapter refreshes invalidate presentation caches; local sorting/filtering does not.
     let presentationSnapshot=null,renderedFilter=null,presentationRows=[];
@@ -253,7 +255,7 @@
       presentationSnapshot=snapshot;renderedFilter=state.campaignStatusFilter;
       $('#totalsConsolidated').classList.toggle('active',state.totalsMode==='consolidated');$('#totalsD1').classList.toggle('active',state.totalsMode==='d1');$('#totalsD0').classList.toggle('active',state.totalsMode==='d0');
       const totalLabel=state.totalsMode==='d0'?'D zero':state.totalsMode==='d1'?'D−1':'total';
-      const columns=OverviewDomain.totalsColumns(state.totalsMode,totalLabel),headers=OverviewDomain.visibleColumns(columns,selectedColumns),numericHeaders=new Set(['zeroDays','current','imp','clicks','conv','roi','saleRoiFirst','saleRoiSecond','profit','account','limit','remaining']);if(!headers.some(([key])=>key===state.sortKey)){state.sortKey=headers.some(([key])=>key==='current')?'current':'campaign';state.sortDir='desc'}
+      const columns=OverviewDomain.totalsColumns(state.totalsMode,totalLabel),headers=OverviewDomain.visibleColumns(columns,selectedColumns),numericHeaders=new Set(['zeroDays','current','imp','clicks','conv','roi','saleRoiFirst','saleRoiSecond','profit','account','limit','remaining']);if(!headers.some(([key])=>key===state.sortKey)&&!(state.totalsMode==='d0'&&state.sortKey==='imp')){state.sortKey=headers.some(([key])=>key==='current')?'current':'campaign';state.sortDir='desc'}
       renderColumnOptions(columns);
       visibleWidthKeys=headers.map(([key])=>key);
       const remainingMinimum=OverviewDomain.remainingAlertThreshold(snapshot.remainingAlertMinimum),remainingYellowMinimum=OverviewDomain.remainingWarningThreshold(snapshot.remainingAlertYellowMinimum);
@@ -275,7 +277,7 @@ $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="$
       const cards=cardSnapshot,summary=cards.summary,cardRows=cards.rows||[],kpiMarkup=`${renderD1MetricSummary(cards.d1Totals,summary?.d1)}${renderD1ProfitSummary(cards.d1Totals,summary?.d1)}`;
       const pausedTodayNames=Array.isArray(cards.pausedTodayCampaigns)?cards.pausedTodayCampaigns:[],pausedTodayCount=pausedTodayNames.length,pausedTodayMarkup='<button id="overviewPausedToday" class="overview-kpi-detail overview-kpi-detail-action" type="button" aria-haspopup="dialog" aria-controls="pausedTodayDialog" aria-label="Ver as '+fmtNum(pausedTodayCount)+' campanhas que pausaram hoje"><span class="kpi-label">Pausaram hoje</span><strong class="overview-kpi-detail-value">'+fmtNum(pausedTodayCount)+'</strong></button>',d0ProfitMarkup=renderD0ProfitSummary(cardRows,cards,summary?.d0).replace(metricDetail('Pausadas',{value:cards.pausedCount},fmtNum),pausedTodayMarkup);
       updateCardMarkup(kpiMarkup+renderD0MetricSummary(cardRows,summary?.d0)+d0ProfitMarkup+renderManifestSummary(cards)+renderBaseSummary(cards));$('#kpis').classList.add('has-overview-cards');
-      $('#kpis').title=getCardSnapshot?(cards.computedAt?'Resumo salvo na última atualização MCC.':'Aguardando a próxima carga MCC para salvar o resumo dos cartões.'):'';
+      $('#kpis').title=getCardSnapshot?(cards.computedAt?'Resumo baseado na MCC carregada e nos lançamentos manuais atuais.':'Aguardando a próxima carga MCC para salvar o resumo dos cartões.'):'';
       $('#overviewPausedToday').onclick=event=>{event.preventDefault();event.stopPropagation();showPausedTodayDialog()};
       }
       if(!reuse)presentationRows=[...rows,...OverviewDomain.historyNavigationRows(snapshot.historyEntries||[],rows)];
@@ -283,10 +285,10 @@ $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="$
       const matchingRows=OverviewDomain.searchRows(OverviewDomain.campaignRowsOnStartDate(OverviewDomain.sortRows(tableRows,state,sortCell),selectedCampaignDate),$('#search').value);
       $('#totalsBody').innerHTML=matchingRows.map(row=>{if(!rowMarkupCache.has(row))rowMarkupCache.set(row,renderRow(row,headers,snapshot.referenceDate,remainingMinimum,remainingYellowMinimum));return rowMarkupCache.get(row)}).join('')||`<tr><td colspan="${headers.length}" class="empty">Nenhuma campanha encontrada.</td></tr>`;
       renderTableFooter(matchingRows,headers,snapshot.referenceDate);
-      $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}renderTable()});
+      $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}saveSortPreference();renderTable()});
       $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();if(link.classList.contains('overview-remaining-edit'))showRemainingDialog();else if(link.classList.contains('overview-test-rules-edit'))showTestRulesDialog();else if(link.classList.contains('test-budget-commission-link'))showCommissionDialog(link.dataset);else showRoiDialog(link.dataset.campaignId,link.dataset.currentRoi,link.dataset.currentLimit,link.dataset.totalRevenue)};link.ondblclick=event=>event.stopPropagation()});
       $$('.overview-kpi-fractional-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();showFractionalDialog()};link.ondblclick=event=>event.stopPropagation()});
-      $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>tr.dataset.campaign&&actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals({updateCards:false})};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals({updateCards:false})};$('#totalsD0').onclick=()=>{state.totalsMode='d0';renderTotals({updateCards:false})};
+      $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>tr.dataset.campaign&&actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals({updateCards:false})};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals({updateCards:false})};$('#totalsD0').onclick=()=>{state.totalsMode='d0';state.sortKey='imp';state.sortDir='desc';saveSortPreference();renderTotals({updateCards:false})};
       $('#campaignStatusFilter').value=state.campaignStatusFilter;
       $('#totalsCaption').textContent=state.totalsMode==='d0'?'Total do dia por campanha, inclusive pausadas; o filtro de situação afeta apenas a tabela':state.totalsMode==='d1'?`Retrato fechado de D−1${dates.d1?` · ${dateLabel(dates.d1)}`:''}`:'';
     }

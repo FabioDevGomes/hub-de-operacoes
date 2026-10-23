@@ -15,6 +15,11 @@ test('account directory sorts numeric and date values and keeps missing data las
   assert.deepEqual(sortAccountDirectoryRows(rows,'impressions','desc').map(row=>row.account),['A','D','B','C'],'ausentes ficam no fim e zero continua sendo valor válido');
   assert.deepEqual(sortAccountDirectoryRows(rows,'startDate','asc').map(row=>row.account),['C','A','D','B']);
   assert.deepEqual(sortAccountDirectoryRows(rows,'startDate','desc').map(row=>row.account),['A','D','C','B']);
+  assert.deepEqual(sortAccountDirectoryRows([
+    {account:'A',creationDate:'2026-10-03'},
+    {account:'B',creationDate:null},
+    {account:'C',creationDate:'2026-09-30'}
+  ],'creationDate','asc').map(row=>row.account),['C','A','B'],'a coluna nova aceita ordenação cronológica e mantém ausentes no fim');
   assert.deepEqual(rows.map(row=>row.account),['A','B','C','D'],'a função não altera a ordem de entrada');
 });
 
@@ -42,8 +47,8 @@ test('directory deduplicates accounts and reports the earliest observed capture 
     }
   });
   assert.deepEqual(rows,[
-    {account:'111-222-3333',mcc:'MCC principal · 999-888-7777',startDate:'2026-10-03',impressions:null,clicks:null,campaignCount:1,conversions:null},
-    {account:'444-555-6666',mcc:'MCC principal · 999-888-7777',startDate:'2026-10-08',impressions:null,clicks:null,campaignCount:1,conversions:null}
+    {account:'111-222-3333',mcc:'MCC principal · 999-888-7777',startDate:'2026-10-03',creationDate:null,impressions:null,clicks:null,campaignCount:1,conversions:null},
+    {account:'444-555-6666',mcc:'MCC principal · 999-888-7777',startDate:'2026-10-08',creationDate:null,impressions:null,clicks:null,campaignCount:1,conversions:null}
   ]);
 });
 
@@ -54,14 +59,14 @@ test('directory retains identified accounts without making up an MCC or a start 
     snapshots:[]
   });
   assert.deepEqual(rows,[
-    {account:'1234',mcc:'Não identificada',startDate:null,impressions:null,clicks:null,campaignCount:1,conversions:null},
-    {account:'5678',mcc:'Não identificada',startDate:null,impressions:null,clicks:null,campaignCount:0,conversions:null}
+    {account:'1234',mcc:'Não identificada',startDate:null,creationDate:null,impressions:null,clicks:null,campaignCount:1,conversions:null},
+    {account:'5678',mcc:'Não identificada',startDate:null,creationDate:null,impressions:null,clicks:null,campaignCount:0,conversions:null}
   ]);
 });
 
 test('manually registered accounts appear without product data and merge with a later capture', () => {
   const manual = buildAccountDirectory({manualAccounts:['1234567890','123-456-7890']});
-  assert.deepEqual(manual,[{account:'123-456-7890',mcc:'Não identificada',startDate:null,impressions:null,clicks:null,campaignCount:0,conversions:null}],
+  assert.deepEqual(manual,[{account:'123-456-7890',mcc:'Não identificada',startDate:null,creationDate:null,impressions:null,clicks:null,campaignCount:0,conversions:null}],
     'ID digitado sem hífens é normalizado e duplicata manual não aparece duas vezes');
   assert.equal(normalizeAccountDirectoryId('1234'),null,'só o sufixo não é identidade completa suficiente');
   assert.equal(normalizeAccountDirectoryId('123-456-789'),null,'ID incompleto não é aceito');
@@ -72,7 +77,7 @@ test('manually registered accounts appear without product data and merge with a 
     snapshots:[{data:'2026-10-19',campanhas:['Produto futuro']}],
     manualAccounts:['1234567890']
   });
-  assert.deepEqual(merged,[{account:'123-456-7890',mcc:'MCC e-com · 999-888-7777',startDate:'2026-10-19',impressions:null,clicks:null,campaignCount:1,conversions:null}],
+  assert.deepEqual(merged,[{account:'123-456-7890',mcc:'MCC e-com · 999-888-7777',startDate:'2026-10-19',creationDate:null,impressions:null,clicks:null,campaignCount:1,conversions:null}],
     'quando a captura MCC passar a trazer a conta, seus dados enriquecem a mesma linha manual');
 });
 
@@ -155,7 +160,7 @@ test('directory view escapes imported labels and renders editable manual fields 
   const root = {innerHTML:'',listeners:{},querySelector:selector=>fields[selector.slice(1)],querySelectorAll:()=>[],addEventListener:(type,listener)=>{root.listeners[type]=listener}};
   const controller = mount({root,getSnapshot:()=>({campaigns:[{nome_mcc:'<img>',conta_id:'111-222-3333',mcc_id:'999-888-7777'}],managers:[{id:'999-888-7777',nome:'<script>'}]}),format:{date:value=>value}});
   controller.render();
-  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,11);
+  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,12);
   assert.match(fields.accountDirectoryBody.innerHTML,/&lt;script&gt;/);
   assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/<script>|<img/);
   assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span>/);

@@ -27,6 +27,10 @@ assert.ok(view.includes('Provisória · MCC D0') && view.includes('Não confirma
 assert.ok(view.includes("sale.source === 'mcc_conversion_aggregate'"), 'linhas agregadas são reconhecidas para proteger os dados derivados');
 assert.match(view, /const actions = `<div class="billing-action-buttons"><button class="btn" data-billing-action="edit"/,
   'todas as vendas, inclusive agregados MCC e registros inativos, exibem Editar');
+assert.match(view, /onCancelSale = null[\s\S]*?root\.__cancelSale = onCancelSale/,
+  'a tela pode delegar cancelamentos ao adaptador compartilhado para sincronizar a Visão Geral');
+assert.match(view, /if \(root\.__cancelSale\) await root\.__cancelSale\(\{ saleId, reason \}\);[\s\S]*?else await Storage\.cancelSale\(saleId, reason\)/,
+  'o cancelamento da venda usa a integração atômica quando disponível e mantém fallback do módulo');
 assert.ok(view.includes('billingMccCorrectionNotice') && view.includes("form.dataset.mccAggregateCorrection = 'true'")
   && view.includes('root.__updateMccConversionValues')
   && view.includes('Storage.updateMccConversionValues(form.elements.sale_id.value, values,'),
@@ -44,6 +48,10 @@ assert.ok(view.includes('onManualSaleSaved = null') && view.includes('root.__onM
   && app.includes('onManualSaleSaved:()=>syncMccDiaryRowsToBilling({force:true})'),
   'ao salvar uma venda manual, o Faturamento tenta imediatamente rastrear uma conta por evidência inequívoca do Diário');
 assert.ok(view.includes('billingPaymentStatusDialog') && view.includes('data-payment-status-choice') && view.includes('data-billing-action="payment-status"'), 'o status na coluna de vendas é acionável e abre o seletor de pagamento');
+assert.ok(view.includes('billingManualMccMatchDialog') && view.includes('data-billing-action="manual-mcc-match"') && view.includes('root.__linkManualSaleToMcc'), 'sugestões de correspondência MCC exigem selecionar e confirmar o vínculo');
+assert.ok(view.includes('manualMccMatchCandidates') && view.includes('A conversão inteira exibida no D0 pode confirmar o vínculo'), 'a revisão mostra candidatos e explica a confirmação D0 sem tratar pagamento como recebido');
+assert.ok(app.includes("placeholder=candidates.length===1?'':") && app.includes("if(candidates.length!==1)$('#saleCampaign').value=''"), 'com mais de uma campanha possível, o formulário exige escolha explícita');
+assert.ok(app.includes('manualMccMatchCandidates(state.database)') && app.includes('A sugestão mudou ou deixou de ser compatível'), 'o adaptador recalcula a compatibilidade antes de gravar um vínculo');
 assert.ok(view.includes('getCampaigns = () => []') && view.includes('inferPlatformFromCampaignName = null')
   && view.includes('Domain.resolveMccSalePlatforms(rawAllSales, campaigns, root.__inferBillingCampaignPlatform)')
   && view.includes('Domain.resolveMccSalePlatforms(raw, campaigns, root.__inferBillingCampaignPlatform)'),

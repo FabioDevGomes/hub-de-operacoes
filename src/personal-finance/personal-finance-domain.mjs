@@ -1,7 +1,8 @@
 export const SCHEMA = 'personal_finance_v1';
 export const CURRENCIES = Object.freeze(['BRL', 'USD']);
 export const FUND_TYPES = Object.freeze(['available', 'reserve']);
-export const RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax']);
+export const RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax', 'expense']);
+export const MANUAL_RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax']);
 export const DEBT_STATUSES = Object.freeze(['open', 'paid']);
 export const DEFAULT_SETTINGS = Object.freeze({ key:'preferences', default_currency:'BRL', near_limit_percent:80 });
 export const LUNCH_DINNER_MONTHLY_BUDGET = 1250;
@@ -118,11 +119,16 @@ export function normalizeFund(fund) {
   };
   if (fund?.reserve_movements != null) {
     if (!Array.isArray(fund.reserve_movements)) throw new Error('Histórico da reserva inválido.');
-    if (fund.type !== 'reserve') throw new Error('Somente uma reserva pode conter movimentações de resgate ou imposto.');
+    if (fund.type !== 'reserve') throw new Error('Somente uma reserva pode conter movimentações de resgate, imposto ou gasto.');
     normalized.reserve_movements = fund.reserve_movements.map(normalizeReserveMovement);
     if (new Set(normalized.reserve_movements.map(movement => movement.movement_id)).size !== normalized.reserve_movements.length) throw new Error('O histórico da reserva contém movimentações duplicadas.');
   }
   return normalized;
+}
+
+export function isNubankReserve(fund) {
+  const normalizedName = String(fund?.name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return fund?.type === 'reserve' && normalizedName === 'saldo nubank';
 }
 
 export function normalizeReserveMovement(movement) {
@@ -627,12 +633,13 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
   const latestContributions = [...reserveByItem.values()].sort((a, b) => a.started_month_key.localeCompare(b.started_month_key) || a.item_id.localeCompare(b.item_id));
   const withdrawals = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const taxes = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
+  const expenses = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const contributions = latestContributions.map(fund => {
     const movements = (fund.reserve_movements || []).map(normalizeReserveMovement);
     const itemMovements = movements.filter(movement => movement.currency === fund.currency);
     const deducted = itemMovements.reduce((total, movement) => total + movement.amount, 0);
     for (const movement of movements) {
-      const totals = movement.type === 'withdrawal' ? withdrawals : taxes;
+      const totals = movement.type === 'withdrawal' ? withdrawals : movement.type === 'tax' ? taxes : expenses;
       totals[movement.currency] += movement.amount;
     }
     const grossAmount = Number(fund.amount) || 0;
@@ -655,14 +662,15 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
     }
   }
   const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-  // Resgates e impostos reduzem o saldo da reserva; despesas continuam acompanhadas separadamente.
-  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(Math.max(0, contributed[code] - withdrawals[code] - taxes[code]))]));
+  // Resgates, impostos e gastos reconciliados reduzem o saldo da reserva; despesas de orçamento continuam separadas.
+  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(Math.max(0, contributed[code] - withdrawals[code] - taxes[code] - expenses[code]))]));
   return {
     contributions,
     firstContributionMonth,
     contributed:Object.fromEntries(CURRENCIES.map(code => [code, round(contributed[code])])),
     withdrawals:Object.fromEntries(CURRENCIES.map(code => [code, round(withdrawals[code])])),
     taxes:Object.fromEntries(CURRENCIES.map(code => [code, round(taxes[code])])),
+    expenses:Object.fromEntries(CURRENCIES.map(code => [code, round(expenses[code])])),
     nubankBalances:Object.fromEntries(CURRENCIES.map(code => [code, round(nubankBalances[code])])),
     spent:Object.fromEntries(CURRENCIES.map(code => [code, round(spent[code])])),
     balances,

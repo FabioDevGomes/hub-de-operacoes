@@ -2,19 +2,21 @@ import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectory
 import {createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=5';
 
 export const ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY = 'hub:account-directory:column-widths:v1';
-const accountColumns = ['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','conversions','status','edit'];
+const accountColumns = ['account','email','paymentProfile','mcc','startDate','creationDate','impressions','clicks','campaignCount','conversions','status','edit'];
 const accountSortableColumns = accountColumns.filter(key=>key !== 'edit');
 const previousAccountColumns = ['account','email','paymentProfile','mcc','startDate','status'];
-const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',startDate:'Data de início',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',conversions:'Conversões totais',status:'Status',edit:'Editar'};
-const accountColumnMinimums = {account:132,email:150,paymentProfile:190,mcc:144,startDate:124,impressions:150,clicks:130,campaignCount:158,conversions:154,status:136,edit:104};
+const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',startDate:'Data de início',creationDate:'Data de criação',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',conversions:'Conversões totais',status:'Status',edit:'Editar'};
+const accountColumnMinimums = {account:132,email:150,paymentProfile:120,mcc:144,startDate:124,creationDate:124,impressions:92,clicks:84,campaignCount:112,conversions:96,status:136,edit:104};
+const accountColumnDefaults = {account:132,email:150,paymentProfile:190,mcc:144,startDate:124,creationDate:136,impressions:150,clicks:130,campaignCount:158,conversions:154,status:136,edit:104};
 const accountConversionsFormatter = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:6});
 const accountColumnWidthMinimum = key => accountColumnMinimums[key] || 64;
+const accountColumnDefaultWidth = key => accountColumnDefaults[key] || accountColumnWidthMinimum(key);
 const clampAccountColumnWidth = (key,value) => Math.round(Math.min(1200,Math.max(accountColumnWidthMinimum(key),value)));
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-const accountColumnHeader = (key,label) => `<th scope="col" data-column="${key}"${key==='edit'?'': ' aria-sort="none"'}${key==='startDate'?' title="Primeira data encontrada no histórico de capturas"':key==='impressions'?' title="Soma das impressões diárias registradas no Diário de campanha para esta conta"':key==='clicks'?' title="Soma dos cliques diários registrados no Diário de campanha para esta conta"':key==='campaignCount'?' title="Quantidade de campanhas distintas registradas nesta conta"':key==='conversions'?' title="Soma dos valores registrados nas células F do Diário de campanha; não inclui vendas provisórias"':''}>${key==='edit'?esc(label):`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnWidthMinimum(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
+const accountColumnHeader = (key,label) => `<th scope="col" data-column="${key}"${key==='edit'?'': ' aria-sort="none"'}${key==='startDate'?' title="Primeira data encontrada no histórico de capturas"':key==='creationDate'?' title="Data real de criação; não inferida da primeira captura"':key==='impressions'?' title="Soma das impressões diárias registradas no Diário de campanha para esta conta"':key==='clicks'?' title="Soma dos cliques diários registrados no Diário de campanha para esta conta"':key==='campaignCount'?' title="Quantidade de campanhas distintas registradas nesta conta"':key==='conversions'?' title="Soma dos valores registrados nas células F do Diário de campanha; não inclui vendas provisórias"':''}>${key==='edit'?esc(label):`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" title="${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnDefaultWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
 
 export const accountsListTemplate = `<section class="account-directory-status-kpis" aria-label="Resumo do status das contas">
   <article class="account-directory-status-kpi is-active"><span>Contas ativas</span><strong id="accountDirectoryActiveCount" aria-live="polite">0</strong></article>
@@ -69,7 +71,7 @@ export function mount({root, getSnapshot, format, storage}) {
   try {
     const saved = JSON.parse(storage?.getItem?.(ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY) || 'null');
     if (saved && typeof saved === 'object' && !Array.isArray(saved) && previousAccountColumns.every(key=>typeof saved[key] === 'number' && Number.isFinite(saved[key]) && saved[key] > 0)) {
-      columnWidths = Object.fromEntries(accountColumns.map(key=>[key,clampAccountColumnWidth(key,typeof saved[key] === 'number' && Number.isFinite(saved[key]) && saved[key] > 0 ? saved[key] : accountColumnWidthMinimum(key))]));
+      columnWidths = Object.fromEntries(accountColumns.map(key=>[key,clampAccountColumnWidth(key,typeof saved[key] === 'number' && Number.isFinite(saved[key]) && saved[key] > 0 ? saved[key] : accountColumnDefaultWidth(key))]));
     }
   } catch {}
 
@@ -80,7 +82,7 @@ export function mount({root, getSnapshot, format, storage}) {
       currentTable.removeAttribute?.('style');
       root.querySelectorAll('.account-directory-table th[data-column],.account-directory-table td[data-column]').forEach(cell=>cell.removeAttribute?.('style'));
     } else {
-      const total = accountColumns.reduce((sum,key)=>sum+(columnWidths[key]||accountColumnWidthMinimum(key)),0);
+      const total = accountColumns.reduce((sum,key)=>sum+(columnWidths[key]||accountColumnDefaultWidth(key)),0);
       currentTable.setAttribute('style',`table-layout:fixed;width:${total}px;min-width:${total}px`);
       root.querySelectorAll('.account-directory-table th[data-column],.account-directory-table td[data-column]').forEach(cell=>{
         const key=cell.dataset?.column;
@@ -89,7 +91,7 @@ export function mount({root, getSnapshot, format, storage}) {
     }
     const renderedWidths=new Map([...root.querySelectorAll('.account-directory-table th[data-column]')].map(header=>[header.dataset.column,header.getBoundingClientRect?.().width]));
     root.querySelectorAll('[data-account-column-resizer]').forEach(handle=>{
-      const key=handle.dataset.accountColumnResizer,rendered=renderedWidths.get(key),width=columnWidths[key]||(Number.isFinite(rendered)&&rendered>0?clampAccountColumnWidth(key,rendered):accountColumnWidthMinimum(key));
+      const key=handle.dataset.accountColumnResizer,rendered=renderedWidths.get(key),width=columnWidths[key]||(Number.isFinite(rendered)&&rendered>0?clampAccountColumnWidth(key,rendered):accountColumnDefaultWidth(key));
       handle.setAttribute('aria-valuenow',String(width));
     });
   }
@@ -99,7 +101,7 @@ export function mount({root, getSnapshot, format, storage}) {
       const width=header.getBoundingClientRect?.().width;
       if (Number.isFinite(width) && width > 0) columnWidths[header.dataset.column]=clampAccountColumnWidth(header.dataset.column,width);
     });
-    for (const key of accountColumns) columnWidths[key] ||= accountColumnWidthMinimum(key);
+    for (const key of accountColumns) columnWidths[key] ||= accountColumnDefaultWidth(key);
   }
 
   function saveColumnWidths() {
@@ -352,8 +354,8 @@ export function mount({root, getSnapshot, format, storage}) {
       const clicks = row.clicks == null ? '—' : (format.num ? format.num(row.clicks) : new Intl.NumberFormat('pt-BR').format(row.clicks));
       const campaignCount = format.num ? format.num(row.campaignCount) : new Intl.NumberFormat('pt-BR').format(row.campaignCount);
       const conversions = row.conversions == null ? '—' : accountConversionsFormatter.format(row.conversions);
-      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="conversions" class="account-directory-conversions-cell">${esc(conversions)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
-    }).join('') : '<tr><td colspan="11" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>';
+      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="creationDate" class="account-directory-date">${row.creationDate ? esc(format.date(row.creationDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="conversions" class="account-directory-conversions-cell">${esc(conversions)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
+    }).join('') : '<tr><td colspan="12" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>';
     applyColumnWidths();
   }
   return {render};

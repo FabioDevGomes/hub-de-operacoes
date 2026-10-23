@@ -1,6 +1,6 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
 import * as Storage from './clickbank-top-offers-storage.mjs?v=11';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=41';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=43';
 import {mountExtensionCapture} from './extension-capture.mjs?v=7';
 import {mergeDtcCountries,removeManualCountry as removeManualCountryMetadata} from './dtc-country-capture.mjs?v=6';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';

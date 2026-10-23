@@ -97,6 +97,10 @@ Confira cada fechamento (inclusive Decisão sem salvar), restauração da rolage
 
 ## Composição e responsividade
 
+### Baixo contraste para estados sem pesquisa nas tabelas da Curadoria
+
+Nas tabelas do Radar SpyHero, Lista de Gerente GM, E-commerce GM, Top Offers CB, Ofertas SmartAdv, Hot Offers MS e Curadoria manual, use `color:#8794a5` apenas para “Não definido” (Decisão), “Não verificado” (Imagens), “Pesquisar” (Glimpse sem análise) e “Não pesquisado” (Google Trends sem avaliação). Mantenha a cápsula neutra e preserve as cores de resultados avaliados e decisões definidas. Não use opacity nem generalize para outros status. A apresentação fica em `trends-sheet.css`; as classes seguem as etiquetas exatas nas views, e a tabela inline da E-commerce GM usa o sincronizador limitado a `#rows` em `curation-low-contrast-states.mjs`. Testes: `tests/curation-analytics-badges.test.mjs`, `tests/clickbank-top-offers-ui.test.mjs` e `tests/curation-low-contrast-states.test.mjs`.
+
 ### Barra global para fichas com abas
 
 A referência visual é a barra Top Offers CB aprovada em 07/10/2026 e documentada em [Fichas de análise — barra com abas](../../../../docs/curation-analysis-pattern.md#barra-de-ficha-com-abas-preferência-global). Adoção nas cinco fichas com esse formato: Top Offers CB, E-commerce GM, Hot Offers MS, Ofertas SmartAdv e Lista de Gerente GM. Reutilize `analysis-sheet-bar.css` e `white-button.css?v=6`: navegação à esquerda, Salvar sólido azul com bisel do creme em tons azuis e Voltar textual à direita, antes do contexto. Não criar esse formato em telas sem a barra correspondente nem alterar as ações para reproduzir a aparência.

@@ -185,12 +185,10 @@ html body :is(button.trends-badge.inconclusive,button.image-badge.ambiguous,butt
 }
 html body .glimpse-badge{background:transparent;color:#c9c9ff}
 html body .glimpse-badge.saved{background:transparent;color:#83e5bb}
-/* Estado sem pesquisa/verificação: as três colunas usam a mesma cápsula neutra. */
-html body :is(
-  .trends-badge:not(.up):not(.stable):not(.down):not(.low_volume):not(.point_peak):not(.inconclusive),
-  .image-badge:not(.dominant):not(.mixed):not(.scarce):not(.absent):not(.ambiguous):not(.inconclusive),
-  .glimpse-badge:not(.saved)
-){background:#182337;color:#ccd4df}
+/* Baixo contraste aprovado para estados explicitamente sem pesquisa ou classificação.
+   As classes são derivadas pelo texto exibido; avaliações e valores classificados preservam a cor semântica. */
+html body :is(button.trends-badge.unsearched,.glimpse-badge.unsearched,button.image-badge.unverified){background:#182337;color:#8794a5}
+html body button.decision-badge.undefined{color:#8794a5}
 
 .glimpse-host-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto}
 /* O Salvar das barras de ficha da Curadoria usa o acabamento compartilhado e sua variante azul. */

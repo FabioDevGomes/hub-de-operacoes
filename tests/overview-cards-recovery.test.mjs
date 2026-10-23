@@ -62,11 +62,15 @@ test('transaction abort, synchronous put or creation failure keeps original data
     assert.deepEqual(db.read(),json(base));assert.equal(db.calls.closes,1);
   }
 });
-test('empty/non-MCC/unknown-time/future-version bases do not trigger repair; invalid current summary does; observed zero remains zero',async()=>{
-  for(const base of [null,database.create(),{schema:'old'}, {...legacy(),atualizado_em:null,manifesto_atual:{campanhas:[{}]}}, {...legacy(),overview_cards:{version:2}}]){
+test('empty/non-MCC/unknown-time/future-version bases do not trigger repair; outdated/invalid summaries do; observed zero remains zero',async()=>{
+  for(const base of [null,database.create(),{schema:'old'}, {...legacy(),atualizado_em:null,manifesto_atual:{campanhas:[{}]}}, {...legacy(),overview_cards:{version:3}}]){
     const result=await recovery.ensure({base,openDatabase:()=>{throw new Error('must not open')}});assert.equal(result.recovered,false);
   }
-  const base=legacy(0);base.overview_cards={version:1,revision:'broken'};
+  const outdated=legacy();outdated.overview_cards={...cards.create(outdated,{computedAt:timestamp}),version:1,pendingSaleCount:0};
+  const outdatedDb=storage(outdated),migrated=await recovery.ensure({base:outdated,openDatabase:outdatedDb.openDatabase});
+  assert.equal(migrated.recovered,true,'an older saved summary is recalculated once after the card contract changes');
+  assert.equal(migrated.base.overview_cards.version,2);
+  const base=legacy(0);base.overview_cards={version:2,revision:'broken'};
   const db=storage(base),result=await recovery.ensure({base,openDatabase:db.openDatabase});
   assert.equal(result.recovered,true);assert.equal(result.base.overview_cards.summary.d0.investment.value,0);
   assert.match(render(result.base),/BRL 0\.00/);

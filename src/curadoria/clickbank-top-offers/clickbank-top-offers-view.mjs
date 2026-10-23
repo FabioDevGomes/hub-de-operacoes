@@ -140,14 +140,15 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   }
   function glimpseBadge(item) {
     const analysis=glimpseFor(item);
-    return `<button type="button" class="table-action glimpse-badge ${analysis?'saved':''}" data-action="glimpse" data-key="${escape(item.offerKey)}" data-curation-focus="glimpse" title="${escape(analysis?'Última análise '+dateTime(analysis.capturedAt):'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
+    return `<button type="button" class="table-action glimpse-badge ${analysis?'saved':'unsearched'}" data-action="glimpse" data-key="${escape(item.offerKey)}" data-curation-focus="glimpse" title="${escape(analysis?'Última análise '+dateTime(analysis.capturedAt):'Abrir Glimpse')}">${escape(Glimpse.compactSummary(analysis))}</button>`;
   }
   function imageBadge(item) {
     const progress=imageProgress(item),latest=[...progress.latest.values()].sort((a,b)=>String(b.capturedAt||'').localeCompare(String(a.capturedAt||'')))[0];
     const label=progress.total?`${progress.done} de ${progress.total}`:Images.resultLabel(latest?.status);
+    const statusClass=latest?.status||(label==='Não verificado'?'unverified':'');
     const hasCandidates=[...progress.latest.values()].some(record=>(record.negativeKeywordCandidates||record.relatedProducts||[]).some(value=>String(value??'').trim()));
     const marker=KeywordCandidatesUI.keywordCandidateMarkerHtml(hasCandidates?1:0,'negative');
-    return `<button type="button" class="table-action image-badge ${escape(latest?.status || '')}" data-action="images" data-key="${escape(item.offerKey)}" data-curation-focus="images" title="Abrir Google Imagens">${escape(label)}${marker}</button>`;
+    return `<button type="button" class="table-action image-badge ${escape(statusClass)}" data-action="images" data-key="${escape(item.offerKey)}" data-curation-focus="images" title="Abrir Google Imagens">${escape(label)}${marker}</button>`;
   }
 
   function renderTable(selected, previous) {

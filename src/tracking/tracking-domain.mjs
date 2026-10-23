@@ -289,8 +289,11 @@ export function normalizeClickBankInsV8Report(value) {
       || eligibleCount > candidateCount || ignoredCount !== candidateCount - eligibleCount) {
     throw new Error('Os totais do relatório INS v8 não conferem.');
   }
-  if (typeof value.conversion_name !== 'string' || !value.conversion_name.trim()) {
-    throw new Error('O relatório INS v8 não informou a ação de conversão.');
+  const reportConversionName = value.conversion_name === undefined || value.conversion_name === null
+    ? null
+    : nullableApiText(value.conversion_name, 'conversion_name', 255);
+  if (reportConversionName !== null && !reportConversionName.trim()) {
+    throw new Error('O relatório INS v8 informou uma ação de conversão inválida.');
   }
   if (typeof value.generated_at_utc !== 'string'
       || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.generated_at_utc)
@@ -330,6 +333,15 @@ export function normalizeClickBankInsV8Report(value) {
     }
     const transactionType = nullableApiText(row.transaction_type, 'transaction_type', 48);
     const role = nullableApiText(row.role, 'role', 32);
+    const country = row.customer_country === undefined
+      ? null
+      : nullableApiText(row.customer_country, 'customer_country', 2);
+    if (country !== null && !/^[A-Z]{2}$/.test(country)) {
+      throw new Error(`País da transação ${index + 1} inválido.`);
+    }
+    const conversionName = row.conversion_name === undefined
+      ? null
+      : nullableApiText(row.conversion_name, 'conversion_name', 255);
     if (!transactionType || !role || typeof row.is_test !== 'boolean' || typeof row.eligible !== 'boolean') {
       throw new Error(`Estado da transação ${index + 1} inválido.`);
     }
@@ -371,6 +383,8 @@ export function normalizeClickBankInsV8Report(value) {
       transactionType,
       role,
       isTest: row.is_test,
+      customerCountry: country,
+      conversionName,
       commissionTotal: nullableApiDecimal(row.commission_total, 'commission_total'),
       saleGrossTotal: nullableApiDecimal(row.sale_gross_total, 'sale_gross_total'),
       currency: row.commission_currency,
@@ -388,7 +402,7 @@ export function normalizeClickBankInsV8Report(value) {
   if (downloadAvailable !== (eligibleCount > 0)) throw new Error('O status do CSV INS v8 é inconsistente.');
   return Object.freeze({
     generatedAtUtc: value.generated_at_utc,
-    conversionName: value.conversion_name,
+    conversionName: reportConversionName,
     candidateCount,
     testCount,
     saleCount,

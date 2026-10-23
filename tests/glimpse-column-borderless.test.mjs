@@ -19,7 +19,7 @@ const lists = [
 for (const [name, module] of lists) {
   for (const directory of ['src','dist']) {
     const html = await read(directory + '/curadoria/' + name + '/index.html');
-    assert.ok(html.includes('trends-sheet.css?v=20261016-trends-keyword-candidates-flat'), name + ' usa a folha atual');
+    assert.ok(html.includes('trends-sheet.css?v=20261021-curation-low-contrast'), name + ' usa a folha atual');
     assert.ok(html.includes('hub-table-button-behavior'), name + ' adota o comportamento de tabela');
     const view = module ? await read(directory + '/curadoria/' + name + '/' + module) : html;
     assert.ok(view.includes('glimpse-badge'), name + ' mantém o atalho Glimpse');

@@ -62,16 +62,17 @@ test('legacy sales reserve their chronological slots, cancelled/other campaign s
   assert.equal(sales.length,2);assert.equal(sales[0].snapshot,null);assert.equal(sales[1].sequence,2);assert.ok(sales[1].snapshot);assert.equal(JSON.stringify(result.base),before);
 });
 test('manual adapter persists sale and ROI photograph together; failed persistence rolls back and repeats do not recapture',async()=>{
-  const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8'),start=template.indexOf('    async function saveProvisionalSale(){'),end=template.indexOf('    let timeModulePromise=',start),source=template.slice(start,end);
+  const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8'),helperStart=template.indexOf('function refreshOverviewCardsForSaleChange(base){'),helperEnd=template.indexOf('\n',helperStart),saveStart=template.indexOf('async function saveProvisionalSale(){',helperEnd),end=template.indexOf('    let timeModulePromise=',saveStart),source=template.slice(helperStart,helperEnd)+'\n'+template.slice(saveStart,end);
   const ctx=vm.createContext({window:{},structuredClone});
-  for(const file of ['database.js','overview-domain.js','overview/sale-roi-domain.js'])vm.runInContext(await readFile(new URL('../src/'+file,import.meta.url),'utf8'),ctx);
-  const nodes=new Map([['#saleCampaign',{value:'campaign-a'}],['#saleIdentifier',{value:'synthetic-id'}],['#saleSaveMessage',{}]]),initial=fixture();let fail=false,writes=0,closes=0;
-  Object.assign(ctx,{CampaignDatabase:ctx.window.CampaignDatabase,OverviewDomain:ctx.window.OverviewDomain,SaleRoiDomain:ctx.window.SaleRoiDomain,saleSource:'flowtracking',
+  for(const file of ['database.js','overview-domain.js','overview/sale-roi-domain.js','overview/cards-domain.js'])vm.runInContext(await readFile(new URL('../src/'+file,import.meta.url),'utf8'),ctx);
+  const nodes=new Map([['#saleCampaign',{value:'campaign-a'}],['#saleIdentifier',{value:'synthetic-id'}],['#saleSaveMessage',{}]]),initial=fixture();for(const row of initial.diario)row.celulas.F.value=0;let fail=false,writes=0,closes=0;
+  const database=ctx.window.CampaignDatabase;
+  Object.assign(ctx,{CampaignDatabase:database,OverviewDomain:ctx.window.OverviewDomain,SaleRoiDomain:ctx.window.SaleRoiDomain,OverviewCardsDomain:ctx.window.OverviewCardsDomain,saleSource:'flowtracking',
     state:{database:initial,rate:5,saleCountry:'ZZ',saleDraft:{date:'2026-10-05',hour:'10:00',amount:200,product:'Oferta',platform:'Teste'}},
     $:key=>nodes.get(key),sha256:async()=> 'unique',closeSaleModal:()=>closes++,showTotals:()=>{},renderStatus:()=>{},toast:()=>{},
-    persistLocalBase:async({provisionalBillingSales})=>{writes++;assert.equal(provisionalBillingSales[0],ctx.state.database.vendas_provisorias.at(-1));assert.equal(provisionalBillingSales[0].roi_no_registro.investment_brl,150);if(fail)throw Error('synthetic persistence failure')}});
+    persistLocalBase:async({provisionalBillingSales})=>{writes++;assert.equal(provisionalBillingSales[0],ctx.state.database.vendas_provisorias.at(-1));assert.equal(provisionalBillingSales[0].roi_no_registro.investment_brl,150);assert.equal(ctx.state.database.overview_cards.version,2);assert.equal(ctx.state.database.overview_cards.pendingSaleCount,1,'saved overview summary includes the new pending sale in the same write');if(fail)throw Error('synthetic persistence failure')}});
   vm.runInContext(source,ctx);fail=true;await ctx.saveProvisionalSale();assert.equal(ctx.state.database,initial);assert.equal(closes,0);assert.match(nodes.get('#saleSaveMessage').textContent,/persistence failure/);
-  fail=false;await ctx.saveProvisionalSale();assert.equal(closes,1);assert.equal(writes,2);const photo=JSON.stringify(ctx.state.database.vendas_provisorias[0].roi_no_registro);
+  fail=false;await ctx.saveProvisionalSale();assert.equal(closes,1);assert.equal(writes,2);assert.equal(ctx.state.database.overview_cards.pendingSaleCount,1);const photo=JSON.stringify(ctx.state.database.vendas_provisorias[0].roi_no_registro);
   await ctx.saveProvisionalSale();assert.equal(writes,2);assert.equal(JSON.stringify(ctx.state.database.vendas_provisorias[0].roi_no_registro),photo);assert.match(nodes.get('#saleSaveMessage').textContent,/não foi duplicada/);
 });
 test('campaign-scoped MCC snapshots preserve another MCC dates and convert both investment and revenue once',()=>{

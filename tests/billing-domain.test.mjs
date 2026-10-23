@@ -62,6 +62,10 @@ const linkedConfirmedSale=provisionalSaleToBilling({id:'sale-local',billing_sale
 assert.equal(linkedConfirmedSale.confirmation_status,'confirmed');
 assert.equal(linkedConfirmedSale.confirmation_source,'MCC D−1');
 assert.equal(linkedConfirmedSale.payment_status,'pending','confirmação MCC não significa pagamento recebido');
+const linkedD0Sale=provisionalSaleToBilling({id:'sale-local-d0',billing_sale_id:'manual-sale:cmp-1-d0',campanha_id:'cmp-1',data:'2026-09-23',produto:'Produto A',plataforma:'GuruMedia',valor_brl:229.5,status:'conciliada',conciliacao_origem:'mcc_d0',conciliada_em:'2026-09-23T12:00:00Z'});
+assert.equal(linkedD0Sale.confirmation_status,'confirmed');
+assert.equal(linkedD0Sale.confirmation_source,'MCC D0 · captura parcial');
+assert.equal(linkedD0Sale.payment_status,'pending','confirmação D0 também não significa pagamento recebido');
 const mccAggregate=normalizeSale({sale_id:mccConversionSaleId('cmp-mcc','2026-09-24'),sale_date:'2026-09-24',product:'Produto MCC',platform:'Google Ads MCC',value_brl:120,payment_status:'pending',confirmation_status:'confirmed',confirmation_source:'MCC D−1',campaign_id:'cmp-mcc',source:'mcc_conversion_aggregate',source_period:'d1',conversion_count:2});
 const campaignCatalog=[{id:'cmp-mcc',nome_mcc:'Campanha antiga (GM-BB-US)'}];
 const platformResolver=name=>name.includes('(GM-')?'Guru Media':name.includes('(MS-')?'Midi Scalers':name.includes('(CB-')?'ClickBank':null;

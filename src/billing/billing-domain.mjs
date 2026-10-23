@@ -123,7 +123,7 @@ export function provisionalSaleToBilling(input, { now = new Date().toISOString()
     payment_status: 'pending',
     observed_payment_status: 'pending',
     confirmation_status: confirmed ? 'confirmed' : 'manual',
-    confirmation_source: confirmed ? (input.conciliacao_origem === 'excel_legacy' ? 'Histórico Excel' : 'MCC D−1') : null,
+    confirmation_source: confirmed ? (input.conciliacao_origem === 'excel_legacy' ? 'Histórico Excel' : input.conciliacao_origem === 'mcc_d0' ? 'MCC D0 · captura parcial' : 'MCC D−1') : null,
     confirmed_at: confirmed ? (input.conciliada_em || now) : null,
     campaign_id: input.campanha_id,
     country_code: input.pais_codigo || null,

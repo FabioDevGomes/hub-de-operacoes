@@ -16,7 +16,7 @@ assert.ok(trendsCss.includes('@import url("./curation-header-actions.css?v=5")')
 
 for (const [screen, path] of consumers) {
   const page = await read(path);
-  const version='20261016-trends-keyword-candidates-flat';
+  const version='20261021-curation-low-contrast';
   assert.ok(page.includes(`trends-sheet.css?v=${version}`), `${screen} invalida o cache da folha compartilhada`);
 }
 

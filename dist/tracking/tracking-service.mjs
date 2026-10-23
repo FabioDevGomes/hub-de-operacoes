@@ -1,21 +1,32 @@
-import { normalizeClickBankInsV8Report, normalizeTrackingApiReport } from './tracking-domain.mjs?v=3';
+import { normalizeClickBankInsV8Report, normalizeTrackingApiReport } from './tracking-domain.mjs?v=4';
 import {
   normalizeTrackingDomainInput,
   normalizeTrackingDomainList,
+  normalizeTrackingProductKey,
+  normalizeTrackingProductLabel,
   normalizeTrackingDomainSave,
-} from './tracking-domain-admin.mjs?v=1';
+} from './tracking-domain-admin.mjs?v=7';
+import { normalizeTrackingClicksReport, validateTrackingClicksDateRange } from './tracking-clicks-domain.mjs?v=1';
+import { normalizeTrackingSalesPage } from './tracking-sales-domain.mjs?v=1';
 
 export const TRACKING_API_ENDPOINTS = Object.freeze({
   report: 'https://track.travenzo.shop/google-ads-report.php',
   csv: 'https://track.travenzo.shop/google-ads-csv.php',
   insV8Report: 'https://track.travenzo.shop/clickbank-ins-v8-report.php',
   insV8Csv: 'https://track.travenzo.shop/clickbank-ins-v8-csv.php',
+  clicksReport: 'https://track.travenzo.shop/tracking-clicks-report.php',
+  sales: 'https://track.travenzo.shop/clickbank-ins-v8-sales.php',
   domains: 'https://track.travenzo.shop/tracking-domains.php',
 });
 
 const ERROR_MESSAGES = Object.freeze({
   api_not_configured: 'A API ainda não está configurada no servidor. Confira as chaves privadas de integração.',
+  api_unavailable: 'A API de vendas por Track ainda não está instalada no servidor. O pacote local precisa ser publicado manualmente na Hostinger.',
   conversion_action_not_configured: 'O nome da ação de conversão ainda não está configurado no servidor.',
+  invalid_conversion_name: 'Informe o nome exato da ação de conversão cadastrada no Google Ads.',
+  unsupported_content_type: 'O servidor esperava o nome da ação em JSON.',
+  invalid_payload: 'O servidor não aceitou os dados do perfil de conversão.',
+  payload_too_large: 'A configuração da ação excedeu o limite permitido.',
   not_authorized: 'Token não autorizado. Confira o token separado do postback ClickBank.',
   origin_not_allowed: 'O servidor ainda não autorizou a origem local http://127.0.0.1:8765.',
   method_not_allowed: 'Método não permitido pela API de Tracking.',
@@ -26,9 +37,13 @@ const ERROR_MESSAGES = Object.freeze({
   server_error: 'O servidor não conseguiu concluir a leitura. Nenhum evento foi alterado.',
   domain_registry_unavailable: 'A tabela de domínios ainda não está disponível. Confirme a migração SQL e tente novamente.',
   invalid_domain: 'Informe um domínio HTTPS válido, sem caminho ou parâmetros.',
+  invalid_product_label: 'Informe um nome de Track válido, com até 253 caracteres.',
   unsupported_content_type: 'A API de domínios aceita somente JSON.',
   invalid_payload: 'Os dados enviados para o cadastro de domínio são inválidos.',
   payload_too_large: 'A solicitação de domínio excedeu o limite permitido.',
+  invalid_date_range: 'Informe um intervalo de datas UTC válido.',
+  date_range_too_large: 'O período máximo por consulta é de 366 dias.',
+  report_limit_exceeded: 'Há muitas combinações de data, produto e domínio. Reduza o período e tente novamente.',
 });
 
 function readToken(token) {
@@ -37,21 +52,24 @@ function readToken(token) {
   return value;
 }
 
-async function withTrackingRequest(path, token, fetchImpl, expectCsv, normalizeReport = normalizeTrackingApiReport) {
+async function withTrackingRequest(path, token, fetchImpl, expectCsv, normalizeReport = normalizeTrackingApiReport, request = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A conexão com o servidor não está disponível neste navegador.');
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 15000);
   try {
+    const headers = {
+      Accept: expectCsv ? 'text/csv' : 'application/json',
+      Authorization: `Bearer ${readToken(token)}`,
+    };
+    if (request.body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetchImpl(path, {
-      method: 'GET',
+      method: request.method || 'GET',
       mode: 'cors',
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
-      headers: {
-        Accept: expectCsv ? 'text/csv' : 'application/json',
-        Authorization: `Bearer ${readToken(token)}`,
-      },
+      headers,
+      ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
       signal: controller.signal,
     });
     if (!response?.ok) {
@@ -88,8 +106,51 @@ export function fetchClickBankInsV8Report(token, { fetchImpl = globalThis.fetch 
   return withTrackingRequest(TRACKING_API_ENDPOINTS.insV8Report, token, fetchImpl, false, normalizeClickBankInsV8Report);
 }
 
-export function downloadClickBankInsV8Csv(token, { fetchImpl = globalThis.fetch } = {}) {
-  return withTrackingRequest(TRACKING_API_ENDPOINTS.insV8Csv, token, fetchImpl, true);
+export function fetchTrackingClicksReport(token, dateRange, { fetchImpl = globalThis.fetch } = {}) {
+  const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.clicksReport,
+    token,
+    fetchImpl,
+    false,
+    payload => normalizeTrackingClicksReport(payload, range),
+    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate } },
+  );
+}
+
+export function fetchTrackingSalesPage(token, { afterId, snapshotMaxId = null, fetchImpl = globalThis.fetch } = {}) {
+  const isValidId = value => typeof value === 'string'
+    && /^(?:0|[1-9]\d{0,19})$/.test(value)
+    && (value.length < 20 || value <= '18446744073709551615');
+  if (!isValidId(afterId)) {
+    throw new Error('O cursor de vendas local é inválido.');
+  }
+  if (snapshotMaxId !== null && !isValidId(snapshotMaxId)) {
+    throw new Error('O cursor máximo de vendas local é inválido.');
+  }
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.sales,
+    token,
+    fetchImpl,
+    false,
+    payload => normalizeTrackingSalesPage(payload, { afterId, snapshotMaxId }),
+    { method: 'POST', body: { after_id: afterId, snapshot_max_id: snapshotMaxId } },
+  );
+}
+
+export function downloadClickBankInsV8Csv(token, { conversionName, fetchImpl = globalThis.fetch } = {}) {
+  const actionName = String(conversionName ?? '').trim();
+  if (!actionName || new TextEncoder().encode(actionName).length > 255 || /[\u0000-\u001f\u007f]/u.test(actionName)) {
+    throw new Error('Informe o nome exato da ação de conversão do perfil selecionado.');
+  }
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.insV8Csv,
+    token,
+    fetchImpl,
+    true,
+    normalizeTrackingApiReport,
+    { method: 'POST', body: { conversion_name: actionName } },
+  );
 }
 
 async function withDomainRequest(token, { method, body, fetchImpl }) {
@@ -141,11 +202,14 @@ export function fetchTrackingDomains(token, { fetchImpl = globalThis.fetch } = {
   return withDomainRequest(token, { method: 'GET', fetchImpl });
 }
 
-export function addTrackingDomain(token, domain, { includeWww = false, fetchImpl = globalThis.fetch } = {}) {
+export function addTrackingDomain(token, domain, { includeWww = false, productKey, productLabel, fetchImpl = globalThis.fetch } = {}) {
   const normalizedDomain = normalizeTrackingDomainInput(domain);
+  const normalizedProductKey = normalizeTrackingProductKey(productKey);
+  const body = { domain: normalizedDomain, include_www: Boolean(includeWww), product_key: normalizedProductKey };
+  if (productLabel !== undefined) body.product_label = normalizeTrackingProductLabel(productLabel).trim();
   return withDomainRequest(token, {
     method: 'POST',
-    body: { domain: normalizedDomain, include_www: Boolean(includeWww) },
+    body,
     fetchImpl,
   });
 }

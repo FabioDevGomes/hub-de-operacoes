@@ -46,12 +46,13 @@ test('Macro table footer totals only the selected month and calculates aggregate
 });
 test('Macro rechecks Billing on each render and labels the reconciliation status',async()=>{
   let h,calls=0,fail=false;
-  h=harness([row],{beforeRender:async()=>{calls++;if(fail)throw new Error('IndexedDB indisponível');h.state.macroBillingCheckedAt='2026-10-18T12:34:00';h.state.controlMacroBillingCheck={activeRecords:14,billingConversions:14,appliedSales:1,appliedRevenue:225.5,macroAheadSalesDates:0};h.state.macroBillingReadError=null}});
+  h=harness([row],{beforeRender:async()=>{calls++;if(fail)throw new Error('IndexedDB indisponível');h.state.macroBillingCheckedAt='2026-10-18T12:34:00';h.state.controlMacroBillingCheck={activeRecords:14,billingConversions:14,appliedSales:1,appliedRevenue:225.5,macroAheadSalesDates:0,cancelledProvisionalSales:1};h.state.macroBillingReadError=null}});
   h.state.macroMonth='2026-09';
   await h.controller.render();
   assert.equal(calls,1);
   assert.match(h.get('#macroBillingStatus').textContent,/14 registros ativos \/ 14 conversões/);
   assert.match(h.get('#macroBillingStatus').textContent,/1 venda incorporada/);
+  assert.match(h.get('#macroBillingStatus').textContent,/1 venda cancelada removida da projeção/);
   await h.get('#macroTrendDaily').onclick();
   assert.equal(calls,2,'trocar o gráfico também atualiza a validação com o Faturamento');
   fail=true;await h.controller.render();
@@ -70,7 +71,13 @@ test('Macro hides per-row Billing revenue differences while keeping the authorit
   const h=harness([{...row,pendingRevenue:0,billingRevenueDelta:-5}]);h.state.macroMonth='2026-09';h.controller.render();
   const html=h.get('#macroDailyBody').innerHTML;
   assert.match(html,/<td>BRL 150\.00<\/td>/,'a célula continua exibindo a receita consolidada recebida da fonte');
-  assert.doesNotMatch(html,/billingRevenueDelta|class="macro-billing-detail"[^>]*>[^<]*Faturamento/);
+  assert.doesNotMatch(html,/billingRevenueDelta|inclui \d+ do Faturamento/);
+});
+test('Macro omits the per-row Billing annotation while preserving the consolidated sales count',()=>{
+  const h=harness([{...row,sales:3,officialSales:2,pendingSales:0,billingSales:1}]);h.state.macroMonth='2026-09';h.controller.render();
+  const html=h.get('#macroDailyBody').innerHTML;
+  assert.match(html,/<td>3<\/td>/,'a célula continua mostrando o total de vendas');
+  assert.doesNotMatch(html,/inclui 1 do Faturamento|macro-billing-detail/);
 });
 test('Macro shows concise product name, sales count and value for Billing details',()=>{
   const h=harness([{...row,observation:'',productSales:[

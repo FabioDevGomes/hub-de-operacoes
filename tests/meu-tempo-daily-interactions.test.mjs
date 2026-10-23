@@ -52,18 +52,19 @@ const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promi
 
 function harness(){
   const root=new Root(),store={items:structuredClone(items),categories:[{id:'example',name:'Exemplo',active:true}],entries:[entry(600)],days:[{date,output:'Texto salvo',observations:'Nota salva'}],settings:{waterUnitMl:350}},messages=[];
-  let writes=0,reads=0,wait=null,fail=false;
+  let writes=0,reads=0,wait=null,fail=false,confirmResult=true,confirmCalls=0,promptValues=['08:00','08:25'];
   const Storage={
     async snapshot(){reads++;return structuredClone(store)},
     async saveEntry(row){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;store.entries.push({...row,id:`new-${writes}`,createdAt:new Clock().toISOString()})},
+    async saveEntryAndSetting(row,key,value){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;store.entries.push({...row,id:`new-${writes}`,createdAt:new Clock().toISOString()});store.settings[key]=structuredClone(value)},
     async saveDay(row){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;const index=store.days.findIndex(x=>x.date===row.date);if(index<0)store.days.push(structuredClone(row));else store.days[index]=structuredClone(row)},
     async saveSetting(key,value){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;store.settings[key]=structuredClone(value)},
     async removeDuration(day,id,minutes){if(wait)await wait.promise;if(fail)throw new Error('Falha sintética de gravação');writes++;const plan=Domain.planDurationRemoval(store.entries.filter(x=>x.date===day&&x.itemId===id),minutes);store.entries=store.entries.filter(x=>!plan.deleteIds.includes(x.id)).map(x=>({...x,...plan.updates.find(u=>u.id===x.id)}));return plan},
   };
   const code=source.replace(/^import[^\n]+\n/gm,'').replace(/export /g,'');
   const testDomain={...Domain,localDate:()=>date};
-  const api=new Function('Domain','Storage','recordWaterTrackerLog','WATER_TRACKER_ITEM_ID','Date','CSS',code+`;selectedDate='${date}';return{mount,refresh,draw:()=>render(),pending:()=>dailyActionPending,total:()=>Domain.aggregateDay(data.entries,selectedDate).totalMinutes,drafts:dailyDrafts};`)(testDomain,Storage,()=>{},'item-agua',Clock,{escape:String});
-  return {root,store,api,messages,get writes(){return writes},get reads(){return reads},set wait(value){wait=value},set fail(value){fail=value},mount:()=>api.mount({root,toast:message=>messages.push(message)}),
+  const api=new Function('Domain','Storage','recordWaterTrackerLog','WATER_TRACKER_ITEM_ID','Date','CSS','confirm','prompt',code+`;selectedDate='${date}';return{mount,refresh,draw:()=>render(),pending:()=>dailyActionPending,total:()=>Domain.aggregateDay(data.entries,selectedDate).totalMinutes,drafts:dailyDrafts};`)(testDomain,Storage,()=>{},'item-agua',Clock,{escape:String},()=>{confirmCalls++;return confirmResult},()=>promptValues.shift()??null);
+  return {root,store,api,messages,get writes(){return writes},get reads(){return reads},get confirmCalls(){return confirmCalls},set confirmResult(value){confirmResult=value},set promptValues(value){promptValues=[...value]},set wait(value){wait=value},set fail(value){fail=value},mount:()=>api.mount({root,toast:message=>messages.push(message)}),
     field:selector=>root.querySelector(selector),
     type(selector,value){const field=root.querySelector(selector);field.value=value;field.oninput?.();return field},
     select(selector,value){const field=root.querySelector(selector);field.value=value;field.onchange?.();return field},
@@ -118,6 +119,48 @@ test('pausar o indicador congela seu valor por dia sem interromper os lançament
   assert.equal(h.api.total(),660,'o total geral registrado continua considerando todos os lançamentos');
   assert.equal(h.writes,2);assert.match(h.root.html,/35min/,'o KPI permanece congelado apesar do novo lançamento');assert.match(h.root.html,/Parado/);
   h.api.draw();assert.match(h.root.html,/35min/,'a pausa persiste no redesenho da tela');assert.match(h.root.html,/Parado/);
+});
+
+test('primeiro lançamento produtivo elegível pede confirmação e pausa atomicamente antes de registrar o trabalho',async()=>{
+  const h=harness(),preWorkId=Domain.PRE_WORK_ITEM_IDS[0],key=Domain.preWorkCounterPauseKey(date);
+  h.store.entries=[{id:'pre-work',date,itemId:preWorkId,type:'duration',minutes:35,productiveSnapshot:false,source:'manual',createdAt:'2026-10-10T08:00:00.000Z'}];
+  h.store.items.push({id:preWorkId,name:'Na cama após acordar',categoryId:'example',type:'duration',active:true,productive:false});
+  await h.mount();const input=h.type('[data-manual="activity"]','25');await input.onkeydown(enter());
+  assert.equal(h.confirmCalls,1);assert.equal(h.writes,1,'lançamento e pausa usam uma única operação de armazenamento');
+  assert.deepEqual(h.store.settings[key].minutes,35,'o contador congela no valor anterior ao primeiro lançamento produtivo');
+  assert.equal(h.store.entries.at(-1).minutes,25);assert.equal(h.api.total(),60);assert.match(h.root.html,/Parado/);
+});
+
+test('Kakashi, treino e mentalização não acionam a confirmação; a primeira outra atividade produtiva aciona uma única vez',async()=>{
+  const h=harness();h.store.entries=[];h.store.items.push(
+    {id:'workout',name:'Treino academia',categoryId:'example',type:'duration',active:true,productive:true},
+    {id:'mentalization',name:'Mentalização / autossugestão',categoryId:'example',type:'duration',active:true,productive:true},
+    {id:Domain.PARTIALLY_PRODUCTIVE_ITEM_ID,name:'Kakashi',categoryId:'example',type:'duration',active:true,productive:false}
+  );await h.mount();
+  for(const[id,value]of [[Domain.PARTIALLY_PRODUCTIVE_ITEM_ID,'8'],['workout','30'],['mentalization','5']]){const input=h.type(`[data-manual="${id}"]`,value);await input.onkeydown(enter())}
+  assert.equal(h.confirmCalls,0);assert.equal(h.store.entries.length,3);
+  assert.equal(Domain.productiveContributionMinutes(h.store.entries[0]),.8,'Kakashi continua contribuindo com 10% para a produtividade normal do dia');
+  assert.equal(h.store.settings[Domain.preWorkCounterPauseKey(date)],undefined,'Kakashi não pausa o contador');
+  const input=h.type('[data-manual="activity"]','10');await input.onkeydown(enter());
+  assert.equal(h.confirmCalls,1);assert.ok(h.store.settings[Domain.preWorkCounterPauseKey(date)]);
+});
+
+test('recusar a parada automática mantém o contador ativo, registra o item e não pergunta de novo no mesmo dia',async()=>{
+  const h=harness();h.store.entries=[];h.confirmResult=false;await h.mount();
+  const first=h.type('[data-manual="activity"]','10');await first.onkeydown(enter());
+  assert.equal(h.confirmCalls,1);assert.equal(h.store.entries.length,1);assert.equal(h.store.settings[Domain.preWorkCounterPauseKey(date)],undefined);
+  const second=h.type('[data-manual="activity"]','15');await second.onkeydown(enter());
+  assert.equal(h.confirmCalls,1);assert.equal(h.store.entries.length,2);assert.equal(h.field('#pausePreWorkCounter')!==null,true);
+});
+
+test('Intervalo e Até agora também passam pela parada automática confirmada',async()=>{
+  const intervalHarness=harness();intervalHarness.store.entries=[];await intervalHarness.mount();
+  await intervalHarness.field('[data-interval="activity"]').onclick();
+  assert.equal(intervalHarness.confirmCalls,1);assert.ok(intervalHarness.store.settings[Domain.preWorkCounterPauseKey(date)]);
+
+  const untilHarness=harness();untilHarness.store.entries=[];await untilHarness.mount();
+  await untilHarness.field('[data-until="activity"]').onclick();
+  assert.equal(untilHarness.confirmCalls,1);assert.ok(untilHarness.store.settings[Domain.preWorkCounterPauseKey(date)]);
 });
 
 test('clique e Enter de valor não temporal compartilham bloqueio e preservam os demais campos',async()=>{

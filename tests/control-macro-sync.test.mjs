@@ -34,7 +34,8 @@ const context = vm.createContext({ state, macroUi, CampaignBaseReader, CampaignD
     return tx;
   } }),
 });
-const helpers = ['macroHistory','refreshControlMacroCache','macroAllRows'].map(name => template.match(new RegExp(`function ${name}\\([^\\n]+`))[0]).join('\n');
+const macroProjectionStart=template.indexOf('    function macroHistory('),macroAllRowsStart=template.indexOf('    function macroAllRows(',macroProjectionStart),macroUiStart=template.indexOf('    const macroUi=',macroAllRowsStart);
+const helpers=[template.slice(macroProjectionStart,macroAllRowsStart),template.slice(macroAllRowsStart,macroUiStart)].join('\n');
 const restoreStart = template.indexOf('    async function restoreLocalBase(');
 const restoreEnd = template.indexOf('    async function restoreProductCatalog(', restoreStart);
 vm.runInContext(`let derivedCache={stale:true};\n${helpers}\n${template.slice(restoreStart,restoreEnd)}`, context);
@@ -58,7 +59,7 @@ persisted.manifesto_atual={separacao_temporal:{D_zero:{datas_detectadas:['2026-0
 persisted.controle_macro_historico=[{date:'2026-09-29',investment:500,revenue:400,clicks:100,sales:10}];
 persisted.diario[0].celulas.F.value=0;
 persisted.diario[0].celulas.P.value=0;
-persisted.vendas_provisorias=[{id:'manual-sale',campanha_id:'synthetic',data:'2026-09-29',produto:'Wego6 · campanha teste longa',valor_brl:30,status:'provisoria'}];
+persisted.vendas_provisorias=[{id:'manual-sale',billing_sale_id:'manual-sale-billing',campanha_id:'synthetic',data:'2026-09-29',produto:'Wego6 · campanha teste longa',valor_brl:30,status:'provisoria'}];
 await context.restoreLocalBase({persist:false,renderPage:false});
 assert.equal(september()[0].investment,20,'última captura menor prevalece sobre Diário e planilha após restauração');
 assert.equal(september()[0].revenue,30);assert.equal(september()[0].profit,10);assert.equal(september()[0].clicks,5);
@@ -72,6 +73,16 @@ persisted.manifesto_atual={separacao_temporal:{D_zero:{datas_detectadas:['2026-0
 await context.restoreLocalBase({persist:false,renderPage:false});
 assert.equal(september()[0].officialSales,null,'campo de conversões ausente não vira confirmação nem zero');
 assert.equal(september()[0].pendingSales,1,'a pendência continua visível quando a captura omite conversões');
+state.macroBillingSales=[
+  {sale_id:'manual-sale-billing',sale_date:'2026-09-29',source:'hub_manual_capture',source_ref:'manual-sale',conversion_count:1,value_brl:30,product:'Wego6',campaign_id:'synthetic',active:false,cancelled_at:'2026-10-22T19:00:00.000Z'},
+  {sale_id:'mcc-confirmed',sale_date:'2026-09-29',source:'mcc_conversion_aggregate',conversion_count:1,value_brl:30,product:'Wego6',campaign_id:'synthetic',active:true,confirmation_status:'provisional'},
+];state.macroBillingRevenueByDate=aggregateBillingRevenueByDate(state.macroBillingSales,5.1);state.controlMacroRows=null;
+await context.restoreLocalBase({persist:false,renderPage:false});
+assert.equal(september()[0].sales,1,'o Macro remove da contagem a venda manual cancelada no Faturamento e preserva a conversão MCC D0');
+assert.equal(september()[0].officialSales,1);assert.equal(september()[0].pendingSales,0,'o cancelamento remove o aviso de venda provisória');
+assert.deepEqual(september()[0].productSales.map(item=>({product:item.product,sales:item.sales,provisional:item.provisional})),[{product:'Wego6',sales:1,provisional:false}],'observações deixam de duplicar produto/valor da venda cancelada');
+assert.equal(persisted.vendas_provisorias[0].status,'provisoria','a correção da projeção não grava nem altera o registro local');
+assert.equal(state.controlMacroBillingCheck.cancelledProvisionalSales,1,'a conferência identifica o cancelamento aplicado à projeção');
 persisted.manifesto_atual={separacao_temporal:{D_menos_1:{datas_detectadas:['2026-09-29']}},campanhas:[{nome_campanha_exato:'Wego6 campanha',metricas_D_menos_1:{presente:true,data:{valor:'2026-09-29'},moeda:{valor:'BRL'},custo_total:{valor:20},valor_conversao:{valor:30},cliques_google:{valor:5},conversoes:{valor:1}}}]};
 await context.restoreLocalBase({persist:false,renderPage:false});
 assert.equal(september()[0].pendingSales,0,'a confirmação D−1 também remove a marcação provisória do Macro');

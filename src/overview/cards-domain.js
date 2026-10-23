@@ -1,5 +1,5 @@
 (function(root){
-  const VERSION=1,fields=['investment','impressions','clicks'];
+  const VERSION=2,fields=['investment','impressions','clicks'];
   const emptyResult=()=>({value:null,observedCount:0,totalCount:0});
   const emptyPeriod=()=>Object.fromEntries([...fields,'profit'].map(field=>[field,emptyResult()]));
   const empty=Object.freeze({version:VERSION,revision:'unavailable',summary:{d1:emptyPeriod(),d0:emptyPeriod()},dates:{d1:'',d0:''},activeCount:null,pausedCount:null,pausedTodayCampaigns:[],pendingSaleCount:0,fractionalSaleCount:0});
@@ -7,6 +7,7 @@
   function read(base){
     const saved=base?.overview_cards;
     if(saved?.version!==VERSION||typeof saved.revision!=='string'||!saved.revision)return empty;
+    if(!Number.isInteger(saved.pendingSaleCount)||saved.pendingSaleCount<0||!Number.isInteger(saved.fractionalSaleCount)||saved.fractionalSaleCount<0)return empty;
     for(const period of ['d1','d0'])for(const field of [...fields,'profit']){
       const result=saved.summary?.[period]?.[field];
       if(!result||(result.value!==null&&(typeof result.value!=='number'||!Number.isFinite(result.value)))||!Number.isInteger(result.observedCount)||!Number.isInteger(result.totalCount)||result.observedCount<0||result.totalCount<result.observedCount)return empty;
@@ -22,12 +23,13 @@
     const dates=domain.manifestPeriodDates(base,manifest),latestSnapshots=domain.authoritativeMccSnapshots(manifest,{exchangeRate}),snapshotsByCampaignName=new Map(),dailyByCampaign=new Map(),histories=database.campaignTotalsMap(base),adjustments=database.salesAdjustmentMap(base);
     for(const row of latestSnapshots.rows){const key=row.campaignName.toLocaleLowerCase('pt-BR');if(!snapshotsByCampaignName.has(key))snapshotsByCampaignName.set(key,[]);snapshotsByCampaignName.get(key).push(row)}
     for(const row of base.diario||[]){if(!dailyByCampaign.has(row.campanha_id))dailyByCampaign.set(row.campanha_id,[]);dailyByCampaign.get(row.campanha_id).push(row)}
-    const context={dates,latestSnapshots,snapshotsByCampaignName,dailyByCampaign,exchangeRate},d1=[],d0=[],profits=[];let activeCount=0;
+    const context={dates,latestSnapshots,snapshotsByCampaignName,dailyByCampaign,exchangeRate},d1=[],d1Profits=[],d0=[],profits=[];let activeCount=0;
     for(const campaign of campaigns){
       const key=campaign.nome_campanha_exato.toLocaleLowerCase('pt-BR'),record=byName.get(key),paused=record?.status==='pausada'||['pausada','ausente'].includes(states.get(campaign.nome_campanha_exato.trim().toLowerCase()));
       if(!paused)activeCount++;
       const history=histories.get(`mcc:${key}`)||histories.get(`aba:${String(record?.aba||'').toLowerCase()}`);
-      d1.push(domain.campaignD1Totals(campaign,history,context));
+      const previousDay=domain.campaignD1Totals(campaign,history,context);d1.push(previousDay);const d1Adjustment=record?adjustments.get(record.id)?.byDate?.[previousDay.date||dates.d1]:null;
+      d1Profits.push(d1Adjustment?{...previousDay,commission:Number(previousDay.commission||0)+Number(d1Adjustment.commissionAdjustment||0)}:previousDay);
       const day=domain.campaignD0Totals(campaign,{...context,stored:record});
       if(campaign.metricas_D_zero?.presente!==false||campaign.metricas_D_zero?.retida_no_dia===true||day.fromStoredCapture===true){
         d0.push(day);const adjustment=record?adjustments.get(record.id)?.byDate?.[day.date||dates.d0]:null;
@@ -36,7 +38,7 @@
     }
     const summarize=(totals,profitTotals=totals)=>({...Object.fromEntries(fields.map(field=>[field,domain.sumObservedMetric(totals,field)])),profit:domain.sumObservedProfit(profitTotals)});
     const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(new Date(timestamp)),values=[...adjustments.values()];
-    return{version:VERSION,revision:timestamp,computedAt:timestamp,exchangeRate,summary:{d1:summarize(d1),d0:summarize(d0,profits)},dates,activeCount,pausedCount:campaigns.length-activeCount,pausedTodayDate:today,pausedTodayCampaigns:domain.pausedCampaignNamesOnDate(stored,today),manifestCaptureInfo:domain.manifestCaptureInfo(manifest),manifestMccCoverage:domain.manifestMccCoverage(base,manifest,{d1:domain.previousIsoDate(today),d0:today}),mccImportUpdates:domain.latestMccImportUpdates(base.mccs||[],manifest?.cobertura_D_zero_por_mcc||{}),pendingSaleCount:values.reduce((sum,item)=>sum+item.pendingConversions,0),fractionalSaleCount:values.reduce((sum,item)=>sum+(Number(item.fractionalValuePendingCount)||0),0)};
+    return{version:VERSION,revision:timestamp,computedAt:timestamp,exchangeRate,summary:{d1:summarize(d1,d1Profits),d0:summarize(d0,profits)},dates,activeCount,pausedCount:campaigns.length-activeCount,pausedTodayDate:today,pausedTodayCampaigns:domain.pausedCampaignNamesOnDate(stored,today),manifestCaptureInfo:domain.manifestCaptureInfo(manifest),manifestMccCoverage:domain.manifestMccCoverage(base,manifest,{d1:domain.previousIsoDate(today),d0:today}),mccImportUpdates:domain.latestMccImportUpdates(base.mccs||[],manifest?.cobertura_D_zero_por_mcc||{}),pendingSaleCount:values.reduce((sum,item)=>sum+Number(item.pendingConfirmationCount??item.pendingConversions??0),0),fractionalSaleCount:values.reduce((sum,item)=>sum+(Number(item.fractionalValuePendingCount)||0),0)};
   }
   root.OverviewCardsDomain=Object.freeze({VERSION,create,read});
 })(typeof window==='object'?window:globalThis);

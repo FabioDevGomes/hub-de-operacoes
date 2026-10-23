@@ -81,6 +81,7 @@ function openAccountEdit(root, fields, account) {
 test('account directory centers the table and all numeric totals', () => {
   const css = readFileSync(new URL('../src/accounts/accounts.css', import.meta.url), 'utf8');
   assert.match(css,/\.account-directory-panel\{width:100%;max-width:none;box-sizing:border-box\}/,'o painel da tabela ocupa toda a largura disponível do conteúdo');
+  assert.match(css,/@media\(min-width:981px\) and \(min-height:600px\)\{main:has\(#accountDirectoryView:not\(\.hidden\)\) \.account-directory-panel \.table-wrap\{max-height:calc\(100vh - 285px\)\}\}/,'a área rolável da tabela deixa espaço para a borda inferior ficar visível em telas desktop');
   assert.match(css,/\.account-directory-table th,\.account-directory-table td\{[^}]*text-align:center(?:;|\})/);
   assert.match(css,/\.account-directory-table \.account-directory-impressions-cell,\.account-directory-table \.account-directory-clicks-cell,\.account-directory-table \.account-directory-campaign-count-cell,\.account-directory-table \.account-directory-conversions-cell\{text-align:center!important;font-variant-numeric:tabular-nums\}/);
   assert.match(css,/\.account-directory-table \.account-directory-sort:focus-visible\{outline:2px solid #4fa7ff;outline-offset:-1px\}/,'ordenação mantém foco de teclado visível');
@@ -133,13 +134,13 @@ test('account directory add action reuses the dark standard button without chang
   assert.doesNotMatch(css,/\.account-directory-add-button\s*\{/);
 });
 
-function resizeFixture(fields, widths=[140,205,230,210,120,150,130,158,154,136,110]) {
+function resizeFixture(fields, widths=[140,205,230,210,120,136,150,130,158,154,136,110]) {
   const makeClassList=()=>({values:new Set(),add(value){this.values.add(value);},remove(value){this.values.delete(value);}});
   const element=(dataset,width=0)=>{
     const attributes=new Map();
     return {dataset,style:{},classList:makeClassList(),setAttribute(key,value){attributes.set(key,String(value));},getAttribute(key){return attributes.get(key)||null;},removeAttribute(key){attributes.delete(key);},getBoundingClientRect(){return {width};}};
   };
-  const columns=['account','email','paymentProfile','mcc','startDate','impressions','clicks','campaignCount','conversions','status','edit'];
+  const columns=['account','email','paymentProfile','mcc','startDate','creationDate','impressions','clicks','campaignCount','conversions','status','edit'];
   fields.accountDirectoryHeaders=columns.map((column,index)=>element({column},widths[index]));
   fields.accountDirectoryCells=columns.map(column=>element({column}));
   fields.accountDirectoryResizers=columns.map(accountColumnResizer=>element({accountColumnResizer}));
@@ -163,26 +164,42 @@ test('account directory resizes columns by pointer and persists a screen-local p
   assert.equal(saved.account,220);assert.equal(saved.paymentProfile,230);assert.equal(storage.values.size,1);
   assert.equal(JSON.stringify(snapshot()),data,'redimensionamento não altera dados da conta');
 
-  const remount=mockRoot(),remountHandle=resizeFixture(remount.fields,[100,100,100,100,100,100,100,100,100,100,100]);
+  const remount=mockRoot(),remountHandle=resizeFixture(remount.fields,[100,100,100,100,100,100,100,100,100,100,100,100]);
   mount({root:remount.root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
   assert.equal(remount.fields.accountDirectoryHeaders[0].getAttribute('style'),'width:220px','a largura é restaurada ao abrir novamente');
   assert.equal(remount.fields.accountDirectoryHeaders[2].getAttribute('style'),'width:230px','as outras colunas mantêm a largura congelada');
   assert.equal(remountHandle.getAttribute('aria-valuenow'),'220');
 });
 
-test('adding account metrics and edit columns preserves existing six-column width preferences',()=>{
+test('adding account columns preserves existing six-column width preferences',()=>{
   const storage=memoryStorage();
   storage.setItem(ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY,JSON.stringify({account:170,email:215,paymentProfile:240,mcc:205,startDate:135,status:142}));
   const {root,fields}=mockRoot();resizeFixture(fields);
   mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
   assert.equal(fields.accountDirectoryHeaders[0].getAttribute('style'),'width:170px');
-  assert.equal(fields.accountDirectoryHeaders[5].getAttribute('style'),'width:150px','a coluna nova recebe uma largura mínima legível');
-  assert.equal(fields.accountDirectoryHeaders[6].getAttribute('style'),'width:130px','Cliques recebe largura inicial própria');
-  assert.equal(fields.accountDirectoryHeaders[7].getAttribute('style'),'width:158px','Total de campanhas recebe largura inicial própria');
-  assert.equal(fields.accountDirectoryHeaders[8].getAttribute('style'),'width:154px','Conversões recebe largura inicial própria');
-  assert.equal(fields.accountDirectoryHeaders[9].getAttribute('style'),'width:142px','a largura de Status salva anteriormente é preservada');
-  assert.equal(fields.accountDirectoryHeaders[10].getAttribute('style'),'width:104px','Editar mantém a largura mínima inicial');
+  assert.equal(fields.accountDirectoryHeaders[5].getAttribute('style'),'width:136px','Data de criação recebe a largura inicial sem deslocar preferências antigas');
+  assert.equal(fields.accountDirectoryHeaders[6].getAttribute('style'),'width:150px','Impressões mantém a largura inicial, separada do novo mínimo');
+  assert.equal(fields.accountDirectoryHeaders[7].getAttribute('style'),'width:130px','Cliques mantém a largura inicial, separada do novo mínimo');
+  assert.equal(fields.accountDirectoryHeaders[8].getAttribute('style'),'width:158px','Total de campanhas mantém a largura inicial, separada do novo mínimo');
+  assert.equal(fields.accountDirectoryHeaders[9].getAttribute('style'),'width:154px','Conversões mantém a largura inicial, separada do novo mínimo');
+  assert.equal(fields.accountDirectoryHeaders[10].getAttribute('style'),'width:142px','a largura de Status salva anteriormente é preservada');
+  assert.equal(fields.accountDirectoryHeaders[11].getAttribute('style'),'width:104px','Editar mantém a largura mínima inicial');
   assert.equal(storage.values.size,1,'a preferência antiga não é regravada só por abrir a tela');
+});
+
+test('payment-profile and metric columns can resize below their previous floors',()=>{
+  const columns=[['paymentProfile',2,120],['impressions',6,92],['clicks',7,84],['campaignCount',8,112],['conversions',9,96]];
+  for(const [key,index,minimum] of columns){
+    const storage=memoryStorage(),{root,fields,listeners}=mockRoot();resizeFixture(fields);const columnHandle=fields.accountDirectoryResizers[index];
+    mount({root,getSnapshot:snapshot,format:{date:value=>value},storage}).render();
+    assert.match(accountsListTemplate,new RegExp(`data-account-column-resizer="${key}"[^>]*aria-valuemin="${minimum}"`),`${key} expõe seu limite mínimo real`);
+    columnHandle.setPointerCapture=id=>{columnHandle.pointerId=id};columnHandle.hasPointerCapture=id=>columnHandle.pointerId===id;columnHandle.releasePointerCapture=()=>{columnHandle.pointerId=null};
+    const initial=[140,205,230,210,120,136,150,130,158,154,136,110][index],event=x=>({button:0,pointerId:7,clientX:x,target:{closest(selector){return selector==='[data-account-column-resizer]'?columnHandle:null;}},preventDefault(){},stopPropagation(){}});
+    listeners.pointerdown(event(200));listeners.pointermove(event(200+minimum-initial-20));listeners.pointerup(event(200+minimum-initial-20));
+    assert.equal(fields.accountDirectoryHeaders[index].getAttribute('style'),`width:${minimum}px`,`${key} pode ser reduzida até o novo limite`);
+    assert.equal(columnHandle.getAttribute('aria-valuenow'),String(minimum));
+    assert.equal(JSON.parse(storage.getItem(ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY))[key],minimum,'a largura compacta é salva na preferência local');
+  }
 });
 
 test('account directory column resizing supports keyboard, cancellation, width limits and blocked storage feedback',()=>{
@@ -205,7 +222,8 @@ test('account directory saves changed details together and closes after success'
   const controller = mount({root,getSnapshot:snapshot,format:{date:value=>value},storage});
   controller.render();
 
-  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,11);
+  assert.equal((accountsListTemplate.match(/<th\b/g)||[]).length,12);
+  assert.match(accountsListTemplate,/<th scope="col" data-column="startDate"[^>]*>[\s\S]*?<th scope="col" data-column="creationDate"[^>]*title="Data real de criação; não inferida da primeira captura"[\s\S]*?Data de criação/,'Data de criação aparece ordenável logo após Data de início');
   assert.match(accountsListTemplate,/<th scope="col" data-column="impressions" aria-sort="none" title="Soma das impressões diárias registradas no Diário de campanha para esta conta"><button[^>]*data-account-directory-sort="impressions"[^>]*>.*?Impressões totais/s);
   assert.match(accountsListTemplate,/<th scope="col" data-column="clicks" aria-sort="none" title="Soma dos cliques diários registrados no Diário de campanha para esta conta"><button[^>]*data-account-directory-sort="clicks"[^>]*>.*?Cliques totais/s);
   assert.match(accountsListTemplate,/<th scope="col" data-column="campaignCount" aria-sort="none" title="Quantidade de campanhas distintas registradas nesta conta"><button[^>]*data-account-directory-sort="campaignCount"[^>]*>.*?Total de campanhas/s);
@@ -220,11 +238,12 @@ test('account directory saves changed details together and closes after success'
   assert.equal(storage.values.size,0,'abrir e renderizar não infere nem grava e-mails');
   assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="E-mail não definido">Não definido<\/span><\/td>/);
   assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="ID de perfil de pagamento não definido">Não definido<\/span><\/td>/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="startDate" class="account-directory-date">—<\/td><td data-column="creationDate" class="account-directory-date">—<\/td><td data-column="impressions"/,'a data de criação não é inferida e aparece logo após a data de início');
   assert.match(fields.accountDirectoryBody.innerHTML,/data-column="edit" class="account-directory-edit-cell"><button[^>]*data-account-edit-open="111-222-3333"[^>]*>Editar<\/button>/);
   assert.doesNotMatch(fields.accountDirectoryBody.innerHTML,/data-account-email-open|data-account-payment-profile-open|hub-corner-edit/,'os links de edição não ficam mais dentro das colunas de dados');
   const empty = mockRoot();
   mount({root:empty.root,getSnapshot:()=>({}),format:{date:value=>value},storage}).render();
-  assert.match(empty.fields.accountDirectoryBody.innerHTML,/colspan="11"/,'estado vazio acompanha as onze colunas');
+  assert.match(empty.fields.accountDirectoryBody.innerHTML,/colspan="12"/,'estado vazio acompanha as doze colunas');
 
   root.click('[data-account-create-open]');
   assert.equal(fields.accountDirectoryManualAccountDialog.open,true);
@@ -241,7 +260,7 @@ test('account directory saves changed details together and closes after success'
   assert.match(fields.accountDirectoryBody.innerHTML,/class="account-directory-email-value" title="E-mail não definido">Não definido<\/span>/);
   assert.match(fields.accountDirectoryBody.innerHTML,/data-status="unset" data-account-status-open="777-888-9999"[^>]*>Não definido<\/button>/);
   assert.match(fields.accountDirectoryBody.innerHTML,/data-account-edit-open="777-888-9999"[^>]*aria-label="Editar e-mail ou ID de perfil de pagamento da conta 777-888-9999"/);
-  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="mcc" title="Não identificada">Não identificada<\/td><td data-column="startDate" class="account-directory-date">—/);
+  assert.match(fields.accountDirectoryBody.innerHTML,/<td data-column="mcc" title="Não identificada">Não identificada<\/td><td data-column="startDate" class="account-directory-date">—<\/td><td data-column="creationDate" class="account-directory-date">—/);
 
   openAccountEdit(root,fields,'111-222-3333');
   assert.equal(fields.accountDirectoryEmailInput.value,'');

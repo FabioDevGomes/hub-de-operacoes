@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyActualTargetUpdates, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, millisecondsUntilNextLocalMidnight, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, normalizeFund, normalizeMonth, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
+  applyLunchDinnerBudgetFallback, canEditActualForEntry, canEditActualForMonth, canMarkQuickPayInFutureMonthlyView, cardDebtAmount, cardPaymentAmount, consolidatedPeriod, createGlobalExpenseTotals, createMonthSnapshot, dailyActualTargetUpdates, dailyBudgetPace, DEFAULT_CONSOLIDATED_MONTH_COUNT, hasMonthlyOccurrence, isBreakfastCategory, isLunchDinnerCategory, isNubankReserve, LUNCH_DINNER_MONTHLY_BUDGET, MIN_CONSOLIDATED_MONTH_COUNT, millisecondsUntilNextLocalMidnight, monthWeekRange, monthlyAmountRemaining, monthlyCategoryStatus, normalizeEntry, normalizeFund, normalizeMonth, openCardDebtAmount, overlayCurrentCategoryNames, quarterPeriod, reserveMinusOpenExpenses, sumGlobalOpenCommitments, summarizeByCurrency, summarizeGlobalReserve, summarizeMonthlyOpenDebts, summarizeMonthlyPeriodTotals, summarizePeriodEntries, summarizeQuarterEntries, updateEntryAmount, validateBundle, yearRemainderPeriod,
 } from '../src/personal-finance/personal-finance-domain.mjs';
 
 assert.equal(DEFAULT_CONSOLIDATED_MONTH_COUNT, 8, 'o consolidado abre com oito meses por padrão');
@@ -254,6 +254,14 @@ assert.deepEqual(reserveWithMovements.contributed, { BRL:16254, USD:0 }, 'o hist
 assert.deepEqual(reserveWithMovements.withdrawals, { BRL:500, USD:0 });
 assert.deepEqual(reserveWithMovements.taxes, { BRL:100.25, USD:0 });
 assert.deepEqual(reserveWithMovements.balances, { BRL:15653.75, USD:0 }, 'resgates e impostos reduzem a reserva no cálculo geral');
+const nubankReserve = { item_id:'nubank-reserve', snapshot_id:'2026-10:nubank-reserve', month_key:'2026-10', name:'Saldo Nubank', amount:689, currency:'BRL', type:'reserve', reserve_movements:[{ movement_id:'expense-1', type:'expense', amount:89, currency:'BRL', created_at:'2026-10-22T12:00:00.000Z' }] };
+assert.equal(isNubankReserve(nubankReserve), true, 'a regra especial identifica somente a reserva Saldo Nubank');
+assert.equal(isNubankReserve({ ...nubankReserve, name:'Reserva Nubank' }), false, 'outras reservas Nubank mantêm o comportamento geral');
+assert.equal(isNubankReserve({ ...nubankReserve, type:'available' }), false, 'o saldo disponível não recebe a regra da reserva');
+const nubankExpenseSummary = summarizeGlobalReserve([], [nubankReserve], '2026-10');
+assert.equal(nubankExpenseSummary.contributions[0].amount, 600, 'a redução de R$ 689 para R$ 600 mantém o saldo líquido correto');
+assert.deepEqual(nubankExpenseSummary.expenses, { BRL:89, USD:0 }, 'a diferença reduzida aparece como gasto no histórico da reserva');
+assert.deepEqual(nubankExpenseSummary.balances, { BRL:600, USD:0 }, 'o gasto da reserva Nubank reduz o saldo sem criar realizado de categoria');
 assert.equal(normalizeFund({ item_id:'cdi-brl', snapshot_id:'2026-10:cdi-brl', month_key:'2026-10', name:'CDI', amount:16254, currency:'BRL', type:'reserve', reserve_movements:[{ movement_id:'withdraw-1', type:'withdrawal', amount:500, currency:'BRL', created_at:'2026-10-18T12:00:00.000Z' }] }).reserve_movements.length, 1, 'o backup e a normalização preservam o histórico aditivo');
 assert.throws(() => normalizeFund({ item_id:'cdi-brl', snapshot_id:'2026-10:cdi-brl', month_key:'2026-10', name:'CDI', amount:16254, currency:'BRL', type:'reserve', reserve_movements:[{ movement_id:'bad', type:'other', amount:1, currency:'BRL', created_at:'2026-10-18T12:00:00.000Z' }] }), /Tipo de movimentação da reserva inválido/);
 const reserveAfterFuturePayment = summarizeGlobalReserve([

@@ -302,11 +302,26 @@
     const days=[...billingRevenueByDate.entries()].filter(([date])=>date>=start&&date<=end).map(([,value])=>value),known=days.map(day=>parseNumber(day?.amount)).filter(value=>value!=null);
     return days.length?(known.length?known.reduce((total,value)=>total+value,0):null):0;
   }
+  function excludeCancelledBillingManualSales(database,billingSales=[]){
+    if(!database||!Array.isArray(database.vendas_provisorias))return{database,excludedCount:0};
+    const cancelledSourceRefs=new Set((billingSales||[])
+      .filter(sale=>sale?.source==='hub_manual_capture'&&sale.active===false&&sale.cancelled_at)
+      .map(sale=>String(sale.source_ref||'').trim()).filter(Boolean));
+    if(!cancelledSourceRefs.size)return{database,excludedCount:0};
+    const excluded=new Set(database.vendas_provisorias
+      .filter(sale=>sale?.status!=='cancelada'&&cancelledSourceRefs.has(String(sale?.id||'')))
+      .map(sale=>String(sale.id)));
+    if(!excluded.size)return{database,excludedCount:0};
+    return{
+      database:{...database,vendas_provisorias:database.vendas_provisorias.filter(sale=>!excluded.has(String(sale?.id||'')))},
+      excludedCount:excluded.size,
+    };
+  }
   function monthlyTrendBuckets(rows=[],{startMonth='2026-04',throughDate=localIsoDate()}={},billingRevenueByDate=null){
     let month=normalizeMonth(startMonth);const through=parseDate(throughDate)||localIsoDate(),last=through.slice(0,7),output=[];if(!month||month>last)return output;
     const byMonth=new Map();for(const row of rows||[]){const date=parseDate(row?.date);if(!date)continue;const key=date.slice(0,7);if(key<month||key>last)continue;if(!byMonth.has(key))byMonth.set(key,[]);byMonth.get(key).push(row)}
     while(month&&month<=last){const days=month===last?Number(through.slice(-2)):monthDayCount(month),bucket=trendBucket(month,byMonth.get(month)||[],days);if(billingRevenueByDate instanceof Map){const start=`${month}-01`,end=month===last?through:monthBounds(month).end,monthDays=[...billingRevenueByDate.entries()].filter(([date])=>date>=start&&date<=end).map(([,value])=>value),known=monthDays.map(day=>parseNumber(day?.amount)).filter(value=>value!=null);bucket.revenue=monthDays.length?(known.length?known.reduce((total,value)=>total+value,0):null):0;bucket.coverage.revenue=known.length}output.push(bucket);month=shiftMonth(month,1)}
     return output;
   }
-  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,reconcileBillingSales,summarize,lifetimeSummary,billingRevenueForRange,dailyTrendBuckets,monthlyTrendBuckets});
+  return Object.freeze({normalizeMonth,monthBounds,shiftMonth,currentMonth,parseDate,parseNumber,isSuspensionDate,deriveMetrics,aggregateMccDaily,parseHistoricalWorkbook,previewHistoryImport,mergeHistoryImport,combineDailyRows,reconcileBillingSales,excludeCancelledBillingManualSales,summarize,lifetimeSummary,billingRevenueForRange,dailyTrendBuckets,monthlyTrendBuckets});
 });

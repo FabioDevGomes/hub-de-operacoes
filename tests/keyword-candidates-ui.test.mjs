@@ -11,7 +11,7 @@ assert.ok(imagesStyles.includes('.keyword-candidate.image-candidate .keyword-can
 assert.ok(!imagesStyles.includes('.keyword-candidate.trends-keyword-candidate.saved'),'a regra compartilhada não deve alterar aparência de candidatas salvas de Imagens');
 for(const page of ['index.html','gerentes/index.html','top-performance/index.html','clickbank-top-offers/index.html','hot-offers-ms/index.html','manual/index.html','smartadv-offers/index.html']){
   const html=await readFile(new URL(`../dist/curadoria/${page}`,import.meta.url),'utf8');
-  assert.match(html,/trends-sheet\.css\?v=20261016-trends-keyword-candidates-flat/,`${page} deve carregar o CSS compartilhado atualizado`);
+  assert.match(html,/trends-sheet\.css\?v=20261021-curation-low-contrast/,`${page} deve carregar o CSS compartilhado atualizado`);
 }
 
 assert.equal(keywordCandidateMarkerHtml(0), '', 'não deve mostrar marcador sem candidatas');

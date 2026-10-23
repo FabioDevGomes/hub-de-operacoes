@@ -4,17 +4,17 @@ import vm from 'node:vm';
 
 const html=await readFile(new URL('../dist/preparador-MCC/index.html',import.meta.url),'utf8');
 const functionSource=name=>html.match(new RegExp(`function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n    \\}`))?.[0]||'';
-const helpers=['buildD1DeltaRows','captureFormatter','formatD0DeltaValue','renderD1DeltaPanel'].map(functionSource).join('\n');
+const helpers=['canonicalAccountId','buildD1DeltaRows','captureFormatter','formatD0DeltaValue','renderD1DeltaPanel'].map(functionSource).join('\n');
 assert.ok(helpers.includes('buildD1DeltaRows'),'comparador do fechamento D−1 ausente');
 const absent=new Set(['','-','--','—','–']);
-const context={Intl,Number,Map,Boolean,String,Math,parseNumber:value=>Number(value),stateValue:(raw,parser=null)=>{
+const context={Intl,Number,Map,Boolean,String,Math,Object,parseNumber:value=>Number(value),stateValue:(raw,parser=null)=>{
   if(raw==null||absent.has(String(raw).trim()))return{valor:null,estado:'ausente'};
   try{const value=parser?parser(raw):String(raw).trim();return{valor:value,estado:value===0?'zero_confirmado':'confirmado'}}catch{return{valor:null,estado:'invalido'}};
 }};
 vm.runInNewContext(`${helpers};globalThis.buildD1DeltaRows=buildD1DeltaRows;globalThis.formatD0DeltaValue=formatD0DeltaValue;`,context);
 
 const metric=(value,estado=value==null?'ausente':'confirmado')=>({valor:value,estado});
-const previousCampaign=(name,{impressions,clicks,cost,currency='BRL'})=>({nome_campanha_exato:name,metricas_D_zero:{impressoes:metric(impressions),cliques_google:metric(clicks),custo_total:metric(cost),moeda:metric(currency)}});
+const previousCampaign=(name,{impressions,clicks,cost,currency='BRL',date=null,manager=null})=>({nome_campanha_exato:name,...(manager?{mcc_id:manager}:{}),metricas_D_zero:{impressoes:metric(impressions),cliques_google:metric(clicks),custo_total:metric(cost),moeda:metric(currency),...(date?{data:metric(date)}:{})}});
 const d1Record=(name,{impressions,clicks,cost,currency='BRL'})=>({nome_campanha_exato:name,moeda:currency,raw:{impressions,clicks,cost}});
 const date='2026-10-02';
 const previous={manifesto_atual:{separacao_temporal:{D_zero:{datas_detectadas:[date]}},campanhas:[
@@ -64,6 +64,18 @@ assert.match(renderedElements.get('#d1-changes-empty').textContent,/nenhum campo
 const nextDayD0=context.buildD1DeltaRows(source,{manifesto_atual:{separacao_temporal:{D_zero:{datas_detectadas:['2026-10-03']}},campanhas:previous.manifesto_atual.campanhas}});
 assert.equal(nextDayD0.comparableDate,false,'D0 do dia seguinte fica fora do corte do fechamento D−1');
 assert.deepEqual(JSON.parse(JSON.stringify(nextDayD0.rows)),[],'não subtrai D0 de hoje do fechamento de ontem');
+
+const managerA='111-222-3333',managerB='444-555-6666',campaignA='Campanha A';
+const sameCampaignD0=previousCampaign(campaignA,{impressions:100,clicks:10,cost:50,date,manager:managerA});
+const newerD0=previousCampaign('Campanha B',{impressions:300,clicks:30,cost:90,date:'2026-10-03',manager:managerA});
+const consolidatedAfterNewerD0={manifesto_atual:{identificacao_mcc:{id:managerB},separacao_temporal:{D_zero:{datas_detectadas:['2026-10-03']}},campanhas:[sameCampaignD0,newerD0]}};
+const priorD0Close=context.buildD1DeltaRows({...source,managerAccountId:managerA,records:[d1Record(campaignA,{impressions:'110',clicks:'12',cost:'55'})]},consolidatedAfterNewerD0);
+assert.equal(priorD0Close.comparableDate,true,'o D0 da campanha na data fechada continua comparável mesmo se o cabeçalho do manifesto já avançou');
+assert.deepEqual(JSON.parse(JSON.stringify(priorD0Close.rows)),[{campaign:campaignA,currency:'BRL',impressions:10,clicks:2,cost:5}],'o comparador usa somente o D0 daquela campanha e data, da mesma MCC');
+
+const wrongManager=context.buildD1DeltaRows({...source,managerAccountId:managerA,records:[d1Record(campaignA,{impressions:'110',clicks:'12',cost:'55'})]},{manifesto_atual:{identificacao_mcc:{id:managerB,nome:'MCC diferente'},separacao_temporal:{D_zero:{datas_detectadas:[date]}},campanhas:[previousCampaign(campaignA,{impressions:100,clicks:10,cost:50,date,manager:managerB})]}});
+assert.equal(wrongManager.comparableDate,false,'um D0 de outra MCC nunca é base de comparação');
+assert.deepEqual(JSON.parse(JSON.stringify(wrongManager.rows)),[],'MCC incompatível não gera deltas mesmo quando nome/data coincidem');
 
 const renamed=context.buildD1DeltaRows({dates:[date],records:[d1Record('Campanha A 02/10',{impressions:'105',clicks:'11',cost:'51'})]},previous,[{oldName:'Campanha A',newName:'Campanha A 02/10'}]);
 assert.deepEqual(JSON.parse(JSON.stringify(renamed.rows)),[{campaign:'Campanha A 02/10',currency:'BRL',impressions:5,clicks:1,cost:1}],'renomeação só é associada quando confirmada pelo detector existente');

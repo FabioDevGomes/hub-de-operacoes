@@ -1,4 +1,4 @@
-import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, normalizeReserveMovement, RESERVE_MOVEMENT_TYPES, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=35';
+import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, isNubankReserve, MANUAL_RESERVE_MOVEMENT_TYPES, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, normalizeReserveMovement, RESERVE_MOVEMENT_TYPES, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=36';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
@@ -368,9 +368,66 @@ export async function saveReserveContribution(fund) {
   } finally { db.close(); }
 }
 
+export async function saveNubankReserveBalance(fund, createdAt = new Date().toISOString()) {
+  const normalized = normalizeFund({ ...fund, type:'reserve' });
+  const requestedBalance = Math.round((Number(normalized.amount) + Number.EPSILON) * 100) / 100;
+  const db = await openPersonalFinanceDatabase();
+  try {
+    let movement = null;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.funds, 'readwrite');
+      const store = tx.objectStore(STORES.funds);
+      const request = store.index('item_id').openCursor(only(normalized.item_id));
+      const snapshots = [];
+      let failure = null;
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          if (cursor.value.type === 'reserve') snapshots.push(cursor.value);
+          cursor.continue();
+          return;
+        }
+        try {
+          const latest = snapshots.sort((a, b) => b.month_key.localeCompare(a.month_key) || String(b.snapshot_id).localeCompare(String(a.snapshot_id)))[0];
+          if (!latest || !isNubankReserve(latest)) throw new Error('A contribuição Saldo Nubank não foi encontrada.');
+          if (latest.currency !== normalized.currency) throw new Error('A moeda do Saldo Nubank deve permanecer a mesma para reconciliar o histórico.');
+          const priorMovements = (latest.reserve_movements || []).map(normalizeReserveMovement);
+          const priorDeductions = priorMovements.filter(item => item.currency === latest.currency).reduce((total, item) => total + item.amount, 0);
+          const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+          const currentBalance = Math.max(0, round((Number(latest.amount) || 0) - priorDeductions));
+          const expenseAmount = round(Math.max(0, currentBalance - requestedBalance));
+          const movements = [...priorMovements];
+          if (expenseAmount > 0) {
+            movement = normalizeReserveMovement({
+              movement_id:`reserve-movement:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
+              type:'expense', amount:expenseAmount, currency:latest.currency, created_at:createdAt,
+            });
+            movements.push(movement);
+          }
+          const deductions = priorDeductions + expenseAmount;
+          const grossAmount = round(requestedBalance + deductions);
+          for (const snapshot of snapshots) {
+            const updated = { ...snapshot, name:normalized.name, amount:grossAmount, currency:normalized.currency, notes:normalized.notes };
+            if (snapshot.snapshot_id === latest.snapshot_id && movements.length) updated.reserve_movements = movements;
+            store.put(updated);
+          }
+        } catch (error) {
+          failure = error;
+          tx.abort();
+        }
+      };
+      request.onerror = () => tx.abort();
+      tx.oncomplete = () => { publishPersonalFinanceUpdate(); resolve(); };
+      tx.onerror = () => reject(failure || tx.error || new Error('Não foi possível salvar o saldo Nubank.'));
+      tx.onabort = () => reject(failure || tx.error || new Error('A atualização do saldo Nubank foi cancelada.'));
+    });
+    return { movement };
+  } finally { db.close(); }
+}
+
 export async function recordReserveMovement(itemId, type, amount, createdAt = new Date().toISOString()) {
   const rawAmount = Number(amount);
-  if (!RESERVE_MOVEMENT_TYPES.includes(type)) throw new Error('Selecione Resgatar ou Deduzir impostos.');
+  if (!MANUAL_RESERVE_MOVEMENT_TYPES.includes(type)) throw new Error('Selecione Resgatar ou Deduzir impostos.');
   if (!Number.isFinite(rawAmount) || rawAmount <= 0) throw new Error('Informe um valor maior que zero.');
   const numericAmount = Math.round((rawAmount + Number.EPSILON) * 100) / 100;
   if (numericAmount <= 0) throw new Error('Informe um valor maior que zero.');

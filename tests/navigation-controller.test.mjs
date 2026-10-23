@@ -128,7 +128,7 @@ test('render adapters keep their existing storage and mounting contracts',()=>{
   assert.ok(template.includes('await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling()'));
   assert.ok(template.includes('personalFinanceController.refresh()')&&template.includes('personalFinanceMountPromise=personalFinanceMountPromise||module.mount('));
   assert.ok(template.includes("render:()=>renderProduct(state.activeCampaign,state.activeSource,state.activeCampaignId)"));
-  assert.ok(template.includes("totals:{render:()=>{state.sortKey='current';state.sortDir='desc';renderTotals()}}"));
+  assert.ok(template.includes('totals:{render:()=>renderTotals()}'));
   assert.doesNotMatch(source,/indexedDB|localStorage|fetch\(|import\(/);
   assert.doesNotMatch(template,/viewsBefore|beforeObservabilityShow|timeBaseShow|withRegisterSaleVisibility/);
 });

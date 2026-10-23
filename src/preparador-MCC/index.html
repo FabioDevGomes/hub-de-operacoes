@@ -856,7 +856,7 @@
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
-        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=12'):null;
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=14'):null;
         window.OverviewBaseSessionCache?.invalidate();
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         window.OverviewBaseSessionCache?.invalidate();
@@ -1548,10 +1548,25 @@
       const date = source?.dates?.length === 1 ? source.dates[0] : null;
       const previousManifest = base?.manifesto_atual;
       const previousDate = previousManifest?.separacao_temporal?.D_zero?.datas_detectadas?.[0] || null;
-      // O fechamento só pode usar como corte um D0 da própria data D−1.
-      // Um D0 do dia seguinte contém tráfego posterior à virada e nunca entra aqui.
-      const comparableDate = Boolean(date && previousDate === date);
       const previousCampaigns = previousManifest?.campanhas || [];
+      const sourceManagerId = canonicalAccountId(source?.managerAccountId);
+      const previousManifestManagerId = canonicalAccountId(previousManifest?.identificacao_mcc?.id);
+      const hasCampaignManagerIds = previousCampaigns.some(item => canonicalAccountId(item?.mcc_id));
+      const managerIdForPrevious = campaign => canonicalAccountId(campaign?.mcc_id) || (!hasCampaignManagerIds ? previousManifestManagerId : null);
+      const belongsToSameManager = campaign => {
+        const previousManagerId = managerIdForPrevious(campaign);
+        if (sourceManagerId || previousManagerId) return Boolean(sourceManagerId && previousManagerId && sourceManagerId === previousManagerId);
+        return true;
+      };
+      const previousD0Date = campaign => {
+        const rawDate = campaign?.metricas_D_zero?.data;
+        const campaignDate = rawDate && typeof rawDate === 'object' && Object.hasOwn(rawDate,'valor') ? rawDate.valor : rawDate;
+        return String(campaignDate || previousDate || '').trim() || null;
+      };
+      // O D−1 fecha o D0 parcial da mesma data e MCC. Use a data da métrica por
+      // campanha no manifesto consolidado, pois o cabeçalho pode refletir outro
+      // período/MCC importado depois; nunca use D0 de uma data diferente.
+      const comparableDate = Boolean(date && previousCampaigns.some(campaign => belongsToSameManager(campaign) && previousD0Date(campaign) === date));
       const aliases = new Map((dateChanges || []).map(item => [String(item.newName || '').trim(), String(item.oldName || '').trim()]));
       const exactName = value => String(value || '').trim();
       const numeric = field => {
@@ -1564,7 +1579,7 @@
       const oldCampaignFor = record => {
         const name = exactName(record?.nome_campanha_exato);
         const priorName = aliases.get(name) || name;
-        const matches = previousCampaigns.filter(item => exactName(item?.nome_campanha_exato) === priorName);
+        const matches = previousCampaigns.filter(item => belongsToSameManager(item) && previousD0Date(item) === date && exactName(item?.nome_campanha_exato) === priorName);
         return matches.length === 1 ? matches[0] : null;
       };
       const currentValue = (record, key) => numeric(stateValue(record?.raw?.[key], parseNumber));
@@ -1796,8 +1811,8 @@
       const result = buildD1DeltaRows(source, base, dateChanges);
       body.replaceChildren();
       if (!result.date) q('#d1-changes-caption').textContent = 'A data do fechamento D−1 não foi identificada; não foi possível comparar as métricas.';
-      else if (result.comparableDate) q('#d1-changes-caption').textContent = `Comparação do fechamento D−1 com a última captura D0 salva na base local para ${panelDateLabel(result.date)}. A tabela mostra somente campanhas com alguma mudança.`;
-      else q('#d1-changes-caption').textContent = `Não há uma captura D0 salva na base local para ${panelDateLabel(result.date)}. Sem a captura parcial correspondente, não é possível calcular as alterações do fechamento.`;
+      else if (result.comparableDate) q('#d1-changes-caption').textContent = `Comparação do fechamento D−1 com o D0 salvo da mesma MCC e data (${panelDateLabel(result.date)}). A tabela mostra somente campanhas com alguma mudança.`;
+      else q('#d1-changes-caption').textContent = `Não há um D0 salvo da mesma MCC e data (${panelDateLabel(result.date)}). Sem a captura parcial correspondente, não é possível calcular as alterações do fechamento.`;
       result.rows.forEach(row => {
         const tr = document.createElement('tr'), values = [row.campaign, formatD0DeltaValue(row.impressions, 'count'), formatD0DeltaValue(row.clicks, 'count'), formatD0DeltaValue(row.cost, 'cost', row.currency)];
         values.forEach((value, index) => {

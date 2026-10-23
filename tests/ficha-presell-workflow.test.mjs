@@ -6,7 +6,7 @@ import {renderTemplate} from '../src/copy-ficha/copy-ficha-template.mjs';
 import {createFromStructuredContent} from '../src/copy-ficha/copy-ficha-workflow.mjs';
 import {buildStructuredFicha,structuredFichaFormat} from '../src/copy-ficha/copy-ficha-structured.mjs';
 import {createPresellFromFicha,parseFicha} from '../src/presell/presell-service.mjs?v=1';
-import {reportHtml} from '../src/presell/presell-report.mjs?v=2';
+import {reportHtml} from '../src/presell/presell-report.mjs?v=3';
 import {parseFicha as legacyParse,createPresellFromFicha as legacyCreate,reportHtml as legacyReport} from '../src/presell/presell-view.mjs';
 
 const fields={PRODUTO:'Synthetic board',TEXTO_EXPANDIR:'View details',TITULO_PRINCIPAL:'Synthetic offer',INTRODUCAO:'Text & accents: ação.',TITULO_OFERTA:'Overview',TEXTO_OFERTA:'Terms unchanged.',TITULO_PRECO:'Price',TEXTO_PRECO:'$10 per unit. Save 70%.',TITULO_FRETE_GARANTIA:'Shipping',TEXTO_FRETE_GARANTIA:'See checkout.',TITULO_FAQ:'FAQ'};
@@ -84,8 +84,9 @@ test('presentation keeps creation separate from restored questions and safely es
     {status:'BLOCK',name:'validator-output',message:'A saída não pôde ser lida.',items:['ExitCode: 2','SYNTHETIC_DIAGNOSTIC: invalid report']},
     {status:'PASS',name:'ficha',message:'Ficha JSON carregada.'}
   ]}}]});
-  assert.ok(noisy.includes('Saída técnica do validador')&&noisy.includes('SYNTHETIC_DIAGNOSTIC: invalid report'));
-  assert.ok(noisy.includes('Ver 1 verificação(ões) aprovada(s)')&&noisy.includes('A validação terminou com uma falha técnica'));
+  assert.ok(noisy.includes('Falha técnica ao executar o validador')&&noisy.includes('SYNTHETIC_DIAGNOSTIC: invalid report'));
+  assert.ok(noisy.includes('Ver 1 verificação(ões) aprovada(s)')&&noisy.includes('erro interno ao chamar o PowerShell'));
+  assert.ok(noisy.includes('alterar os campos não evita a falha')&&noisy.includes('corrigir a chamada do validador'));
   assert.equal(legacyParse,parseFicha);assert.equal(legacyCreate,createPresellFromFicha);assert.equal(legacyReport,reportHtml);
 });
 test('view delegates layout, drafts and workflow without importing another view or producing at mount time',async()=>{
@@ -93,6 +94,7 @@ test('view delegates layout, drafts and workflow without importing another view 
   assert.ok(view.includes('root.innerHTML=renderTemplate()')&&view.includes('const draft=readDraft()')&&view.includes('writeDraft({...payload(root)'));
   assert.ok(!view.includes('localStorage')&&!view.includes('presell-view.mjs')&&!view.includes('buildStructuredFicha('));
   assert.ok(view.includes("createFromStructuredContent(inputValue(root,'copyFichaSource'),payload(root))"));
+  assert.ok(view.includes('você não precisa alterar os campos para tentar corrigir. Não crie novamente nem publique'));
   const mounting=view.slice(view.indexOf('export async function mount'));
   assert.ok(mounting.includes('by(root,\'copyGenerateFicha\').onclick=async()=>')&&mounting.includes('if(creatingPresell)return')&&mounting.includes('finally{creatingPresell=false;button.disabled=false;'));
 });

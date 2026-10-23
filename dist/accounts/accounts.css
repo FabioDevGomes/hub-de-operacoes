@@ -92,21 +92,24 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-detail-controls select:focus-visible{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,167,255,.12)}
 
 .account-directory-status-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,250px));gap:12px;max-width:520px;margin:0 0 12px}
-.account-directory-status-kpi{position:relative;display:grid;align-content:center;gap:7px;min-height:94px;padding:15px 18px 15px 21px;overflow:hidden;border-radius:16px;background:linear-gradient(145deg,#111f33,#0d192b);box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.account-directory-status-kpi{position:relative;display:grid;align-content:center;gap:5px;min-height:71px;padding:10px 18px 10px 21px;overflow:hidden;border-radius:16px;background:linear-gradient(145deg,#111f33,#0d192b);box-shadow:0 8px 22px rgba(0,0,0,.16)}
 .account-directory-status-kpi::before{position:absolute;inset:0 auto 0 0;width:4px;background:var(--green);content:''}
 .account-directory-status-kpi.is-suspended::before{background:var(--red)}
 .account-directory-status-kpi span{color:#8eb0d3;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
 .account-directory-status-kpi strong{color:var(--green);font-size:1.18rem;line-height:1.1}
 .account-directory-status-kpi.is-suspended strong{color:#ff8191}
 .account-directory-panel{width:100%;max-width:none;box-sizing:border-box}
+@media(min-width:981px) and (min-height:600px){main:has(#accountDirectoryView:not(.hidden)) .account-directory-panel .table-wrap{max-height:calc(100vh - 285px)}}
 .account-directory-table{width:100%;border-collapse:collapse}
 .account-directory-table th,.account-directory-table td{padding:11px 14px;text-align:center;border-bottom:1px solid rgba(129,157,191,.16)}
 .account-directory-table th{color:#8eb0d3;font-size:.68rem;font-weight:500;white-space:nowrap}
 .account-directory-table th[data-column]{position:sticky;box-sizing:border-box;min-width:0;max-width:none}
-.account-directory-table .account-directory-sort{display:inline-flex;align-items:center;justify-content:center;gap:5px;max-width:calc(100% - 9px);min-height:30px;padding:2px 10px 2px 4px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;white-space:nowrap;cursor:pointer}
+.account-directory-table .account-directory-sort{position:relative;display:flex;align-items:center;justify-content:center;width:100%;max-width:calc(100% - 9px);min-height:30px;box-sizing:border-box;padding:2px 4px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;white-space:normal;cursor:pointer}
+.account-directory-table th[data-column="impressions"],.account-directory-table th[data-column="clicks"],.account-directory-table th[data-column="campaignCount"],.account-directory-table th[data-column="conversions"],.account-directory-table td[data-column="impressions"],.account-directory-table td[data-column="clicks"],.account-directory-table td[data-column="campaignCount"],.account-directory-table td[data-column="conversions"]{padding-inline:6px}
+.account-directory-table .account-directory-sort-label{position:relative;left:.5em;display:block;flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;padding-right:1em;overflow:visible;text-overflow:clip;text-align:center;white-space:normal;overflow-wrap:normal;word-break:normal;line-height:1.15}
 .account-directory-table .account-directory-sort:hover{background:rgba(79,167,255,.12);color:#cfe7ff}
 .account-directory-table .account-directory-sort:focus-visible{outline:2px solid #4fa7ff;outline-offset:-1px}
-.account-directory-table .account-directory-sort-arrow{min-width:1em;color:#36c8d4;font-size:.78rem;line-height:1}
+.account-directory-table .account-directory-sort-arrow{position:absolute;top:50%;right:2px;transform:translateY(-50%);min-width:1em;color:#36c8d4;font-size:.78rem;line-height:1}
 .account-directory-table td[data-column]{box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-directory-table .account-directory-column-resizer{position:absolute;z-index:3;top:0;right:0;bottom:0;width:9px;touch-action:none;cursor:col-resize;user-select:none}
 .account-directory-table .account-directory-column-resizer::after{position:absolute;top:0;right:3px;bottom:0;width:2px;background:transparent;content:"";transition:background-color .12s ease}
@@ -121,7 +124,7 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-directory-table .account-directory-impressions-cell,.account-directory-table .account-directory-clicks-cell,.account-directory-table .account-directory-campaign-count-cell,.account-directory-table .account-directory-conversions-cell{text-align:center!important;font-variant-numeric:tabular-nums}
 .account-directory-empty{text-align:center!important;color:var(--muted);padding:24px!important}
 .account-directory-head-actions{display:flex;align-items:center;gap:8px}
-@media(max-width:560px){.account-directory-status-kpis{grid-template-columns:1fr 1fr;gap:8px}.account-directory-status-kpi{min-height:82px;padding:12px 10px 12px 15px}.account-directory-table th,.account-directory-table td{padding:10px 8px}.account-directory-table{font-size:.76rem}}
+@media(max-width:560px){.account-directory-status-kpis{grid-template-columns:1fr 1fr;gap:8px}.account-directory-status-kpi{min-height:62px;padding:9px 10px 9px 15px}.account-directory-table th,.account-directory-table td{padding:10px 8px}.account-directory-table{font-size:.76rem}}
 main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
 .account-directory-status-cell{text-align:center!important;white-space:nowrap}
 .account-directory-status-button{display:inline-flex;align-items:center;justify-content:center;min-height:29px;min-width:104px;padding:5px 10px;border:1px solid #31506e;border-radius:999px;background:#17263a;color:#b9c9dc;font:inherit;font-size:.73rem;cursor:pointer;white-space:nowrap}

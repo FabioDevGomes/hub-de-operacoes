@@ -176,7 +176,7 @@ test('valida o relatório INS v8, inclui eventos de teste no diagnóstico e masc
     schema_version: 1,
     source: 'clickbank_ins_v8',
     generated_at_utc: '2026-10-18T19:06:30Z',
-    conversion_name: 'Venda afiliado ClickBank',
+    conversion_name: null,
     candidate_count: 2,
     test_count: 1,
     sale_count: 1,
@@ -208,6 +208,8 @@ test('valida o relatório INS v8, inclui eventos de teste no diagnóstico e masc
         transaction_type: 'SALE',
         role: 'AFFILIATE',
         is_test: false,
+        customer_country: 'BR',
+        conversion_name: null,
         commission_total: '12.3456',
         sale_gross_total: '100.0000',
         commission_currency: 'USD',
@@ -232,6 +234,9 @@ test('valida o relatório INS v8, inclui eventos de teste no diagnóstico e masc
   assert.equal(report.preview[0].isTest, true);
   assert.equal(report.preview[1].lineItems.length, 2);
   assert.equal(report.preview[1].commissionTotal, '12.3456');
+  assert.equal(report.preview[1].customerCountry, 'BR');
+  assert.equal(report.preview[1].conversionName, null);
+  assert.equal(report.conversionName, null, 'the report no longer depends on a single server-wide conversion action');
   assert.equal(report.valueByCurrency.USD, '12.3456');
   assert.equal(report.preview[1].gclidMasked, 'Real…6789');
   assert.equal(trackingIssueLabel(report.preview[0].ineligibilityReason), 'transação de teste — fora do CSV');
@@ -239,4 +244,8 @@ test('valida o relatório INS v8, inclui eventos de teste no diagnóstico e masc
     ...payload,
     preview: [{ ...payload.preview[1], gclid_masked: 'FullUnmaskedGclid' }, payload.preview[1]],
   }), /identificador não mascarado/i);
+  assert.throws(() => normalizeClickBankInsV8Report({
+    ...payload,
+    preview: [{ ...payload.preview[1], customer_country: 'Brazil' }, payload.preview[1]],
+  }), /customer_country.*inválido/i);
 });

@@ -7,10 +7,11 @@ import {createRoot,format} from './helpers/view-dom.mjs';
 const context=vm.createContext({window:{},structuredClone});
 for(const file of ['database.js','overview-domain.js','overview/cards-domain.js','overview/view.js'])vm.runInContext(await readFile(new URL('../src/'+file,import.meta.url),'utf8'),context);
 const database=context.window.CampaignDatabase,domain=context.window.OverviewDomain,cards=context.window.OverviewCardsDomain,view=context.window.OverviewView;
+const app=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
 const json=value=>JSON.parse(JSON.stringify(value)),timestamp='2026-10-08T15:30:00Z',field=valor=>({valor,estado:valor==null?'ausente':'confirmado'});
-function capture(index,period,cost){
+function capture(index,period,cost,{conversions=0,commission=0}={}){
   const date=period==='d0'?'2026-10-08':'2026-10-07',key=period==='d0'?'metricas_D_zero':'metricas_D_menos_1';
-  return {identificacao_mcc:{id:index?'222-222-2222':'111-111-1111',nome:index?'MCC Nutra':'MCC E-com'},gerado_em_utc:timestamp,separacao_temporal:{D_zero:{estado:period==='d0'?'fornecido':'nao_fornecido',datas_detectadas:period==='d0'?[date]:[]},D_menos_1:{estado:period==='d1'?'fornecido':'nao_fornecido',datas_detectadas:period==='d1'?[date]:[]}},[period==='d0'?'captura_D_zero':'captura_D_menos_1']:{escopo:'all_campaigns',capturada_em:timestamp},campanhas:[{nome_campanha_exato:'Synthetic '+index,mcc_id:index?'222-222-2222':'111-111-1111',[key]:{presente:true,data:field(date),moeda:field('BRL'),custo_total:field(cost),impressoes:field(cost==null?null:2*cost),cliques_google:field(cost==null?null:1),conversoes:field(0),valor_conversao:field(0),estado_campanha:field('Ativada')}}]};
+  return {identificacao_mcc:{id:index?'222-222-2222':'111-111-1111',nome:index?'MCC Nutra':'MCC E-com'},gerado_em_utc:timestamp,separacao_temporal:{D_zero:{estado:period==='d0'?'fornecido':'nao_fornecido',datas_detectadas:period==='d0'?[date]:[]},D_menos_1:{estado:period==='d1'?'fornecido':'nao_fornecido',datas_detectadas:period==='d1'?[date]:[]}},[period==='d0'?'captura_D_zero':'captura_D_menos_1']:{escopo:'all_campaigns',capturada_em:timestamp},campanhas:[{nome_campanha_exato:'Synthetic '+index,mcc_id:index?'222-222-2222':'111-111-1111',[key]:{presente:true,data:field(date),moeda:field('BRL'),custo_total:field(cost),impressoes:field(cost==null?null:2*cost),cliques_google:field(cost==null?null:1),conversoes:field(conversions),valor_conversao:field(commission),estado_campanha:field('Ativada')}}]};
 }
 const rowFactory=c=>['d0','d1'].flatMap(period=>{const m=c[period==='d0'?'metricas_D_zero':'metricas_D_menos_1'];return m?.presente?[{date:m.data.valor,period,cells:{B:{value:m.impressoes.valor},C:{value:m.cliques_google.valor},F:{value:m.conversoes.valor},O:{value:m.custo_total.valor},P:{value:m.valor_conversao.valor}}}]:[]});
 function apply(base,manifest,computedAt=timestamp){const next=database.importManifest(base,manifest,rowFactory,{overwrite:true}).base;next.overview_cards=cards.create(next,{computedAt});return next}
@@ -42,6 +43,31 @@ test('saved summaries preserve D0 after alternating D−1 MCCs, coverage and rel
   assert.equal(JSON.stringify(base),before,'display never writes or normalizes the source in place');
 });
 
+test('cancelling a linked manual sale refreshes the persisted provisional count without changing MCC conversions',()=>{
+  const base=fixture(),campaign=base.campanhas[0],date='2026-10-08';
+  const manual=database.addProvisionalSale(base,{campanha_id:campaign.id,data:date,produto:'Synthetic product',plataforma:'Demo',valor_brl:25,pais_codigo:'US',chave_duplicidade:'synthetic-cancel-key'});
+  const before=cards.create(manual.base,{computedAt:'2026-10-08T15:00:00Z'});
+  assert.equal(before.pendingSaleCount,1,'resumo mostra o lançamento manual pendente antes do cancelamento');
+  const cancelled=database.cancelProvisionalSale(manual.base,{id:manual.sale.id,reason:'Venda duplicada',now:'2026-10-08T16:00:00Z'});
+  const after=cards.create(cancelled.base,{computedAt:'2026-10-08T16:00:00Z'});
+  assert.equal(after.pendingSaleCount,0,'novo resumo persistido deixa de contar a venda provisória cancelada');
+  assert.equal(cancelled.base.diario.length,manual.base.diario.length,'cancelar o lançamento não altera o Diário MCC');
+  assert.equal(JSON.stringify(cancelled.base.manifesto_atual),JSON.stringify(manual.base.manifesto_atual),'cancelar o lançamento preserva a captura oficial da MCC');
+});
+
+test('the billing cancellation adapter saves its linked source, billing row, audit and cards atomically',()=>{
+  assert.match(app,/async function cancelBillingSale\([\s\S]*?sourceSale[\s\S]*?CampaignDatabase\.cancelProvisionalSale[\s\S]*?refreshOverviewCardsForSaleChange\(result\.base\)[\s\S]*?persistLocalBase\(\{billingSaleCancellation:\{saleId,reason:why,now\}\}\)/,
+    'cancelar uma venda espelhada deve marcar a origem, recalcular cartões e passar o cancelamento à transação da base');
+  assert.match(app,/billingSaleCancellation\)billingCancellation=billing\.cancelSaleToTransaction\(tx,billingSaleCancellation\.saleId,billingSaleCancellation\.reason,\{now:billingSaleCancellation\.now\}\)/,
+    'a linha do Faturamento e a auditoria compartilham a transação IndexedDB que grava a base');
+  assert.match(app,/announceBaseUpdated\(\{provisionalSaleIds:\[sourceSale\.id\]\}\)/,
+    'outras abas recebem o ID da origem cancelada para sincronização sem reativá-la');
+  assert.match(app,/async function reconcileCancelledManualSalesToBase\([\s\S]*?item\?\.source==='hub_manual_capture'[\s\S]*?item\.active===false&&item\.cancelled_at[\s\S]*?CampaignDatabase\.cancelProvisionalSale[\s\S]*?refreshOverviewCardsForSaleChange\(next\)[\s\S]*?persistLocalBase\(\)/,
+    'a carga da base recupera cancelamentos antigos e persiste novamente o resumo derivado');
+  assert.match(app,/reconcileCancelledManualSalesToBase\(\)\.then\(changed=>\{if\(changed\)render\(\)\}\)/,
+    'a recuperação roda na inicialização sem recalcular cartões quando não há cancelamento pendente');
+});
+
 test('manual changes retain the saved summary; next MCC recomputes even without an overview mounted',()=>{
   const base=fixture(),saved=JSON.stringify(base.overview_cards);
   const changed=database.normalize(base);changed.diario[0].celulas.O.value=999;changed.atualizado_em='2026-10-08T16:00:00Z';
@@ -50,6 +76,30 @@ test('manual changes retain the saved summary; next MCC recomputes even without 
   assert.equal(next.overview_cards.summary.d0.investment.value,41);
   assert.notEqual(next.overview_cards.revision,base.overview_cards.revision);
   assert.match(card(mount(next).get('#kpis').innerHTML,'kpi-group-d0'),/BRL 41\.00/);
+});
+
+test('a D0-matched manual sale confirms and updates profit cards without double-counting MCC commission',()=>{
+  const base=apply(database.create(),capture(0,'d0',10,{conversions:1,commission:75})),campaign=base.campanhas.find(item=>item.nome_mcc==='Synthetic 0');
+  const added=database.addProvisionalSale(base,{campanha_id:campaign.id,data:'2026-10-08',hora:'12:00',produto:'Synthetic sale',plataforma:'Test',valor_brl:200,pais_codigo:'US',chave_duplicidade:'synthetic-d0-sale'});
+  assert.equal(added.sale.status,'conciliada','an integer D0 conversion confirms a linked manual sale');
+  assert.equal(added.sale.conciliacao_origem,'mcc_d0');
+  const adjustment=database.salesAdjustmentMap(added.base).get(campaign.id);assert.equal(adjustment.pendingConversions,0,'the observed D0 conversion is not added a second time');assert.equal(adjustment.pendingConfirmationCount,0);assert.equal(adjustment.commissionAdjustment,125,'the manual value replaces the exact matched D0 aggregate without duplication');
+  added.base.overview_cards=cards.create(added.base,{computedAt:'2026-10-08T16:00:00Z'});
+  assert.equal(added.base.overview_cards.pendingSaleCount,0);
+  assert.equal(added.base.overview_cards.summary.d0.profit.value,190);
+  const ui=mount(added.base),pending=card(ui.get('#kpis').innerHTML,'overview-kpi-base'),profit=card(ui.get('#kpis').innerHTML,'kpi-d0-profit');
+  assert.match(pending,/<strong class="kpi-value">0<\/strong>/);
+  assert.match(profit,/BRL 190\.00/);
+});
+
+test('a provisional manual sale dated D−1 updates the D−1 profit card',()=>{
+  const base=apply(database.create(),capture(0,'d1',20)),campaign=base.campanhas.find(item=>item.nome_mcc==='Synthetic 0');
+  const added=database.addProvisionalSale(base,{campanha_id:campaign.id,data:'2026-10-07',hora:'12:00',produto:'Synthetic prior-day sale',plataforma:'Test',valor_brl:200,pais_codigo:'US',chave_duplicidade:'synthetic-d1-sale'});
+  assert.equal(added.sale.status,'provisoria');
+  added.base.overview_cards=cards.create(added.base,{computedAt:'2026-10-08T16:00:00Z'});
+  assert.equal(added.base.overview_cards.pendingSaleCount,1);
+  assert.equal(added.base.overview_cards.summary.d1.profit.value,180);
+  assert.match(card(mount(added.base).get('#kpis').innerHTML,'kpi-d1-profit'),/BRL 180\.00/);
 });
 
 test('legacy/invalid cache never triggers a fallback computation; zero is observed and absence is not zero',()=>{
@@ -84,7 +134,7 @@ test('table-only adapter skips card projections and the MCC apply saves summary 
       campanhas:manifest.campanhas.map(item=>({...structuredClone(item),metricas_D_zero:{...structuredClone(item.metricas_D_zero),exchange_rate_usd_brl:currentQuote.rate}}))};
     },
     openPanelDatabase:async()=>({close(){closed++}}),readPanelBase:async()=>persisted,panelManifestRow:rowFactory,
-    writePanelBase:async(_db,base)=>{writes++;assert.equal(cards.read(base).version,1);assert.equal(cards.read(base).computedAt,base.atualizado_em);if(fail)throw new Error('write failed');persisted=json(base)},
+    writePanelBase:async(_db,base)=>{writes++;assert.equal(cards.read(base).version,2);assert.equal(cards.read(base).computedAt,base.atualizado_em);if(fail)throw new Error('write failed');persisted=json(base)},
     BroadcastChannel:class{postMessage(){notifications++}close(){}}
   });
   vm.runInContext(html.slice(start,end),applyContext);

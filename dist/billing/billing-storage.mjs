@@ -1,4 +1,4 @@
-import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=4';
+import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=5';
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
 export const BILLING_DB_NAME = DB_NAME;
@@ -258,7 +258,9 @@ export function syncEditedProvisionalSalesToTransaction(transaction, provisional
       if (!changed.length) return;
       const updated = normalizeSale({ ...existing, ...patch, updated_at:now }, { now });
       sales.put(updated);
-      const action = changed.length === 1 && changed[0] === 'value_brl' ? 'financial_value_corrected' : 'provisional_sale_updated';
+      const action = changed.includes('campaign_id') && source.conciliacao_origem === 'mcc_d0' ? 'manual_sale_linked_to_mcc_d0'
+        : changed.includes('campaign_id') && source.conciliacao_origem === 'mcc_d1' ? 'manual_sale_linked_to_mcc_d1'
+          : changed.length === 1 && changed[0] === 'value_brl' ? 'financial_value_corrected' : 'provisional_sale_updated';
       audit.add(makeAudit(action, 'sale', incoming.sale_id,
         changed.map(field => ({ field, old_value:existing[field] ?? null, new_value:updated[field] ?? null })), { now }));
     };
@@ -734,10 +736,53 @@ export async function createMovement(input) {
   });
 }
 
-export async function cancelSale(saleId, reason) {
+export function cancelSaleToTransaction(transaction, saleId, reason, { now = new Date().toISOString() } = {}) {
   const why = String(reason || '').trim();
   if (!why) throw new Error('Informe o motivo do cancelamento.');
-  return updateSale(saleId, { active: false, cancelled_at: new Date().toISOString(), cancellation_reason: why }, 'sale_cancelled');
+  const sales = transaction.objectStore(BILLING_STORES.sales);
+  const audit = transaction.objectStore(BILLING_STORES.audit);
+  const result = { updated:null, failure:null };
+  const request = sales.get(saleId);
+  request.onsuccess = () => {
+    const prior = request.result;
+    if (!prior) {
+      result.failure = new Error('A venda não foi encontrada para cancelar.');
+      transaction.abort();
+      return;
+    }
+    if (prior.active === false || prior.cancelled_at) {
+      result.updated = prior;
+      return;
+    }
+    try {
+      result.updated = normalizeSale({ ...prior, active:false, cancelled_at:now, cancellation_reason:why, updated_at:now }, { now });
+    } catch (error) {
+      result.failure = error;
+      transaction.abort();
+      return;
+    }
+    const changes = ['active','cancelled_at','cancellation_reason']
+      .filter(field => !Object.is(prior[field] ?? null, result.updated[field] ?? null))
+      .map(field => ({ field, old_value:prior[field] ?? null, new_value:result.updated[field] ?? null }));
+    if (!changes.length) return;
+    sales.put(result.updated);
+    audit.add(makeAudit('sale_cancelled', 'sale', saleId, changes, { now }));
+  };
+  request.onerror = () => { result.failure = request.error; transaction.abort(); };
+  return result;
+}
+
+export async function cancelSale(saleId, reason, options = {}) {
+  const why = String(reason || '').trim();
+  if (!why) throw new Error('Informe o motivo do cancelamento.');
+  const db = await openBillingDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([BILLING_STORES.sales, BILLING_STORES.audit], 'readwrite');
+    const result = cancelSaleToTransaction(tx, saleId, why, options);
+    tx.oncomplete = () => { db.close(); resolve(result.updated); };
+    tx.onerror = () => { db.close(); reject(result.failure || tx.error); };
+    tx.onabort = () => { db.close(); reject(result.failure || tx.error || new Error('A venda não foi encontrada ou não pôde ser cancelada.')); };
+  });
 }
 
 function writeSaleTransaction(db, sale, audit, mode) {

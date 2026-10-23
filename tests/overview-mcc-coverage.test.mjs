@@ -62,7 +62,7 @@ test('D−1/D0 dates under provisional sales render independent dots, accessible
 
 test('adapter supplies only persisted coverage evidence and scoped stylesheet aligns date groups',async()=>{
   const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8'),css=await readFile(new URL('../src/overview/overview.css',import.meta.url),'utf8');
-  assert.ok(template.includes('snapshot.manifestMccCoverage=OverviewDomain.manifestMccCoverage(state.database,state.database?.manifesto_atual||state.manifest,{d1:OverviewDomain.previousIsoDate(today),d0:today})'));
+  assert.ok(template.includes('snapshot.manifestMccCoverage=OverviewDomain.manifestMccCoverage(database,database?.manifesto_atual||state.manifest,{d1:OverviewDomain.previousIsoDate(today),d0:today})'));
   assert.match(css,/#totalsView \.overview-kpi-dates\{display:flex;align-items:center;justify-content:center/);
   assert.match(css,/#totalsView \.overview-manifest-dot\.warn\{background:var\(--amber\)/);
 });
@@ -74,7 +74,8 @@ test('D−1-only last import cannot hide today D0 coverage; operational dates us
   db.diario=[row('a','d1',dates.d1),row('b','d1',dates.d1)];
   let instant='2026-10-01T01:30:00Z';
   class Clock extends Date{constructor(...args){super(...(args.length?args:[instant]))}}
-  const sandbox=vm.createContext({Intl,Date:Clock,OverviewDomain:domain,state:{database:db},overviewSnapshot:()=>({dates:{d1:dates.d1,d0:''}})});
+  const state={database:db};
+  const sandbox=vm.createContext({Intl,Date:Clock,OverviewDomain:domain,state,operationalDatabase:()=>state.database,overviewSnapshot:()=>({dates:{d1:dates.d1,d0:''}})});
   vm.runInContext(adapter,sandbox);const before=JSON.stringify(db),snapshot=sandbox.overviewDisplaySnapshot();
   assert.equal(snapshot.manifestMccCoverage.d0.date,dates.d0);assert.equal(snapshot.manifestMccCoverage.d0.complete,true);
   assert.equal(snapshot.manifestMccCoverage.d1.complete,true);assert.equal(snapshot.dates.d0,'','financial dates are not rewritten by presentation');

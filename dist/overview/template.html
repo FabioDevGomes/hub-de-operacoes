@@ -13,10 +13,14 @@
               <summary class="btn">Colunas</summary>
               <div class="overview-column-menu hub-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions" data-column-options></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
             </details>
+            <button id="ignoredCampaignsButton" class="btn overview-ignored-button" type="button">Ignoradas <span id="ignoredCampaignCount">0</span></button>
           </div></div>
           <p id="overviewWidthsMessage" role="status"></p>
           <div class="table-wrap"><table class="totals-table hub-table-layout"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody><tfoot id="totalsFoot" aria-label="Totais das campanhas filtradas"></tfoot></table></div>
         </div>
+        <dialog id="ignoredCampaignsDialog" class="overview-roi-dialog overview-paused-today-dialog overview-ignored-dialog" aria-labelledby="ignoredCampaignsTitle">
+          <div class="overview-paused-today-content"><div><h2 id="ignoredCampaignsTitle">Campanhas ignoradas</h2><p>Essas campanhas não entram nas telas e métricas operacionais. O histórico original continua guardado; restaure uma campanha para voltar a incluí-la.</p></div><ul id="ignoredCampaignsList" class="overview-ignored-list"></ul><p id="overviewIgnoreMessage" class="overview-roi-error" role="alert" aria-live="polite"></p><div class="overview-roi-actions"><button id="ignoredCampaignsClose" class="btn" type="button">Fechar</button></div></div>
+        </dialog>
         <dialog id="minimumRoiDialog" class="overview-roi-dialog" aria-labelledby="minimumRoiTitle">
           <form id="minimumRoiForm" class="overview-roi-form">
             <div><h2 id="minimumRoiTitle">Ajustar limite de teste</h2><p>Altere o valor máximo ou o ROI mínimo; o outro campo será recalculado.</p></div>

@@ -2,6 +2,10 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.49.0] - 2026-10-23
+
+- Permite ignorar e restaurar campanhas sem excluir histórico
+
 ## [1.48.0] - 2026-10-23
 
 - Automatiza consultas de Tracking no Hub

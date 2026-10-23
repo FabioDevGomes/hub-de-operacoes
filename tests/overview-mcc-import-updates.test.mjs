@@ -9,7 +9,7 @@ const latestMccImportUpdates=context.window.OverviewDomain.latestMccImportUpdate
 const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
 
 test('overview adapter projects per-MCC timestamps from the current base without writing to storage',()=>{
-  assert.match(template,/function overviewDisplaySnapshot\(\)\{const snapshot=overviewSnapshot\(\),today=new Intl\.DateTimeFormat\('sv-SE',\{timeZone:'America\/Sao_Paulo'\}\)\.format\(new Date\(\)\);snapshot\.pausedTodayDate=today;snapshot\.pausedTodayCampaigns=OverviewDomain\.pausedCampaignNamesOnDate/);
+  assert.match(template,/function overviewDisplaySnapshot\(\)\{const snapshot=overviewSnapshot\(\),database=operationalDatabase\(\),today=new Intl\.DateTimeFormat\('sv-SE',\{timeZone:'America\/Sao_Paulo'\}\)\.format\(new Date\(\)\);snapshot\.pausedTodayDate=today;snapshot\.pausedTodayCampaigns=OverviewDomain\.pausedCampaignNamesOnDate/);
   assert.ok(template.includes('getSnapshot:overviewTableSnapshot'));
   assert.ok(template.includes('getCardSnapshot:()=>OverviewCardsDomain.read(state.database)'));
 });

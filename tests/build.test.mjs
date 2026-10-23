@@ -328,7 +328,7 @@ assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
   html.includes('getSnapshot:()=>accountReportSnapshot(accountStatusStorage.read())'), 'Mapa por Conta não está conectado ao adaptador do Hub');
 assert.ok(html.includes('id="accountDirectoryView" class="hidden"></section>') &&
   html.includes("import('./accounts/accounts-list-view.mjs?v=20')") &&
-  html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('diario:state.database?.diario||[]') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
+  html.includes('getSnapshot:accountDirectorySnapshot') && html.includes('diario:database?.diario||[]') && html.includes('storage:accountDirectoryStorage()') && sidebarComponent.includes("key: 'account-directory'") &&
   sidebarComponent.includes("href: '/?view=account-directory'"), 'lista de contas não está conectada à sua rota do Hub');
 for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts-list-domain.mjs','accounts-list-view.mjs','accounts-list-storage.mjs','accounts.css']) {
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),

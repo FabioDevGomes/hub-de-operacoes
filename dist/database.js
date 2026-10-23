@@ -23,6 +23,30 @@
   }
   function create(){return{schema:SCHEMA,atualizado_em:new Date().toISOString(),manifesto_atual:null,mccs:[],campanhas:[],diario:[],campos_operacionais:[],importacoes:[],snapshots_campanhas:[],vendas_provisorias:[],mcc_fractional_value_confirmations:[],mcc_conversion_value_overrides:[]}}
   function normalize(base){const value=base?.schema===SCHEMA?clone(base):create();value.mccs??=[];value.campanhas??=[];value.diario??=[];value.campos_operacionais??=[];value.importacoes??=[];value.snapshots_campanhas??=[];value.vendas_provisorias??=[];value.mcc_fractional_value_confirmations=Array.isArray(value.mcc_fractional_value_confirmations)?value.mcc_fractional_value_confirmations:[];value.mcc_conversion_value_overrides=Array.isArray(value.mcc_conversion_value_overrides)?value.mcc_conversion_value_overrides:[];return value}
+  function setCampaignIgnored(baseInput,campaignId,ignored,now=new Date().toISOString()){
+    const base=normalize(baseInput),campaign=base.campanhas.find(item=>String(item.id)===String(campaignId));
+    if(!campaign)throw new Error('Campanha não encontrada para ignorar ou restaurar.');
+    if(ignored){campaign.ignorada=true;campaign.ignorada_em=now}else{delete campaign.ignorada;delete campaign.ignorada_em}
+    base.atualizado_em=now;return base
+  }
+  function operationalProjection(baseInput,manifestOverride=null){
+    if(!baseInput)return null;
+    const base=normalize(baseInput),ignored=base.campanhas.filter(item=>item.ignorada===true),ignoredIds=new Set(ignored.map(item=>item.id).filter(id=>id!=null&&id!=='').map(String)),campaignsByName=new Map(),nameKey=name=>String(name||'').trim().toLocaleLowerCase('pt-BR');
+    for(const campaign of base.campanhas)for(const name of[campaign.nome_mcc,...(campaign.nome_mcc_anteriores||[])].filter(Boolean)){const key=nameKey(name),matches=campaignsByName.get(key)||[];matches.push(campaign);campaignsByName.set(key,matches)}
+    const visibleName=name=>{const matches=campaignsByName.get(nameKey(name))||[];return !matches.length||matches.some(item=>!item.ignorada)};
+    const manifestCampaignIgnored=item=>{const matches=campaignsByName.get(nameKey(item?.nome_campanha_exato))||[];if(!matches.length)return false;if(matches.length===1)return matches[0].ignorada===true;let accountId=null;try{accountId=sourceAccountId(item)}catch{return false}if(!accountId)return false;const accountMatches=matches.filter(campaign=>canonicalAccountId(campaign.conta_id)===accountId);return accountMatches.length===1&&accountMatches[0].ignorada===true};
+    const projectManifest=manifest=>manifest?{...clone(manifest),campanhas:(manifest.campanhas||[]).filter(item=>!manifestCampaignIgnored(item))}:manifest;
+    base.campanhas=base.campanhas.filter(item=>item.ignorada!==true&&!ignoredIds.has(String(item.id)));
+    base.diario=base.diario.filter(item=>!ignoredIds.has(String(item.campanha_id)));
+    base.campos_operacionais=base.campos_operacionais.filter(item=>!ignoredIds.has(String(item.campanha_id)));
+    base.vendas_provisorias=base.vendas_provisorias.filter(item=>!ignoredIds.has(String(item.campanha_id)));
+    if(Array.isArray(base.observacoes_diario))base.observacoes_diario=base.observacoes_diario.filter(item=>!ignoredIds.has(String(item.campanha_id)));
+    if(Array.isArray(base.snapshots_campanhas))base.snapshots_campanhas=base.snapshots_campanhas.map(snapshot=>({...snapshot,campanhas:(snapshot.campanhas||[]).filter(visibleName),campanhas_ativas:(snapshot.campanhas_ativas||[]).filter(visibleName)}));
+    if(Array.isArray(base.mcc_conversion_value_overrides))base.mcc_conversion_value_overrides=base.mcc_conversion_value_overrides.filter(item=>!ignoredIds.has(String(item.campanha_id||item.campaign_id)));
+    if(Array.isArray(base.mcc_fractional_value_confirmations))base.mcc_fractional_value_confirmations=base.mcc_fractional_value_confirmations.filter(item=>!ignoredIds.has(String(item.campaignId||item.campaign_id)));
+    base.manifesto_atual=projectManifest(manifestOverride||base.manifesto_atual);
+    return base
+  }
   function fractionalEvidenceKey(campaignId,date,period,conversions,valueObserved,value){return[String(campaignId),String(date),String(period),Number(conversions).toFixed(8),valueObserved?'observed':'missing',valueObserved?Number(value).toFixed(2):''].join('|')}
   function fractionalValueConfirmation(base,key){return(base.mcc_fractional_value_confirmations||[]).find(item=>item?.key===key)||null}
   function campaignIndexes(base){return{byId:new Map(base.campanhas.map(x=>[x.id,x])),byExact:new Map(base.campanhas.filter(x=>x.nome_mcc).map(x=>[x.nome_mcc.toLowerCase(),x])),byDisplay:new Map(base.campanhas.map(x=>[x.nome_exibicao.toLowerCase(),x]))}}
@@ -577,5 +601,5 @@
     for(const sale of d0Confirmed){const summary=map.get(sale.campanha_id);if(!summary)continue;summary.pendingConfirmationCount=Math.max(0,summary.pendingConfirmationCount-1);const day=summary.byDate?.[sale.data];if(day)day.pendingConfirmationCount=Math.max(0,day.pendingConfirmationCount-1)}
     return map;
   }
-  window.CampaignDatabase={parseSearchImpressionShare,searchImpressionShareCells,SCHEMA,create,normalize,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,cancelProvisionalSale,correctMccConversionValue,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,manualMccMatchCandidates,inferAffiliatePlatformFromCampaignName,salesAdjustmentMap};
+  window.CampaignDatabase={parseSearchImpressionShare,searchImpressionShareCells,SCHEMA,create,normalize,setCampaignIgnored,operationalProjection,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,cancelProvisionalSale,correctMccConversionValue,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,manualMccMatchCandidates,inferAffiliatePlatformFromCampaignName,salesAdjustmentMap};
 })();

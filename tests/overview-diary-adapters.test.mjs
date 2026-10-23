@@ -45,7 +45,7 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
     rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc})),
     database={campanhas:campaigns,diario},calls=[];
   vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
-  Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
+  Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},operationalDatabase:()=>database,campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
     CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)}},
     ProductDiaryDomain:context.window.ProductDiaryDomain,sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),
@@ -60,7 +60,7 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
 test('legacy adapter returns only preserved summary, does not synthesize daily history or provisional sales',()=>{
   const stored={id:'legacy-id',nome_mcc:'MCC legado',nome_exibicao:'Legado',legacy_totais:{metrics:{investment_brl:{state:'observed',value:50}}}},
     database={campanhas:[stored],diario:[]},before=JSON.stringify(database),context=vm.createContext({state:{database},Map});
-  Object.assign(context,{campaignRows:()=>{throw Error('legacy must not read operational rows')},
+  Object.assign(context,{operationalDatabase:()=>database,campaignRows:()=>{throw Error('legacy must not read operational rows')},
     CampaignDatabase:{dailyRows:()=>{throw Error('legacy must not read native diary')}},
     derivedContext:()=>{throw Error('legacy must not mix manual sales')}});
   vm.runInContext(diaryAdapter,context);
@@ -68,4 +68,13 @@ test('legacy adapter returns only preserved summary, does not synthesize daily h
   assert.equal(snapshot.summary,stored.legacy_totais);assert.equal(snapshot.rows.length,0);
   assert.equal(snapshot.displayRows.length,0);assert.equal(snapshot.manualSalesByDate.size,0);
   assert.equal(snapshot.investment,null);assert.equal(JSON.stringify(database),before);
+});
+test('diary hides an ignored campaign without deleting the stored campaign or its rows',async()=>{
+  const stored={id:'ignored-id',nome_mcc:'Campanha ignorada',nome_exibicao:'Campanha ignorada',ignorada:true},
+    database={campanhas:[stored],diario:[{campanha_id:'ignored-id',data:'2026-09-30',celulas:{O:{value:75}}}]},before=JSON.stringify(database),context=vm.createContext({state:{database}});
+  vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);
+  vm.runInContext(diaryAdapter,context);
+  const snapshot=context.productDiarySnapshot('Campanha ignorada','workbook','ignored-id');
+  assert.equal(snapshot.ignored,true);assert.equal(snapshot.rows.length,0);assert.equal(snapshot.investment,null);
+  assert.equal(JSON.stringify(database),before,'o Diário não apaga nem altera os dados de origem');
 });

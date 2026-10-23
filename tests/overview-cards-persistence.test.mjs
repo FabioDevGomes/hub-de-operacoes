@@ -43,6 +43,17 @@ test('saved summaries preserve D0 after alternating D−1 MCCs, coverage and rel
   assert.equal(JSON.stringify(base),before,'display never writes or normalizes the source in place');
 });
 
+test('ignoring a campaign removes it from the persisted overview cards while preserving the source history',()=>{
+  const base=fixture(),ignoredCampaign=base.campanhas.find(item=>item.nome_mcc==='Synthetic 0'),before=JSON.stringify(base),ignored=database.setCampaignIgnored(base,ignoredCampaign.id,true,timestamp),saved=cards.create(ignored,{computedAt:timestamp});
+  assert.equal(saved.summary.d0.investment.value,11);
+  assert.equal(saved.summary.d1.investment.value,21);
+  assert.equal(saved.activeCount,1);
+  assert.equal(saved.summary.d0.investment.observedCount,1);
+  assert.equal(JSON.stringify(base),before,'the underlying MCC records and existing card snapshot are unchanged');
+  assert.equal(ignored.diario.length,4,'the persisted base retains all imported daily records');
+  assert.equal(ignored.campanhas.find(item=>item.id===ignoredCampaign.id).ignorada,true);
+});
+
 test('cancelling a linked manual sale refreshes the persisted provisional count without changing MCC conversions',()=>{
   const base=fixture(),campaign=base.campanhas[0],date='2026-10-08';
   const manual=database.addProvisionalSale(base,{campanha_id:campaign.id,data:date,produto:'Synthetic product',plataforma:'Demo',valor_brl:25,pais_codigo:'US',chave_duplicidade:'synthetic-cancel-key'});

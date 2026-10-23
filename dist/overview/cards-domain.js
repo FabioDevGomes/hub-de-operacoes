@@ -17,6 +17,7 @@
   // Pure projection. Caller stores this small result atomically with the applied MCC base.
   function create(base,{database=root.CampaignDatabase,domain=root.OverviewDomain,exchangeRate=5.1,computedAt}={}){
     if(!database||!domain)throw new Error('O cálculo compartilhado dos cartões MCC não foi carregado.');
+    base=database.operationalProjection?database.operationalProjection(base):base;
     const timestamp=computedAt||base.atualizado_em;
     if(!timestamp||!Number.isFinite(new Date(timestamp).getTime()))throw new Error('Horário da atualização MCC inválido.');
     const manifest=base.manifesto_atual,stored=base.campanhas||[],byName=new Map(stored.filter(c=>c.nome_mcc).map(c=>[c.nome_mcc.toLocaleLowerCase('pt-BR'),c])),states=database.manifestOperationalStates(manifest),current=manifest?.campanhas||[],keys=new Set(current.map(c=>c.nome_campanha_exato.toLocaleLowerCase('pt-BR'))),campaigns=[...current,...stored.filter(c=>c.status==='pausada'&&c.nome_mcc&&!keys.has(c.nome_mcc.toLocaleLowerCase('pt-BR'))).map(c=>({nome_campanha_exato:c.nome_mcc,metricas_D_zero:{presente:false},metricas_D_menos_1:{presente:false},custo_D_zero:{presente:false}}))];

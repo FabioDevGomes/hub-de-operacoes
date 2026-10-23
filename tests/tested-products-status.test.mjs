@@ -16,7 +16,7 @@ function fixture(overrides={}){
   const manifest=names.slice(0,4).map((name,index)=>({nome_campanha_exato:name,_status:index===3?'ativa':'pausada',metricas_D_zero:{presente:true,data:'2026-10-06',conversoes:{value:2}}}));
   const context={campaigns:manifest,latestSnapshots:{rows:[],dates:[]},dailyByCampaign:new Map(source.map(c=>[c.id,[{data:'2026-10-06',celulas:{F:{value:0},O:{value:10},P:{value:30}}}]])),salesAdjustments:new Map()};
   const catalog={ocultos:[],aliases:{},datas_inicio:{},ajustes_testados:overrides};
-  const sandbox={derivedContext:()=>context,campaignRows:()=>context.campaigns,currentCampaignRows:()=>manifest,state:{database:{campanhas:source},productCatalog:catalog},manifestDates:()=>({d0:'2026-10-06',d1:null}),testedProductName:c=>c.nome_exibicao,campaignIdentity:()=>({dateSort:null}),campaignSheet:name=>name,ProductCatalog:{normalize:value=>value},TestedProductsDomain:domain};
+  const sandbox={derivedContext:()=>context,campaignRows:()=>context.campaigns,currentCampaignRows:()=>manifest,state:{database:{campanhas:source},productCatalog:catalog},operationalDatabase:()=>sandbox.state.database,manifestDates:()=>({d0:'2026-10-06',d1:null}),testedProductName:c=>c.nome_exibicao,campaignIdentity:()=>({dateSort:null}),campaignSheet:name=>name,ProductCatalog:{normalize:value=>value},TestedProductsDomain:domain};
   const before=JSON.stringify({source,manifest,catalog,daily:[...context.dailyByCampaign]});
   vm.createContext(sandbox);vm.runInContext(activeHelper,sandbox);
   const products=vm.runInContext(`(${adapter})`,sandbox)();

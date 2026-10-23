@@ -15,8 +15,8 @@ test('report dates scan history once per derived context; base/manifest/rate/cat
   const manifest={campanhas:[],separacao_temporal:{D_menos_1:{datas_detectadas:['2026-10-07']},D_zero:{estado:'nao_fornecido'}}};
   const sandbox=vm.createContext({state:{database:base,manifest,productCatalog:{},rate:5},Map,Set,
     OverviewDomain:{...domain,manifestPeriodDates(...args){scans++;return domain.manifestPeriodDates(...args)}},
-    CampaignDatabase:{manifestOperationalStates:()=>new Map(),campaignNumberReuseIssues:()=>[],campaignTotalsMap:()=>new Map(),salesAdjustmentMap:()=>new Map(),operationalMap:()=>new Map()}});
-  vm.runInContext('let derivedCache=null;\n'+source.split('\n').filter(line=>/function (manifestDates|derivedContext)\(/.test(line)).join('\n'),sandbox);
+    CampaignDatabase:{operationalProjection:database=>database,manifestOperationalStates:()=>new Map(),campaignNumberReuseIssues:()=>[],campaignTotalsMap:()=>new Map(),salesAdjustmentMap:()=>new Map(),operationalMap:()=>new Map()}});
+  vm.runInContext('let derivedCache=null;function operationalDatabase(){return CampaignDatabase.operationalProjection(state.database,state.manifest)}\n'+source.split('\n').filter(line=>/function (manifestDates|derivedContext)\(/.test(line)).join('\n'),sandbox);
   const before=JSON.stringify(base);
   for(let i=0;i<100;i++)assert.equal(sandbox.manifestDates().d0,'2026-10-08');
   assert.equal(scans,1);

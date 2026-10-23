@@ -20,7 +20,7 @@ function setup(rows,preferences){
     manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:{ecom:{timestamp:'2026-10-05T17:57:00Z',source:'import'},nutra:{timestamp:'2026-10-05T18:40:00Z',source:'import'}},pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
-    actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args]),refreshExchangeRate:()=>calls.push(['refresh-rate'])}});
+    actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args]),refreshExchangeRate:()=>calls.push(['refresh-rate']),setCampaignIgnored:(...args)=>calls.push(['ignore',...args]),getIgnoredCampaigns:()=>[]}});
   return {...dom,state,snapshot,calls,controller};
 }
 test('PTAX control shows the active rate, refreshes on click and marks stale quotes clearly',()=>{
@@ -269,7 +269,7 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     assert.match(kpis,/Venda provisória[\s\S]*overview-info-icon/);
     assert.match(kpis,/overview-kpi-main-label">Investimento/);assert.match(kpis,/overview-kpi-detail-value">10/);
     assert.match(s.get('#totalsBody').innerHTML,/<tr class="paused-row hidden"/);
-    assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,16);
+    assert.equal((s.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,17);
     s.state.campaignStatusFilter='all';s.controller.render();assert.equal(s.get('#kpis').innerHTML,kpis);
   }
   assert.equal(JSON.stringify(s.snapshot),before);assert.deepEqual(s.calls,[]);
@@ -569,8 +569,8 @@ test('column choices persist locally, keep campaign identifiable and maintain vi
   assert.match(s.get('#totalsBody').innerHTML,/data-column="campaign"[^>]*title="Oferta"/);assert.match(s.get('#totalsBody').innerHTML,/data-column="saleRoiFirst"/);
   s.get('#totalsD0').onclick();assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/);
   const next=setup([row('Oferta','ativa',10)],preferences);next.controller.render();assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="current"/);
-  next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.has('hub:overview:visible-columns:v2'),false);assert.deepEqual(JSON.parse(values.get('hub:overview:sort:v1')),{key:'imp',direction:'desc'});
-  const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,16);
+  next.get('#overviewColumnsReset').onclick();assert.match(next.get('#totalsHead').innerHTML,/data-column="current"/);assert.equal(values.has('hub:overview:visible-columns:v2'),false);assert.equal(values.has('hub:overview:visible-columns:v3'),false);assert.deepEqual(JSON.parse(values.get('hub:overview:sort:v1')),{key:'imp',direction:'desc'});
+  const broken=setup([], {getItem:()=>'{invalid',setItem(){throw Error('blocked')}});broken.controller.render();assert.equal((broken.get('#totalsHead').innerHTML.match(/<th /g)||[]).length,17);
 });
 
 test('MCC column renders escaped catalog label, participates in columns and preserves legacy preferences',()=>{
@@ -580,12 +580,25 @@ test('MCC column renders escaped catalog label, participates in columns and pres
   assert.match(s.get('#totalsHead').innerHTML,/data-column="mcc"/);
   assert.match(s.get('#totalsBody').innerHTML,/data-column="mcc"[^>]*title="MCC &lt;e-com&gt;">MCC &lt;e-com&gt;/);
   assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="current"/,'colunas anteriormente ocultadas continuam ocultas');
-  assert.equal(values.has('hub:overview:visible-columns:v2'),false,'a leitura da preferência antiga não grava nem migra automaticamente');
+  assert.equal(values.has('hub:overview:visible-columns:v3'),false,'a leitura da preferência antiga não grava nem migra automaticamente');
   const mccOption=s.root.querySelectorAll('[data-column-choice]').find(input=>input.dataset.columnChoice==='mcc');mccOption.checked=false;mccOption.onchange();
-  assert.deepEqual(JSON.parse(values.get('hub:overview:visible-columns:v2')),['campaign','account','limit']);
+  assert.deepEqual(JSON.parse(values.get('hub:overview:visible-columns:v3')),['campaign','account','limit','ignore']);
   assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="mcc"/);
   const next=setup([row('Oferta','ativa',10,{mcc:'MCC e-com'})],preferences);next.controller.render();
   assert.doesNotMatch(next.get('#totalsHead').innerHTML,/data-column="mcc"/,'a preferência nova permite manter a MCC oculta após reabrir');
-  next.get('#overviewColumnsReset').onclick();assert.equal(values.has('hub:overview:visible-columns:v1'),false);assert.equal(values.has('hub:overview:visible-columns:v2'),false);
+  next.get('#overviewColumnsReset').onclick();assert.equal(values.has('hub:overview:visible-columns:v1'),false);assert.equal(values.has('hub:overview:visible-columns:v2'),false);assert.equal(values.has('hub:overview:visible-columns:v3'),false);
   next.controller.render();assert.match(next.get('#totalsHead').innerHTML,/data-column="mcc"/,'restaurar padrão exibe a coluna MCC');
+});
+
+test('ignore action is a hideable column and an explicit hidden choice survives remount',()=>{
+  const values=new Map(),preferences={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},s=setup([row('Campanha duplicada','ativa',10)],preferences);
+  s.setList('[data-column-choice]',[{columnChoice:'ignore'}]);s.controller.render();
+  assert.match(s.get('#totalsHead').innerHTML,/data-column="ignore"[^>]*>.*?<span class="overview-unsortable">Ignorar<\/span>/);
+  assert.match(s.get('#totalsBody').innerHTML,/data-column="ignore"[^>]*><button class="overview-ignore-action"/);
+  const choice=s.root.querySelectorAll('[data-column-choice]')[0];choice.checked=false;choice.onchange();
+  assert.doesNotMatch(s.get('#totalsHead').innerHTML,/data-column="ignore"/);
+  assert.equal(JSON.parse(values.get('hub:overview:visible-columns:v3')).includes('ignore'),false);
+  const reopened=setup([row('Campanha duplicada','ativa',10)],preferences);reopened.controller.render();
+  assert.doesNotMatch(reopened.get('#totalsHead').innerHTML,/data-column="ignore"/,'o estado ausente no novo formato significa escolha explícita de ocultar');
+  reopened.get('#overviewColumnsReset').onclick();assert.match(reopened.get('#totalsHead').innerHTML,/data-column="ignore"/);
 });

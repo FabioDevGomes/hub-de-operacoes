@@ -2,6 +2,14 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.49.2] - 2026-10-23
+
+- Remove recurso de campanhas ignoradas
+
+## [1.49.1] - 2026-10-23
+
+- Audita e corrige duplicatas históricas da MCC sem apagar a origem
+
 ## [1.49.0] - 2026-10-23
 
 - Permite ignorar e restaurar campanhas sem excluir histórico

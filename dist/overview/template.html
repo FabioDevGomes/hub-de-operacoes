@@ -13,13 +13,13 @@
               <summary class="btn">Colunas</summary>
               <div class="overview-column-menu hub-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions" data-column-options></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
             </details>
-            <button id="ignoredCampaignsButton" class="btn overview-ignored-button" type="button">Ignoradas <span id="ignoredCampaignCount">0</span></button>
+            <button id="verifyDuplicateCampaignsButton" class="btn overview-audit-button" type="button">Verificar duplicidades</button>
           </div></div>
           <p id="overviewWidthsMessage" role="status"></p>
           <div class="table-wrap"><table class="totals-table hub-table-layout"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody><tfoot id="totalsFoot" aria-label="Totais das campanhas filtradas"></tfoot></table></div>
         </div>
-        <dialog id="ignoredCampaignsDialog" class="overview-roi-dialog overview-paused-today-dialog overview-ignored-dialog" aria-labelledby="ignoredCampaignsTitle">
-          <div class="overview-paused-today-content"><div><h2 id="ignoredCampaignsTitle">Campanhas ignoradas</h2><p>Essas campanhas não entram nas telas e métricas operacionais. O histórico original continua guardado; restaure uma campanha para voltar a incluí-la.</p></div><ul id="ignoredCampaignsList" class="overview-ignored-list"></ul><p id="overviewIgnoreMessage" class="overview-roi-error" role="alert" aria-live="polite"></p><div class="overview-roi-actions"><button id="ignoredCampaignsClose" class="btn" type="button">Fechar</button></div></div>
+        <dialog id="duplicateCampaignAuditDialog" class="overview-roi-dialog overview-paused-today-dialog overview-duplicate-audit-dialog" aria-labelledby="duplicateCampaignAuditTitle">
+          <div class="overview-paused-today-content"><div><h2 id="duplicateCampaignAuditTitle">Verificar linhas duplicadas</h2><p>A análise confere linhas da captura já salva pelo nome normalizado, ID completo da conta e métricas D−1/D0. Somente linhas com métricas idênticas podem ser ajustadas após sua confirmação. Isso não muda as próximas capturas nem apaga o manifesto ou o histórico; o ajuste é reversível e vale para as telas e métricas operacionais.</p></div><p id="duplicateCampaignAuditSummary" class="overview-duplicate-audit-summary" role="status" aria-live="polite"></p><ul id="duplicateCampaignAuditList" class="overview-duplicate-audit-list"></ul><p id="duplicateCampaignAuditMessage" class="overview-roi-error" role="alert" aria-live="polite"></p><div class="overview-roi-actions"><button id="duplicateCampaignAuditClose" class="btn" type="button">Fechar</button></div></div>
         </dialog>
         <dialog id="minimumRoiDialog" class="overview-roi-dialog" aria-labelledby="minimumRoiTitle">
           <form id="minimumRoiForm" class="overview-roi-form">

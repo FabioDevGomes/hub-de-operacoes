@@ -137,9 +137,9 @@
     return typeof manager?.nome==='string'&&manager.nome.trim()?manager.nome.trim():null;
   }
   function totalsColumns(mode,totalLabel='total'){
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['ignore','Ignorar']];
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
   }
-  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,ignore:86});
+  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82});
   function visibleColumns(columns,selected){
     return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
   }

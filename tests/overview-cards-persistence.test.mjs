@@ -43,15 +43,17 @@ test('saved summaries preserve D0 after alternating D−1 MCCs, coverage and rel
   assert.equal(JSON.stringify(base),before,'display never writes or normalizes the source in place');
 });
 
-test('ignoring a campaign removes it from the persisted overview cards while preserving the source history',()=>{
-  const base=fixture(),ignoredCampaign=base.campanhas.find(item=>item.nome_mcc==='Synthetic 0'),before=JSON.stringify(base),ignored=database.setCampaignIgnored(base,ignoredCampaign.id,true,timestamp),saved=cards.create(ignored,{computedAt:timestamp});
-  assert.equal(saved.summary.d0.investment.value,11);
-  assert.equal(saved.summary.d1.investment.value,21);
-  assert.equal(saved.activeCount,1);
-  assert.equal(saved.summary.d0.investment.observedCount,1);
-  assert.equal(JSON.stringify(base),before,'the underlying MCC records and existing card snapshot are unchanged');
-  assert.equal(ignored.diario.length,4,'the persisted base retains all imported daily records');
-  assert.equal(ignored.campanhas.find(item=>item.id===ignoredCampaign.id).ignorada,true);
+test('confirmed duplicate-line projection corrects overview card totals without deleting captured MCC rows',()=>{
+  const base=database.create(),manifest=capture(0,'d0',10),source=manifest.campanhas[0];
+  source.metricas_D_zero.conta_id=field('111-222-3333');manifest.campanhas.push(json(source));
+  base.manifesto_atual=manifest;base.atualizado_em=timestamp;base.campanhas=[{id:'single-canonical-record',nome_mcc:source.nome_campanha_exato,nome_exibicao:source.nome_campanha_exato,conta_id:'111-222-3333',status:'ativa'}];
+  const original=JSON.stringify(base.manifesto_atual),before=cards.create(base,{computedAt:timestamp});
+  const adjusted=database.setManifestDuplicateSuppression(base,{accountId:'111-222-3333',name:source.nome_campanha_exato,suppressed:true,now:timestamp}),after=cards.create(adjusted,{computedAt:timestamp});
+  assert.equal(before.summary.d0.investment.value,20,'as duas linhas repetidas são refletidas antes da confirmação');
+  assert.equal(after.summary.d0.investment.value,10,'o cartão recalculado usa somente uma ocorrência após a confirmação');
+  assert.equal(after.activeCount,1,'a contagem operacional também remove a duplicidade');
+  assert.equal(adjusted.manifesto_atual.campanhas.length,2,'as duas entradas originais continuam guardadas');
+  assert.equal(JSON.stringify(base.manifesto_atual),original,'a projeção não altera a captura de origem');
 });
 
 test('cancelling a linked manual sale refreshes the persisted provisional count without changing MCC conversions',()=>{

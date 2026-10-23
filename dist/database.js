@@ -21,29 +21,40 @@
     for(const char of String(value).toLowerCase()){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619)}
     return`cmp_${(hash>>>0).toString(36)}`;
   }
-  function create(){return{schema:SCHEMA,atualizado_em:new Date().toISOString(),manifesto_atual:null,mccs:[],campanhas:[],diario:[],campos_operacionais:[],importacoes:[],snapshots_campanhas:[],vendas_provisorias:[],mcc_fractional_value_confirmations:[],mcc_conversion_value_overrides:[]}}
-  function normalize(base){const value=base?.schema===SCHEMA?clone(base):create();value.mccs??=[];value.campanhas??=[];value.diario??=[];value.campos_operacionais??=[];value.importacoes??=[];value.snapshots_campanhas??=[];value.vendas_provisorias??=[];value.mcc_fractional_value_confirmations=Array.isArray(value.mcc_fractional_value_confirmations)?value.mcc_fractional_value_confirmations:[];value.mcc_conversion_value_overrides=Array.isArray(value.mcc_conversion_value_overrides)?value.mcc_conversion_value_overrides:[];return value}
-  function setCampaignIgnored(baseInput,campaignId,ignored,now=new Date().toISOString()){
-    const base=normalize(baseInput),campaign=base.campanhas.find(item=>String(item.id)===String(campaignId));
-    if(!campaign)throw new Error('Campanha não encontrada para ignorar ou restaurar.');
-    if(ignored){campaign.ignorada=true;campaign.ignorada_em=now}else{delete campaign.ignorada;delete campaign.ignorada_em}
-    base.atualizado_em=now;return base
+  function create(){return{schema:SCHEMA,atualizado_em:new Date().toISOString(),manifesto_atual:null,mccs:[],campanhas:[],diario:[],campos_operacionais:[],importacoes:[],snapshots_campanhas:[],vendas_provisorias:[],mcc_fractional_value_confirmations:[],mcc_conversion_value_overrides:[],manifest_duplicate_suppressions:[]}}
+  function normalize(base){const value=base?.schema===SCHEMA?clone(base):create();value.mccs??=[];value.campanhas??=[];value.diario??=[];value.campos_operacionais??=[];value.importacoes??=[];value.snapshots_campanhas??=[];value.vendas_provisorias??=[];value.mcc_fractional_value_confirmations=Array.isArray(value.mcc_fractional_value_confirmations)?value.mcc_fractional_value_confirmations:[];value.mcc_conversion_value_overrides=Array.isArray(value.mcc_conversion_value_overrides)?value.mcc_conversion_value_overrides:[];value.manifest_duplicate_suppressions=Array.isArray(value.manifest_duplicate_suppressions)?value.manifest_duplicate_suppressions:[];return value}
+  function duplicateNameKey(value){return String(value??'').normalize('NFKC').replace(/\s+/gu,' ').trim().toLocaleLowerCase('pt-BR')}
+  function duplicateGroupKey(accountId,name){return`${accountId}\u0000${duplicateNameKey(name)}`}
+  function duplicateMetricValue(value){const raw=metricValue(value);if(raw==null)return null;if(typeof raw==='number')return Number.isFinite(raw)?raw:String(raw);const text=String(raw).trim();if(!text)return null;if(/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text))return Number(text);if(/^[+-]?\d+,\d+$/.test(text))return Number(text.replace(',','.'));return text}
+  function duplicateMetricEvidence(source){
+    const fields=['data','moeda','impressoes','cliques_google','custo_total','conversoes','valor_conversao','estado_campanha','status_campanha'],numericFields=new Set(['impressoes','cliques_google','custo_total','conversoes','valor_conversao']);
+    const periods=['metricas_D_menos_1','metricas_D_zero'].map(key=>{const metrics=source?.[key];return{present:!!metrics&&metrics.presente!==false,values:Object.fromEntries(fields.map(field=>[field,duplicateMetricValue(metrics?.[field])]))}});
+    return{signature:JSON.stringify(periods),hasObservedMetrics:periods.some(period=>[...numericFields].some(field=>typeof period.values[field]==='number'&&Number.isFinite(period.values[field])))};
+  }
+  function setManifestDuplicateSuppression(baseInput,{accountId,name,suppressed=true,now=new Date().toISOString()}={}){
+    const base=normalize(baseInput),account=canonicalAccountId(accountId),normalizedName=duplicateNameKey(name);if(!account||!normalizedName)throw new Error('Informe o ID completo da conta e o nome da campanha para ajustar a duplicidade.');
+    const key=duplicateGroupKey(account,normalizedName),keys=new Set(base.manifest_duplicate_suppressions.filter(item=>typeof item==='string'));
+    if(suppressed){const matches=(base.manifesto_atual?.campanhas||[]).filter(source=>{if(duplicateNameKey(source?.nome_campanha_exato)!==normalizedName)return false;try{return sourceAccountId(source)===account}catch{return false}}),evidence=matches.map(duplicateMetricEvidence);if(matches.length<2||!evidence[0]?.hasObservedMetrics||!evidence.every(item=>item.hasObservedMetrics&&item.signature===evidence[0].signature))throw new Error('As linhas atuais não formam uma duplicidade verificável com métricas idênticas; nenhuma linha foi ocultada.')}
+    if(suppressed)keys.add(key);else keys.delete(key);
+    base.manifest_duplicate_suppressions=[...keys];base.atualizado_em=now;return base
   }
   function operationalProjection(baseInput,manifestOverride=null){
     if(!baseInput)return null;
-    const base=normalize(baseInput),ignored=base.campanhas.filter(item=>item.ignorada===true),ignoredIds=new Set(ignored.map(item=>item.id).filter(id=>id!=null&&id!=='').map(String)),campaignsByName=new Map(),nameKey=name=>String(name||'').trim().toLocaleLowerCase('pt-BR');
-    for(const campaign of base.campanhas)for(const name of[campaign.nome_mcc,...(campaign.nome_mcc_anteriores||[])].filter(Boolean)){const key=nameKey(name),matches=campaignsByName.get(key)||[];matches.push(campaign);campaignsByName.set(key,matches)}
-    const visibleName=name=>{const matches=campaignsByName.get(nameKey(name))||[];return !matches.length||matches.some(item=>!item.ignorada)};
-    const manifestCampaignIgnored=item=>{const matches=campaignsByName.get(nameKey(item?.nome_campanha_exato))||[];if(!matches.length)return false;if(matches.length===1)return matches[0].ignorada===true;let accountId=null;try{accountId=sourceAccountId(item)}catch{return false}if(!accountId)return false;const accountMatches=matches.filter(campaign=>canonicalAccountId(campaign.conta_id)===accountId);return accountMatches.length===1&&accountMatches[0].ignorada===true};
-    const projectManifest=manifest=>manifest?{...clone(manifest),campanhas:(manifest.campanhas||[]).filter(item=>!manifestCampaignIgnored(item))}:manifest;
-    base.campanhas=base.campanhas.filter(item=>item.ignorada!==true&&!ignoredIds.has(String(item.id)));
-    base.diario=base.diario.filter(item=>!ignoredIds.has(String(item.campanha_id)));
-    base.campos_operacionais=base.campos_operacionais.filter(item=>!ignoredIds.has(String(item.campanha_id)));
-    base.vendas_provisorias=base.vendas_provisorias.filter(item=>!ignoredIds.has(String(item.campanha_id)));
-    if(Array.isArray(base.observacoes_diario))base.observacoes_diario=base.observacoes_diario.filter(item=>!ignoredIds.has(String(item.campanha_id)));
-    if(Array.isArray(base.snapshots_campanhas))base.snapshots_campanhas=base.snapshots_campanhas.map(snapshot=>({...snapshot,campanhas:(snapshot.campanhas||[]).filter(visibleName),campanhas_ativas:(snapshot.campanhas_ativas||[]).filter(visibleName)}));
-    if(Array.isArray(base.mcc_conversion_value_overrides))base.mcc_conversion_value_overrides=base.mcc_conversion_value_overrides.filter(item=>!ignoredIds.has(String(item.campanha_id||item.campaign_id)));
-    if(Array.isArray(base.mcc_fractional_value_confirmations))base.mcc_fractional_value_confirmations=base.mcc_fractional_value_confirmations.filter(item=>!ignoredIds.has(String(item.campaignId||item.campaign_id)));
+    const base=normalize(baseInput);
+    const duplicateSuppressions=new Set(base.manifest_duplicate_suppressions||[]);
+    const projectManifest=manifest=>{
+      if(!manifest)return manifest;
+      const entries=manifest.campanhas||[],groups=new Map(),suppressedGroups=new Set(),seenSuppressedRows=new Map(),campaigns=[];
+      for(const item of entries){let accountId=null;try{accountId=sourceAccountId(item)}catch{}const name=duplicateNameKey(item?.nome_campanha_exato);if(!accountId||!name)continue;const key=duplicateGroupKey(accountId,name),group=groups.get(key)||[];group.push(item);groups.set(key,group)}
+      for(const [key,items] of groups){if(items.length<2||!duplicateSuppressions.has(key))continue;const evidence=items.map(duplicateMetricEvidence);if(evidence[0].hasObservedMetrics&&evidence.every(item=>item.hasObservedMetrics&&item.signature===evidence[0].signature))suppressedGroups.add(key)}
+      for(const item of entries){
+        const keyName=duplicateNameKey(item?.nome_campanha_exato);let accountId=null;try{accountId=sourceAccountId(item)}catch{}
+        const duplicateKey=accountId&&keyName?duplicateGroupKey(accountId,keyName):null;
+        if(duplicateKey&&suppressedGroups.has(duplicateKey)){const seen=seenSuppressedRows.get(duplicateKey)||0;if(seen===0)campaigns.push(item);seenSuppressedRows.set(duplicateKey,seen+1);continue}
+        campaigns.push(item);
+      }
+      return{...clone(manifest),campanhas:campaigns};
+    };
     base.manifesto_atual=projectManifest(manifestOverride||base.manifesto_atual);
     return base
   }
@@ -601,5 +612,5 @@
     for(const sale of d0Confirmed){const summary=map.get(sale.campanha_id);if(!summary)continue;summary.pendingConfirmationCount=Math.max(0,summary.pendingConfirmationCount-1);const day=summary.byDate?.[sale.data];if(day)day.pendingConfirmationCount=Math.max(0,day.pendingConfirmationCount-1)}
     return map;
   }
-  window.CampaignDatabase={parseSearchImpressionShare,searchImpressionShareCells,SCHEMA,create,normalize,setCampaignIgnored,operationalProjection,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,cancelProvisionalSale,correctMccConversionValue,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,manualMccMatchCandidates,inferAffiliatePlatformFromCampaignName,salesAdjustmentMap};
+  window.CampaignDatabase={parseSearchImpressionShare,searchImpressionShareCells,SCHEMA,create,normalize,setManifestDuplicateSuppression,operationalProjection,importWorkbook,importManifest,manifestOperationalStates,campaignNumberReuseIssues,campaignNumberHistoryWarnings,campaignDateChangeCandidates,campaignCpaChangeCandidates,setCampaignStartDate,setCampaignMinimumRoi,setCampaignCommissionTestPercent,setRemainingAlertThreshold,reconcileCampaignSnapshots,dailyRows,campaignTotalsMap,consecutiveZeroImpressionDays,investmentTotalsMap,operationalMap,accountDomain,addProvisionalSale,updateProvisionalSale,cancelProvisionalSale,correctMccConversionValue,confirmFractionalConversionValue,mccBillingSalesFromDiary,mccBillingSalesFromManifest,manualMccMatchCandidates,inferAffiliatePlatformFromCampaignName,salesAdjustmentMap};
 })();

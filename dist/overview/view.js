@@ -3,7 +3,7 @@
   function mount({root,state,getSnapshot,getCardSnapshot,getCardRevision,domain,format,actions,preferences}){
     const $=selector=>root.querySelector(selector),$$=selector=>[...root.querySelectorAll(selector)];
     const OverviewDomain=domain,{esc,num:fmtNum,money:fmtMoney,pct:fmtPct,date:dateLabel}=format;
-    const columnPreferenceKey='hub:overview:visible-columns:v3',legacyColumnPreferenceKey='hub:overview:visible-columns:v2',oldestColumnPreferenceKey='hub:overview:visible-columns:v1',sortPreferenceKey='hub:overview:sort:v1',validSortKeys=new Set(OverviewDomain.totalsColumns('consolidated').map(([key])=>key).filter(key=>key!=='ignore'));let selectedColumns=null,selectedCampaignDate='';
+    const columnPreferenceKey='hub:overview:visible-columns:v3',legacyColumnPreferenceKey='hub:overview:visible-columns:v2',oldestColumnPreferenceKey='hub:overview:visible-columns:v1',sortPreferenceKey='hub:overview:sort:v1',validColumnKeys=new Set(OverviewDomain.totalsColumns('consolidated').map(([key])=>key)),validSortKeys=new Set(validColumnKeys);let selectedColumns=null,selectedCampaignDate='';
     try{const saved=JSON.parse(preferences?.getItem(sortPreferenceKey)||'null');if(saved&&validSortKeys.has(saved.key)&&['asc','desc'].includes(saved.direction)){state.sortKey=saved.key;state.sortDir=saved.direction}}catch{}
     function saveSortPreference(){try{preferences?.setItem(sortPreferenceKey,JSON.stringify({key:state.sortKey,direction:state.sortDir}))}catch{}}
     const overviewMetricZeroClass=value=>typeof value==='number'&&Number.isFinite(value)&&value===0?' overview-zero-value':'';
@@ -14,7 +14,7 @@
     const picker=$('#overviewColumnPicker'),viewport=root.ownerDocument?.defaultView;
     // Widths are presentation preferences only, shared by all three periods.
     const widthPreferenceKey='hub:overview:column-widths:v1',widthDefaults=OverviewDomain.columnWidths;
-    const widthMinimum=key=>key==='campaign'?160:key==='date'?52:key==='ignore'?76:64;
+    const widthMinimum=key=>key==='campaign'?160:key==='date'?52:64;
     const clampWidth=(key,value)=>Math.round(Math.min(1200,Math.max(widthMinimum(key),value)));
     let columnWidths={},resizeGesture=null,visibleWidthKeys=[];
     try{const saved=JSON.parse(preferences?.getItem(widthPreferenceKey)||'null');if(saved&&typeof saved==='object'&&!Array.isArray(saved))for(const key of Object.keys(widthDefaults)){const value=saved[key];if(typeof value==='number'&&Number.isFinite(value)&&value>0)columnWidths[key]=clampWidth(key,value)}}catch{}
@@ -73,8 +73,8 @@
     picker.onkeydown=event=>{if(event.key==='Escape'){picker.open=false;picker.querySelector('summary')?.focus()}};
     try{
       const stored=JSON.parse(preferences?.getItem(columnPreferenceKey)||'null');
-      if(Array.isArray(stored))selectedColumns=stored;
-      else{const legacy=JSON.parse(preferences?.getItem(legacyColumnPreferenceKey)||'null');if(Array.isArray(legacy))selectedColumns=[...new Set([...legacy,'ignore'])];else{const oldest=JSON.parse(preferences?.getItem(oldestColumnPreferenceKey)||'null');if(Array.isArray(oldest))selectedColumns=[...new Set([...oldest,'mcc','ignore'])]}}
+      if(Array.isArray(stored))selectedColumns=[...new Set(stored.filter(key=>validColumnKeys.has(key)))];
+      else{const legacy=JSON.parse(preferences?.getItem(legacyColumnPreferenceKey)||'null');if(Array.isArray(legacy))selectedColumns=[...new Set(legacy.filter(key=>validColumnKeys.has(key)))];else{const oldest=JSON.parse(preferences?.getItem(oldestColumnPreferenceKey)||'null');if(Array.isArray(oldest))selectedColumns=[...new Set([...oldest.filter(key=>validColumnKeys.has(key)),'mcc'].filter(key=>validColumnKeys.has(key)))]}}
     }catch{}
     function saveColumns(){try{preferences?.setItem(columnPreferenceKey,JSON.stringify(selectedColumns));$('#overviewColumnsMessage').textContent=''}catch{$('#overviewColumnsMessage').textContent='Preferência válida nesta sessão; não foi possível salvá-la no navegador.'}}
     function renderColumnOptions(columns){
@@ -82,15 +82,30 @@
       $$('[data-column-choice]').forEach(input=>input.onchange=()=>{const key=input.dataset.columnChoice,chosen=new Set(selectedColumns||columns.map(([key])=>key));input.checked?chosen.add(key):chosen.delete(key);chosen.add('campaign');selectedColumns=[...chosen];saveColumns();renderTotals();$(`[data-column-choice="${key}"]`)?.focus?.()});
     }
     $('#overviewColumnsReset').onclick=()=>{selectedColumns=null;try{preferences?.removeItem(columnPreferenceKey);preferences?.removeItem(legacyColumnPreferenceKey);preferences?.removeItem(oldestColumnPreferenceKey);$('#overviewColumnsMessage').textContent=''}catch{$('#overviewColumnsMessage').textContent='Padrão restaurado somente nesta sessão.'}renderTotals()};
-    const ignoredDialog=$('#ignoredCampaignsDialog');
-    function renderIgnoredCampaigns(){
-      const items=actions.getIgnoredCampaigns?.()||[];$('#ignoredCampaignCount').textContent=fmtNum(items.length);
-      $('#overviewIgnoreMessage').textContent='';
-      $('#ignoredCampaignsList').innerHTML=items.length?items.map(item=>`<li><span>${esc(item.name)}</span><button class="btn ignored-campaign-restore" type="button" data-restore-campaign="${esc(item.id)}">Restaurar</button></li>`).join(''):'<li class="overview-ignored-empty">Nenhuma campanha ignorada.</li>';
-      $$('[data-restore-campaign]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await actions.setCampaignIgnored?.(button.dataset.restoreCampaign,false);renderIgnoredCampaigns();renderTotals()}catch(error){$('#overviewIgnoreMessage').textContent=error.message||'Não foi possível restaurar a campanha.';button.disabled=false}});
+    const duplicateAuditDialog=$('#duplicateCampaignAuditDialog');
+    function renderDuplicateCampaignAudit(){
+      const result=actions.getDuplicateCampaignGroups?.()||{groups:[],unverifiableCount:0},groups=Array.isArray(result)?result:result.groups||[],unverifiableCount=Number(result.unverifiableCount)||0;
+      $('#duplicateCampaignAuditMessage').textContent='';
+      $('#duplicateCampaignAuditSummary').textContent=groups.length?`${fmtNum(groups.length)} grupo(s) de linhas repetidas encontrado(s) na captura salva. A ação mantém o original e só altera a projeção operacional.`:'Nenhuma linha repetida verificável encontrada na captura salva.';
+      const displayMetric=(value,decimals=0)=>value==null?'—':typeof value==='number'&&Number.isFinite(value)?fmtNum(value,decimals):String(value);
+      const memberMarkup=member=>{
+        const periodText=(period,label)=>`${label}: ${period.data?(/^\d{4}-\d{2}-\d{2}$/.test(period.data)?dateLabel(period.data):period.data):'data —'} · impr. ${displayMetric(period.impressoes)} · cliques ${displayMetric(period.cliques_google)} · custo ${displayMetric(period.custo_total,2)} · conv. ${displayMetric(period.conversoes,2)} · valor conv. ${displayMetric(period.valor_conversao,2)}`;
+        return`<li class="overview-duplicate-member"><div><strong>Linha ${fmtNum(member.occurrence)} · ${esc(member.name)}</strong><small>${esc(periodText(member.metrics?.[0]||{},'D−1'))}</small><small>${esc(periodText(member.metrics?.[1]||{},'D0'))}</small></div></li>`
+      };
+      const groupAction=group=>group.suppressed?`<button class="btn overview-duplicate-action" type="button" data-restore-duplicate-group="true" data-duplicate-account="${esc(group.accountId)}" data-duplicate-name="${esc(group.name)}">Restaurar linhas</button>`:group.metricsIdentical?`<button class="btn overview-duplicate-action" type="button" data-suppress-duplicate-group="true" data-duplicate-account="${esc(group.accountId)}" data-duplicate-name="${esc(group.name)}">Manter uma linha</button>`:group.suppressionStored?`<button class="btn overview-duplicate-action" type="button" data-restore-duplicate-group="true" data-duplicate-account="${esc(group.accountId)}" data-duplicate-name="${esc(group.name)}">Remover ajuste suspenso</button>`:'<span class="overview-duplicate-review">Revisão manual: métricas diferentes ou ausentes</span>';
+      const groupMarkup=groups.map(group=>`<li class="overview-duplicate-group"><div class="overview-duplicate-heading"><strong>${esc(group.name)}</strong><span>Conta ${esc(group.accountId)}</span></div><p class="overview-duplicate-evidence ${group.metricsIdentical?'is-match':'is-review'}">${group.suppressed?'Ajuste aplicado: esta projeção mostra uma ocorrência. O manifesto original permanece intacto.':group.metricsIdentical?'As métricas D−1 e D0 dessas linhas são idênticas. Confira se representam a mesma campanha antes de ajustar.':group.suppressionStored?'O ajuste salvo está suspenso: as métricas divergiram ou estão ausentes, então todas as linhas ficam visíveis.':'Métricas diferentes ou insuficientes; nenhuma linha pode ser ajustada automaticamente.'}</p><ul class="overview-duplicate-members">${group.members.map(memberMarkup).join('')}</ul><div class="overview-roi-actions">${groupAction(group)}</div></li>`).join('');
+      const warning=unverifiableCount?`<li class="overview-duplicate-unverifiable">${fmtNum(unverifiableCount)} ocorrência(s) de nomes repetidos sem ID completo da conta não puderam ser verificadas com segurança.</li>`:'';
+      $('#duplicateCampaignAuditList').innerHTML=groups.length||warning?groupMarkup+warning:'<li class="overview-duplicate-empty">Não há linhas repetidas com o mesmo nome normalizado e ID completo da conta. A auditoria não altera a regra das próximas capturas.</li>';
+      const applyDuplicateAction=async(button,suppressed)=>{
+        const confirmAction=viewport?.confirm;
+        if(suppressed&&typeof confirmAction==='function'&&!confirmAction('Manter uma única ocorrência nas telas e métricas operacionais para este nome e conta? O manifesto MCC, os registros originais e o histórico não serão apagados. Você poderá restaurar as linhas por esta mesma auditoria.'))return;
+        button.disabled=true;try{await actions.setManifestDuplicateSuppression?.(button.dataset.duplicateAccount,button.dataset.duplicateName,suppressed);renderTotals();renderDuplicateCampaignAudit()}catch(error){$('#duplicateCampaignAuditMessage').textContent=error.message||'Não foi possível ajustar as linhas duplicadas.';button.disabled=false}
+      };
+      $$('[data-suppress-duplicate-group]').forEach(button=>button.onclick=()=>applyDuplicateAction(button,true));
+      $$('[data-restore-duplicate-group]').forEach(button=>button.onclick=()=>applyDuplicateAction(button,false));
     }
-    $('#ignoredCampaignsButton').onclick=()=>{renderIgnoredCampaigns();if(typeof ignoredDialog.showModal==='function')ignoredDialog.showModal();else ignoredDialog.open=true};
-    $('#ignoredCampaignsClose').onclick=()=>ignoredDialog.close?.();
+    $('#verifyDuplicateCampaignsButton').onclick=()=>{renderDuplicateCampaignAudit();if(typeof duplicateAuditDialog.showModal==='function')duplicateAuditDialog.showModal();else duplicateAuditDialog.open=true};
+    $('#duplicateCampaignAuditClose').onclick=()=>duplicateAuditDialog.close?.();
     function saleRoiCell(sale){
       const snapshot=sale?.snapshot,roi=snapshot?.roi_percent;
       const detail=snapshot?`ROI acumulado no registro (${dateLabel(snapshot.sale_date)}${snapshot.sale_time?' '+snapshot.sale_time:''}): investimento ${fmtMoney(snapshot.investment_brl)}; receita ${fmtMoney(snapshot.revenue_brl)}. ${snapshot.unavailable_reason||'Fotografia preservada; não muda com capturas futuras.'}`:'Sem fotografia de ROI para esta venda manual registrada.';
@@ -203,7 +218,6 @@
         remainingTone=OverviewDomain.remainingAlertTone(remainingValue,remainingMinimum,remainingYellowMinimum),
         profitClass=profit==null?'':profit<0?'negative':profit>0?'positive':'',
         cells={
-        ignore:`<td class="overview-ignore-cell"><button class="overview-ignore-action" type="button" data-ignore-campaign="${esc(campaignId||'')}" ${campaignId?'':'disabled'} title="Tira esta campanha das telas e métricas operacionais; o histórico continua guardado">Ignorar</button></td>`,
         date:`<td>${esc(identity.dateLabel)}</td>`,
         campaign:`<td class="name" title="${esc(c.nome_campanha_exato)}">${esc(identity.name)}</td>`,
         zeroDays:`<td class="num ${zeroDays>0?'negative':'muted'}" title="${zeroDays==null?'Sem histórico diário suficiente':zeroDays===0?'A campanha teve impressões no dia mais recente':`${zeroDays} dia${zeroDays===1?'':'s'} consecutivo${zeroDays===1?'':'s'} sem impressões`}">${zeroDays==null?'—':zeroDays}</td>`,
@@ -228,7 +242,6 @@
       const fields={current:'investment',imp:'impressions',clicks:'clicks',conv:'conversions',profit:'profit'};
       $('#totalsFoot').innerHTML='<tr>'+headers.map(([key])=>{
         if(key==='campaign')return'<th scope="row" data-column="campaign">Totais</th>';
-        if(key==='ignore')return'<td data-column="ignore"></td>';
         const field=fields[key],total=totals[field],value=total?.value;
         const tone=key==='profit'&&value!=null?(value<0?' negative':value>0?' positive':''):'';
         const zeroClass=['imp','clicks','conv'].includes(key)?overviewMetricZeroClass(value):'';
@@ -268,10 +281,9 @@
       const totalLabel=state.totalsMode==='d0'?'D zero':state.totalsMode==='d1'?'D−1':'total';
       const columns=OverviewDomain.totalsColumns(state.totalsMode,totalLabel),headers=OverviewDomain.visibleColumns(columns,selectedColumns),numericHeaders=new Set(['zeroDays','current','imp','clicks','conv','roi','saleRoiFirst','saleRoiSecond','profit','account','limit','remaining']);if(!headers.some(([key])=>key===state.sortKey)&&!(state.totalsMode==='d0'&&state.sortKey==='imp')){state.sortKey=headers.some(([key])=>key==='current')?'current':'campaign';state.sortDir='desc'}
       renderColumnOptions(columns);
-      renderIgnoredCampaigns();
       visibleWidthKeys=headers.map(([key])=>key);
       const remainingMinimum=OverviewDomain.remainingAlertThreshold(snapshot.remainingAlertMinimum),remainingYellowMinimum=OverviewDomain.remainingWarningThreshold(snapshot.remainingAlertYellowMinimum);
-      $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="${key}" style="width:${columnWidth(key)}px">${key==='ignore'?`<span class="overview-unsortable">${label}</span>`:`<button class="sort-btn ${numericHeaders.has(key)?'num':''} ${state.sortKey===key?'active':''}" data-sort="${key}" aria-label="Ordenar por ${label}"${key.startsWith('saleRoi')?' title="ROI acumulado no momento do registro da venda manual; não recalculado por período"':''}>${label}<span class="sort-arrow">${state.sortKey===key?(state.sortDir==='asc'?'↑':'↓'):''}</span></button>`}${key==='limit'?`<a class="test-budget-roi-link overview-test-rules-edit hub-corner-edit" href="#" aria-label="Editar regras de exibição do limite de teste" aria-haspopup="dialog" aria-controls="overviewTestRulesDialog" title="Editar regras de CPA e ROI mínimo">Editar</a>`:key==='remaining'?`<a class="test-budget-roi-link overview-remaining-edit hub-corner-edit" href="#" aria-label="Editar valor mínimo de alerta do valor restante" aria-haspopup="dialog" aria-controls="remainingAlertDialog" title="${esc(remainingAlertTitle(remainingMinimum,remainingYellowMinimum))}">Editar</a>`:''}<span class="overview-column-resizer" data-resize-column="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${widthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${columnWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`).join('')+'</tr>';
+      $('#totalsHead').innerHTML='<tr>'+headers.map(([key,label])=>`<th data-column="${key}" style="width:${columnWidth(key)}px"><button class="sort-btn ${numericHeaders.has(key)?'num':''} ${state.sortKey===key?'active':''}" data-sort="${key}" aria-label="Ordenar por ${label}"${key.startsWith('saleRoi')?' title="ROI acumulado no momento do registro da venda manual; não recalculado por período"':''}>${label}<span class="sort-arrow">${state.sortKey===key?(state.sortDir==='asc'?'↑':'↓'):''}</span></button>${key==='limit'?`<a class="test-budget-roi-link overview-test-rules-edit hub-corner-edit" href="#" aria-label="Editar regras de exibição do limite de teste" aria-haspopup="dialog" aria-controls="overviewTestRulesDialog" title="Editar regras de CPA e ROI mínimo">Editar</a>`:key==='remaining'?`<a class="test-budget-roi-link overview-remaining-edit hub-corner-edit" href="#" aria-label="Editar valor mínimo de alerta do valor restante" aria-haspopup="dialog" aria-controls="remainingAlertDialog" title="${esc(remainingAlertTitle(remainingMinimum,remainingYellowMinimum))}">Editar</a>`:''}<span class="overview-column-resizer" data-resize-column="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${widthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${columnWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`).join('')+'</tr>';
       applyWidths();bindColumnResizers();
       const rows=snapshot.rows;
       const dateNavigation=OverviewDomain.campaignDateNavigation(rows,selectedCampaignDate);
@@ -298,7 +310,6 @@
       $('#totalsBody').innerHTML=matchingRows.map(row=>{if(!rowMarkupCache.has(row))rowMarkupCache.set(row,renderRow(row,headers,snapshot.referenceDate,remainingMinimum,remainingYellowMinimum));return rowMarkupCache.get(row)}).join('')||`<tr><td colspan="${headers.length}" class="empty">Nenhuma campanha encontrada.</td></tr>`;
       renderTableFooter(matchingRows,headers,snapshot.referenceDate);
       $$('.sort-btn').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;if(state.sortKey===key)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=key;state.sortDir='asc'}saveSortPreference();renderTable()});
-      $$('.overview-ignore-action').forEach(button=>button.onclick=async event=>{event.preventDefault();event.stopPropagation();if(!button.dataset.ignoreCampaign)return;const confirmAction=viewport?.confirm;if(typeof confirmAction==='function'&&!confirmAction('Ignorar esta campanha? Ela deixará de aparecer nas telas e métricas operacionais, mas o histórico será preservado e poderá ser restaurado.'))return;button.disabled=true;try{await actions.setCampaignIgnored?.(button.dataset.ignoreCampaign,true);renderTotals()}catch(error){button.disabled=false;$('#overviewWidthsMessage').textContent=error.message||'Não foi possível ignorar a campanha.'}});
       $$('.test-budget-roi-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();if(link.classList.contains('overview-remaining-edit'))showRemainingDialog();else if(link.classList.contains('overview-test-rules-edit'))showTestRulesDialog();else if(link.classList.contains('test-budget-commission-link'))showCommissionDialog(link.dataset);else showRoiDialog(link.dataset.campaignId,link.dataset.currentRoi,link.dataset.currentLimit,link.dataset.totalRevenue)};link.ondblclick=event=>event.stopPropagation()});
       $$('.overview-kpi-fractional-link').forEach(link=>{link.onclick=event=>{event.preventDefault();event.stopPropagation();showFractionalDialog()};link.ondblclick=event=>event.stopPropagation()});
       $$('#totalsBody tr').forEach(tr=>tr.ondblclick=()=>tr.dataset.campaign&&actions.showProduct(tr.dataset.campaign,tr.dataset.source,tr.dataset.campaignId||null));$('#totalsConsolidated').onclick=()=>{state.totalsMode='consolidated';renderTotals({updateCards:false})};$('#totalsD1').onclick=()=>{state.totalsMode='d1';renderTotals({updateCards:false})};$('#totalsD0').onclick=()=>{state.totalsMode='d0';state.sortKey='imp';state.sortDir='desc';saveSortPreference();renderTotals({updateCards:false})};

@@ -10,6 +10,8 @@ Ao concluir, confira os arquivos do escopo, publicação/cache, testes do domín
 
 **Apresentação D0/D−1 é prioridade protegida.** Ao tocar em importação MCC, dados de período, adaptadores ou Visão Geral, mantenha o [contrato prioritário de apresentação](../../../../docs/maintenance.md#contrato-prioritário-de-apresentação-dos-períodos-mcc). Execute `node --test tests/overview-d0-after-d1.test.mjs tests/overview-view.test.mjs tests/overview-mcc-coverage.test.mjs`, build e suíte completa. A regressão deve chegar até o conteúdo renderizado de cartões/tabela: D0 das duas MCCs precisa continuar visível após D−1-only, alternância de períodos e reabertura, sem inventar zero para ausência nem reviver ausência explícita. Falha desse contrato bloqueia entrega; não retire asserts ou recursos para aprovar outra implementação.
 
+Na auditoria de duplicidades históricas, teste a detecção de linhas do manifesto MCC por nome normalizado + conta completa, comparação D−1/D0, conta incompleta sem supressão, preservação das linhas originais e ação reversível na projeção operacional. Divergência posterior das métricas deve devolver todas as linhas à projeção. Use somente dados sintéticos em memória; a varredura não pode consultar/importar MCC real. Rode também `tests/overview-duplicate-audit.test.mjs`, `tests/campaign-ignore.test.mjs` e `tests/overview-view.test.mjs`.
+
 1. Confirme a raiz e preserve mudanças preexistentes sem executar verificações Git.
 2. Localize a fonte efetiva antes de editar. Use `apply_patch` para mudanças manuais.
 3. Rode `node build.mjs` depois de alterações nas fontes. O Preparador MCC é editado em `src/preparador-MCC/index.html` e publicado pelo build; não altere a cópia gerada em `dist/`.

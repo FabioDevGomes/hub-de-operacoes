@@ -69,12 +69,3 @@ test('legacy adapter returns only preserved summary, does not synthesize daily h
   assert.equal(snapshot.displayRows.length,0);assert.equal(snapshot.manualSalesByDate.size,0);
   assert.equal(snapshot.investment,null);assert.equal(JSON.stringify(database),before);
 });
-test('diary hides an ignored campaign without deleting the stored campaign or its rows',async()=>{
-  const stored={id:'ignored-id',nome_mcc:'Campanha ignorada',nome_exibicao:'Campanha ignorada',ignorada:true},
-    database={campanhas:[stored],diario:[{campanha_id:'ignored-id',data:'2026-09-30',celulas:{O:{value:75}}}]},before=JSON.stringify(database),context=vm.createContext({state:{database}});
-  vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);
-  vm.runInContext(diaryAdapter,context);
-  const snapshot=context.productDiarySnapshot('Campanha ignorada','workbook','ignored-id');
-  assert.equal(snapshot.ignored,true);assert.equal(snapshot.rows.length,0);assert.equal(snapshot.investment,null);
-  assert.equal(JSON.stringify(database),before,'o Diário não apaga nem altera os dados de origem');
-});

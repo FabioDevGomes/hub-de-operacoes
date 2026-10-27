@@ -1,10 +1,23 @@
 # Workflow de engenharia
 
+## Diagnóstico de carregamento travado
+
+Em 27/10/2026, a Visão Geral ficou indefinidamente em “Carregando base local…” após a mudança da coluna de ações de campanha. A causa foi um erro de sintaxe em `src/overview/view.js`: faltava fechar uma template string na célula `status`, antes da propriedade `actions`. O navegador recusou o script inteiro (`SyntaxError: Unexpected token 'class'`), portanto `OverviewView` não foi definido. No arranque, `render()` chama `navigation.refresh()` antes de `restoreLocalBase()`; a exceção síncrona seguinte (`ReferenceError: OverviewView is not defined`) interrompeu a execução antes que a leitura IndexedDB começasse. A mensagem de carregamento, que só termina por `ready()` ou `fail()`, ficou presa. Não era lentidão nem corrupção da base.
+
+Ao investigar este sintoma, siga esta ordem:
+
+1. Leia o erro mais antigo no Console e confirme a URL/versão de cache do script. Um erro de parsing pode impedir a definição dos globais que outras views usam.
+2. Execute `node --check` no JavaScript de cada arquivo alterado antes do build. O build publica/copia módulos do navegador e não garante que todos sejam parseados.
+3. Inspecione a ordem do arranque: falha síncrona de render não pode impedir o início da recuperação da base nem deixar o estado de carregamento sem saída. O `render()` do shell captura erros, registra-os no Console e exibe toast; a recuperação da base continua pelo fluxo próprio.
+4. Depois de corrigir, atualize o query param de cache do script alterado, faça o build e confira o artefato servido. Não apague nem substitua IndexedDB para resolver erro de JavaScript.
+
+Neste incidente, o fechamento ausente foi corrigido e a versão de cache da view foi avançada. Verificação: `node --check src/overview/view.js`; não foi necessário alterar dados ou schema.
+
 ## Porta de entrada para novas implementações
 
 Leia [Regras para novas implementações](../../../../docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](../../../../docs/maintenance.md#roteiro-de-execução). Antes de editar, identifique o módulo responsável e registre quais comportamentos devem permanecer. Uma falha de teste após extração de arquivos não autoriza remover um botão ou uma funcionalidade: confira o requisito atual, ajuste a verificação ao novo módulo e proteja o comportamento com regressão.
 
-Ao concluir, confira os arquivos do escopo, publicação/cache, testes do domínio e suíte completa, e a UI quando aplicável; atualize os contratos e o mapa de arquivos. Separe falhas preexistentes de regressões e informe verificações não realizadas. **Cada alteração entregue deve avançar a versão global, no mínimo um patch, antes da resposta final**, sem adiar para commit/push ou agrupar pedidos já entregues; siga [o contrato de versionamento](../../../../docs/versioning.md#regra-obrigatória-uma-versão-por-alteração-entregue). Alterações apenas de documentação exigem checagem de caminhos/links, coerência com as fontes e rebuild para atualizar os metadados de versão, sem saves ou acesso aos bancos reais. Não execute verificações Git, conforme preferência explícita do usuário.
+Durante a implementação, use testes focados para encurtar o ciclo de correção; não repita a suíte completa a cada ajuste intermediário. Na validação final, confira os arquivos do escopo, publicação/cache, regressões do domínio e contratos protegidos, suíte completa e UI quando aplicável; atualize contratos e mapa de arquivos. Separe falhas preexistentes de regressões e informe verificações não realizadas. **Cada alteração entregue deve avançar a versão global, no mínimo um patch, antes da resposta final**, sem adiar para commit/push ou agrupar pedidos já entregues; siga [o contrato de versionamento](../../../../docs/versioning.md#regra-obrigatória-uma-versão-por-alteração-entregue). Alterações apenas de documentação exigem checagem de caminhos/links, coerência com as fontes e rebuild dos metadados uma vez ao fechar a entrega, sem saves ou acesso aos bancos reais. Não execute verificações Git, conforme preferência explícita do usuário.
 
 ## Editar, compilar e testar
 
@@ -14,25 +27,25 @@ Na auditoria de duplicidades históricas, teste a detecção de linhas do manife
 
 1. Confirme a raiz e preserve mudanças preexistentes sem executar verificações Git.
 2. Localize a fonte efetiva antes de editar. Use `apply_patch` para mudanças manuais.
-3. Rode `node build.mjs` depois de alterações nas fontes. O Preparador MCC é editado em `src/preparador-MCC/index.html` e publicado pelo build; não altere a cópia gerada em `dist/`.
-4. Execute a suíte completa:
+3. Edite fontes canônicas; não altere manualmente cópias geradas em `dist/`.
+4. Durante o ciclo, rode somente a regressão ligada à alteração. Para repetir um caso individual, use o filtro nativo do Node:
 
 ```powershell
-$failed=$false
-Get-ChildItem tests -Filter '*.test.mjs' | ForEach-Object {
-  node $_.FullName
-  if ($LASTEXITCODE -ne 0) { $failed=$true }
-}
-if ($failed) { exit 1 }
+node --test --test-name-pattern='trecho do nome do caso' tests/<modulo>.test.mjs
 ```
 
+Para regressão de módulo, inclua seus testes de domínio, view/adaptador e contratos protegidos num comando só. No fechamento, avance a versão uma vez, faça o build uma vez e rode a suíte com `node --test --test-skip-pattern='privacy-boundary' --test-concurrency=4`. Isso exclui o teste que depende do índice Git, conforme preferência do usuário; não apague esse teste e não use o loop PowerShell que inicia um processo Node por arquivo.
+
+**Medição local (26/10/2026, Node 24.22.1):** 252 arquivos de teste, sem `tests/privacy-boundary.test.mjs`; 976 casos, 915 passaram e 61 falharam. O mesmo conjunto de 61 falhas ocorreu com 1, 2 e 4 workers. Tempos medidos: 93,6 s em série, 52,4 s com 2 workers e 37,6 s com 4 (redução de cerca de 60% frente ao serial). Quatro workers são o padrão para a suíte completa; use 2 para lotes focados e 1 quando o caso dependa de sequência explícita. As falhas atuais abrangem testes de Accounts, Build, Visão Geral, gastos pessoais, Preparador/MCC e Tracking; em `tracking-view.test.mjs`, 14 de 18 casos falharam com expectativas da tela antiga, incluindo controles movidos para Configurações globais e uma expectativa de estado vazio incompatível com o fixture. Alinhe os contratos caso a caso à arquitetura atual; não apague nem pule falhas para aprovar uma mudança. O build Node isolado levou 0,99 s; não é o gargalo principal.
+
 5. Mudanças de UI/view ou IndexedDB exigem validação visual em `http://127.0.0.1:8765/` e da rota impactada. Prefira leitura e estado vazio; não grave fixtures em armazenamento real.
+6. O Preparador MCC é editado em `src/preparador-MCC/index.html` e publicado pelo build; não altere a cópia gerada em `dist/`.
 
 ### Cache da base na Visão Geral
 
 `src/overview/base-session-cache.js` mantém um snapshot limitado em `sessionStorage` para a mesma aba. A Visão Geral só evita o IndexedDB quando a versão do Hub e o marcador compartilhado de revisão correspondem. Toda escrita em `bases`/`catalogos` invalida o marcador antes e depois da transação, incluindo a rota Preparador MCC e reparos de compatibilidade. Uma leitura completa só pode renovar o marcador se a revisão não mudou durante a leitura; isso impede que um snapshot antigo vença uma gravação concorrente. Snapshot ausente, antigo, inválido, acima do limite, Storage indisponível ou revisão concorrente retorna ao carregamento normal. Teste com armazenamento sintético em memória; a validação visual usa a base real apenas em leitura, sem limpar Storage nem gravar dados de teste. Ver [contrato de manutenção](../../../../docs/maintenance.md#retorno-rápido-à-visão-geral-na-mesma-aba) e `tests/overview-base-session-cache.test.mjs`.
 
-Também é possível executar a suíte inteira com `node --test`. O guia `docs/maintenance.md` identifica fontes e contratos atuais. Para Mapa por Conta, rode `tests/accounts-domain.test.mjs`, `tests/accounts-view.test.mjs`, `tests/account-cpa-coverage.test.mjs` e `tests/build.test.mjs`; os dois primeiros usam apenas dados sintéticos em memória. Compare a tela antes/depois nos três filtros de situação (sincronizados entre matriz, cobertura e detalhe), conta/produto, seleção, ordenação e domínio. Não transforme essa extração em migração de dados ou em alteração da consolidação histórica.
+O comando padrão da suíte é `node --test --test-skip-pattern='privacy-boundary' --test-concurrency=4`; ele exclui o teste que depende do índice Git. O guia `docs/maintenance.md` identifica fontes e contratos atuais. Para Mapa por Conta, rode `tests/accounts-domain.test.mjs`, `tests/accounts-view.test.mjs`, `tests/account-cpa-coverage.test.mjs` e `tests/build.test.mjs`; os dois primeiros usam apenas dados sintéticos em memória. Compare a tela antes/depois nos três filtros de situação (sincronizados entre matriz, cobertura e detalhe), conta/produto, seleção, ordenação e domínio. Não transforme essa extração em migração de dados ou em alteração da consolidação histórica.
 
 Ao mudar a ordem de contas no Mapa por Conta, valide com `tests/accounts-domain.test.mjs` que o nome MCC explícito determina e-com primeiro, MCC Nutra por último e “Sem conta” continua especial; inclua uma conta nova apenas nos dados sintéticos para provar que a próxima projeção a posiciona sem persistir preferência ou alterar MCC/campanhas. Rode também os testes de view/adaptador/CPA do Mapa, build e suíte completa. A inspeção visual da rota real é somente de leitura; não importe contas de teste.
 

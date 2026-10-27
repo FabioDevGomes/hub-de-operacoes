@@ -1,6 +1,6 @@
 import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=11';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=43';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=12';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=44';
 import {mountExtensionCapture} from './extension-capture.mjs?v=7';
 import {mergeDtcCountries,removeManualCountry as removeManualCountryMetadata} from './dtc-country-capture.mjs?v=6';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
@@ -62,11 +62,11 @@ async function refreshAfterGlimpseSave() {
     view.showMessage('A análise foi salva, mas não foi possível atualizar a tabela. Recarregue a tela.',{error:true});
   }
 }
-async function saveDecision(offerKey,status,notes='') {
+async function saveDecision(offerKey,status,notes='',pageClassification=null) {
   const item=currentOffer(offerKey);if(!item)return;
   const previous=decisions.find(record=>record.offerKey===offerKey)||{offerKey,currentStatus:TopOffersDecision.DEFAULT_DECISION,notes:'',history:[]};
-  const normalized=TopOffersDecision.normalizeDecision(status),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').slice(0,5000);
-  const stored={...previous,offerKey,currentStatus:normalized,notes:decisionNotes,updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,capturedAt,notes:decisionNotes}]};
+  const normalized=TopOffersDecision.normalizeDecision(status),normalizedPageClassification=TopOffersDecision.normalizePageClassification(pageClassification),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').slice(0,5000);
+  const stored={...previous,offerKey,currentStatus:normalized,pageClassification:normalizedPageClassification,notes:decisionNotes,updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,pageClassification:normalizedPageClassification,capturedAt,notes:decisionNotes}]};
   try{await Storage.putDecision(stored);decisions=[...decisions.filter(record=>record.offerKey!==offerKey),stored];show();view.showMessage(`Decisão salva somente em Top Offers CB: ${normalized}.`)}
   catch(error){console.error('Não foi possível salvar a decisão Top Offers CB.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true});throw error}
 }

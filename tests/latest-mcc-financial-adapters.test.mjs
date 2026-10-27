@@ -16,7 +16,7 @@ test('latest lower D0/D−1 drives Overview, accumulated profit and CPA, not sta
   const cache={latestSnapshots:{dates:snapshots.map(row=>row.date),rows:snapshots},snapshotsByCampaignName:new Map([['synthetic campaign',snapshots]]),dailyByCampaign:new Map([[stored.id,Object.entries(history.byDate).map(([data,row])=>({data,celulas:{O:{value:row.investment},P:{value:row.commission},B:{value:row.impressions},C:{value:row.clicks},F:{value:row.conversions}}}))]]),salesAdjustments:new Map([[stored.id,{byDate:{'2026-10-02':{pendingConversions:1,commissionAdjustment:15}}}]])};
   const context=vm.createContext({window:{},state:{database:{},totalsMode:'consolidated'},derivedContext:()=>cache,manifestDates:()=>({d0:'2026-10-02',d1:'2026-10-01'}),databaseCampaign:()=>stored,valueOf:field=>field?.valor??null,currentCost:()=>{throw Error('must use snapshot')}});
   vm.runInContext(script,context);context.OverviewDomain=context.window.OverviewDomain;
-  vm.runInContext(['d0Totals','d1Totals','totalsForMode','cpaPeriodTotals','roiForTotals'].map(adapter).join('\n'),context);
+  vm.runInContext(['googleAdsApiFieldsByDate','d0Totals','d1Totals','totalsForMode','cpaPeriodTotals','roiForTotals'].map(adapter).join('\n'),context);
   assert.equal(context.d0Totals(campaign).investment,10);assert.equal(context.d0Totals(campaign).clicks,2);
   assert.equal(context.d1Totals(campaign,history).investment,20);assert.equal(context.d1Totals(campaign,history).clicks,4);
   assert.equal(context.d1Totals({nome_campanha_exato:'Missing',metricas_D_menos_1:{presente:false}},history).investment,null,'D−1 ausente na captura não herda métricas anteriores da mesma data');
@@ -32,6 +32,20 @@ test('latest lower D0/D−1 drives Overview, accumulated profit and CPA, not sta
   assert.equal(context.OverviewDomain.profitForTotals(context.d0Totals(campaign)),null);
   assert.equal(context.roiForTotals({investment:10,commission:null}),null);
   assert.equal(history.investment,150,'cálculos não modificam o histórico');
+});
+
+test('API daily values remain in Consolidado and reduce the configured test balance',()=>{
+  const date='2026-10-26',campaign={nome_campanha_exato:'Synthetic campaign',metricas_D_zero:{presente:true},metricas_D_menos_1:{presente:true}},stored={id:'synthetic'},history={investment:1437.74,impressions:437,clicks:19,conversions:0,commission:0,observed:{investment:1,impressions:1,clicks:1,conversions:1,commission:1},byDate:{[date]:{investment:1437.74,impressions:437,clicks:19,conversions:0,commission:0}}},snapshot=[{campaignName:campaign.nome_campanha_exato,date,period:'d1',present:true,investment:0,impressions:0,clicks:0,conversions:0,commission:0}],daily={data:date,fontes:['google_ads_api'],celulas:{O:{value:1437.74,origem:'google_ads_api'},B:{value:437,origem:'google_ads_api'},C:{value:19,origem:'google_ads_api'},F:{value:0,origem:'google_ads_api'},P:{value:0}}},cache={latestSnapshots:{dates:[date],rows:snapshot},snapshotsByCampaignName:new Map([['synthetic campaign',snapshot]]),dailyByCampaign:new Map([[stored.id,[daily]]])};
+  const context=vm.createContext({window:{},state:{database:{},totalsMode:'d1',googleAdsSourceMode:'api'},derivedContext:()=>cache,manifestDates:()=>({d0:'2026-10-27',d1:date}),databaseCampaign:()=>stored,valueOf:field=>field?.valor??null,currentCost:()=>{throw Error('must use snapshot')}});
+  vm.runInContext(script,context);context.OverviewDomain=context.window.OverviewDomain;
+  vm.runInContext(['googleAdsApiFieldsByDate','d0Totals','d1Totals','totalsForMode'].map(adapter).join('\n'),context);
+  const consolidated=context.totalsForMode(campaign,history,'consolidated');
+  assert.equal(context.d1Totals(campaign,history).investment,1437.74,'D−1 mantém o valor diário recebido pela API');
+  assert.equal(consolidated.investment,1437.74,'Consolidado não perde o investimento API ao aplicar retrato MCC da mesma data');
+  assert.equal(consolidated.impressions,437);assert.equal(consolidated.clicks,19);assert.equal(consolidated.conversions,0);
+  const budget=context.OverviewDomain.deriveTestBudget({commission:176,commissionCurrency:'USD',exchangeRate:5.3407,conversions:0,sales:0,cpaPercent:90,commissionTestPercentOverride:50,testLimitSettings:{cpaMinimumPercent:90,commissionPercent:50},investment:consolidated.investment});
+  assert.equal(budget.limit,469.98);assert.equal(budget.remaining,-967.76,'o saldo desconta pelo menos o investimento API observado');
+  assert.equal(history.investment,1437.74,'a correção não modifica o histórico de entrada');
 });
 
 test('first Billing backfill applies latest correction, preserves older sales, payments and manual rows',async()=>{

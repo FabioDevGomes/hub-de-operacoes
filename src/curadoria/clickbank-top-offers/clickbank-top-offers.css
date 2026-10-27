@@ -103,6 +103,10 @@ body:has(#clickbankTopOffersRoot #offerSheet:not(.hidden)):not(:has(#offerSheet 
 body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(1000px,calc(100% - 28px))}
 body:has(#clickbankTopOffersRoot) #sharedDecisionActions{grid-template-columns:repeat(7,minmax(126px,1fr));justify-content:center;overflow-x:auto;overscroll-behavior-inline:contain}
 body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{box-sizing:border-box;width:100%;white-space:nowrap;padding-inline:2px}
+body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification:not([hidden]){display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 21px 0}
+body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification label{display:inline-flex;align-items:center;gap:8px;color:var(--cb-muted);font-size:.82rem;font-weight:700;cursor:pointer}
+body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification input[type="checkbox"]{width:16px;height:16px;margin:0;accent-color:#34d399}
+body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification input[type="checkbox"]:focus-visible{outline:2px solid rgba(90,177,255,.72);outline-offset:2px}
 @media(max-width:868px){
   body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(1000px,calc(100% - 16px))}
   body:has(#clickbankTopOffersRoot) #sharedDecisionActions{display:grid;grid-template-columns:repeat(7,minmax(126px,1fr));justify-content:start;overflow-x:auto}

@@ -22,11 +22,61 @@ export function parseTrackingDatePtBr(value) {
   return isDate(isoDate) ? isoDate : null;
 }
 
-export function trackingClicksDefaultDateRange(now = new Date()) {
-  const end = now.toISOString().slice(0, 10);
-  const startDate = new Date(`${end}T00:00:00.000Z`);
-  startDate.setUTCDate(startDate.getUTCDate() - 29);
-  return { startDate: startDate.toISOString().slice(0, 10), endDate: end };
+function browserTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
+function dateInTimeZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function trackingClicksDefaultDateRange(now = new Date(), timeZone = browserTimeZone()) {
+  const end = dateInTimeZone(now, timeZone);
+  return { startDate: end, endDate: end };
+}
+
+export function trackingClicksDateRangeForPreset(preset, now = new Date(), timeZone = browserTimeZone()) {
+  const [year, month, day] = dateInTimeZone(now, timeZone).split('-').map(Number);
+  const today = new Date(Date.UTC(year, month - 1, day));
+  const start = new Date(today);
+  let end = today;
+
+  switch (preset) {
+    case 'today':
+      break;
+    case 'yesterday':
+      start.setUTCDate(start.getUTCDate() - 1);
+      end = new Date(start);
+      break;
+    case '7-days':
+      start.setUTCDate(start.getUTCDate() - 6);
+      break;
+    case '30-days':
+      start.setUTCDate(start.getUTCDate() - 29);
+      break;
+    case 'this-month':
+      start.setUTCDate(1);
+      break;
+    case 'last-month':
+      start.setUTCDate(1);
+      start.setUTCMonth(start.getUTCMonth() - 1);
+      end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0));
+      break;
+    case 'total':
+      start.setUTCDate(start.getUTCDate() - (TRACKING_CLICKS_MAX_DAYS - 1));
+      break;
+    default:
+      throw new Error('Selecione um período rápido válido.');
+  }
+
+  return validateTrackingClicksDateRange(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
 }
 
 export function validateTrackingClicksDateRange(startDate, endDate) {
@@ -44,11 +94,16 @@ function optionalSafeText(value, pattern, label) {
   return value;
 }
 
-export function normalizeTrackingClicksReport(payload, requestedRange = null) {
-  if (!payload || payload.ok !== true || payload.schema_version !== 1 || !Array.isArray(payload.rows)) {
+export function normalizeTrackingClicksReport(payload, requestedRange = null, requestedPlatform = null) {
+  if (!payload || payload.ok !== true || payload.schema_version !== 2 || !Array.isArray(payload.rows)) {
     throw new Error('O servidor retornou um relatório de cliques ilegível.');
   }
-  const allowedReportFields = ['ok', 'schema_version', 'generated_at_utc', 'start_date', 'end_date', 'count_semantics', 'rows'];
+  const platform = payload.platform;
+  if (!['clickbank', 'gurumedia', 'unsegmented'].includes(platform)
+      || (requestedPlatform && platform !== requestedPlatform)) {
+    throw new Error('O servidor retornou métricas de outra plataforma ou sem classificação. Atualize os arquivos do servidor.');
+  }
+  const allowedReportFields = ['ok', 'schema_version', 'platform', 'generated_at_utc', 'start_date', 'end_date', 'count_semantics', 'rows'];
   if (Object.keys(payload).some(key => !allowedReportFields.includes(key))) throw new Error('O relatório contém campos não permitidos.');
   const startDate = payload.start_date;
   const endDate = payload.end_date;
@@ -63,12 +118,13 @@ export function normalizeTrackingClicksReport(payload, requestedRange = null) {
   }
   const seen = new Set();
   const rows = payload.rows.map(row => {
-    const allowedRowFields = ['date_utc', 'product_key', 'presell_host', 'page_views', 'outbound_clicks'];
+    const allowedRowFields = ['date_utc', 'product_key', 'product_label', 'presell_host', 'page_views', 'outbound_clicks'];
     if (!row || Object.keys(row).some(key => !allowedRowFields.includes(key))) throw new Error('O relatório contém campos não permitidos.');
     if (!isDate(row.date_utc) || row.date_utc < startDate || row.date_utc > endDate) {
       throw new Error('O relatório contém uma data fora do período solicitado.');
     }
     const productKey = optionalSafeText(row.product_key, /^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/, 'identificador de produto');
+    const productLabel = optionalSafeText(row.product_label, /^[^\x00-\x1f\x7f]{1,253}$/, 'nome de Track');
     const presellHost = optionalSafeText(row.presell_host, /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, 'domínio');
     const pageViews = row.page_views;
     const outboundClicks = row.outbound_clicks;
@@ -79,9 +135,9 @@ export function normalizeTrackingClicksReport(payload, requestedRange = null) {
     const identity = `${row.date_utc}\0${productKey ?? ''}\0${presellHost ?? ''}`;
     if (seen.has(identity)) throw new Error('O relatório contém uma linha agregada duplicada.');
     seen.add(identity);
-    return { dateUtc: row.date_utc, productKey, presellHost, pageViews, outboundClicks };
+    return { dateUtc: row.date_utc, productKey, productLabel, presellHost, pageViews, outboundClicks };
   });
-  return { startDate, endDate, generatedAtUtc: payload.generated_at_utc, rows };
+  return { startDate, endDate, platform, generatedAtUtc: payload.generated_at_utc, rows };
 }
 
 export function summarizeTrackingClicks(rows) {
@@ -109,7 +165,8 @@ export function normalizeTrackingClicksSnapshot(value) {
   const endDate = value.endDate;
   const report = normalizeTrackingClicksReport({
     ok: true,
-    schema_version: 1,
+    schema_version: 2,
+    platform: value.platform ?? 'unsegmented',
     generated_at_utc: value.generatedAtUtc,
     start_date: startDate,
     end_date: endDate,
@@ -117,6 +174,7 @@ export function normalizeTrackingClicksSnapshot(value) {
     rows: Array.isArray(value.rows) ? value.rows.map(row => ({
       date_utc: row?.dateUtc,
       product_key: row?.productKey ?? null,
+      product_label: row?.productLabel ?? null,
       presell_host: row?.presellHost ?? null,
       page_views: row?.pageViews,
       outbound_clicks: row?.outboundClicks,
@@ -140,12 +198,14 @@ function compareTrackingRows(left, right) {
   return String(left.presellHost ?? '').localeCompare(String(right.presellHost ?? ''));
 }
 
-export function resolveTrackingClicksCache(snapshots, dateRange) {
+export function resolveTrackingClicksCache(snapshots, dateRange, platform = 'clickbank') {
   const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  if (!['clickbank', 'gurumedia'].includes(platform)) throw new Error('Selecione uma plataforma de cache válida.');
   if (!Array.isArray(snapshots)) throw new Error('O histórico local de consultas está inválido.');
   const totalDays = (Date.parse(`${range.endDate}T00:00:00Z`) - Date.parse(`${range.startDate}T00:00:00Z`)) / 86400000 + 1;
   const latestByDay = new Map();
   let invalidSnapshotCount = 0;
+  let unsegmentedSnapshotCount = 0;
 
   for (const rawSnapshot of snapshots) {
     let snapshot;
@@ -155,6 +215,11 @@ export function resolveTrackingClicksCache(snapshots, dateRange) {
       invalidSnapshotCount += 1;
       continue;
     }
+    if (snapshot.platform === 'unsegmented') {
+      unsegmentedSnapshotCount += 1;
+      continue;
+    }
+    if (snapshot.platform !== platform) continue;
     const firstDay = snapshot.startDate > range.startDate ? snapshot.startDate : range.startDate;
     const lastDay = snapshot.endDate < range.endDate ? snapshot.endDate : range.endDate;
     if (firstDay > lastDay) continue;
@@ -191,6 +256,7 @@ export function resolveTrackingClicksCache(snapshots, dateRange) {
       totalDays,
       snapshotCount: snapshotsUsed.length,
       invalidSnapshotCount,
+      unsegmentedSnapshotCount,
     },
   };
 }

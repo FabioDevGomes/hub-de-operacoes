@@ -76,7 +76,7 @@ function managerFor(campaign, source, manifest, managers) {
   const manifestManager = manifest?.identificacao_mcc || {};
   const id = String(source?.mcc_id || campaign?.mcc_id || manifestManager.id || '').trim();
   const registered = catalog.find(manager => String(manager?.id ?? '') === id);
-  const name = String(source?.mcc_nome || registered?.nome || (id === String(manifestManager.id || '').trim() ? manifestManager.nome : '') || '').trim();
+  const name = String(registered?.nome || source?.mcc_nome || (id === String(manifestManager.id || '').trim() ? manifestManager.nome : '') || '').trim();
   return {id, name};
 }
 

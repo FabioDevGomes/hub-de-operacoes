@@ -6,6 +6,45 @@ export function createAccountState() {
   return {status:'ativa', account:'all', product:'all', selected:null, sortKey:null, sortDir:'asc'};
 }
 
+function accountMccFilterKey(row) {
+  const rawId = String(row?.mccId ?? '').trim();
+  if (rawId) {
+    const digits = rawId.replace(/\D/g, '');
+    return `id:${/^\d{10}$/.test(digits) ? digits : rawId.toLocaleLowerCase('pt-BR')}`;
+  }
+  const name = String(row?.mccName ?? '').replace(/\s+/g, ' ').trim();
+  return name ? `name:${name.toLocaleLowerCase('pt-BR')}` : 'unknown';
+}
+
+function formatAccountMccId(value) {
+  const raw = String(value ?? '').trim(), digits = raw.replace(/\D/g, '');
+  return /^\d{10}$/.test(digits) ? `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}` : raw;
+}
+
+export function accountMccFilterOptions(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = accountMccFilterKey(row);
+    const group = groups.get(key) || {names:new Set(), ids:new Set()};
+    const name = String(row?.mccName ?? '').replace(/\s+/g, ' ').trim();
+    const id = String(row?.mccId ?? '').trim();
+    if (name) group.names.add(name);
+    if (id) group.ids.add(id);
+    groups.set(key, group);
+  }
+  return [...groups].map(([value, group]) => {
+    const names = [...group.names].sort(compare), ids = [...group.ids].sort(compare);
+    const idLabel = ids.length ? formatAccountMccId(ids[0]) : '';
+    const label = value === 'unknown' ? 'MCC não identificada' :
+      names.length ? `${names.join(' · ')}${idLabel ? ` · ${idLabel}` : ''}` : `MCC ${idLabel}`;
+    return {value, label};
+  }).sort((a, b) => compare(a.label, b.label));
+}
+
+export function filterAccountRowsByMcc(rows, mcc = 'all') {
+  return mcc === 'all' ? rows : rows.filter(row => accountMccFilterKey(row) === mcc);
+}
+
 export function filterAccountCpaCoverageRows(rows, status, account) {
   return rows.filter(row => (status === 'all' || row.status === status) &&
     (account === 'all' || row.account === account));
@@ -20,7 +59,7 @@ export function accountDomainUrl(domain) {
 export function accountDetailSortValue(row, key) {
   if (key === 'campaign') return row.identity.name;
   if (key === 'campaignDate') return row.identity.dateSort;
-  if (['account','domain','status','zeroDays','roi'].includes(key)) return row[key] ?? null;
+  if (['account','domain','presellUrl','status','zeroDays','roi'].includes(key)) return row[key] ?? null;
   return row.totals?.[key] ?? null;
 }
 
@@ -66,6 +105,36 @@ export function accountCpaCoverage(rows, ranges) {
   return [...groups.values()].map(group => ({
     ...group, missing:ranges.filter(range => !group.ranges.has(range))
   })).sort((a, b) => compare(a.name, b.name));
+}
+
+export function accountHeaderNames(rows) {
+  const namesByAccount = new Map();
+  const verifiedAccountNameFallbacks = new Map([
+    ['1074733248', '6ª CNPJ']
+  ]);
+  for (const row of rows) {
+    if (!row.account || row.account === 'Sem conta') continue;
+    const candidates = Array.isArray(row.accountNames) ? row.accountNames : [row.accountName];
+    for (const candidate of candidates) {
+      const name = String(candidate ?? '')
+        .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+        .replace(/(?:https?:\/\/)?(?:www\.)?\.?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?:\/[^\s]*)?/gi, '')
+        .replace(/^(?:conta\s+)?(?:\d{3}-\d{3}-\d{4}|\d{10}|\d{4})(?=$|[\s–—-])\s*[–—-]?\s*/i, '')
+        .replace(/\b\d{3}-\d{3}-\d{4}\b/g, '')
+        .replace(/^[\s|;:,–—-]+|[\s|;:,–—-]+$/g, '').replace(/\s+/g, ' ').trim();
+      if (!name || /^(?:conta|sem conta|não identificad[ao]|nao identificad[ao])$/i.test(name)) continue;
+      const names = namesByAccount.get(row.account) || new Set();
+      names.add(name);
+      namesByAccount.set(row.account, names);
+    }
+  }
+  for (const row of rows) {
+    if (!row.account || row.account === 'Sem conta' || namesByAccount.has(row.account)) continue;
+    const digits = String(row.account).replace(/\D/g, '');
+    const fallback = verifiedAccountNameFallbacks.get(digits);
+    if (fallback) namesByAccount.set(row.account, new Set([fallback]));
+  }
+  return new Map([...namesByAccount].map(([account,names]) => [account,[...names].sort(compare).join(' · ')]));
 }
 
 export function accountMccHeaderLabels(rows) {
@@ -124,6 +193,7 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
       .filter(account => account && account !== 'Sem conta'))]
     : [];
   const accountMccLabels = accountMccHeaderLabels(allRows);
+  const accountNames = accountHeaderNames(allRows);
   const accountMccIds = accountMccHeaderIds(allRows);
   for (const account of activeAccounts) if (!accountMccLabels.has(account)) accountMccLabels.set(account, 'MCC não identificada');
   const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts]), accountMccIds);
@@ -136,7 +206,8 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
   const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns]), accountMccIds);
   const groups = new Map();
   for (const row of rows) {
-    const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, rows:[]};
+    const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, firstRecordDate:row.productFirstRecordDate ?? null, rows:[]};
+    if (row.productFirstRecordDate && (!group.firstRecordDate || row.productFirstRecordDate < group.firstRecordDate)) group.firstRecordDate = row.productFirstRecordDate;
     group.rows.push(row);
     groups.set(row.productKey, group);
   }
@@ -148,15 +219,25 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
   const ranges = [...new Set(accountRows.map(row => row.cpa.range).filter(range => range != null))].sort((a, b) => a - b);
   const coverage = accountCpaCoverage(rows, ranges);
   const paused = rows.filter(row => row.status === 'pausada').length;
-  const bars = products.map(item => ({
-    key:item.key,
-    name:item.name,
-    count:new Set(item.rows.map(row => String(row.account ?? '').trim())
-      .filter(account => account && account !== 'Sem conta')).size
-  })).sort((a, b) => b.count - a.count || compare(a.name, b.name));
+  const productKeys = new Set(products.map(item => item.key));
+  const historicalRowsByProduct = new Map();
+  for (const row of allRows) {
+    if (!productKeys.has(row.productKey) || (account !== 'all' && row.account !== account)) continue;
+    const history = historicalRowsByProduct.get(row.productKey) || [];
+    history.push(row);
+    historicalRowsByProduct.set(row.productKey, history);
+  }
+  const bars = products.map(item => {
+    const history = historicalRowsByProduct.get(item.key) || [];
+    const identifiedAccounts = rows => new Set(rows.map(row => String(row.account ?? '').trim())
+      .filter(value => value && value !== 'Sem conta'));
+    const activeAccountCount = identifiedAccounts(history.filter(row => row.status === 'ativa')).size;
+    const totalAccountsTested = identifiedAccounts(history).size;
+    return {key:item.key,name:item.name,activeAccountCount,totalAccountsTested};
+  }).sort((a, b) => b.totalAccountsTested - a.totalAccountsTested || compare(a.name, b.name));
   return {
     accountOptions, productOptions, account, product, rows, accounts, products, selected,
-    accountMccLabels,
+    accountMccLabels, accountNames,
     selectedProduct, detail, bars, ranges, coverage, cpaBars:accountProductsByCpaRange(rows),
     missingTotal:coverage.reduce((sum, item) => sum + item.missing.length, 0),
     kpis:{

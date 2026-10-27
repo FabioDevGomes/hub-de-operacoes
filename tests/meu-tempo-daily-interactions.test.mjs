@@ -181,7 +181,9 @@ test('o Histórico mostra a última correção Sim/Não sem apagar os eventos an
   await h.mount();h.field('[data-tab="history"]').onclick();
   assert.match(h.root.innerHTML,new RegExp(`<td class="has-value " data-cell-item="item-alcool" data-cell-date="${date}">Não</td>`),'a célula do dia exibe Não após a correção');
   assert.doesNotMatch(h.root.innerHTML,new RegExp(`<td class="[^"]*time-alcohol-yes[^"]*" data-cell-item="item-alcool" data-cell-date="${date}">`),'célula corrigida não conserva o destaque de Sim');
-  assert.match(h.root.innerHTML,new RegExp(`<th class="time-clear-day">${date.split('-').reverse().join('/')}</th>`),'o cabeçalho fica verde automaticamente após a última resposta corrigida para Não');
+  assert.match(h.root.innerHTML,new RegExp(`<th class="time-clear-day time-matrix-day-header(?: has-observation)?">${date.split('-').reverse().join('/')}`),'o cabeçalho fica verde automaticamente após a última resposta corrigida para Não');
+  assert.match(h.root.innerHTML,new RegExp(`<tr class="time-observation-row">[\\s\\S]*<a[^>]*data-open-day-observation="${date}"[^>]*>OBS</a>[\\s\\S]*</tr><tr><th>Atividade</th>[\\s\\S]*<th class="time-clear-day time-matrix-day-header">${date.split('-').reverse().join('/')}</th>`),'o dia com observação salva mostra OBS em linha própria acima da célula da data');
+  assert.equal((h.root.innerHTML.match(/data-open-day-observation=/g)||[]).length,1,'dias sem observação não recebem link');
   assert.equal(h.store.entries.filter(row=>row.itemId==='item-alcool'&&row.date===date).length,2,'a correção de exibição não remove lançamentos históricos');
 });
 

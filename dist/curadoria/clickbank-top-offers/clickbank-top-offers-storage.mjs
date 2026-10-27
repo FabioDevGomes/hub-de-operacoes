@@ -9,7 +9,12 @@ export const LEGACY_BACKUP_V2_FORMAT = 'radar-clickbank-top-offers-backup-v2';
 export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
 
 const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'Ocultar']);
+const PAGE_CLASSIFICATIONS = new Set(['review','cookies']);
 const MAX_TREND_SEARCH_HISTORY = 10000;
+
+function validPageClassification(value) {
+  return value == null || PAGE_CLASSIFICATIONS.has(value);
+}
 
 function validTrendSearch(entry) {
   return Boolean(entry && typeof entry.searchedAt === 'string' && Number.isFinite(Date.parse(entry.searchedAt)) &&
@@ -272,9 +277,10 @@ export async function saveBrandBidding(identity, value) {
 function validDecisionRecord(record) {
   return Boolean(record && typeof record.offerKey === 'string' && record.offerKey.length > 0 && record.offerKey.length <= 1400 &&
     DECISION_VALUES.has(record.currentStatus) && typeof (record.notes ?? '') === 'string' && (record.notes ?? '').length <= 5000 &&
+    validPageClassification(record.pageClassification) &&
     (record.updatedAt == null || Number.isFinite(Date.parse(record.updatedAt))) && Array.isArray(record.history) && record.history.length <= 10000 &&
     record.history.every(item => item && DECISION_VALUES.has(item.status) && typeof item.capturedAt === 'string' && Number.isFinite(Date.parse(item.capturedAt)) &&
-      typeof (item.notes ?? '') === 'string' && (item.notes ?? '').length <= 5000));
+      validPageClassification(item.pageClassification) && typeof (item.notes ?? '') === 'string' && (item.notes ?? '').length <= 5000));
 }
 
 export async function putDecision(record) {

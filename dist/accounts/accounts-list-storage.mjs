@@ -1,4 +1,4 @@
-import {normalizeAccountDirectoryId} from './accounts-list-domain.mjs?v=2';
+import {normalizeAccountDirectoryId} from './accounts-list-domain.mjs?v=8';
 
 export const ACCOUNT_DIRECTORY_STATUS_KEY = 'hub:account-directory:manual-status:v1';
 export const ACCOUNT_DIRECTORY_EMAIL_KEY = 'hub:account-directory:manual-email:v1';

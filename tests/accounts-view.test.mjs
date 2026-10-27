@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import {mount, accountReportTemplate, detailSortKeys} from '../src/accounts/accounts-view.mjs';
+const accountsCss=await readFile(new URL('../src/accounts/accounts.css',import.meta.url),'utf8');
+
+test('matrix exposes a horizontal scrollbar only when its account columns exceed the available width',()=>{
+  assert.match(accountsCss,/\.account-matrix-wrap\{max-width:100%;overflow-x:auto;overflow-y:hidden;max-height:none/);
+  assert.match(accountsCss,/\.account-matrix\{width:max-content;min-width:100%\}/);
+  assert.match(accountsCss,/\.account-matrix-wrap::-webkit-scrollbar\{height:8px\}/);
+});
 
 // Minimal DOM boundary double: executes renderers and event callbacks without
 // browser storage, network calls, or synthetic writes to the user's profile.
 function fakeRoot() {
   const ids = [...accountReportTemplate.matchAll(/id="([^"]+)"/g)].map(match=>match[1]);
   const elements = Object.fromEntries(ids.map(id=>[id,{innerHTML:'',textContent:'',value:''}]));
-  const labels = ['Conta','Domínio','Campanha','Data de subida','Dias sem impressão','Situação','Investimento','Impressões','Cliques','Conversões','ROI'];
+  const labels = ['Conta','Domínio','URL da pre-sell','Campanha','Data de subida','Dias sem impressão','Situação','Investimento','Impressões','Cliques','Conversões','ROI'];
   const header = {cells:labels.map(label=>({
     textContent:label,innerHTML:'',attributes:{},
     querySelector(){return {textContent:label}},
@@ -82,6 +90,40 @@ test('matrix shows MCC above each account inside one header cell and escapes the
   assert.doesNotMatch(html,/<img/);
 });
 
+test('matrix places the captured account name under the ID, escapes it and omits unavailable names',()=>{
+  const {root}=setup([sample('ativa',{account:'111-222-3333',accountName:'3333 - Loja <Azul> .example.shop'})],{'444-555-6666':'active'});
+  const header=root.elements.accountMatrixHead.innerHTML;
+  assert.match(header,/Conta 111-222-3333<\/span><span class="account-matrix-name">Loja &lt;Azul&gt;<\/span>/);
+  assert.doesNotMatch(header,/example.shop/);
+  assert.match(header,/Conta 444-555-6666<\/span><\/th>/);
+});
+
+test('paused underline is shown only for cells without active campaigns, including when paused campaigns are included',()=>{
+  const {root}=setup([
+    sample('ativa',{account:'A'}),
+    sample('pausada',{account:'A'}),
+    sample('pausada',{account:'B'})
+  ]);
+  const matrixCells = () => {
+    const row = root.elements.accountMatrixBody.innerHTML.match(/<tr class="account-product-row[\s\S]*?<\/tr>/)?.[0] || '';
+    return [...row.matchAll(/<td class="account-cell ([^"]*)"/g)].map(match=>match[1]);
+  };
+
+  change(root,'accountReportStatus','all');
+  let cells = matrixCells();
+  assert.equal(cells.length,2);
+  assert.match(cells[0],/has-campaigns/);
+  assert.doesNotMatch(cells[0],/has-paused/,'a cell with active and paused campaigns has no red underline');
+  assert.match(cells[1],/has-paused/,'a cell with paused campaigns and zero active campaigns keeps the red underline');
+
+  change(root,'accountReportStatus','ativa');
+  root.listeners.change({target:{id:'accountIncludePausedAccounts',checked:true}});
+  cells = matrixCells();
+  assert.equal(cells.length,2,'the checkbox adds the paused-only account column to the matrix');
+  assert.doesNotMatch(cells[0],/has-paused/,'the rule remains based on active count with paused campaigns included');
+  assert.match(cells[1],/has-paused/);
+});
+
 test('matrix keeps a directory-active account visible with empty cells and no fabricated product',()=>{
   const {root}=setup([sample()],{'333-444-5555':'active'});
   assert.match(root.elements.accountReportAccount.innerHTML,/value="333-444-5555">333-444-5555/);
@@ -93,10 +135,10 @@ test('matrix keeps a directory-active account visible with empty cells and no fa
   assert.match(root.elements.accountMatrixHead.innerHTML,/Conta 333-444-5555/,'campaign situation filters do not remove active directory account columns');
 });
 
-test('detail renders eleven aligned columns, safe domain links and missing values',()=>{
+test('detail renders twelve aligned columns, safe domain links and missing values',()=>{
   const {root}=setup([sample()]);
   const html=root.elements.accountDetailBody.innerHTML;
-  assert.equal(detailSortKeys.length,11); assert.equal((html.match(/<td\b/g)||[]).length,11);
+  assert.equal(detailSortKeys.length,12); assert.equal((html.match(/<td\b/g)||[]).length,12);
   assert.match(html,/https:\/\/hpanel.hostinger.com\/websites\/example.shop/);
   assert.match(html,/target="_blank" rel="noopener noreferrer"/);
   assert.match(html,/data-campaign-date[^>]*>01\/01<\/td><td/);
@@ -107,7 +149,7 @@ test('detail renders eleven aligned columns, safe domain links and missing value
 test('header actions toggle sort direction accessibly and retain stable labels',()=>{
   const {root}=setup([sample()]);
   click(root,'[data-account-sort]',{accountSort:'investment'});
-  const th=root.header.cells[6];
+  const th=root.header.cells[7];
   assert.equal(th.attributes['aria-sort'],'ascending');
   assert.match(th.innerHTML,/Ordenar por Investimento crescente/);
   click(root,'[data-account-sort]',{accountSort:'investment'});
@@ -123,7 +165,7 @@ test('selection, filters and subsequent data refresh use the latest read-only sn
   assert.match(root.elements.accountDetailCaption.textContent,/^Example:/);
   update({rows:[],period:'No period'}); controller.render();
   assert.equal(root.elements.accountReportAccount.value,'all');
-  assert.match(root.elements.accountDetailBody.innerHTML,/colspan="11"/);
+  assert.match(root.elements.accountDetailBody.innerHTML,/colspan="12"/);
   assert.match(root.elements.accountDetailBody.innerHTML,/Selecione um produto/);
 });
 
@@ -132,7 +174,7 @@ test('product account chart refreshes on new snapshots, shows every product and 
     productKey:`product-${index+1}`,product:`Product ${index+1}`,account:`A${index+1}`
   }));
   const {root,controller,update}=setup(initial);
-  const barRows=()=>root.elements.accountProductBars.innerHTML.match(/class="account-bar-row"/g)||[];
+  const barRows=()=>root.elements.accountProductBars.innerHTML.match(/class="account-bar-row(?: account-bar-row--with-secondary)?"/g)||[];
   assert.equal(barRows().length,9);
   assert.match(root.elements.accountProductBarsCaption.textContent,/filtro Ativas/);
 
@@ -144,6 +186,35 @@ test('product account chart refreshes on new snapshots, shows every product and 
   change(root,'accountReportStatus','pausada');
   assert.match(root.elements.accountProductBarsCaption.textContent,/filtro Pausadas/);
   assert.equal(barRows().length,0,'active campaigns are excluded after the shared filter changes to Pausadas');
+});
+
+test('historical accounts are the bar, active accounts appear first, and only their counts at two or fewer are red',()=>{
+  const {root}=setup([
+    sample('ativa',{productKey:'single',product:'Single account',account:'A'}),
+    sample('ativa',{productKey:'multiple',product:'Multiple accounts',account:'B'}),
+    sample('ativa',{productKey:'multiple',product:'Multiple accounts',account:'C'}),
+    sample('ativa',{productKey:'multiple',product:'Multiple accounts',account:'D'}),
+    sample('ativa',{productKey:'unidentified',product:'Unidentified',account:'Sem conta'})
+  ]);
+  const productBars=root.elements.accountProductBars.innerHTML;
+  assert.match(productBars,/class="account-bar-row account-bar-row--with-secondary"><span class="account-product-name--low-history" title="Single account">Single account<\/span><div class="account-bar-track"><div class="account-bar-fill account-bar-fill--low-history"[\s\S]*?<strong class="account-bar-active-count account-bar-active-count--low" title="Contas distintas com campanhas ativas">1<\/strong><strong class="account-bar-history-count--low" title="Contas distintas testadas no histórico">1<\/strong>/);
+  assert.match(productBars,/class="account-bar-row account-bar-row--with-secondary"><span title="Multiple accounts">Multiple accounts<\/span><div class="account-bar-track"><div class="account-bar-fill"[\s\S]*?<strong class="account-bar-active-count" title="Contas distintas com campanhas ativas">3<\/strong><strong title="Contas distintas testadas no histórico">3<\/strong>/);
+  assert.match(productBars,/class="account-bar-row account-bar-row--with-secondary"><span class="account-product-name--low-history" title="Unidentified">Unidentified<\/span><div class="account-bar-track"><div class="account-bar-fill account-bar-fill--low-history"[\s\S]*?<strong class="account-bar-active-count account-bar-active-count--low" title="Contas distintas com campanhas ativas">0<\/strong><strong class="account-bar-history-count--low" title="Contas distintas testadas no histórico">0<\/strong>/);
+  assert.doesNotMatch(root.elements.accountCpaRangeBars.innerHTML,/account-bar-active-count--low/,'a regra não altera o gráfico de faixas de CPA');
+  assert.match(accountsCss,/\.account-bar-active-count--low\{color:#ff9aa5\}/);
+  assert.match(accountsCss,/\.account-bar-fill--low-history\{background:linear-gradient\(90deg,#e2606f,#ff9aa5\)\}/);
+  assert.match(accountsCss,/\.account-bar-history-count--low\{color:#ff9aa5\}/);
+});
+
+test('pre-sell column reads current Track snapshots, renders safe links and clears stale associations',()=>{
+  const root=fakeRoot();
+  let tracks=[{productLabel:'Example - conta 9737',hostname:'presell.example.shop',origin:'https://presell.example.shop'}];
+  const controller=mount({root,format,getSnapshot:()=>({rows:[sample('ativa',{account:'761-756-9737'})],period:''}),getTrackingDomains:()=>tracks});
+  controller.render();
+  assert.match(root.elements.accountDetailBody.innerHTML,/href="https:\/\/presell.example.shop\/" target="_blank" rel="noopener noreferrer"/);
+  assert.equal((root.elements.accountDetailBody.innerHTML.match(/<td\b/g)||[]).length,12);
+  tracks=[];controller.render();
+  assert.doesNotMatch(root.elements.accountDetailBody.innerHTML,/presell.example.shop/);
 });
 
 test('untrusted names and invalid domain text are escaped, never rendered as markup',()=>{

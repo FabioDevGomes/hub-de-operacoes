@@ -1,0 +1,13 @@
+import {COPY_SCHEMA,COPY_SECTIONS,COPY_BASES,COPY_STATUSES,CLAIM_CHECKS,COPY_ASSETS,createCopyState} from './review-copy-domain.mjs?v=1';
+
+export const COPY_PREFIX='hub:review:copy:v1:';
+const keyFor=id=>{if(!/^[a-zA-Z0-9-]{1,100}$/.test(id))throw new Error('Identificador da review inválido.');return COPY_PREFIX+id};
+function text(value,max){return typeof value==='string'&&value.length<=max}
+function assertCopyState(state,id){
+  const sectionKeys=COPY_SECTIONS.map(section=>section.key),baseKeys=COPY_BASES.map(([key])=>key),statusKeys=Object.keys(COPY_STATUSES),claimKeys=CLAIM_CHECKS.map(([key])=>key),assetKeys=COPY_ASSETS.map(([key])=>key);
+  if(!state||state.schema!==COPY_SCHEMA||state.reviewId!==id||typeof state.binding!=='string'||state.sourceSnapshot!==null&&(!state.sourceSnapshot||typeof state.sourceSnapshot!=='object'||Array.isArray(state.sourceSnapshot))||typeof state.reviewed!=='boolean'||!state.sections||Object.keys(state.sections).length!==sectionKeys.length||!sectionKeys.every(key=>Object.hasOwn(state.sections,key)))throw new Error('Rascunho da copy inválido. O registro original foi preservado.');
+  for(const key of sectionKeys){const item=state.sections[key];if(!item||!statusKeys.includes(item.status)||!baseKeys.includes(item.basis)||!claimKeys.includes(item.claimCheck)||!assetKeys.includes(item.assetKey)||!['copy','sourceReference','evidence','claimNote','ctaLabel','ctaUrl','decisionNote'].every(field=>text(item[field],field==='copy'?6000:2000))||typeof item.ctaConfirmed!=='boolean')throw new Error('Campos da copy inválidos. O registro original foi preservado.')}
+}
+function historyFor(storage,id){const raw=storage.getItem(keyFor(id));if(raw===null)return[];const history=JSON.parse(raw);if(!Array.isArray(history)||!history.length)throw new Error('Histórico da copy inválido.');for(const [index,entry] of history.entries()){if(!entry||entry.revision!==index+1||typeof entry.savedAt!=='string')throw new Error('Revisões da copy inválidas.');assertCopyState(entry.state,id)}return history}
+export function loadCopy(storage,draft){return historyFor(storage,draft.id).at(-1)||{revision:0,savedAt:null,state:createCopyState(draft)}}
+export function saveCopy(storage,state,{expectedRevision=0,now=()=>new Date().toISOString()}={}){assertCopyState(state,state.reviewId);const history=historyFor(storage,state.reviewId),latest=history.at(-1);if((latest?.revision||0)!==expectedRevision)throw new Error('A copy foi alterada em outra aba. Exporte suas edições antes de recarregar.');if(latest&&JSON.stringify(latest.state)===JSON.stringify(state))return latest;const entry={revision:expectedRevision+1,savedAt:now(),state};storage.setItem(keyFor(state.reviewId),JSON.stringify([...history,entry]));return entry}

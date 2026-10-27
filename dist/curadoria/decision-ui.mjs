@@ -41,19 +41,28 @@ function ensureDialog(){
   dialog=document.createElement('dialog');
   dialog.id='sharedDecisionDialog';
   dialog.className='decision-dialog';
-  dialog.innerHTML='<div class="decision-dialog-head"><div><span class="decision-dialog-kicker">Decisão de curadoria</span><h2 id="sharedDecisionTitle"></h2><p>Escolha uma opção. A decisão será salva imediatamente.</p></div><button class="decision-dialog-close" type="button" aria-label="Fechar">×</button></div><div class="decision-dialog-notes" id="sharedDecisionNotes" hidden><label for="sharedDecisionNote">Observação sobre a decisão (opcional)</label><textarea id="sharedDecisionNote" maxlength="5000" rows="3" placeholder="Registre o motivo ou contexto desta decisão."></textarea></div><div class="decision-dialog-actions" id="sharedDecisionActions"></div>';
+  dialog.innerHTML='<div class="decision-dialog-head"><div><span class="decision-dialog-kicker">Decisão de curadoria</span><h2 id="sharedDecisionTitle"></h2><p>Escolha uma opção. A decisão será salva imediatamente.</p></div><button class="decision-dialog-close" type="button" aria-label="Fechar">×</button></div><div class="decision-dialog-page-type" id="sharedDecisionPageClassification" role="group" aria-label="Tipo de página" hidden><label><input id="sharedDecisionPageReview" type="checkbox">Página review</label><label><input id="sharedDecisionPageCookies" type="checkbox">Página de cookies</label></div><div class="decision-dialog-notes" id="sharedDecisionNotes" hidden><label for="sharedDecisionNote">Observação sobre a decisão (opcional)</label><textarea id="sharedDecisionNote" maxlength="5000" rows="3" placeholder="Registre o motivo ou contexto desta decisão."></textarea></div><div class="decision-dialog-actions" id="sharedDecisionActions"></div>';
   document.body.append(dialog);
   dialog.querySelector('.decision-dialog-close').onclick=()=>dialog.close();
   dialog.onclick=event=>{if(event.target===dialog)dialog.close()};
   return dialog;
 }
 
-export function openDecisionPicker({title,currentValue,onSelect,onError,allowNotes=false,notes='',options=DECISION_OPTIONS}){
+export function openDecisionPicker({title,currentValue,onSelect,onError,allowNotes=false,notes='',allowPageClassification=false,pageClassification=null,options=DECISION_OPTIONS}){
   const dialog=ensureDialog(),current=normalizeDecision(currentValue,options),actions=dialog.querySelector('#sharedDecisionActions');
   dialog.querySelector('#sharedDecisionTitle').textContent=title;
   const noteWrap=dialog.querySelector('#sharedDecisionNotes'),noteInput=dialog.querySelector('#sharedDecisionNote');
+  const pageClassificationWrap=dialog.querySelector('#sharedDecisionPageClassification');
+  const pageReviewInput=dialog.querySelector('#sharedDecisionPageReview'),pageCookiesInput=dialog.querySelector('#sharedDecisionPageCookies');
   noteWrap.hidden=!allowNotes;
   noteInput.value=allowNotes?String(notes??'').slice(0,5000):'';
+  pageClassificationWrap.hidden=!allowPageClassification;
+  pageReviewInput.checked=allowPageClassification&&pageClassification==='review';
+  pageCookiesInput.checked=allowPageClassification&&pageClassification==='cookies';
+  pageReviewInput.disabled=!allowPageClassification;
+  pageCookiesInput.disabled=!allowPageClassification;
+  pageReviewInput.onchange=()=>{if(pageReviewInput.checked)pageCookiesInput.checked=false};
+  pageCookiesInput.onchange=()=>{if(pageCookiesInput.checked)pageReviewInput.checked=false};
   dialog.querySelector('p').textContent=allowNotes?'Escolha uma opção. Sua observação será salva junto com a decisão.':'Escolha uma opção. A decisão será salva imediatamente.';
   actions.innerHTML='';
   for(const option of options){
@@ -61,7 +70,7 @@ export function openDecisionPicker({title,currentValue,onSelect,onError,allowNot
     button.type='button';
     button.className=`decision-option ${option.tone}${option.value===current?' selected':''}`;
     button.textContent=option.value;
-    button.onclick=async()=>{button.disabled=true;noteInput.disabled=true;try{await onSelect(option.value,allowNotes?noteInput.value:undefined);dialog.close()}catch(error){dialog.querySelector('p').textContent=error.message||'Não foi possível salvar. Tente novamente.';if(onError)onError(error);}finally{button.disabled=false;noteInput.disabled=false}};
+    button.onclick=async()=>{button.disabled=true;noteInput.disabled=true;pageReviewInput.disabled=true;pageCookiesInput.disabled=true;try{const selectedPageClassification=pageReviewInput.checked?'review':pageCookiesInput.checked?'cookies':null;if(allowPageClassification)await onSelect(option.value,allowNotes?noteInput.value:undefined,selectedPageClassification);else await onSelect(option.value,allowNotes?noteInput.value:undefined);dialog.close()}catch(error){dialog.querySelector('p').textContent=error.message||'Não foi possível salvar. Tente novamente.';if(onError)onError(error);}finally{button.disabled=false;noteInput.disabled=false;pageReviewInput.disabled=!allowPageClassification;pageCookiesInput.disabled=!allowPageClassification}};
     actions.append(button);
   }
   dialog.showModal();

@@ -145,6 +145,8 @@
   color: var(--hub-primary-text, #c3cede);
 }
 
+.tracking-token-input.is-masked { -webkit-text-security: disc; }
+
 .tracking-clicks-date-range input { font-variant-numeric: tabular-nums; }
 .tracking-date-format-note {
   margin: -4px 0 0;
@@ -229,6 +231,45 @@
 .tracking-email-grid .tracking-domain-actions { align-self: end; }
 .tracking-email-panel .tracking-conversion-profile-message { margin: 0; }
 .tracking-email-panel .tracking-conversion-profile-message.is-error { color: #ffbf67; }
+.tracking-gurumedia-postback-panel { display: grid; gap: 12px; }
+.tracking-gurumedia-postback-panel .tracking-table-heading { margin: 0; }
+.tracking-gurumedia-token-grid { margin: 0; }
+.tracking-gurumedia-macro-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+.tracking-gurumedia-postback-panel textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 9px 10px;
+  border: 1px solid var(--line, #24344d);
+  border-radius: 8px;
+  background: var(--panel2, #13243a);
+  color: var(--hub-primary-text, #c3cede);
+  font: .76rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+.tracking-gurumedia-postback-panel textarea:focus-visible {
+  outline: 2px solid var(--hub-control-focus, #5ab1ff);
+  outline-offset: 2px;
+}
+.tracking-gurumedia-postback-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.tracking-gurumedia-action-table th,
+.tracking-gurumedia-action-table td { vertical-align: top; }
+.tracking-gurumedia-action-field { min-width: 260px; }
+.tracking-gurumedia-action-field select {
+  width: 100%; min-height: 36px; padding: 7px 9px;
+  border: 1px solid var(--line, #24344d); border-radius: 8px;
+  background: var(--panel2, #13243a); color: var(--hub-primary-text, #c3cede);
+}
+.tracking-gurumedia-action-field select:focus-visible { outline: 2px solid var(--hub-control-focus, #5ab1ff); outline-offset: 2px; }
+.tracking-gurumedia-action-field small,
+.tracking-gurumedia-action-message { display: block; margin-top: 5px; color: var(--muted, #91a1b8); font-size: .7rem; line-height: 1.45; }
+.tracking-gurumedia-action-warning,
+.tracking-gurumedia-action-message.is-error { color: #ffbf67; }
+.tracking-gurumedia-resource { min-width: 220px; max-width: 300px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .72rem; }
+.tracking-gurumedia-action-buttons { display: flex; flex-wrap: wrap; gap: 6px; min-width: 180px; }
+.tracking-gurumedia-action-buttons .btn { min-height: 32px; padding: 6px 9px; }
+.tracking-gurumedia-action-table td:nth-child(2),
+.tracking-gurumedia-action-table td:nth-child(5) { white-space: nowrap; }
 
 .tracking-domain-token-grid {
   display: grid;
@@ -261,10 +302,39 @@
 
 .tracking-domain-form {
   display: grid;
-  grid-template-columns: minmax(240px, 1.1fr) minmax(190px, .9fr) auto auto;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(180px, .9fr) minmax(150px, .7fr) auto auto;
   align-items: start;
   gap: 10px 14px;
 }
+
+.tracking-domain-form:has(#globalGuruMediaOfferId) {
+  grid-template-columns: minmax(200px, 1fr) minmax(170px, .9fr) minmax(145px, .7fr) minmax(145px, .7fr) auto auto;
+}
+
+.tracking-domain-product-field { display: grid; gap: 7px; min-width: 0; }
+.tracking-track-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.tracking-track-suggestions > span,
+.tracking-track-suggestions-empty { color: var(--muted, #91a1b8); font-size: .68rem; line-height: 1.4; }
+.tracking-track-suggestion {
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line, #24344d);
+  border-radius: 999px;
+  background: rgba(90, 177, 255, .08);
+  color: var(--hub-primary-text, #c3cede);
+  font: inherit;
+  font-size: .68rem;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.tracking-track-suggestion:hover { background: rgba(90, 177, 255, .18); }
+.tracking-track-suggestion:focus-visible {
+  outline: 2px solid var(--hub-control-focus, #5ab1ff);
+  outline-offset: 2px;
+}
+.tracking-track-suggestions-empty { margin-top: -1px; }
 
 @media (min-width: 901px) {
   .tracking-domain-form > .tracking-remember-token,
@@ -280,10 +350,14 @@
   overflow-wrap: anywhere;
 }
 
-.tracking-domain-table { min-width: 680px; }
+.tracking-domain-table { min-width: 820px; }
 .tracking-domain-table th:last-child,
-.tracking-domain-table td:last-child { width: 150px; text-align: right; }
+.tracking-domain-table td:last-child { min-width: 250px; text-align: right; }
+.tracking-domain-table th:last-child { text-align: right; }
+.tracking-domain-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.tracking-domain-table .tracking-registration-date { width: 132px; text-align: center; white-space: nowrap; }
 .tracking-domain-table td:first-child code { color: var(--hub-primary-text, #c3cede); overflow-wrap: anywhere; }
+.tracking-domain-table td:first-child .tracking-presell-link code { color: inherit; }
 .tracking-domain-show-tag { min-width: 112px; justify-content: center; }
 
 @keyframes tracking-new-track-row-pulse {
@@ -345,7 +419,8 @@
   overflow-wrap: anywhere;
 }
 
-.tracking-tag-dialog textarea {
+.tracking-tag-dialog textarea,
+.tracking-email-config-body .tracking-token-field textarea {
   width: 100%;
   min-height: 76px;
   padding: 9px 10px;
@@ -358,7 +433,8 @@
   resize: vertical;
 }
 
-.tracking-tag-dialog textarea:focus-visible {
+.tracking-tag-dialog textarea:focus-visible,
+.tracking-email-config-body .tracking-token-field textarea:focus-visible {
   outline: 2px solid var(--hub-control-focus, #5ab1ff);
   outline-offset: 2px;
 }
@@ -534,14 +610,25 @@
   max-width: 760px;
 }
 .tracking-clicks-date-range {
-  grid-template-columns: repeat(2, minmax(180px, 230px));
-  max-width: 474px;
+  grid-template-columns: repeat(2, minmax(180px, 230px)) minmax(160px, 190px);
+  max-width: 668px;
 }
 .tracking-clicks-results { display: grid; gap: 10px; }
 .tracking-clicks-results .tracking-file-details,
 .tracking-clicks-results .tracking-scope-note { margin-top: 0; }
 .tracking-clicks-results .tracking-table-heading { margin-top: 4px; }
 .tracking-clicks-table { min-width: 850px; }
+.tracking-presell-link {
+  color: #9bcaff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tracking-presell-link:hover { color: #d3e8ff; }
+.tracking-presell-link:focus-visible {
+  outline: 2px solid #9bcaff;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 
 .tracking-table th,
 .tracking-table td {
@@ -563,8 +650,11 @@
 
 .tracking-table tbody tr:hover { background: rgba(131, 164, 203, .06); }
 .tracking-table .tracking-number { text-align: right; font-variant-numeric: tabular-nums; }
-.tracking-domain-table .tracking-sales-count { text-align: center; }
+.tracking-domain-table .tracking-sales-count,
+.tracking-domain-table .tracking-checkout-count { text-align: center; }
 .tracking-clicks-table .tracking-number { text-align: left; }
+.tracking-gurumedia-table th:nth-child(n+4):nth-child(-n+6),
+.tracking-gurumedia-table td:nth-child(n+4):nth-child(-n+6) { text-align: center; }
 .tracking-ins-v8-table th:nth-child(n+6):nth-child(-n+9),
 .tracking-ins-v8-table td:nth-child(n+6):nth-child(-n+9) { text-align: center; }
 .tracking-row-status { color: #77d8a2; white-space: normal; }
@@ -605,6 +695,8 @@
   .tracking-domain-heading-actions { align-self: stretch; justify-content: space-between; }
   .tracking-ins-v8-url > small { grid-column: 1; }
   .tracking-email-panel .tracking-email-heading { align-items: center; flex-direction: row; }
+  .tracking-gurumedia-action-field { min-width: 180px; }
+  .tracking-gurumedia-action-buttons { min-width: 140px; }
   .tracking-tag-dialog { padding: 16px; }
   .tracking-tag-dialog-actions > * { flex: 1 1 100%; justify-content: center; }
 }

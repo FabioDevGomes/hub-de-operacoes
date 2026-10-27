@@ -1,4 +1,4 @@
-import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=7';
+import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=8';
 import {createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=5';
 
 export const ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY = 'hub:account-directory:column-widths:v1';

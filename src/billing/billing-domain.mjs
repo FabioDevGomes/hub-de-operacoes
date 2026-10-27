@@ -86,6 +86,8 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     source: text(input.source) || 'manual',
     source_ref: text(input.source_ref) || null,
     source_period: ['d0', 'd1'].includes(input.source_period) ? input.source_period : null,
+    data_source: input.data_source === 'google_ads_api' ? 'google_ads_api' : null,
+    source_captured_at: input.source_captured_at || null,
     manual_value_override: input.manual_value_override === true,
     external_id: text(input.external_id) || null,
     active: input.active !== false,

@@ -1,4 +1,4 @@
-import { normalizeTrackingProductKey, normalizeTrackingProductLabel } from './tracking-domain-admin.mjs?v=7';
+import { normalizeTrackingProductKey, normalizeTrackingProductLabel } from './tracking-domain-admin.mjs?v=11';
 
 export const TRACKING_PRODUCT_LABELS_STORAGE_KEY = 'hub:tracking:product-labels:v1';
 const MAX_LABELS = 1000;

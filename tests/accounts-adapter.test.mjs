@@ -25,8 +25,8 @@ test('CPA selects remain self-contained after extracting the Accounts select ren
 
 test('Accounts adapter preserves observed history and replaces, not duplicates, same-day D0',()=>{
   const d0={date:'2026-01-02',investment:5,impressions:0,clicks:null,conversions:0,commission:null};
-  const context=vm.createContext({d0Totals:()=>d0,derivedContext:()=>({latestSnapshots:{dates:[]},snapshotsByCampaignName:new Map()})});
-  vm.runInContext(functionLine('accountCampaignTotals')+';this.totals=accountCampaignTotals',context);
+  const context=vm.createContext({state:{googleAdsSourceMode:'manifest'},d0Totals:()=>d0,derivedContext:()=>({latestSnapshots:{dates:[]},snapshotsByCampaignName:new Map()})});
+  vm.runInContext([functionLine('googleAdsApiFieldsByDate'),functionLine('accountCampaignTotals')].join('\n')+';this.totals=accountCampaignTotals',context);
   const history={
     observed:{investment:true,impressions:true,clicks:false,conversions:true,commission:false},
     investment:20,impressions:30,clicks:0,conversions:2,commission:0,
@@ -52,7 +52,7 @@ test('product and account projections preserve exact campaign names, sales adjus
     campaignSheet:()=>'',campaignHistoricalTotals:()=>null,d0Totals:campaign=>campaign.totals,
     campaignAccount:campaign=>campaign.account,campaignAccountDomain:()=>null,roiForTotals:()=>null
   });
-  vm.runInContext(['accountCampaignTotals','accountProductIdentity','accountReportRows'].map(functionLine).join('\n')+';this.rows=accountReportRows',context);
+  vm.runInContext(['googleAdsApiFieldsByDate','accountCampaignTotals','accountProductIdentity','accountReportRows'].map(functionLine).join('\n')+';this.rows=accountReportRows',context);
   const before=JSON.stringify(campaigns);
   const result=context.rows();
   assert.deepEqual(Array.from(result,row=>row.campaign),campaigns.map(row=>row.nome_campanha_exato));
@@ -66,6 +66,14 @@ test('product and account projections preserve exact campaign names, sales adjus
   assert.equal(context.rows(),result,'the existing derived-context cache is reused');
 });
 
+test('Accounts snapshot exposes the captured account label, preferring D0 then D1',()=>{
+  const start=source.indexOf('    function accountReportSnapshot('),end=source.indexOf('    let accountDirectoryControllerPromise',start);
+  const campaigns=[{nome_campanha_exato:'A',metricas_D_zero:{conta:{valor:'9737 - Loja Azul .example.shop'}}},{nome_campanha_exato:'B',metricas_D_menos_1:{conta:{valor:'6244 - Loja Verde'}}}];
+  const context=vm.createContext({derivedContext:()=>({campaigns}),state:{database:{diario:[]}},databaseCampaign:()=>null,accountReportRows:()=>[{campaign:'A'},{campaign:'B'}],valueOf:item=>item?.valor,campaignIdentity:()=>({}),cpaTitleInfo:()=>({}),campaignZeroImpressionDays:()=>0,dateLabel:String});
+  vm.runInContext(source.slice(start,end)+';this.snapshot=accountReportSnapshot',context);
+  assert.deepEqual(Array.from(context.snapshot().rows,row=>row.accountName),['9737 - Loja Azul .example.shop','6244 - Loja Verde']);
+});
+
 test('Accounts replaces both latest snapshot dates, preserving older days and absence',()=>{
   const context=vm.createContext({window:{}});
   vm.runInContext(readFileSync(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
@@ -73,7 +81,8 @@ test('Accounts replaces both latest snapshot dates, preserving older days and ab
   context.OverviewDomain=context.window.OverviewDomain;
   context.derivedContext=()=>({latestSnapshots:{dates:rows.map(row=>row.date)},snapshotsByCampaignName:new Map([['captured',rows]])});
   const history={investment:150,commission:150,conversions:6,observed:{investment:3,commission:3,conversions:3},byDate:{'2026-09-30':{investment:50,commission:50,conversions:2},'2026-10-01':{investment:50,commission:50,conversions:2},'2026-10-02':{investment:50,commission:50,conversions:2}}};
-  vm.runInContext(functionLine('accountCampaignTotals')+';this.totals=accountCampaignTotals',context);
+  context.state={googleAdsSourceMode:'manifest'};
+  vm.runInContext([functionLine('googleAdsApiFieldsByDate'),functionLine('accountCampaignTotals')].join('\n')+';this.totals=accountCampaignTotals',context);
   const totals=context.totals({nome_campanha_exato:'Captured'},history);
   assert.equal(totals.investment,80);assert.equal(totals.commission,90);assert.equal(totals.conversions,3);
   assert.equal(context.totals({nome_campanha_exato:'Missing'},history).investment,50);

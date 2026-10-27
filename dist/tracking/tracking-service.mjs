@@ -5,9 +5,11 @@ import {
   normalizeTrackingProductKey,
   normalizeTrackingProductLabel,
   normalizeTrackingDomainSave,
-} from './tracking-domain-admin.mjs?v=7';
-import { normalizeTrackingClicksReport, validateTrackingClicksDateRange } from './tracking-clicks-domain.mjs?v=1';
+} from './tracking-domain-admin.mjs?v=11';
+import { normalizeTrackingClicksReport, validateTrackingClicksDateRange } from './tracking-clicks-domain.mjs?v=6';
 import { normalizeTrackingSalesPage } from './tracking-sales-domain.mjs?v=1';
+import { normalizeTrackingCheckoutsReport } from './tracking-checkouts-domain.mjs?v=1';
+import { normalizeGuruMediaSalesReport } from './tracking-gurumedia-domain.mjs?v=1';
 
 export const TRACKING_API_ENDPOINTS = Object.freeze({
   report: 'https://track.travenzo.shop/google-ads-report.php',
@@ -16,12 +18,15 @@ export const TRACKING_API_ENDPOINTS = Object.freeze({
   insV8Csv: 'https://track.travenzo.shop/clickbank-ins-v8-csv.php',
   clicksReport: 'https://track.travenzo.shop/tracking-clicks-report.php',
   sales: 'https://track.travenzo.shop/clickbank-ins-v8-sales.php',
+  checkouts: 'https://track.travenzo.shop/clickbank-checkouts-report.php',
   domains: 'https://track.travenzo.shop/tracking-domains.php',
+  guruMediaSales: 'https://track.travenzo.shop/gurumedia-sales-report.php',
 });
 
 const ERROR_MESSAGES = Object.freeze({
   api_not_configured: 'A API ainda não está configurada no servidor. Confira as chaves privadas de integração.',
   api_unavailable: 'A API de vendas por Track ainda não está instalada no servidor. O pacote local precisa ser publicado manualmente na Hostinger.',
+  checkouts_api_unavailable: 'A API de checkouts por Track ainda não está instalada no servidor. Publique manualmente o pacote clickbank-checkouts-report na Hostinger.',
   conversion_action_not_configured: 'O nome da ação de conversão ainda não está configurado no servidor.',
   invalid_conversion_name: 'Informe o nome exato da ação de conversão cadastrada no Google Ads.',
   unsupported_content_type: 'O servidor esperava o nome da ação em JSON.',
@@ -44,6 +49,8 @@ const ERROR_MESSAGES = Object.freeze({
   invalid_date_range: 'Informe um intervalo de datas UTC válido.',
   date_range_too_large: 'O período máximo por consulta é de 366 dias.',
   report_limit_exceeded: 'Há muitas combinações de data, produto e domínio. Reduza o período e tente novamente.',
+  gurumedia_api_unavailable: 'A consulta de vendas GuruMedia ainda não está instalada no servidor. Publique o pacote manual correspondente.',
+  service_unavailable: 'O servidor não conseguiu concluir a consulta de vendas GuruMedia. Confira a instalação e tente novamente.',
 });
 
 function readToken(token) {
@@ -106,15 +113,17 @@ export function fetchClickBankInsV8Report(token, { fetchImpl = globalThis.fetch 
   return withTrackingRequest(TRACKING_API_ENDPOINTS.insV8Report, token, fetchImpl, false, normalizeClickBankInsV8Report);
 }
 
-export function fetchTrackingClicksReport(token, dateRange, { fetchImpl = globalThis.fetch } = {}) {
+export function fetchTrackingClicksReport(token, dateRange, { platform = 'clickbank', fetchImpl = globalThis.fetch } = {}) {
   const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  const normalizedPlatform = String(platform ?? '').trim().toLowerCase();
+  if (!['clickbank', 'gurumedia'].includes(normalizedPlatform)) throw new Error('Selecione uma plataforma de Tracking válida.');
   return withTrackingRequest(
     TRACKING_API_ENDPOINTS.clicksReport,
     token,
     fetchImpl,
     false,
-    payload => normalizeTrackingClicksReport(payload, range),
-    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate } },
+    payload => normalizeTrackingClicksReport(payload, range, normalizedPlatform),
+    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate, platform: normalizedPlatform } },
   );
 }
 
@@ -135,6 +144,28 @@ export function fetchTrackingSalesPage(token, { afterId, snapshotMaxId = null, f
     false,
     payload => normalizeTrackingSalesPage(payload, { afterId, snapshotMaxId }),
     { method: 'POST', body: { after_id: afterId, snapshot_max_id: snapshotMaxId } },
+  );
+}
+
+export function fetchTrackingCheckoutsReport(token, { fetchImpl = globalThis.fetch } = {}) {
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.checkouts,
+    token,
+    fetchImpl,
+    false,
+    normalizeTrackingCheckoutsReport,
+  );
+}
+
+export function fetchGuruMediaSalesReport(token, dateRange, { fetchImpl = globalThis.fetch } = {}) {
+  const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.guruMediaSales,
+    token,
+    fetchImpl,
+    false,
+    payload => normalizeGuruMediaSalesReport(payload, range),
+    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate } },
   );
 }
 
@@ -202,14 +233,27 @@ export function fetchTrackingDomains(token, { fetchImpl = globalThis.fetch } = {
   return withDomainRequest(token, { method: 'GET', fetchImpl });
 }
 
-export function addTrackingDomain(token, domain, { includeWww = false, productKey, productLabel, fetchImpl = globalThis.fetch } = {}) {
+export function addTrackingDomain(token, domain, { includeWww = false, productKey, productLabel, platform = 'clickbank', offerId = null, fetchImpl = globalThis.fetch } = {}) {
   const normalizedDomain = normalizeTrackingDomainInput(domain);
   const normalizedProductKey = normalizeTrackingProductKey(productKey);
-  const body = { domain: normalizedDomain, include_www: Boolean(includeWww), product_key: normalizedProductKey };
+  const normalizedPlatform = String(platform ?? '').trim().toLowerCase();
+  if (!['clickbank', 'gurumedia'].includes(normalizedPlatform)) throw new Error('Selecione ClickBank ou GuruMedia para esta Track.');
+  const normalizedOfferId = normalizedPlatform === 'gurumedia'
+    ? String(offerId ?? '').trim() || null
+    : null;
+  if (normalizedOfferId !== null && (!/^[A-Za-z0-9._-]{1,64}$/.test(normalizedOfferId))) {
+    throw new Error('Informe um ID de oferta GuruMedia válido.');
+  }
+  const body = { domain: normalizedDomain, include_www: Boolean(includeWww), product_key: normalizedProductKey, platform: normalizedPlatform };
+  if (normalizedOfferId !== null) body.offer_id = normalizedOfferId;
   if (productLabel !== undefined) body.product_label = normalizeTrackingProductLabel(productLabel).trim();
   return withDomainRequest(token, {
     method: 'POST',
     body,
     fetchImpl,
+  }).then(result => {
+    if (result.platform !== normalizedPlatform) throw new Error('O servidor não confirmou a plataforma desta Track. Publique a API de domínios e a migração de classificação antes de salvar.');
+    if (normalizedOfferId !== null && result.offerId !== normalizedOfferId) throw new Error('O servidor não confirmou o ID da oferta. Publique a API de domínios e a migração de postbacks GuruMedia antes de salvar.');
+    return result;
   });
 }

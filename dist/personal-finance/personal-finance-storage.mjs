@@ -1,4 +1,4 @@
-import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isLunchDinnerCategory, isNubankCardCategory, isNubankReserve, MANUAL_RESERVE_MOVEMENT_TYPES, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, normalizeReserveMovement, RESERVE_MOVEMENT_TYPES, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=36';
+import { cardDebtAmount, createGlobalExpenseTotals, createMonthSnapshot, DEFAULT_SETTINGS, hasMonthlyOccurrence, isCdiReserve, isLunchDinnerCategory, isNubankCardCategory, isNubankReserve, MANUAL_RESERVE_MOVEMENT_TYPES, normalizeCategory, normalizeDebt, normalizeEntry, normalizeFund, normalizeGroup, normalizeMonth, normalizeReserveMovement, RESERVE_MOVEMENT_TYPES, snapshotNewCategory, validateBundle } from './personal-finance-domain.mjs?v=37';
 import { publishPersonalFinanceUpdate } from './personal-finance-sync.mjs?v=1';
 
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
@@ -392,9 +392,10 @@ export async function saveNubankReserveBalance(fund, createdAt = new Date().toIS
           if (!latest || !isNubankReserve(latest)) throw new Error('A contribuição Saldo Nubank não foi encontrada.');
           if (latest.currency !== normalized.currency) throw new Error('A moeda do Saldo Nubank deve permanecer a mesma para reconciliar o histórico.');
           const priorMovements = (latest.reserve_movements || []).map(normalizeReserveMovement);
-          const priorDeductions = priorMovements.filter(item => item.currency === latest.currency).reduce((total, item) => total + item.amount, 0);
+          const priorDeductions = priorMovements.filter(item => item.currency === latest.currency && item.type !== 'interest').reduce((total, item) => total + item.amount, 0);
+          const priorInterest = priorMovements.filter(item => item.currency === latest.currency && item.type === 'interest').reduce((total, item) => total + item.amount, 0);
           const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-          const currentBalance = Math.max(0, round((Number(latest.amount) || 0) - priorDeductions));
+          const currentBalance = Math.max(0, round((Number(latest.amount) || 0) - priorDeductions + priorInterest));
           const expenseAmount = round(Math.max(0, currentBalance - requestedBalance));
           const movements = [...priorMovements];
           if (expenseAmount > 0) {
@@ -405,7 +406,7 @@ export async function saveNubankReserveBalance(fund, createdAt = new Date().toIS
             movements.push(movement);
           }
           const deductions = priorDeductions + expenseAmount;
-          const grossAmount = round(requestedBalance + deductions);
+          const grossAmount = round(requestedBalance + deductions - priorInterest);
           for (const snapshot of snapshots) {
             const updated = { ...snapshot, name:normalized.name, amount:grossAmount, currency:normalized.currency, notes:normalized.notes };
             if (snapshot.snapshot_id === latest.snapshot_id && movements.length) updated.reserve_movements = movements;
@@ -450,8 +451,9 @@ export async function recordReserveMovement(itemId, type, amount, createdAt = ne
           const latest = snapshots.sort((a, b) => b.month_key.localeCompare(a.month_key) || String(b.snapshot_id).localeCompare(String(a.snapshot_id)))[0];
           if (!latest) throw new Error('A contribuição global da reserva não foi encontrada.');
           const movements = (latest.reserve_movements || []).map(normalizeReserveMovement);
-          const deductions = movements.filter(movement => movement.currency === latest.currency).reduce((total, movement) => total + movement.amount, 0);
-          const balance = Math.max(0, Math.round((Number(latest.amount - deductions) + Number.EPSILON) * 100) / 100);
+          const deductions = movements.filter(movement => movement.currency === latest.currency && movement.type !== 'interest').reduce((total, movement) => total + movement.amount, 0);
+          const accruedInterest = movements.filter(movement => movement.currency === latest.currency && movement.type === 'interest').reduce((total, movement) => total + movement.amount, 0);
+          const balance = Math.max(0, Math.round((Number(latest.amount - deductions + accruedInterest) + Number.EPSILON) * 100) / 100);
           if (numericAmount - balance > 0.000001) {
             const available = new Intl.NumberFormat('pt-BR', { style:'currency', currency:latest.currency, minimumFractionDigits:2 }).format(balance);
             throw new Error(`O valor excede o saldo disponível desta reserva (${available}).`);
@@ -474,6 +476,60 @@ export async function recordReserveMovement(itemId, type, amount, createdAt = ne
       tx.onerror = () => reject(failure || tx.error || new Error('Não foi possível registrar a movimentação da reserva.'));
       tx.onabort = () => reject(failure || tx.error || new Error('A movimentação da reserva foi cancelada.'));
     });
+  } finally { db.close(); }
+}
+
+export async function recordReserveInterestToDate(itemId, currentBalance, createdAt = new Date().toISOString()) {
+  const rawBalance = Number(currentBalance);
+  if (!Number.isFinite(rawBalance) || rawBalance < 0) throw new Error('Informe o saldo atual do CDI como um valor válido maior ou igual a zero.');
+  const requestedBalance = Math.round((rawBalance + Number.EPSILON) * 100) / 100;
+  const db = await openPersonalFinanceDatabase();
+  try {
+    let movement = null, previousBalance = null;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.funds, 'readwrite');
+      const store = tx.objectStore(STORES.funds);
+      const request = store.index('item_id').openCursor(only(itemId));
+      const snapshots = [];
+      let failure = null;
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          if (cursor.value.type === 'reserve') snapshots.push(cursor.value);
+          cursor.continue();
+          return;
+        }
+        try {
+          const latest = snapshots.sort((a, b) => b.month_key.localeCompare(a.month_key) || String(b.snapshot_id).localeCompare(String(a.snapshot_id)))[0];
+          if (!latest || !isCdiReserve(latest)) throw new Error('O cálculo de juros está disponível somente para a reserva chamada CDI.');
+          const movements = (latest.reserve_movements || []).map(normalizeReserveMovement);
+          const deductions = movements.filter(item => item.currency === latest.currency && item.type !== 'interest').reduce((total, item) => total + item.amount, 0);
+          const accruedInterest = movements.filter(item => item.currency === latest.currency && item.type === 'interest').reduce((total, item) => total + item.amount, 0);
+          const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+          previousBalance = Math.max(0, round((Number(latest.amount) || 0) - deductions + accruedInterest));
+          const interestAmount = round(requestedBalance - previousBalance);
+          if (interestAmount < 0) {
+            const format = value => new Intl.NumberFormat('pt-BR', { style:'currency', currency:latest.currency, minimumFractionDigits:2 }).format(value);
+            throw new Error(`O saldo informado (${format(requestedBalance)}) está abaixo do saldo já registrado (${format(previousBalance)}). Esta ação registra somente juros positivos.`);
+          }
+          if (interestAmount > 0) {
+            movement = normalizeReserveMovement({
+              movement_id:`reserve-movement:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
+              type:'interest', amount:interestAmount, currency:latest.currency, created_at:createdAt,
+            });
+            store.put({ ...latest, reserve_movements:[...movements, movement] });
+          }
+        } catch (error) {
+          failure = error;
+          tx.abort();
+        }
+      };
+      request.onerror = () => tx.abort();
+      tx.oncomplete = () => { if (movement) publishPersonalFinanceUpdate(); resolve(); };
+      tx.onerror = () => reject(failure || tx.error || new Error('Não foi possível calcular os juros da reserva CDI.'));
+      tx.onabort = () => reject(failure || tx.error || new Error('O cálculo dos juros da reserva CDI foi cancelado.'));
+    });
+    return { movement, previousBalance, currentBalance:requestedBalance };
   } finally { db.close(); }
 }
 

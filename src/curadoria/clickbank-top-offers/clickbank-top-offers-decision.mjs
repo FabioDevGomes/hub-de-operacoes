@@ -1,4 +1,7 @@
-import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-options-1';
+import * as DecisionUI from '../decision-ui.mjs?v=curation-decision-options-2';
+
+export function normalizePageClassification(value){return value==='review'||value==='cookies'?value:null}
+export function pageClassificationLabel(value){const normalized=normalizePageClassification(value);return normalized==='cookies'?'cookies':normalized==='review'?'review':''}
 
 export const DEFAULT_DECISION=DecisionUI.DEFAULT_DECISION;
 export const OPTIONS=Object.freeze([

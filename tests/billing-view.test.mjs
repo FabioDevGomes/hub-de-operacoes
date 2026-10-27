@@ -23,7 +23,7 @@ assert.equal((view.match(/class="billing-product-cell"/g) || []).length, 2, 'tan
 assert.equal((view.match(/Domain\.displayProductName\(/g) || []).length, 2, 'as colunas Produto em Competência e Caixa exibem apenas o rótulo simplificado sem trocar o valor salvo');
 assert.match(css, /\.billing-root \.billing-product-cell span\{display:block;width:260px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\}/,
   'nomes longos de produto devem caber em coluna compacta e terminar com reticências');
-assert.ok(view.includes('Provisória · MCC D0') && view.includes('Não confirmada · ${esc(sale.confirmation_source || \'MCC D−1\')}') && view.includes('Coberta por lançamento manual'), 'estados de agregados MCC e cobertura manual ficam explícitos');
+assert.ok(view.includes("Provisória · ${esc(sale.confirmation_source || 'MCC D0')}") && view.includes('Não confirmada · ${esc(sale.confirmation_source || \'MCC D−1\')}') && view.includes('Coberta por lançamento manual'), 'agregados provisórios exibem a fonte observada (MCC ou API), preservando os demais estados');
 assert.ok(view.includes("sale.source === 'mcc_conversion_aggregate'"), 'linhas agregadas são reconhecidas para proteger os dados derivados');
 assert.match(view, /const actions = `<div class="billing-action-buttons"><button class="btn" data-billing-action="edit"/,
   'todas as vendas, inclusive agregados MCC e registros inativos, exibem Editar');

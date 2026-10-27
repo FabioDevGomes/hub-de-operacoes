@@ -7,6 +7,7 @@ import {
   resolveTrackingClicksCache,
   summarizeTrackingClicks,
   trackingClicksDefaultDateRange,
+  trackingClicksDateRangeForPreset,
   trackingClicksRate,
   validateTrackingClicksDateRange,
 } from '../src/tracking/tracking-clicks-domain.mjs';
@@ -24,14 +25,35 @@ const payload = {
   ],
 };
 
-test('cria intervalo UTC de 30 dias e valida período inclusivo de até 366 dias', () => {
-  assert.deepEqual(trackingClicksDefaultDateRange(new Date('2026-10-21T23:59:59-03:00')), {
-    startDate: '2026-09-23', endDate: '2026-10-22',
+test('inicia pelo calendário local do navegador e valida período inclusivo de até 366 dias', () => {
+  assert.deepEqual(trackingClicksDefaultDateRange(new Date('2026-10-21T23:59:59-03:00'), 'America/Sao_Paulo'), {
+    startDate: '2026-10-21', endDate: '2026-10-21',
+  });
+  const afterUtcMidnight = new Date('2026-10-27T00:07:11Z');
+  assert.deepEqual(trackingClicksDefaultDateRange(afterUtcMidnight, 'America/Sao_Paulo'), {
+    startDate: '2026-10-26', endDate: '2026-10-26',
+  });
+  assert.deepEqual(trackingClicksDateRangeForPreset('today', afterUtcMidnight, 'America/Sao_Paulo'), {
+    startDate: '2026-10-26', endDate: '2026-10-26',
   });
   assert.deepEqual(validateTrackingClicksDateRange('2026-10-01', '2026-10-31'), { startDate: '2026-10-01', endDate: '2026-10-31' });
   assert.throws(() => validateTrackingClicksDateRange('2026-02-30', '2026-03-01'), /UTC válido/i);
   assert.throws(() => validateTrackingClicksDateRange('2026-10-02', '2026-10-01'), /UTC válido/i);
   assert.throws(() => validateTrackingClicksDateRange('2026-01-01', '2027-01-02'), /366 dias/i);
+});
+
+test('calcula presets do Tracking pelo calendário local, incluindo meses-calendário e limite de Total', () => {
+  const now = new Date('2026-10-23T00:30:00-03:00');
+  const timeZone = 'America/Sao_Paulo';
+  assert.deepEqual(trackingClicksDateRangeForPreset('today', now, timeZone), { startDate: '2026-10-23', endDate: '2026-10-23' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('yesterday', now, timeZone), { startDate: '2026-10-22', endDate: '2026-10-22' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('7-days', now, timeZone), { startDate: '2026-10-17', endDate: '2026-10-23' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('30-days', now, timeZone), { startDate: '2026-09-24', endDate: '2026-10-23' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('this-month', now, timeZone), { startDate: '2026-10-01', endDate: '2026-10-23' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('last-month', now, timeZone), { startDate: '2026-09-01', endDate: '2026-09-30' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('last-month', new Date('2026-01-01T12:00:00Z'), timeZone), { startDate: '2025-12-01', endDate: '2025-12-31' });
+  assert.deepEqual(trackingClicksDateRangeForPreset('total', now, timeZone), { startDate: '2025-10-23', endDate: '2026-10-23' });
+  assert.throws(() => trackingClicksDateRangeForPreset('custom', now), /período rápido válido/i);
 });
 
 test('converte datas ISO e brasileiras sem depender do locale do navegador', () => {

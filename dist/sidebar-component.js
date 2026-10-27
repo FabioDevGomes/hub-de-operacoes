@@ -7,8 +7,11 @@
       { key: 'preparer', label: 'Preparador MCC', href: '/preparador-MCC/?v=20260923-sidebar' },
       { key: 'tested', label: 'Produtos testados', view: 'tested', href: '/?view=tested' },
     ] },
-    { id: 'tracking', label: 'Tracking', items: [
+    { id: 'tracking', label: 'Integrações', items: [
+      { key: 'google-ads', label: 'Google Ads API', view: 'google-ads', href: '/?view=google-ads' },
       { key: 'tracking', label: 'Tracking ClickBank', view: 'tracking', href: '/?view=tracking' },
+      { key: 'tracking-gurumedia', label: 'Tracking GuruMedia', view: 'tracking-gurumedia', href: '/?view=tracking-gurumedia' },
+      { key: 'tracking-settings', label: 'Configurações globais', view: 'tracking-settings', href: '/?view=tracking-settings' },
     ] },
     { id: 'analysis', label: 'Análises', items: [
       { key: 'cpa', label: 'Análise por faixa de CPA', view: 'cpa', href: '/?view=cpa' },
@@ -31,6 +34,7 @@
     { id: 'creation', label: 'Criação de ofertas', items: [
       { key: 'asset-studio', label: 'Asset Studio', href: '/asset-studio/' },
       { key: 'copy', label: 'Ficha e Presell', view: 'copy', href: '/?view=copy' },
+      { key: 'review', label: 'Review', view: 'review', href: '/?view=review' },
     ] },
     { id: 'personal', label: 'Pessoal', items: [
       { key: 'time', label: 'Meu Tempo', view: 'time', href: '/?view=time' },

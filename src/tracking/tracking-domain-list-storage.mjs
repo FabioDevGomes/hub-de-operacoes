@@ -1,4 +1,4 @@
-import { normalizeTrackingDomainList } from './tracking-domain-admin.mjs?v=7';
+import { normalizeTrackingDomainList } from './tracking-domain-admin.mjs?v=11';
 
 export const TRACKING_DOMAIN_LIST_STORAGE_KEY = 'hub:tracking:domain-list-cache:v1';
 
@@ -25,6 +25,8 @@ function normalizeStoredDomains(domains) {
       origin: row?.origin,
       product_key: row?.product_key,
       product_label: row?.product_label,
+      offer_id: row?.offer_id ?? null,
+      platform: row?.platform ?? 'unclassified',
       created_at_utc: typeof row?.created_at_utc === 'string' && row.created_at_utc.length <= 64
         ? row.created_at_utc
         : '',
@@ -70,6 +72,8 @@ export function saveTrackingDomainList(rows, storage, now = new Date()) {
       origin: row?.origin,
       product_key: row?.productKey,
       product_label: row?.productLabel,
+      offer_id: row?.offerId ?? null,
+      platform: row?.platform ?? 'unclassified',
       created_at_utc: row?.createdAtUtc,
     })));
     const updatedAtUtc = now.toISOString();
@@ -81,6 +85,8 @@ export function saveTrackingDomainList(rows, storage, now = new Date()) {
         origin: row.origin,
         product_key: row.productKey,
         product_label: row.productLabel,
+        offer_id: row.offerId,
+        platform: row.platform,
         created_at_utc: row.createdAtUtc,
       })),
     };

@@ -89,7 +89,7 @@ assert.ok(sidebarComponent.includes("key: 'macro'")&&(html+macroView).includes("
 const operationMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'operation'"),sidebarComponent.indexOf("{ id: 'analysis'"));
 const financeMenu=sidebarComponent.slice(sidebarComponent.indexOf("{ id: 'finance'"),sidebarComponent.indexOf("{ id: 'curation'"));
 assert.ok(!operationMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'macro'")&&financeMenu.includes("key: 'billing'")&&financeMenu.includes('Faturamento'),'Controle Macro e Faturamento devem estar no grupo Financeiro, não em Operação');
-assert.ok(html.includes("query:'billing'")&&html.includes('id="billingView"')&&html.includes("navId:'billingNav'")&&html.includes("import('./billing/billing-view.mjs?v=22')"),'rota ou view do Faturamento ausente');
+assert.ok(html.includes("query:'billing'")&&html.includes('id="billingView"')&&html.includes("navId:'billingNav'")&&/import\('\.\/billing\/billing-view\.mjs\?v=\d+'\)/.test(html),'rota ou view do Faturamento ausente');
 assert.ok(html.includes('billing/billing-status.css?v=3')&&billingStatusCss.includes('.billing-payment-dialog'),'seletor de status e seus estilos precisam ser publicados pelo build');
 assert.ok(databaseModule.includes('mccBillingSalesFromDiary')&&html.includes('await restoreLocalBase({persist:false,renderPage:false});await syncMccDiaryRowsToBilling()')&&html.includes('onlyIfMissing:true')&&html.includes('currentEntryIds.has(entry.sale_id)')&&html.includes("MCC_DIARY_BACKFILL_KEY='mcc-diary-backfill:v1'")&&html.includes("MCC_MANUAL_SALE_BACKFILL_KEY='mcc-manual-sale-backfill:current-period-v2'")&&html.includes("currentMccDates.has(String(sale.data))"),'Faturamento deve atualizar a base local antes da sincronização e fazer backfills idempotentes limitados às datas MCC atuais');
 assert.ok(html.includes("syncMccDiaryRowsToBilling({force:true,provisionalSaleIds:event.data.provisionalSaleIds||[]})"),'atualização MCC em outra aba deve sincronizar também as vendas manuais que acabaram de ser conciliadas');
@@ -269,8 +269,8 @@ assert.ok(sidebarComponent.includes('body.animate(')&&sidebarComponent.includes(
 assert.ok(sidebarComponent.includes('localStorage.setItem(STORAGE_KEY, name)'),'estado do menu expansível não é preservado');
 assert.ok(sidebarCss.includes('.hub-menu-group.collapsed'),'estilos comuns do menu não são publicados');
 assert.ok(panelSource.includes('<option value="history">Histórico</option>')&&!panelSource.includes('function renderSidebar('),'acessos históricos devem estar na Visão Geral sem renderizar a antiga lista lateral');
-assert.ok(html.includes("import('./meu-tempo/meu-tempo-view.mjs?v=37')"),'Meu Tempo não é carregado pelo módulo dedicado versionado');
-assert.ok(html.includes('meu-tempo/meu-tempo.css?v=36'),'CSS do Meu Tempo não está versionado para invalidar cache');
+assert.ok(html.includes("import('./meu-tempo/meu-tempo-view.mjs?v=40')"),'Meu Tempo não é carregado pelo módulo dedicado versionado');
+assert.ok(html.includes('meu-tempo/meu-tempo.css?v=39'),'CSS do Meu Tempo não está versionado para invalidar cache');
 assert.ok(timeViewModule.includes('painel-meu-tempo')||timeViewModule.includes("from'./meu-tempo-storage.mjs'"),'módulo Meu Tempo não foi copiado para dist');
 assert.ok(timeViewModule.includes("from'./meu-tempo-domain.mjs?v=5'")&&timeViewModule.includes('Domain.dailyLaunchHistory(entries,date,WATER_TRACKER_ITEM_ID)')&&timeViewModule.includes('<th>Atividade</th><th>Registro</th><th>Lançado às</th>')&&timeCss.includes('.time-daily-launch-history-wrap{max-height:calc(100vh - 335px)}'),'histórico diário de duração e água e seus assets versionados não foram publicados');
 assert.ok(timeViewModule.includes('Domain.parseSignedQuickDuration(raw)')&&timeViewModule.includes('Storage.removeDuration(selectedDate,itemId,-minutes)')&&!timeViewModule.includes('data-remove')&&!timeViewModule.includes('Remover manualmente'),'ajuste manual com sinal não foi publicado ou manteve a coluna de remoção redundante');
@@ -324,7 +324,7 @@ assert.ok(timeViewModule.includes('Domain.SYMPTOM_SCALE_OPTIONS.map(option=>`<op
 assert.ok(timeCss.includes('.time-daily-summary{display:flex;align-items:end;gap:8px;flex-wrap:nowrap}'),'data e indicadores diários não estão organizados na mesma linha');
 // Accounts is now a separately built UI/domain/CSS module, not inline implementation.
 assert.ok(html.includes('id="accountReportView" class="hidden"></section>') &&
-  html.includes("import('./accounts/accounts-view.mjs?v=4')") &&
+  html.includes("import('./accounts/accounts-view.mjs?v=12')") &&
   html.includes('getSnapshot:()=>accountReportSnapshot(accountStatusStorage.read())'), 'Mapa por Conta não está conectado ao adaptador do Hub');
 assert.ok(html.includes('id="accountDirectoryView" class="hidden"></section>') &&
   html.includes("import('./accounts/accounts-list-view.mjs?v=20')") &&
@@ -334,7 +334,7 @@ for (const filename of ['accounts-domain.mjs','accounts-view.mjs','accounts-list
   assert.equal(await readFile(new URL('../dist/accounts/'+filename,import.meta.url),'utf8'),
     await readFile(new URL('../src/accounts/'+filename,import.meta.url),'utf8'),'o build deve publicar a fonte canônica de '+filename);
 }
-assert.ok(html.includes('accounts/accounts.css?v=26') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountCss.includes('.account-directory-panel .table-wrap{max-height:calc(100vh - 285px)}') && accountCss.includes('.account-directory-status-kpi{position:relative;display:grid;align-content:center;gap:5px;min-height:71px;padding:10px 18px 10px 21px') && accountCss.includes('.account-directory-status-kpi{min-height:62px;padding:9px 10px 9px 15px}') && accountView.includes('./accounts-domain.mjs?v=4') &&
+assert.ok(html.includes('accounts/accounts.css?v=35') && accountCss.includes('.account-bar-active-count--low{color:#ff9aa5}') && accountCss.includes('.account-bar-fill--low-history{background:linear-gradient(90deg,#e2606f,#ff9aa5)}') && accountCss.includes('.account-bar-history-count--low{color:#ff9aa5}') && accountCss.includes('.account-bar-row--with-secondary{grid-template-columns:minmax(70px,1.4fr) minmax(25px,1fr) 48px 47px;gap:6px}') && accountCss.includes('.account-bar-header>span:nth-child(n+3),.account-bar-row--with-secondary>strong{text-align:center}') && accountCss.includes('main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}') && accountCss.includes('.account-directory-panel .table-wrap{max-height:calc(100vh - 285px)}') && accountCss.includes('.account-directory-status-kpi{position:relative;display:grid;align-content:center;gap:5px;min-height:71px;padding:10px 18px 10px 21px') && accountCss.includes('.account-directory-status-kpi{min-height:62px;padding:9px 10px 9px 15px}') && accountView.includes('./accounts-domain.mjs?v=8') &&
   html.includes("accounts-list-view.mjs?v=20") && accountListView.includes('./accounts-list-domain.mjs?v=7') && accountListView.includes('./accounts-list-storage.mjs?v=5') && accountListView.includes("clicks:'Cliques totais'") && accountListView.includes("campaignCount:'Total de campanhas'") && accountListView.includes("conversions:'Conversões totais'") && accountListView.includes('data-account-directory-sort') && accountListView.includes('paymentProfile:120') && accountListView.includes('impressions:92,clicks:84,campaignCount:112,conversions:96') && accountCss.includes('.account-directory-table .account-directory-sort-label{position:relative;left:.5em;display:block;flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;padding-right:1em;overflow:visible;text-overflow:clip;text-align:center;white-space:normal;overflow-wrap:normal;word-break:normal;line-height:1.15}') && accountCss.includes('.account-directory-table .account-directory-sort-arrow{position:absolute;top:50%;right:2px;transform:translateY(-50%)'),
   'dependências do Mapa por Conta e da nova lista não foram publicadas ou a faixa global continua visível em Contas');
 assert.ok(accountListView.includes("startDate:'Data de início'") && accountListView.includes("creationDate:'Data de criação'") && accountListView.includes("status:'Status'") &&
@@ -361,7 +361,7 @@ assert.ok(accountView.includes('Matriz de produtos por conta') && accountView.in
   accountView.includes('Cobertura por faixa de CPA'),'quadros do Mapa por Conta ausentes');
 assert.ok(accountView.indexOf('class="card panel account-detail"') < accountView.indexOf('class="card panel account-cpa-gaps"'),'cobertura deve ser o último cartão');
 assert.ok(accountView.includes('Respeita os filtros de Situação e Conta; Produto limita apenas as linhas exibidas.'),'escopo da cobertura não está explicado');
-assert.ok(accountCss.includes('.account-matrix-wrap{overflow:visible;max-height:none}') &&
+assert.ok(accountCss.includes('.account-matrix-wrap{max-width:100%;overflow-x:auto;overflow-y:hidden;max-height:none') && accountCss.includes('.account-matrix{width:max-content;min-width:100%}') &&
   accountCss.includes('.account-detail .table-wrap{max-height:none;overflow:visible}'),'tabelas não devem ter rolagem vertical interna');
 assert.ok(accountCss.includes('.main:has(#accountReportView:not(.hidden)){height:100vh;overflow-y:auto}') &&
   accountCss.includes('scrollbar-gutter:stable') && accountCss.includes('::-webkit-scrollbar{width:14px}'),'rolagem da área principal não foi preservada');
@@ -371,7 +371,7 @@ assert.ok(html.includes('id="accountScrollRail" class="account-scroll-rail"') &&
 assert.ok((html+cpaView+cpaDomain+cpaCss).includes('body:has(#cpaReportView:not(.hidden)){overflow:hidden}') &&
   cpaCss.includes('body:has(#cpaReportView:not(.hidden)) .account-scroll-rail{display:block}'),'extração do Mapa não deve remover rolagem da análise CPA');
 assert.ok(accountCss.includes('.account-kpis{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}') &&
-  accountCss.includes('.account-matrix tbody td{padding-top:5.12px;padding-bottom:5.12px}'),'compactação existente não foi preservada');
+  html.includes('accounts/accounts.css?v=36') && accountCss.includes('.account-matrix tbody td{padding-top:3.84px;padding-bottom:3.84px;line-height:1.1}') && accountCss.includes('.account-cell small{display:block;color:#8eb0d3;font-size:.68rem;line-height:1.1;margin-top:1px}'),'compactação vertical de 25% da matriz não foi preservada');
 assert.ok(accountCss.includes('.account-matrix tbody tr.selected .account-cell.has-campaigns{background:linear-gradient(') &&
   accountCss.includes('.account-cpa-gap-table tbody td.cpa-coverage{font-weight:400}'),'destaque da seleção ou tipografia da cobertura foi alterado');
 assert.ok(accountCss.includes('.account-product-campaign-table th,.account-product-campaign-table td{text-align:center}') &&

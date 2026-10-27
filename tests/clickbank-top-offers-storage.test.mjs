@@ -24,6 +24,8 @@ assert.throws(()=>Storage.appendTrendSearch({},'2026-01-03T11:00:00.000Z','  '),
 assert.throws(()=>Storage.appendTrendSearch({},'not-a-date','termo válido'),/inválida/,'datas inválidas não entram no histórico');
 const source = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs', import.meta.url), 'utf8');
 assert.match(source, /DECISION_VALUES = new Set\(\[[^\]]*'Precisa de aprovação'/, 'a store e a validação de backups aceitam a decisão exclusiva desta tela');
+assert.match(source, /PAGE_CLASSIFICATIONS = new Set\(\['review','cookies'\]\)/, 'a store valida os dois rótulos de página');
+assert.ok(source.includes('validPageClassification(record.pageClassification)')&&source.includes('validPageClassification(item.pageClassification)'), 'a classificação atual e o histórico são validados sem schema novo');
 assert.match(source, /createObjectStore\(STORES\.captures,\s*\{keyPath:\s*'captureId'\}\)/);
 assert.match(source, /for \(const name of \[STORES\.offerMetadata, STORES\.trends, STORES\.images\]\)/, 'a migração adiciona stores de análise sem recriar capturas');
 assert.match(source, /createObjectStore\(STORES\.decisions,\s*\{keyPath:\s*'offerKey'\}\)/, 'a migração cria decisões por oferta sem recriar capturas');
@@ -57,9 +59,13 @@ assert.doesNotMatch(source, /indexedDB\.open\(['"]radar-hot-offers-ms['"]/, 'Top
 const originalIndexedDB=globalThis.indexedDB;
 try {
   globalThis.indexedDB=memoryIndexedDB();
-  const decision={offerKey:'synthetic::approval',currentStatus:'Precisa de aprovação',notes:'',updatedAt:'2026-10-20T12:00:00.000Z',history:[{status:'Precisa de aprovação',capturedAt:'2026-10-20T12:00:00.000Z',notes:''}]};
+  const decision={offerKey:'synthetic::approval',currentStatus:'Precisa de aprovação',pageClassification:'cookies',notes:'',updatedAt:'2026-10-20T12:00:00.000Z',history:[{status:'Precisa de aprovação',pageClassification:'cookies',capturedAt:'2026-10-20T12:00:00.000Z',notes:''}]};
   await Storage.putDecision(decision);
   assert.deepEqual(await Storage.getAll(Storage.STORES.decisions),[decision],'a nova opção é aceita e persistida na store local');
+  const legacyDecision={offerKey:'synthetic::legacy',currentStatus:'Revisar',notes:'',updatedAt:'2026-10-20T12:01:00.000Z',history:[{status:'Revisar',capturedAt:'2026-10-20T12:01:00.000Z',notes:''}]};
+  await Storage.putDecision(legacyDecision);
+  await assert.rejects(Storage.putDecision({...decision,offerKey:'synthetic::invalid',pageClassification:'quiz'}),/inválida/,'valores fora de review/cookies são rejeitados');
+  await assert.rejects(Storage.putDecision({...decision,offerKey:'synthetic::invalid-history',history:[{...decision.history[0],pageClassification:'dtc'}]}),/inválida/,'classificações inválidas também são rejeitadas no histórico');
   const trendsRecord={offerKey:'offer-history',productKey:'product-history',offerName:'History product',seller:'Seller',assessments:[{assessmentId:'assessment-1',status:'stable',countries:['US'],productAge:null,searchTerm:'existing assessment',date:'2026-10-20',capturedAt:'2026-10-20T12:00:00.000Z'}],keywordCandidates:['existing candidate'],customField:'preserved'};
   await Storage.putOfferRecord(Storage.STORES.trends,trendsRecord);
   const identity={offerKey:trendsRecord.offerKey,productKey:trendsRecord.productKey,offerName:trendsRecord.offerName,seller:trendsRecord.seller};
@@ -81,7 +87,7 @@ try {
   const backup=await Storage.exportBackup();
   globalThis.indexedDB=memoryIndexedDB();
   await Storage.mergeBackup(backup);
-  assert.deepEqual(await Storage.getAll(Storage.STORES.decisions),[decision],'a decisão continua válida no round-trip de backup');
+  assert.deepEqual(await Storage.getAll(Storage.STORES.decisions),[decision,legacyDecision],'backup preserva a nova classificação e continua aceitando decisões legadas sem ela');
   assert.deepEqual(await Storage.getAll(Storage.STORES.trends),[stalePageUpdate.record],'o histórico de buscas é incluído no backup sem store nova');
 } finally {
   if(originalIndexedDB===undefined)delete globalThis.indexedDB;

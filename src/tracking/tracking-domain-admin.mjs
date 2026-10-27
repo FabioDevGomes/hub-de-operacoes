@@ -4,6 +4,13 @@ const TRACKING_COLLECTOR_URL = 'https://track.travenzo.shop/collect.php';
 
 const HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/i;
+const TRACKING_PLATFORMS = new Set(['clickbank', 'gurumedia', 'unclassified']);
+
+export function normalizeTrackingPlatform(value, fallback = 'clickbank') {
+  const platform = String(value ?? fallback).trim().toLowerCase();
+  if (!TRACKING_PLATFORMS.has(platform)) throw new Error('Selecione ClickBank ou GuruMedia para esta Track.');
+  return platform;
+}
 
 function validHost(value) {
   return typeof value === 'string' && HOST_PATTERN.test(value) && !/^\d+(?:\.\d+){3}$/.test(value);
@@ -28,6 +35,16 @@ export function normalizeTrackingProductLabel(value) {
   }
   normalizeTrackingProductKey(label);
   return label;
+}
+
+export function normalizeTrackingOfferId(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') throw new Error('O ID da oferta GuruMedia deve ser texto.');
+  const offerId = value.trim();
+  if (!offerId || offerId.length > 64 || !/^[A-Za-z0-9._-]+$/.test(offerId)) {
+    throw new Error('Informe um ID de oferta GuruMedia com até 64 caracteres alfanuméricos, ponto, hífen ou sublinhado.');
+  }
+  return offerId;
 }
 
 export function buildTrackingPresellScriptTag(productKey, presellHost) {
@@ -69,11 +86,18 @@ export function normalizeTrackingDomainList(payload) {
     const productLabel = rawProductLabel == null
       ? null
       : normalizeTrackingProductLabel(rawProductLabel).trim();
+    const offerId = normalizeTrackingOfferId(row.offer_id ?? null);
+    const platform = normalizeTrackingPlatform(row.platform ?? 'unclassified', 'unclassified');
+    if (offerId !== null && platform !== 'gurumedia') {
+      throw new Error('O servidor retornou um ID de oferta em uma Track que não é GuruMedia.');
+    }
     return {
       hostname,
       origin: row.origin,
       productKey: normalizeTrackingProductKey(row.product_key ?? hostname),
       productLabel,
+      platform,
+      offerId,
       createdAtUtc: typeof row.created_at_utc === 'string' ? row.created_at_utc : '',
     };
   });
@@ -91,8 +115,15 @@ export function normalizeTrackingDomainSave(payload) {
   });
   const rawProductKey = payload.product_key;
   const rawProductLabel = payload.product_label;
+  if (!['clickbank', 'gurumedia'].includes(payload.platform)) {
+    throw new Error('O servidor não confirmou a plataforma desta Track. Publique a API de domínios e a migração de classificação antes de salvar.');
+  }
   if (rawProductLabel != null && typeof rawProductLabel !== 'string') {
     throw new Error('O servidor retornou uma confirmação com nome de Track inválido.');
+  }
+  const offerId = normalizeTrackingOfferId(payload.offer_id ?? null);
+  if (offerId !== null && payload.platform !== 'gurumedia') {
+    throw new Error('O servidor confirmou um ID de oferta para uma Track que não é GuruMedia.');
   }
   return {
     added: validate(payload.added),
@@ -100,6 +131,8 @@ export function normalizeTrackingDomainSave(payload) {
     alreadyAllowed: validate(payload.already_allowed),
     productKey: rawProductKey == null ? null : normalizeTrackingProductKey(rawProductKey),
     productLabel: rawProductLabel == null ? null : normalizeTrackingProductLabel(rawProductLabel).trim(),
+    platform: normalizeTrackingPlatform(payload.platform),
+    offerId,
   };
 }
 

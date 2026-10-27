@@ -1,0 +1,11 @@
+import {PAGE_SCHEMA,PAGE_PREFIX,createPageState} from './review-page-domain.mjs?v=1';
+import {COPY_SECTIONS} from './review-copy-domain.mjs?v=1';
+
+const keyFor=id=>{if(!/^[a-zA-Z0-9-]{1,100}$/.test(id))throw new Error('Identificador da review inválido.');return PAGE_PREFIX+id};
+function assertPageState(state,id){
+  if(!state||state.schema!==PAGE_SCHEMA||state.reviewId!==id||typeof state.binding!=='string'||state.sourceSnapshot!==null&&(!state.sourceSnapshot||typeof state.sourceSnapshot!=='object'||Array.isArray(state.sourceSnapshot))||typeof state.seoTitle!=='string'||state.seoTitle.length>2000||typeof state.description!=='string'||state.description.length>2000||typeof state.reviewed!=='boolean'||!state.imageAlts||Object.keys(state.imageAlts).length!==COPY_SECTIONS.length||!COPY_SECTIONS.every(section=>Object.hasOwn(state.imageAlts,section.key)))throw new Error('Rascunho de página inválido. O registro original foi preservado.');
+  for(const section of COPY_SECTIONS){const alt=state.imageAlts[section.key];if(!alt||typeof alt.text!=='string'||alt.text.length>1000||typeof alt.confirmed!=='boolean')throw new Error('Texto alternativo de imagem inválido. O registro original foi preservado.')}
+}
+function historyFor(storage,id){const raw=storage.getItem(keyFor(id));if(raw===null)return[];const history=JSON.parse(raw);if(!Array.isArray(history)||!history.length)throw new Error('Histórico da página inválido.');for(const [index,entry] of history.entries()){if(!entry||entry.revision!==index+1||typeof entry.savedAt!=='string')throw new Error('Revisões da página inválidas.');assertPageState(entry.state,id)}return history}
+export function loadPage(storage,draft){return historyFor(storage,draft.id).at(-1)||{revision:0,savedAt:null,state:createPageState(draft)}}
+export function savePage(storage,state,{expectedRevision=0,now=()=>new Date().toISOString()}={}){assertPageState(state,state.reviewId);const history=historyFor(storage,state.reviewId),latest=history.at(-1);if((latest?.revision||0)!==expectedRevision)throw new Error('As configurações da página mudaram em outra aba. Exporte as edições antes de recarregar.');if(latest&&JSON.stringify(latest.state)===JSON.stringify(state))return latest;const entry={revision:expectedRevision+1,savedAt:now(),state};storage.setItem(keyFor(state.reviewId),JSON.stringify([...history,entry]));return entry}

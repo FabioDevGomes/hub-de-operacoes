@@ -34,7 +34,7 @@ test('client accounts, duplicates, unknown managers, Excel and stale scoped date
   m.escopo_contas={consolidado:true};db.diario=[{...row('b','d0',dates.d0),fontes:['excel']},row('missing','d0',dates.d0)];
   assert.equal(domain.manifestMccCoverage(db,m,dates).d0.receivedCount,1);
   assert.equal(domain.manifestMccCoverage(db,m,dates).d0.complete,false);
-  assert.equal(domain.manifestMccCoverage({mccs:[{id:a}]},m,dates).d0.complete,false);
+  assert.equal(domain.manifestMccCoverage({mccs:[{id:a}]},m,dates).d0.complete,true,'uma única MCC cadastrada fica completa quando sua própria captura está presente');
   assert.equal(domain.manifestMccCoverage(db,m,{}).d0.receivedCount,0);
   assert.equal(domain.manifestMccCoverage(null,null,dates).d1.complete,false);
 });

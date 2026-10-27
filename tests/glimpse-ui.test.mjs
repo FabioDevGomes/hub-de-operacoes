@@ -94,6 +94,7 @@ test('Glimpse é compartilhado entre as listas e curadorias',async()=>{
   assert.match(glimpsePage,/movementCard\.dataset\.direction=/);
   assert.match(glimpseStyles,/strong\[data-direction="negative"\]\{color:var\(--red\)\}/);
   assert.match(glimpseStyles,/strong\[data-direction="positive"\]\{color:var\(--green\)\}/);
+  assert.match(glimpseStyles,/\.stack-row>div>small\{margin-inline-start:\.4rem\}/,'o status de crescimento dos termos emergentes mantém espaço após o termo em todas as origens Glimpse');
   assert.match(glimpseStyles,/html\.embedded\{overflow-x:hidden;overflow-y:auto\}/,'o componente mantém seu fallback vertical e evita rolagem horizontal; o host acompanha a altura comunicada');
   assert.match(glimpseStyles,/html\.embedded \.input-card\{max-width:920px\}/,'o quadro de colagem incorporado usa largura mais compacta');
   assert.match(glimpseStyles,/html\.wide-offer-embedded \.input-card\{width:100%;max-width:none\}/,'o quadro de colagem das fichas CB e SmartAdv ocupa toda a largura disponível');

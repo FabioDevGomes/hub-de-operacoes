@@ -1,4 +1,5 @@
-import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=5';
+import { makeAudit, makeId, mccConversionSaleId, normalizeMovement, normalizeSale, provisionalSaleToBilling } from './billing-domain.mjs?v=12';
+import { readGoogleAdsSourceMode } from '../google-ads/google-ads-source-preference.mjs?v=1';
 import { DB_NAME, DB_VERSION, ensureStores, openDatabase, BILLING_STORES as SCHEMA_BILLING_STORES, PERSONAL_FINANCE_STORES } from '../storage/hub-database.mjs?v=1';
 
 export const BILLING_DB_NAME = DB_NAME;
@@ -297,7 +298,7 @@ function reconcileMccAggregateForManualSale(transaction, sales, audit, manual, s
   request.onerror = () => transaction.abort();
 }
 
-export function upsertMccConversionSalesToTransaction(transaction, mccSales, { now = new Date().toISOString(), onlyIfMissing = false, preserveExistingPlatform = false } = {}) {
+export function upsertMccConversionSalesToTransaction(transaction, mccSales, { now = new Date().toISOString(), onlyIfMissing = false, preserveExistingPlatform = false, sourceMode = readGoogleAdsSourceMode() } = {}) {
   const entries = (mccSales || []).map(item => normalizeSale({ ...item, updated_at:now }, { now }));
   if (!entries.length) return 0;
   const sales = transaction.objectStore(BILLING_STORES.sales);
@@ -306,6 +307,8 @@ export function upsertMccConversionSalesToTransaction(transaction, mccSales, { n
     const request = sales.get(incoming.sale_id);
     request.onsuccess = () => {
       const existing = request.result;
+      if (incoming.data_source === 'google_ads_api' && sourceMode !== 'api') return;
+      if (sourceMode === 'api' && existing?.data_source === 'google_ads_api' && incoming.data_source !== 'google_ads_api' && incoming.source_period !== 'd1') return;
       if (existing && onlyIfMissing && !(existing.source === 'mcc_conversion_aggregate' && existing.source_period !== 'd1' && incoming.source_period === 'd1')) return;
       if (!existing && incoming.active === false) return;
       if (existing && existing.source !== 'mcc_conversion_aggregate') return;
@@ -337,7 +340,7 @@ export function upsertMccConversionSalesToTransaction(transaction, mccSales, { n
           : incoming.confirmation_status === 'represented_by_manual'
             ? 'mcc_conversion_covered_by_manual_sale'
             : 'mcc_conversion_not_confirmed';
-      audit.add(makeAudit(action, 'sale', incoming.sale_id,
+      audit.add(makeAudit(incoming.data_source === 'google_ads_api' ? action.replace(/^mcc_/, 'google_ads_api_') : action, 'sale', incoming.sale_id,
         fields.map(field => ({ field, old_value:existing?.[field] ?? null, new_value:updated[field] ?? null })), { now }));
     };
     request.onerror = () => transaction.abort();

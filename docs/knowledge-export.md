@@ -30,4 +30,4 @@ Skills e documentação podem conter caminhos locais ou detalhes do ambiente. O 
 | Interface da Visão geral | `src/overview/view.js`, `overview.css` |
 | Testes | `tests/knowledge-export.test.mjs`, `tests/build.test.mjs`, `tests/overview-view.test.mjs` |
 
-Mudanças de allowlist devem atualizar este documento e o teste de exclusões. Teste com diretórios e arquivos sintéticos; não use nem imprima conteúdo de campanhas ou do banco local. Faça o build e rode `node --test`; a verificação HTTP deve usar o loopback e não acessar rotas que escrevam na base.
+Mudanças de allowlist devem atualizar este documento e o teste de exclusões. Teste com diretórios e arquivos sintéticos; não use nem imprima conteúdo de campanhas ou do banco local. Faça o build e rode `node --test --test-skip-pattern='privacy-boundary' --test-concurrency=4`; a verificação HTTP deve usar o loopback e não acessar rotas que escrevam na base.

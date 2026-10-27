@@ -36,8 +36,41 @@
       if(!row.fontes?.includes('manifesto'))continue;
       for(const period of ['d1','d0'])if(row.periodos?.includes(period)&&row.data===periodDates[period])mark(campaignsById.get(row.campanha_id)?.mcc_id,period,row.data);
     }
-    const expectedCount=Math.max(2,known.size),result={};
-    for(const period of ['d1','d0'])result[period]={date:periodDates[period],receivedCount:received[period].size,expectedCount,complete:Boolean(periodDates[period]&&received[period].size===expectedCount),managers:[...known].map(id=>({id,name:(base?.mccs||[]).find(manager=>managerId(manager.id)===id)?.nome||id,received:received[period].has(id)}))};
+    const expectedCount=known.size,result={};
+    for(const period of ['d1','d0'])result[period]={date:periodDates[period],receivedCount:received[period].size,expectedCount,complete:Boolean(periodDates[period]&&expectedCount>0&&received[period].size===expectedCount),managers:[...known].map(id=>({id,name:(base?.mccs||[]).find(manager=>managerId(manager.id)===id)?.nome||id,received:received[period].has(id)}))};
+    return result;
+  }
+  function mccCollectionCoverage(base,manifest,directory,dates={}){
+    const manifestCoverage=manifestMccCoverage(base,manifest,dates),managerId=value=>{const digits=String(value??'').trim().replace(/\D/g,'');return /^\d{10}$/.test(digits)?digits:null},directoryManagers=new Map(),directoryAccounts=new Map(),seenAccounts=new Set();
+    let directoryValid=directory?.schemaVersion===1&&Array.isArray(directory.managers)&&Array.isArray(directory.accounts);
+    if(directoryValid){
+      for(const manager of directory.managers){const id=manager?.customerId==null?null:managerId(manager.customerId);if(manager?.customerId!=null&&!id){directoryValid=false;break}if(id)directoryManagers.set(id,String(manager.name||id))}
+      if(directoryValid)for(const account of directory.accounts){const customerId=managerId(account?.customerId),manager=account?.managerCustomerId==null?null:managerId(account.managerCustomerId),key=`${manager||'direct'}|${customerId||''}`;if(!customerId||account?.managerCustomerId!=null&&!manager||manager&&!directoryManagers.has(manager)||seenAccounts.has(key)){directoryValid=false;break}seenAccounts.add(key);if(!manager)continue;const accounts=directoryAccounts.get(manager)||new Set();accounts.add(customerId);directoryAccounts.set(manager,accounts)}
+    }
+    const directoryHasWarnings=Number(directory?.warningCount)!==0,known=new Map();
+    for(const manager of manifestCoverage.d0?.managers||[])known.set(manager.id,manager.name);
+    for(const manager of manifestCoverage.d1?.managers||[])if(!known.has(manager.id))known.set(manager.id,manager.name);
+    for(const [id,name] of directoryManagers)if(!known.has(id))known.set(id,name);
+    const apiCaptures=base?.google_ads_api_daily_captures||[],periodDates={d1:manifestCoverage.d1?.date||'',d0:manifestCoverage.d0?.date||''},captureAccounts={d1:new Map(),d0:new Map()};
+    for(const capture of apiCaptures){
+      if(Number(capture?.captureSchemaVersion)<3||capture?.queryComplete!==true||!['rows_returned','completed_no_rows'].includes(capture?.coverageStatus))continue;
+      const manager=managerId(capture.managerCustomerId),customer=managerId(capture.customerId);if(!manager||!customer)continue;
+      for(const period of ['d1','d0']){
+        const date=periodDates[period];if(!date||capture.date!==date)continue;
+        const validBusinessDay=period==='d1'?capture.businessTimeZone==='America/Sao_Paulo'&&capture.businessDate===date:!capture.businessTimeZone||(capture.businessTimeZone==='America/Sao_Paulo'&&capture.businessDate===date);
+        if(!validBusinessDay)continue;
+        const accounts=captureAccounts[period].get(manager)||new Set();accounts.add(customer);captureAccounts[period].set(manager,accounts);
+      }
+    }
+    const result={};
+    for(const period of ['d1','d0']){
+      const manifestManagers=new Map((manifestCoverage[period]?.managers||[]).map(manager=>[manager.id,manager])),apiSeen=captureAccounts[period],managers=[...known].map(([id,fallbackName])=>{
+        const manifestReceived=manifestManagers.get(id)?.received===true,expectedAccounts=directoryAccounts.get(id)||new Set(),apiCapturedCount=[...expectedAccounts].filter(customer=>apiSeen.get(id)?.has(customer)).length,apiReceived=directoryValid&&!directoryHasWarnings&&expectedAccounts.size>0&&apiCapturedCount===expectedAccounts.size,received=manifestReceived||apiReceived;
+        return{id,name:manifestManagers.get(id)?.name||fallbackName,received,manifestReceived,apiReceived,apiCapturedCount,apiExpectedCount:expectedAccounts.size,directoryHasWarnings,source:manifestReceived&&apiReceived?'Manifesto MCC + API':manifestReceived?'Manifesto MCC':apiReceived?'Google Ads API':null};
+      });
+      const receivedCount=managers.filter(manager=>manager.received).length,expectedCount=managers.length;
+      result[period]={date:periodDates[period],receivedCount,expectedCount,complete:Boolean(periodDates[period]&&expectedCount>0&&receivedCount===expectedCount),managers};
+    }
     return result;
   }
   function manifestCaptureInfo(manifest){
@@ -47,15 +80,12 @@
     return typeof generated==='string'&&generated.trim()&&Number.isFinite(Date.parse(generated))?{timestamp:generated,source:'generated'}:{timestamp:null,source:null};
   }
   function latestMccImportUpdates(managers=[],coverage={}){
-    const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR'),managerId=value=>String(value||'').replace(/\D/g,''),captures=new Map(Object.entries(coverage||{}).map(([id,item])=>[managerId(id),item]));
-    const resolve=(label,pattern)=>{
-      const matches=(Array.isArray(managers)?managers:[]).filter(manager=>[manager?.nome,...(Array.isArray(manager?.nomes_anteriores)?manager.nomes_anteriores:[])].some(name=>pattern.test(normalized(name)))).map(manager=>{
-        const imported=manager?.ultima_importacao_em,captured=captures.get(managerId(manager?.id))?.capturada_em,valid=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?value:null,timestamp=valid(imported)||valid(captured);
-        return{timestamp,source:valid(imported)?'import':timestamp?'capture':null};
-      }).sort((a,b)=>(Date.parse(b.timestamp||0)||0)-(Date.parse(a.timestamp||0)||0));
-      return{label,...(matches[0]||{timestamp:null,source:null})};
-    };
-    return{ecom:resolve('MCC Ecom',/\be[\s._-]*com(?:merce)?\b/),nutra:resolve('MCC Nutra',/\bnutra\b/)};
+    const managerId=value=>{const digits=String(value??'').replace(/\D/g,'');return /^\d{10}$/.test(digits)?digits:null},valid=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?value:null,captures=new Map(Object.entries(coverage||{}).map(([id,item])=>[managerId(id),item]));
+    return[...(Array.isArray(managers)?managers:[])].map(manager=>{
+      const id=managerId(manager?.id);if(!id)return null;
+      const imported=valid(manager?.ultima_importacao_em),captured=valid(captures.get(id)?.capturada_em),timestamp=imported||captured;
+      return{id:String(manager.id).trim(),name:String(manager?.nome||'').trim()||`MCC ${id}`,timestamp,source:imported?'import':captured?'capture':null};
+    }).filter(Boolean).sort((a,b)=>managerId(a.id).localeCompare(managerId(b.id),'pt-BR',{numeric:true}));
   }
   function sumObservedMetric(rows,field){const entries=Array.isArray(rows)?rows:[];let total=0,observedCount=0;for(const row of entries){const value=numeric(row?.[field]);if(value==null)continue;total+=value;observedCount++}return{value:observedCount?total:null,observedCount,totalCount:entries.length}}
   // Sum the table's existing projections, not cards, commission or hidden campaigns.
@@ -92,10 +122,10 @@
     const rowsByCampaignDate=new Map();for(const row of rows){const key=`${row.campaignName.toLocaleLowerCase('pt-BR')}|${row.date}`,previous=rowsByCampaignDate.get(key);if(!previous||row.period==='d1')rowsByCampaignDate.set(key,row)}
     return{dates:[...dates].sort(),rows:[...rowsByCampaignDate.values()].sort((a,b)=>a.date.localeCompare(b.date))};
   }
-  function replaceAuthoritativeDates(history,snapshots=[],authoritativeDates=[]){
+  function replaceAuthoritativeDates(history,snapshots=[],authoritativeDates=[],preserveFieldsByDate={}){
     const fields=['investment','impressions','clicks','conversions','commission'],source=history||{},total={};for(const field of fields)total[field]=numeric(source[field]);
     const scoped=snapshots.find(row=>Array.isArray(row.scopeDates)),dates=[...new Set(scoped?scoped.scopeDates:authoritativeDates||[])],rowsByDate=new Map();for(const row of snapshots||[]){if(!row?.date)continue;const previous=rowsByDate.get(row.date);if(!previous||row.period==='d1')rowsByDate.set(row.date,row)}
-    const adjustedObserved={};for(const field of fields){let observed=Math.max(0,Number(source.observed?.[field])||0);for(const date of dates){const previous=numeric(source.byDate?.[date]?.[field]),snapshot=rowsByDate.get(date),next=snapshot?.present?numeric(snapshot[field]):null;if(previous!=null||next!=null){total[field]=(total[field]??0)-(previous??0)+(next??0);observed+=Number(next!=null)-Number(previous!=null)}}adjustedObserved[field]=observed;total[field]=observed>0?total[field]:null}
+    const adjustedObserved={};for(const field of fields){let observed=Math.max(0,Number(source.observed?.[field])||0);for(const date of dates){const previous=numeric(source.byDate?.[date]?.[field]),snapshot=rowsByDate.get(date),preserve=previous!=null&&preserveFieldsByDate?.[date]?.includes(field),next=preserve?previous:snapshot?.present?numeric(snapshot[field]):null;if(previous!=null||next!=null){total[field]=(total[field]??0)-(previous??0)+(next??0);observed+=Number(next!=null)-Number(previous!=null)}}adjustedObserved[field]=observed;total[field]=observed>0?total[field]:null}
     return{...total,observed:adjustedObserved};
   }
   function resolveD0Totals(direct,dailyRow,date){
@@ -112,8 +142,15 @@
     for(const field of ['investment','impressions','clicks','conversions','commission'])if(result[field]==null&&recorded?.[field]!=null)result[field]=recorded[field];
     return result;
   }
+  function operationalDayTotals(stored,date,dailyByCampaign){
+    const row=stored&&date?dailyByCampaign?.get(stored.id)?.find(item=>item.data===date&&item.fontes?.includes('google_ads_api')):null;
+    if(!row)return{investment:null,impressions:null,clicks:null,conversions:null,commission:null,date,fromOperationalCapture:false};
+    const read=column=>numeric(row.celulas?.[column]?.value);
+    return{investment:read('O'),impressions:read('B'),clicks:read('C'),conversions:read('F'),commission:read('P'),date,fromOperationalCapture:true};
+  }
   // Shared by the live table and the summary computed only during an MCC application.
-  function campaignD0Totals(c,{dates,stored,dailyByCampaign,snapshotsByCampaignName,exchangeRate=5.1}){
+  function campaignD0Totals(c,{dates,stored,dailyByCampaign,snapshotsByCampaignName,exchangeRate=5.1,useOperationalDate=false}){
+    if(useOperationalDate)return operationalDayTotals(stored,dates.d0,dailyByCampaign);
     const valueOf=obj=>obj?.valor??null,m=c.metricas_D_zero||{},periodRate=numeric(m.exchange_rate_usd_brl)??exchangeRate,date=dates.d0||'',dailyRow=stored&&date?dailyByCampaign.get(stored.id)?.find(row=>row.data===date):null,snapshot=snapshotsByCampaignName.get(String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'))?.find(row=>row.period==='d0'&&row.date===date),cost=valueOf(c.custo_D_zero?.custo_total_destino_totais_coluna_M),costRate=numeric(c.custo_D_zero?.exchange_rate_usd_brl)??periodRate,direct={present:m.presente!==false,investment:!c.custo_D_zero||c.custo_D_zero.presente===false||cost==null?null:Number(cost)*(valueOf(c.custo_D_zero.moeda)==='USD'?costRate:1),impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:valueOf(m.valor_conversao)??valueOf(m.comissao_recebida)};
     if(!date)return resolveD0Totals({present:false},null,date);
     if(!snapshot&&valueOf(m.data)!==date&&(Array.isArray(c.datas_coleta)||m.presente===false||valueOf(m.data))){
@@ -122,7 +159,8 @@
     }
     return snapshot?{investment:snapshot.investment,impressions:snapshot.impressions,clicks:snapshot.clicks,conversions:snapshot.conversions,commission:snapshot.commission,date:snapshot.date}:resolveD0Totals(direct,dailyRow,date);
   }
-  function campaignD1Totals(c,history,{dates,snapshotsByCampaignName,latestSnapshots,exchangeRate=5.1}){
+  function campaignD1Totals(c,history,{dates,snapshotsByCampaignName,latestSnapshots,exchangeRate=5.1,useOperationalDate=false,stored,dailyByCampaign}){
+    if(useOperationalDate)return operationalDayTotals(stored,dates.d1,dailyByCampaign);
     const valueOf=obj=>obj?.valor??null,name=String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'),snapshot=snapshotsByCampaignName.get(name)?.find(row=>row.period==='d1'&&(!row.scopeDates||row.date===dates.d1));
     if(snapshot)return{investment:snapshot.investment,impressions:snapshot.impressions,clicks:snapshot.clicks,conversions:snapshot.conversions,commission:snapshot.commission,date:snapshot.date};
     const m=c.metricas_D_menos_1||{},periodRate=numeric(m.exchange_rate_usd_brl)??exchangeRate,date=Array.isArray(c.datas_coleta)?dates.d1:valueOf(m.data)||dates.d1,factor=String(valueOf(m.moeda)||'').toUpperCase()==='USD'&&periodRate>0?periodRate:1,rawInvestment=valueOf(m.custo_total),rawCommission=valueOf(m.valor_conversao)??valueOf(m.comissao_recebida),direct={investment:rawInvestment==null?null:Number(rawInvestment)*factor,impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:rawCommission==null?null:Number(rawCommission)*factor,date},recorded=date?history?.byDate?.[date]:null;
@@ -137,9 +175,9 @@
     return typeof manager?.nome==='string'&&manager.nome.trim()?manager.nome.trim():null;
   }
   function totalsColumns(mode,totalLabel='total'){
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação']];
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['actions','Ação']];
   }
-  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82});
+  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,actions:122});
   function visibleColumns(columns,selected){
     return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
   }
@@ -220,6 +258,18 @@
        rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?av.localeCompare(bv,'pt-BR',{numeric:true,sensitivity:'base'}):av-bv;return state.sortDir==='asc'?result:-result});
     return rows;
   }
+  function activeMetricProductCounts(rows=[],field='impressions'){
+    const counts=new Map();
+    for(const row of Array.isArray(rows)?rows:[]){
+      const key=String(row?.productKey??'').trim(),value=numeric(row?.totals?.[field]);
+      if(!key||row?.c?._status!=='ativa'||value==null||value<=0)continue;
+      counts.set(key,(counts.get(key)||0)+1);
+    }
+    return counts;
+  }
+  const activeImpressionProductCounts=rows=>activeMetricProductCounts(rows,'impressions');
+  const activeClickProductCounts=rows=>activeMetricProductCounts(rows,'clicks');
+  const activeD0ImpressionProductCounts=activeImpressionProductCounts;
   function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',historical=row.c._status==='historico',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&(paused||historical)||filter==='history'&&!paused&&!historical||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
   // Navigation-only entries preserve the old History access without inventing MCC metrics.
   function historyNavigationRows(entries=[],operationalRows=[]){return entries.filter(entry=>entry.source==='legacy'||!operationalRows.some(row=>entry.id?row.campaignId===entry.id:row.c?.nome_campanha_exato===entry.name)).map(entry=>({c:{nome_campanha_exato:entry.exactName||entry.name,_status:'historico'},identity:{name:entry.label||entry.name,dateLabel:'—',dateSort:null},campaignId:entry.id||null,diaryName:entry.name,diarySource:entry.source||'workbook',totals:null,d0Totals:{},zeroDays:null,roi:null,profit:null,historyEntry:true}))}
@@ -249,5 +299,5 @@
       .filter(Boolean)
       .sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
   }
-  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,manifestCaptureInfo,latestMccImportUpdates,mccNameForCampaign,sortRows,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
+  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,mccCollectionCoverage,manifestCaptureInfo,latestMccImportUpdates,mccNameForCampaign,sortRows,activeMetricProductCounts,activeImpressionProductCounts,activeClickProductCounts,activeD0ImpressionProductCounts,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
 })(typeof window==='object'?window:globalThis);

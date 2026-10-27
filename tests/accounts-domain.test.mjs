@@ -28,7 +28,7 @@ test('default active report preserves grouping, counts and first selection', () 
   assert.deepEqual(report.kpis,{products:2,campaigns:3,active:3,paused:0,accounts:2,multiAccount:0,missing:0});
 });
 
-test('account chart includes every current product, counts distinct identified accounts, and follows status scope', () => {
+test('account chart shows active and historical distinct accounts separately for products in scope', () => {
   const sample = [
     row('alpha','A','ativa',70),
     row('alpha','A','ativa',70),
@@ -39,12 +39,15 @@ test('account chart includes every current product, counts distinct identified a
   ];
   const active = buildAccountReport(sample,createAccountState());
   assert.equal(active.bars.length,11,'new/smaller products are not hidden behind a top-eight limit');
-  assert.equal(active.bars.find(item=>item.key==='alpha').count,1,'multiple campaigns in one account count only once');
-  assert.equal(active.bars.find(item=>item.key==='unidentified').count,0,'unknown account is not fabricated as an account');
+  assert.equal(active.bars.find(item=>item.key==='alpha').totalAccountsTested,2,'history counts distinct accounts across active and paused campaigns');
+  assert.equal(active.bars.find(item=>item.key==='alpha').activeAccountCount,1,'current count is distinct accounts with active campaigns');
+  assert.equal(active.bars.find(item=>item.key==='unidentified').totalAccountsTested,0,'unknown accounts are not fabricated in the historical total');
+  assert.equal(active.bars.find(item=>item.key==='unidentified').activeAccountCount,0);
   assert.ok(!active.bars.some(item=>item.key==='paused-only'),'paused-only products are outside the active scope');
 
   const all = buildAccountReport(sample,{...createAccountState(),status:'all'});
-  assert.equal(all.bars.find(item=>item.key==='alpha').count,2,'pausing the campaign changes the account count only when the all-situations scope includes it');
+  assert.equal(all.bars.find(item=>item.key==='alpha').totalAccountsTested,2,'historical account total is stable across status filters');
+  assert.equal(all.bars.find(item=>item.key==='alpha').activeAccountCount,1);
   assert.equal(all.bars.length,12);
 });
 
@@ -133,6 +136,20 @@ test('account header MCC labels combine explicit names and label missing associa
   assert.equal(report.accountMccLabels.get('111-111-1111'),'MCC e-com · MCC Nutra');
   assert.equal(report.accountMccLabels.get('222-222-2222'),'MCC não identificada');
   assert.equal(report.accountMccLabels.has('Sem conta'),false);
+});
+
+test('matrix account names use captured labels, remove domains and repeated account identifiers',()=>{
+  const report=buildAccountReport([
+    row('alpha','111-222-3333','ativa',70,{accountName:'7441- PP[Des] .dominio-teste.shop\u202c'}),
+    row('beta','111-222-3333','pausada',80,{accountName:'7441 - PP[Des] https://other.shop/'}),
+    row('gamma','444-555-6666','ativa',70,{accountName:'Conta 444-555-6666 - Loja Azul .example.shop'}),
+    row('delta','777-888-9999','ativa',70,{accountName:'9999 - .example.shop'}),
+    row('epsilon','123-456-7890','ativa',70)
+  ],createAccountState());
+  assert.equal(report.accountNames.get('111-222-3333'),'PP[Des]');
+  assert.equal(report.accountNames.get('444-555-6666'),'Loja Azul');
+  assert.equal(report.accountNames.has('777-888-9999'),false,'a domain-only capture cannot invent an account name');
+  assert.equal(report.accountNames.has('123-456-7890'),false);
 });
 
 test('account columns and filters group by MCC ID, independent of names, and accept new MCCs',()=>{

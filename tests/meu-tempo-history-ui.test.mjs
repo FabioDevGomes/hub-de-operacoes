@@ -1,5 +1,5 @@
 import assert from'node:assert/strict';
-import{productiveTotalHighlightClass,alcoholHistoryHighlightClass,refrigeranteHistoryHighlightClass,verdeHorarioHistoryHighlightClass,comparisonDateHeaderClass}from'../src/meu-tempo/meu-tempo-view.mjs';
+import{productiveTotalHighlightClass,alcoholHistoryHighlightClass,refrigeranteHistoryHighlightClass,verdeHorarioHistoryHighlightClass,comparisonDateHeaderClass,dayObservationLink,dayObservationDialogContent}from'../src/meu-tempo/meu-tempo-view.mjs';
 import{readFile}from'node:fs/promises';
 
 assert.equal(productiveTotalHighlightClass(480),'','exatamente oito horas não recebem destaque');
@@ -39,14 +39,26 @@ assert.equal(comparisonDateHeaderClass(items,[],day),'time-clear-day','sem qualq
 assert.equal(comparisonDateHeaderClass(items,[...noEntries,{id:'alcohol-old-yes',date:day,itemId:'item-alcool',type:'boolean',value:true,createdAt:`${day}T07:00:00.000Z`},{id:'alcohol-latest-no',date:day,itemId:'item-alcool',type:'boolean',value:false,createdAt:`${day}T11:00:00.000Z`}],day),'time-clear-day','a cor considera a resposta Sim/Não efetiva mais recente');
 assert.equal(comparisonDateHeaderClass(items,[...noEntries,{id:'alcohol-no',date:day,itemId:'item-alcool',type:'boolean',value:false,createdAt:`${day}T08:30:00.000Z`},{id:'verde-yes',date:day,itemId:'item-verde-horario',type:'boolean',value:true,createdAt:`${day}T10:00:00.000Z`}],day),'','Verde 16:20 vermelho sem consumo de álcool deixa a data azul/neutra');
 assert.equal(comparisonDateHeaderClass(items,[...noEntries,{id:'alcohol-yes',date:day,itemId:'item-alcool',type:'boolean',value:true,createdAt:`${day}T09:00:00.000Z`},{id:'verde-yes-with-alcohol',date:day,itemId:'item-verde-horario',type:'boolean',value:true,createdAt:`${day}T10:00:00.000Z`}],day),'time-alert-day','consumo de álcool mantém a data vermelha mesmo quando outro indicador também está vermelho');
+assert.equal(dayObservationLink(day,' \n\t'),'','dia sem observação não cria link OBS');
+const observationLink=dayObservationLink(day,'Primeira linha\n<segunda linha>');
+assert.match(observationLink,/class="hub-corner-edit time-day-observation-link"/,'OBS reutiliza o link discreto da Visão Geral');
+assert.match(observationLink,/data-open-day-observation="2026-10-15" aria-haspopup="dialog"/,'o link identifica o dia e abre um diálogo acessível');
+assert.match(observationLink,/>OBS<\/a>/,'o texto curto do link é OBS');
+const observationDialog=dayObservationDialogContent(day,'Primeira linha\n<script>alert(1)<\/script>');
+assert.match(observationDialog,/Observação do dia[\s\S]*15\/10\/2026[\s\S]*Primeira linha\n&lt;script&gt;alert\(1\)&lt;\/script&gt;/,'o diálogo mostra a data e o conteúdo escapado preservando quebras de linha');
+assert.doesNotMatch(observationDialog,/<(?:input|textarea)|contenteditable|data-edit-entry/,'a observação é estritamente somente leitura');
 const view=await readFile(new URL('../src/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const publishedView=await readFile(new URL('../dist/meu-tempo/meu-tempo-view.mjs',import.meta.url),'utf8');
 const css=await readFile(new URL('../src/meu-tempo/meu-tempo.css',import.meta.url),'utf8');
+assert.ok(view.includes('<h2>Comparação por atividade</h2>')&&!view.includes('Totais por dia; a coluna Resumo mostra a média ou, para Sim/Não, os dias com resposta Sim.'),'a comparação deve manter o título sem o texto auxiliar removido');
 assert.ok(view.includes("['time-input','hub-inset-input',extraClass].filter(Boolean).join(' ')"),'os campos de data do Meu Tempo devem aderir ao CSS global de inputs com sombra interna');
 assert.ok(publishedView.includes("['time-input','hub-inset-input',extraClass].filter(Boolean).join(' ')"),'o build deve publicar o padrão global nos campos de data do Meu Tempo');
 assert.ok(view.includes('id="dayOutput" class="time-textarea time-output-textarea"'),'Output do dia precisa ter estilo de altura dedicado');
 assert.ok(css.includes('.time-output-textarea{min-height:105px}')&&css.includes('.time-textarea{width:100%;min-height:84px;resize:vertical}'),'Output do dia deve ficar 25% mais alto, sem alterar largura, outros campos nem redimensionamento manual');
 assert.ok(view.includes('comparisonDateHeaderClass(data.items,data.entries,date)'),'cor do cabeçalho deve ser detectada automaticamente pelos indicadores do dia, sem ação manual');
+assert.ok(view.includes("String(dayFor(date).observations||'').trim()")&&view.includes("root.querySelectorAll('[data-open-day-observation]')")&&view.includes('openDayObservation(link.dataset.openDayObservation)')&&view.includes("dialog.showModal()"),'a Comparação mostra OBS somente com nota e abre um modal do sistema, sem usar alerta do navegador');
+assert.ok(view.includes('class="time-observation-row"')&&view.includes('${observationRow}<tr><th>Atividade</th>')&&view.includes('`<th class="${dateHeaderClasses[index]} time-matrix-day-header">${dateLabel(date)}</th>`'),'OBS é renderizado em uma linha separada antes da célula que contém cada data');
+assert.ok(css.includes('.time-matrix thead tr.time-observation-row td .time-day-observation-link{position:static;display:block;width:max-content;margin:0 auto;transform:none}')&&css.includes('.time-observation-modal')&&css.includes('white-space:pre-wrap'),'a linha separada centraliza o link na coluna e o modal preserva quebras de linha');
 assert.ok(view.includes('dateHeaderClasses[index]'),'cada data da comparação recebe a classificação automática correspondente');
 assert.ok(view.includes("<th title=\"Média para os demais tipos; respostas Sim/Não mostram quantos dias tiveram Sim.\">Resumo</th>"),'a comparação identifica a coluna com média ou contagem de dias Sim conforme o tipo de item');
 assert.ok(view.includes("const summaryCell=row=>row.yesDays==null?row.item.type==='duration'?Domain.formatDuration(row.average):historyValue(row.item,row.average,1):`${row.yesDays} ${row.yesDays===1?'dia':'dias'}`"),'itens Sim/Não exibem o total de dias com Sim e os demais preservam a média');

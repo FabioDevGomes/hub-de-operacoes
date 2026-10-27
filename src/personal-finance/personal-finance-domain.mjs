@@ -1,7 +1,7 @@
 export const SCHEMA = 'personal_finance_v1';
 export const CURRENCIES = Object.freeze(['BRL', 'USD']);
 export const FUND_TYPES = Object.freeze(['available', 'reserve']);
-export const RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax', 'expense']);
+export const RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax', 'expense', 'interest']);
 export const MANUAL_RESERVE_MOVEMENT_TYPES = Object.freeze(['withdrawal', 'tax']);
 export const DEBT_STATUSES = Object.freeze(['open', 'paid']);
 export const DEFAULT_SETTINGS = Object.freeze({ key:'preferences', default_currency:'BRL', near_limit_percent:80 });
@@ -129,6 +129,11 @@ export function normalizeFund(fund) {
 export function isNubankReserve(fund) {
   const normalizedName = String(fund?.name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
   return fund?.type === 'reserve' && normalizedName === 'saldo nubank';
+}
+
+export function isCdiReserve(fund) {
+  const normalizedName = String(fund?.name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return fund?.type === 'reserve' && normalizedName === 'cdi';
 }
 
 export function normalizeReserveMovement(movement) {
@@ -634,16 +639,19 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
   const withdrawals = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const taxes = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
   const expenses = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
+  const interests = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
+  const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
   const contributions = latestContributions.map(fund => {
     const movements = (fund.reserve_movements || []).map(normalizeReserveMovement);
     const itemMovements = movements.filter(movement => movement.currency === fund.currency);
-    const deducted = itemMovements.reduce((total, movement) => total + movement.amount, 0);
+    const deducted = itemMovements.filter(movement => movement.type !== 'interest').reduce((total, movement) => total + movement.amount, 0);
+    const accruedInterest = itemMovements.filter(movement => movement.type === 'interest').reduce((total, movement) => total + movement.amount, 0);
     for (const movement of movements) {
-      const totals = movement.type === 'withdrawal' ? withdrawals : movement.type === 'tax' ? taxes : expenses;
+      const totals = movement.type === 'interest' ? interests : movement.type === 'withdrawal' ? withdrawals : movement.type === 'tax' ? taxes : expenses;
       totals[movement.currency] += movement.amount;
     }
     const grossAmount = Number(fund.amount) || 0;
-    return { ...fund, contributed_amount:grossAmount, amount:Math.max(0, Math.round((grossAmount - deducted + Number.EPSILON) * 100) / 100) };
+    return { ...fund, contributed_amount:grossAmount, amount:Math.max(0, round(grossAmount - deducted + accruedInterest)) };
   });
   const firstContributionMonth = contributions.reduce((start, fund) => !start || fund.started_month_key < start ? fund.started_month_key : start, null);
   const contributed = Object.fromEntries(CURRENCIES.map(code => [code, 0]));
@@ -661,9 +669,8 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
       spent[entry.currency] += Number(entry.actual_amount) || 0;
     }
   }
-  const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-  // Resgates, impostos e gastos reconciliados reduzem o saldo da reserva; despesas de orçamento continuam separadas.
-  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(Math.max(0, contributed[code] - withdrawals[code] - taxes[code] - expenses[code]))]));
+  // Juros registrados aumentam o saldo; resgates, impostos e gastos reconciliados reduzem-no.
+  const balances = Object.fromEntries(CURRENCIES.map(code => [code, round(Math.max(0, contributed[code] + interests[code] - withdrawals[code] - taxes[code] - expenses[code]))]));
   return {
     contributions,
     firstContributionMonth,
@@ -671,6 +678,7 @@ export function summarizeGlobalReserve(entries = [], funds = [], throughMonthKey
     withdrawals:Object.fromEntries(CURRENCIES.map(code => [code, round(withdrawals[code])])),
     taxes:Object.fromEntries(CURRENCIES.map(code => [code, round(taxes[code])])),
     expenses:Object.fromEntries(CURRENCIES.map(code => [code, round(expenses[code])])),
+    interests:Object.fromEntries(CURRENCIES.map(code => [code, round(interests[code])])),
     nubankBalances:Object.fromEntries(CURRENCIES.map(code => [code, round(nubankBalances[code])])),
     spent:Object.fromEntries(CURRENCIES.map(code => [code, round(spent[code])])),
     balances,

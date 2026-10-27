@@ -11,7 +11,7 @@ vm.runInContext(registrySource,context);
 vm.runInContext(source,context);
 const registry=context.window.PanelViews;
 const routes=registry.enabledViews().filter(view=>view.id!=='presell');
-const groups={totals:'operation',tested:'products',tracking:'operation',macro:'finance',billing:'finance',cpa:'analysis',accounts:'analysis','account-directory':'analysis',time:'personal','personal-finance':'personal',copy:'creation'};
+const groups={totals:'operation',tested:'products',tracking:'operation',macro:'finance',billing:'finance',cpa:'analysis',accounts:'analysis','account-directory':'analysis',time:'personal','personal-finance':'personal',copy:'creation',review:'creation'};
 function element(group){
   const classes=new Set(['hidden']);
   return {textContent:'',dataset:{sidebarGroup:group},onclick:null,

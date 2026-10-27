@@ -28,6 +28,7 @@ const faviconBase64 = template.match(/<link rel="icon" type="image\/png" href="d
 if (!faviconBase64) throw new Error("Favicon do painel não encontrado no template.");
 await mkdir(resolve(root, "dist"), { recursive: true });
 await writeFile(resolve(root, "dist/index.html"), versionPage(output, version), "utf8");
+await writeFile(resolve(root, "dist/version.txt"), `${version}\n`, "utf8");
 for (const file of ['system-version.js', 'system-version.css']) {
   await cp(resolve(root, 'src', file), resolve(root, 'dist', file));
 }
@@ -56,7 +57,7 @@ await cp(resolve(root, "src/usd-brl-rate.js"), resolve(root, "dist/usd-brl-rate.
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");
-for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking']) {
+for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking', 'google-ads', 'review']) {
   await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
   await versionPublicPages(resolve(root, 'src', directory), resolve(root, 'dist', directory), version);
 }

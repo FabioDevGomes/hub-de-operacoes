@@ -1,0 +1,52 @@
+import {OFFER_FIELDS,PACKAGE_FIELDS,offerBinding,offerReadiness,packageSummary,exportOffer} from './review-offer-domain.mjs?v=1';
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function mountOffer({root,controller,materials}){
+  let message='',failed=false,errors={};
+  function valueAt(path){const state=controller.current().state,parts=path.split('.');return parts[0]==='packages'?state.packages.find(row=>row.id===parts[1])?.[parts[2]]:state[path]}
+  const token=path=>'offer-'+path.replaceAll('.','-');
+  function field(path,label,area=false){const error=errors[path];return `<label for="${token(path)}">${esc(label)}${area?`<textarea id="${token(path)}" data-offer-field="${path}" rows="3" ${error?'aria-invalid="true"':''}>${esc(valueAt(path))}</textarea>`:`<input id="${token(path)}" data-offer-field="${path}" value="${esc(valueAt(path))}" ${error?'aria-invalid="true"':''}>`}${error?`<span class="review-field-error">${esc(error)}</span>`:''}</label>`}
+  const check=(path,label)=>`<label class="review-analysis-check"><input type="checkbox" data-offer-field="${path}" ${valueAt(path)?'checked':''}>${esc(label)}</label>`;
+  const fields=keys=>keys.map(key=>{const [,label]=OFFER_FIELDS.find(([field])=>field===key);return field(key,label,['discountBasis','discountSource','guaranteeTerms','guaranteeSource','dosage','dosageSource','notes'].includes(key))}).join('');
+  function refresh(){
+    const item=controller.current(),state=item.state,quality=offerReadiness(state,materials.current().draft);
+    root.querySelector('[data-offer-status]').textContent=message||(JSON.stringify(state)!==item.saved?'Alterações ainda não salvas.':item.savedAt?'Rascunho recuperado deste navegador.':'Preencha os dados da oferta; você pode salvar e completar depois.');
+    root.querySelector('[data-offer-status]').classList.toggle('review-error',failed);
+    root.querySelector('[data-offer-quality]').textContent=quality.label;
+    root.querySelector('[data-offer-gaps]').innerHTML=quality.gaps.length?quality.gaps.map(gap=>`<li>${esc(gap)}</li>`).join(''):'<li>Nenhuma pendência estrutural; confira a oferta atual nas fontes.</li>';
+    root.querySelector('[data-offer-binding]').hidden=state.binding===offerBinding(materials.current().draft);
+    root.querySelector('[data-offer-discount]').hidden=!state.includeDiscount;
+    root.querySelector('[data-offer-badge]').textContent=quality.badge;
+    root.querySelector('[data-offer-range]').textContent=quality.range?`Totais exibidos sem frete: ${quality.range.currency} ${quality.range.lowPrice.toFixed(2)} a ${quality.range.highPrice.toFixed(2)} · ${quality.range.offerCount} pacote(s). Prévia para a próxima etapa, sujeita à revisão.`:'Faixa de totais pendente. Só entram totais exibidos de todos os pacotes ativos, na mesma moeda.';
+    for(const row of state.packages){const calc=packageSummary(row),node=root.querySelector(`[data-package-summary="${row.id}"]`);node.textContent=`Unitário calculado (auxiliar): ${calc.calculatedUnit??'pendente'} · Total com frete calculado: ${calc.delivered??'pendente'} · Desconto calculado sobre a referência: ${calc.calculatedDiscount===null?'pendente':calc.calculatedDiscount+'%'}${calc.mismatch?' · DIVERGÊNCIA entre unitário × quantidade e total exibido.':''}`;node.classList.toggle('review-error',calc.mismatch);}
+    for(const node of root.querySelectorAll('input[type="checkbox"][data-offer-field]'))node.checked=Boolean(valueAt(node.dataset.offerField));
+    root.querySelector('[data-offer-reviewed]').checked=state.reviewed&&quality.ready;
+  }
+  function render(){
+    const item=controller.current(),current=materials.current(),state=item.state;
+    root.innerHTML=`<p>Transcreva os dados atuais da página, checkout ou rótulo e registre a fonte. Nenhum preço, desconto, frete ou prazo é preenchido por padrão.</p>
+      <label for="offer-review">Review selecionada<select id="offer-review" data-offer-review>${materials.list().map(row=>`<option value="${esc(row.draft.id)}" ${row.draft.id===current.draft.id?'selected':''}>${esc(row.draft.product||'Nova review (salve no passo 1)')} · ${esc(row.draft.market||'mercado a definir')} · ${esc(row.draft.id.slice(0,8))}</option>`).join('')}</select></label>
+      <p data-offer-status role="status" aria-live="polite"></p>${item.error?`<p class="review-error" role="alert">Não foi possível ler a oferta: ${esc(item.error)}. O registro anterior será preservado.</p>`:''}
+      <div class="review-analysis-warning" data-offer-binding hidden><p>Produto, mercado ou página de vendas mudou. Confira se os dados ainda correspondem à oferta.</p><button class="btn hub-standard-action" type="button" data-offer-action="binding">Confirmar correspondência com a oferta atual</button></div>
+      <section><h4>1. Pacotes, preços e frete</h4><div class="review-form-grid">${fields(['currency','checkedAt'])}</div><p>Valores sem símbolo ou separador de milhar (ex.: 49,90). Total é o preço do pacote antes do frete. Cálculos auxiliares não substituem o que a página exibe. Desative pacotes inexistentes; os dados ficam preservados.</p>
+      ${state.packages.map((row,index)=>`<details class="review-analysis-block" open><summary>Pacote ${index+1}</summary><div class="review-offer-package">${check('packages.'+row.id+'.enabled','Incluir este pacote na oferta')}<div class="review-form-grid">${PACKAGE_FIELDS.map(([key,label])=>field('packages.'+row.id+'.'+key,label,['source','shippingTerms'].includes(key))).join('')}<label for="${token('packages.'+row.id+'.shipping')}">Situação do frete<select id="${token('packages.'+row.id+'.shipping')}" data-offer-field="packages.${row.id}.shipping">${Object.entries({unknown:'Não informado',free:'Grátis',paid:'Pago'}).map(([key,label])=>`<option value="${key}" ${row.shipping===key?'selected':''}>${label}</option>`).join('')}</select></label></div><p data-package-summary="${row.id}"></p></div></details>`).join('')}
+      <button class="btn hub-standard-action" type="button" data-offer-action="add">Adicionar pacote</button><p data-offer-range></p></section>
+      <section><h4>2. Desconto</h4>${check('includeDiscount','Incluir percentual de desconto na página')}<p>Informe o valor correto e a comparação que o sustenta. Se a fonte não deixar claro, valide manualmente e registre a referência. Não há percentual fixo nem preenchimento pelo cálculo auxiliar.</p><div data-offer-discount>${fields(['discountPercent','discountBasis','discountSource'])}</div></section>
+      <section><h4>3. Garantia e reembolso</h4>${fields(['guaranteeDays','guaranteeTerms','guaranteeSource'])}<p data-offer-badge></p></section>
+      <section><h4>4. Modo de uso e observações</h4>${fields(['dosage','dosageSource','notes'])}<p>Copie a orientação da fonte oficial, sem criar recomendação de dose.</p></section>
+      <section><h4>5. Conferência e saída</h4>${check('confirmed','Conferi preços, frete, desconto, garantia e modo de uso com as fontes registradas.')}<p data-offer-quality class="review-analysis-warning"></p><details><summary>Ver pendências da oferta</summary><ul data-offer-gaps></ul></details><label class="review-analysis-check"><input type="checkbox" data-offer-reviewed>Revisei a oferta para a próxima etapa.</label><div class="review-actions"><button class="btn primary hub-standard-action" type="button" data-offer-action="save" ${item.error||!current.revision?'disabled':''}>Salvar oferta</button><button class="btn hub-standard-action" type="button" data-offer-action="md">Baixar oferta .md</button><button class="btn hub-standard-action" type="button" data-offer-action="json">Baixar oferta .json</button></div><p>Salvo neste navegador, com histórico. Baixe uma cópia externa; o backup global ainda não inclui os rascunhos de Review. Não publica a página.</p></section>`;
+    refresh();
+  }
+  function update(event){const path=event.target.dataset.offerField;if(!path)return;controller.update(path,event.target.type==='checkbox'?event.target.checked:event.target.value);message='';failed=false;if(errors[path]){delete errors[path];event.target.removeAttribute('aria-invalid')}refresh()}
+  root.addEventListener('input',event=>{if(event.target.type!=='checkbox'&&event.target.tagName!=='SELECT')update(event)});
+  root.addEventListener('change',event=>{try{if(event.target.matches('[data-offer-review]')){materials.select(event.target.value);message='';errors={};failed=false;render()}else if(event.target.matches('[data-offer-reviewed]')){controller.setReviewed(event.target.checked);message='';failed=false;refresh()}else if(event.target.type==='checkbox'||event.target.tagName==='SELECT')update(event)}catch(error){message=error.message;failed=true;refresh()}});
+  root.addEventListener('click',async event=>{
+    const button=event.target.closest('[data-offer-action]'),action=button?.dataset.offerAction;if(!action)return;
+    try{failed=false;
+      if(action==='binding'){controller.confirmBinding();message='Correspondência confirmada. Confira novamente as fontes e marque a conferência da oferta.';refresh()}
+      if(action==='add'){controller.addPackage();message='Pacote adicionado ao rascunho.';render()}
+      if(action==='save'){button.disabled=true;const id=materials.current().draft.id;try{if(navigator.locks?.request)await navigator.locks.request('hub-review-offer-'+id,()=>controller.save(id));else controller.save(id);errors={};message='Oferta salva neste navegador; revisões anteriores preservadas.';render()}finally{button.disabled=false}}
+      if(action==='md'||action==='json'){const state=controller.current().state,draft=materials.current().draft,quality=offerReadiness(state,draft),payload=action==='json'?JSON.stringify({...state,reviewed:state.reviewed&&quality.ready,summary:{product:draft.product,market:draft.market,readiness:quality.label,gaps:quality.gaps,range:quality.range,badge:quality.badge}},null,2):exportOffer(state,draft),url=URL.createObjectURL(new Blob([payload],{type:action==='json'?'application/json;charset=utf-8':'text/markdown;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=`review-${draft.id.slice(0,8)}-oferta.${action}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message='Oferta exportada com as edições atuais.';refresh()}
+    }catch(error){errors=error.fields||{};message=`Não foi possível concluir: ${error.message} As edições continuam nesta tela.`;failed=true;render();root.querySelector('[aria-invalid="true"]')?.focus()}
+  });
+  render();
+}

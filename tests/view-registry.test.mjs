@@ -26,6 +26,10 @@ assert.equal(views.resolveRoute('/?view=time').id,'time');
 assert.equal(views.resolveRoute('/?view=personal-finance').id,'personal-finance');
 assert.equal(views.resolveRoute('/?view=personal-finance').title,'Controle de gastos');
 assert.equal(views.resolveRoute('/?view=copy').id,'copy');
+assert.equal(views.resolveRoute('/?view=review').id,'review');
+assert.equal(views.urlFor('review','/'),'/?view=review');
+assert.equal(views.definition('review').sectionId,'reviewView');
+assert.equal(views.definition('review').navId,'reviewNav');
 assert.equal(views.resolveRoute('/?view=presell').id,'copy');
 assert.equal(views.resolveRoute('/?view=desconhecida').id,'totals');
 

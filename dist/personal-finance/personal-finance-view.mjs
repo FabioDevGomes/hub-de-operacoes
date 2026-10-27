@@ -1,5 +1,5 @@
-import * as Domain from './personal-finance-domain.mjs?v=36';
-import * as Storage from './personal-finance-storage.mjs?v=25';
+import * as Domain from './personal-finance-domain.mjs?v=37';
+import * as Storage from './personal-finance-storage.mjs?v=26';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
@@ -423,7 +423,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
     const availableRows = state.funds.filter(item => item.type === 'available');
     const reserveBalance = Domain.CURRENCIES.map(code => {
       const summary = state.reserveSummary;
-      return `<div class="pf-reserve-balance"><b>${code}</b><span>Reserva acumulada ${money(summary?.balances?.[code] || 0, code)}</span><small>Aportes brutos ${money(summary?.contributed?.[code] || 0, code)} · resgates ${money(summary?.withdrawals?.[code] || 0, code)} · impostos ${money(summary?.taxes?.[code] || 0, code)}</small><small>Gastos realizados ${money(summary?.spent?.[code] || 0, code)}</small></div>`;
+      return `<div class="pf-reserve-balance"><b>${code}</b><span>Reserva acumulada ${money(summary?.balances?.[code] || 0, code)}</span><small>Aportes brutos ${money(summary?.contributed?.[code] || 0, code)} · juros ${money(summary?.interests?.[code] || 0, code)} · resgates ${money(summary?.withdrawals?.[code] || 0, code)} · impostos ${money(summary?.taxes?.[code] || 0, code)}</small><small>Gastos realizados ${money(summary?.spent?.[code] || 0, code)}</small></div>`;
     }).join('');
     const categoryGroups = state.groups.length
       ? state.groups.map(group => `<div class="pf-catalog-row"><div><strong>${esc(group.name)}</strong><small>${state.categories.filter(category => category.group_id === group.group_id).length} categoria(s) vinculada(s)${group.active ? '' : ' · inativo'}</small></div><div class="pf-actions"><button class="pf-icon-button" type="button" data-action="edit-group" data-id="${esc(group.group_id)}">Editar</button><button class="pf-icon-button" type="button" data-action="toggle-group" data-id="${esc(group.group_id)}">${group.active ? 'Inativar' : 'Ativar'}</button></div></div>`).join('')
@@ -552,13 +552,14 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
   function reserveOperationsMarkup(item) {
     const movements = [...(item.reserve_movements || [])].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.movement_id.localeCompare(a.movement_id));
     const isNubankReserve = Domain.isNubankReserve(item);
+    const isCdiReserve = Domain.isCdiReserve(item);
     const history = movements.length
-      ? `<ol class="pf-reserve-history-list">${movements.map(movement => `<li class="${movement.type === 'expense' ? 'is-expense' : ''}"><span>${movement.type === 'withdrawal' ? 'Resgate' : movement.type === 'expense' ? 'Gasto' : 'Prejuízo: imposto menos lucro'}</span><strong>${money(movement.amount, movement.currency)}</strong><time datetime="${esc(movement.created_at)}">${esc(new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(movement.created_at)))}</time></li>`).join('')}</ol>`
-      : `<p class="pf-empty-inline">Nenhum ${isNubankReserve ? 'gasto' : 'resgate ou imposto'} registrado.</p>`;
-    const operationsLabel = isNubankReserve ? 'Histórico do Saldo Nubank' : 'Resgates e impostos desta reserva';
+      ? `<ol class="pf-reserve-history-list">${movements.map(movement => `<li class="${movement.type === 'expense' ? 'is-expense' : movement.type === 'interest' ? 'is-interest' : ''}"><span>${movement.type === 'withdrawal' ? 'Resgate' : movement.type === 'expense' ? 'Gasto' : movement.type === 'interest' ? 'Juros até a data' : 'Prejuízo: imposto menos lucro'}</span><strong>${money(movement.amount, movement.currency)}</strong><time datetime="${esc(movement.created_at)}">${esc(new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(movement.created_at)))}</time></li>`).join('')}</ol>`
+      : `<p class="pf-empty-inline">Nenhuma movimentação registrada.</p>`;
+    const operationsLabel = isNubankReserve ? 'Histórico do Saldo Nubank' : isCdiReserve ? 'Movimentações da reserva CDI' : 'Resgates e impostos desta reserva';
     const operations = isNubankReserve
       ? '<label class="pf-nubank-rule-indicator"><input type="checkbox" checked disabled aria-label="Regra de registrar reduções como gasto no histórico ativa">Reduções do saldo são registradas como Gasto no histórico</label>'
-      : `<h3>Resgates e impostos</h3><div class="pf-reserve-operation-row"><label>Valor do resgate<input name="withdrawal_amount" data-reserve-field="withdrawal" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-withdraw" data-id="${esc(item.item_id)}">Resgatar</button></div><div class="pf-reserve-operation-row"><label>Prejuízo: imposto menos lucro<input name="tax_amount" data-reserve-field="tax" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-deduct-tax" data-id="${esc(item.item_id)}">Deduzir impostos</button></div>`;
+      : `<h3>${isCdiReserve ? 'Resgates, impostos e juros' : 'Resgates e impostos'}</h3><div class="pf-reserve-operation-row"><label>Valor do resgate<input name="withdrawal_amount" data-reserve-field="withdrawal" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-withdraw" data-id="${esc(item.item_id)}">Resgatar</button></div><div class="pf-reserve-operation-row"><label>Prejuízo: imposto menos lucro<input name="tax_amount" data-reserve-field="tax" inputmode="decimal" placeholder="0,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action" type="button" data-action="reserve-deduct-tax" data-id="${esc(item.item_id)}">Deduzir impostos</button></div>${isCdiReserve ? `<div class="pf-reserve-operation-row"><label>Saldo atual do CDI<input name="cdi_current_balance" data-reserve-field="interest-balance" inputmode="decimal" placeholder="Ex.: 14.200,00" autocomplete="off"></label><button class="pf-icon-button pf-reserve-action pf-reserve-interest-action" type="button" data-action="reserve-calculate-interest" data-id="${esc(item.item_id)}">Calcular</button></div><p class="pf-form-note">Informe o saldo total atual da aplicação. O sistema registra somente a diferença positiva como juros até hoje, sem repetir juros já lançados.</p>` : ''}`;
     const historyTitle = isNubankReserve ? 'Histórico de gastos' : 'Histórico';
     return `<section class="pf-reserve-operations" aria-label="${operationsLabel}">${operations}<div class="pf-reserve-history"><h4>${historyTitle}</h4>${history}</div></section>`;
   }
@@ -608,6 +609,49 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       }
       form.dataset.reserveBusy = 'false';
       form.querySelectorAll('.pf-reserve-action').forEach(actionButton => { actionButton.disabled = false; });
+      throw error;
+    }
+  }
+
+  async function calculateCdiInterestFromModal(button, itemId) {
+    const form = button.closest('form[data-form="reserve"]');
+    if (!form) throw new Error('Abra a reserva CDI antes de calcular os juros.');
+    if (form.dataset.interestBusy === 'true') return;
+    const input = form.querySelector('[data-reserve-field="interest-balance"]');
+    const currentBalance = parseAmount(input?.value);
+    if (currentBalance == null) throw new Error('Informe o saldo atual da aplicação CDI.');
+    const existing = state.funds.find(item => item.item_id === itemId && item.type === 'reserve');
+    if (!Domain.isCdiReserve(existing)) throw new Error('O cálculo está disponível somente para a reserva chamada CDI.');
+    const selectedCurrency = form.elements.namedItem('currency')?.value || existing.currency;
+    if (selectedCurrency !== existing.currency) throw new Error('Salve a alteração de moeda antes de calcular os juros.');
+    const draftName = form.elements.namedItem('name')?.value ?? existing.name;
+    const draftNotes = form.elements.namedItem('notes')?.value ?? existing.notes;
+    form.dataset.interestBusy = 'true';
+    button.disabled = true;
+    let recorded = false;
+    try {
+      const result = await Storage.recordReserveInterestToDate(itemId, currentBalance);
+      recorded = true;
+      await loadMonth();
+      openModal('reserve', itemId);
+      const refreshedForm = root.querySelector('form[data-form="reserve"]');
+      if (refreshedForm) {
+        refreshedForm.elements.namedItem('name').value = draftName;
+        refreshedForm.elements.namedItem('notes').value = draftNotes;
+        const interestInput = refreshedForm.querySelector('[data-reserve-field="interest-balance"]');
+        if (interestInput) interestInput.value = amount(currentBalance);
+        interestInput?.focus();
+      }
+      toast(result.movement
+        ? `${money(result.movement.amount, result.movement.currency)} registrados como juros até hoje no histórico do CDI.`
+        : 'Saldo do CDI conferido. Não há juros novos para registrar.');
+    } catch (error) {
+      if (recorded) {
+        toast('Os juros foram registrados, mas a tela não atualizou. Reabra a reserva CDI para conferir o saldo e o histórico.', true);
+        return;
+      }
+      form.dataset.interestBusy = 'false';
+      button.disabled = false;
       throw error;
     }
   }
@@ -689,6 +733,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       }
       else if (action === 'reserve-withdraw') await recordReserveMovementFromModal(button, id, 'withdrawal');
       else if (action === 'reserve-deduct-tax') await recordReserveMovementFromModal(button, id, 'tax');
+      else if (action === 'reserve-calculate-interest') await calculateCdiInterestFromModal(button, id);
       else if (action === 'new-category') openModal('category');
       else if (action === 'edit-category') openModal('category', id);
       else if (action === 'new-group') openModal('group');
@@ -786,8 +831,10 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
         const currency = values.currency || existing?.currency || 'BRL';
         if (existing?.reserve_movements?.length && currency !== existing.currency) throw new Error('A moeda não pode ser alterada depois de registrar movimentações na reserva.');
         const displayedAmount = parseAmount(values.amount);
-        const deductions = (existing?.reserve_movements || []).filter(movement => movement.currency === currency).reduce((total, movement) => total + movement.amount, 0);
-        const amount = existing ? Math.round(((displayedAmount ?? 0) + deductions + Number.EPSILON) * 100) / 100 : displayedAmount;
+        const reserveMovements = existing?.reserve_movements || [];
+        const deductions = reserveMovements.filter(movement => movement.currency === currency && movement.type !== 'interest').reduce((total, movement) => total + movement.amount, 0);
+        const recordedInterest = reserveMovements.filter(movement => movement.currency === currency && movement.type === 'interest').reduce((total, movement) => total + movement.amount, 0);
+        const amount = existing ? Math.round(((displayedAmount ?? 0) + deductions - recordedInterest + Number.EPSILON) * 100) / 100 : displayedAmount;
         const fund = { snapshot_id: existing?.snapshot_id || `${state.monthKey}:${itemId}`, month_key: existing?.month_key || state.monthKey, item_id: itemId, name: values.name, amount:Domain.isNubankReserve(existing) && currency === existing.currency ? displayedAmount : amount, currency, type:'reserve', notes: values.notes };
         if (existing && Domain.isNubankReserve(existing) && currency === existing.currency) await Storage.saveNubankReserveBalance(fund);
         else if (existing) await Storage.saveReserveContribution(fund);

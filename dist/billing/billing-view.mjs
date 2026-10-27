@@ -1,5 +1,5 @@
-import * as Domain from './billing-domain.mjs?v=11';
-import * as Storage from './billing-storage.mjs?v=14';
+import * as Domain from './billing-domain.mjs?v=12';
+import * as Storage from './billing-storage.mjs?v=15';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;
@@ -540,7 +540,7 @@ function saleRow(sale, movements, index, root) {
     : sale.confirmation_status === 'manual'
       ? '<span class="billing-confirmation billing-confirmation-manual">Lançamento manual</span>'
       : sale.confirmation_status === 'provisional'
-        ? '<span class="billing-confirmation billing-confirmation-provisional">Provisória · MCC D0</span>'
+        ? `<span class="billing-confirmation billing-confirmation-provisional">Provisória · ${esc(sale.confirmation_source || 'MCC D0')}</span>`
         : sale.confirmation_status === 'not_confirmed'
           ? `<span class="billing-confirmation billing-confirmation-unconfirmed">Não confirmada · ${esc(sale.confirmation_source || 'MCC D−1')}</span>`
           : sale.confirmation_status === 'represented_by_manual'

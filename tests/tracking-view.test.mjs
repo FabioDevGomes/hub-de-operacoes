@@ -28,6 +28,7 @@ function makeRoot() {
   const productKeyPreviewField = { textContent: '' };
   const clicksStartDateField = { value: '' };
   const clicksEndDateField = { value: '' };
+  const clicksDatePresetField = { value: '' };
   const clicksProductFilterField = { value: '' };
   const clicksHostFilterField = { value: '' };
   const conversionProfileSelectField = { value: '' };
@@ -45,7 +46,11 @@ function makeRoot() {
     domainTokenField: { value: '' },
     rememberDomainTokenField: { checked: false },
     domainNameField: { value: '' },
-    productKeyField: { value: '' },
+    productKeyField: {
+      value: '', focused: false, selection: null,
+      focus() { this.focused = true; },
+      setSelectionRange(start, end) { this.selection = [start, end]; },
+    },
     productKeyPreviewField,
     domainIncludeWwwField: { checked: false },
     domainAdminTokenVisibleField: { checked: false },
@@ -55,6 +60,7 @@ function makeRoot() {
     tagDialogElement,
     clicksStartDateField,
     clicksEndDateField,
+    clicksDatePresetField,
     clicksProductFilterField,
     clicksHostFilterField,
     conversionProfileSelectField,
@@ -82,6 +88,7 @@ function makeRoot() {
       if (selector === '#trackingTagDialog') return this.tagDialogElement;
       if (selector === '#trackingClicksStartDate') return clicksStartDateField;
       if (selector === '#trackingClicksEndDate') return clicksEndDateField;
+      if (selector === '#trackingClicksDatePreset') return clicksDatePresetField;
       if (selector === '#trackingClicksProductFilter') return clicksProductFilterField;
       if (selector === '#trackingClicksHostFilter') return clicksHostFilterField;
       if (selector === '#trackingConversionProfileSelect') return conversionProfileSelectField;
@@ -178,25 +185,32 @@ test('sessão importa para prévia em memória, mascara IDs e baixa cópia byte 
     const root = makeRoot();
     const controller = mount({ root });
     const headerStart = root.innerHTML.indexOf('class="tracking-intro-head"');
-    const configStart = root.innerHTML.indexOf('id="trackingConnectionConfig"');
+    const configStart = root.innerHTML.indexOf('<div id="trackingConnectionConfig"');
     const csvActionsStart = root.innerHTML.indexOf('<div class="tracking-actions">', configStart);
     const conversionProfileStart = root.innerHTML.indexOf('class="tracking-conversion-profile"', configStart);
     const conversionProfileEnd = root.innerHTML.indexOf('</section>', conversionProfileStart);
-    const configEnd = root.innerHTML.indexOf('</div>', conversionProfileEnd);
     const refreshAction = root.innerHTML.indexOf('data-tracking-action="refresh-server"');
     const disconnectAction = root.innerHTML.indexOf('data-tracking-action="disconnect"');
+    const csvActionsNesting = [...root.innerHTML.slice(configStart, csvActionsStart).matchAll(/<\/?div\b[^>]*>/g)]
+      .reduce((depth, [tag]) => depth + (tag.startsWith('</') ? -1 : 1), 0);
     const configMarkup = root.innerHTML.slice(configStart, csvActionsStart);
     assert.ok(headerStart >= 0 && root.innerHTML.includes('data-tracking-action="toggle-connection-config"') && configStart > headerStart, 'o controle de configurações fica no cabeçalho da seção');
     assert.match(root.innerHTML.slice(configStart), /id="trackingConnectionConfig" class="tracking-connection-config" hidden/);
     assert.ok(refreshAction > configStart && disconnectAction > refreshAction, 'ações de conexão ficam agrupadas dentro da configuração recolhida');
     assert.ok(csvActionsStart > configStart && configMarkup.includes('class="tracking-conversion-profile"'), 'o perfil de conversão fica dentro das configurações recolhidas, antes das ações de CSV');
-    assert.ok(conversionProfileStart > configStart && conversionProfileEnd > conversionProfileStart && csvActionsStart > configEnd, 'o bloco de perfil fica oculto com o painel e os controles de CSV ficam fora dele');
+    assert.ok(conversionProfileStart > configStart && conversionProfileEnd > conversionProfileStart && csvActionsStart > conversionProfileEnd && csvActionsNesting === 1, 'o perfil e os controles de CSV ficam dentro do painel recolhível');
     assert.match(root.innerHTML, /aria-expanded="false"[^>]*>Exibir configurações<\/button>/);
     await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'toggle-connection-config' } }) } });
     assert.match(root.innerHTML, /id="trackingConnectionConfig" class="tracking-connection-config">/);
     assert.match(root.innerHTML, /aria-expanded="true"[^>]*>Recolher configurações<\/button>/);
-    assert.match(root.innerHTML.slice(root.innerHTML.indexOf('id="trackingConnectionConfig"')), /Token de acesso do Hub/);
-    assert.match(root.innerHTML.slice(root.innerHTML.indexOf('id="trackingConnectionConfig"'), root.innerHTML.indexOf('<div class="tracking-actions">')), /Ação de conversão · vendas INS v8/);
+    assert.match(root.innerHTML.slice(root.innerHTML.indexOf('<div id="trackingConnectionConfig"')), /Token de acesso do Hub/);
+    const openConfigStart = root.innerHTML.indexOf('<div id="trackingConnectionConfig"');
+    const statusStart = root.innerHTML.indexOf('<p class="tracking-message', openConfigStart);
+    const openConfigMarkup = root.innerHTML.slice(openConfigStart, statusStart);
+    assert.match(openConfigMarkup, /Ação de conversão · vendas INS v8/);
+    assert.match(openConfigMarkup, /Importar CSV já baixado/);
+    assert.match(openConfigMarkup, /Baixar CSV para Google Ads/);
+    assert.match(openConfigMarkup, /Limpar leitura/);
     await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'toggle-connection-config' } }) } });
     assert.match(root.innerHTML, /id="trackingConnectionConfig" class="tracking-connection-config" hidden/);
     assert.match(root.innerHTML, /id="trackingInstructionalText" class="tracking-session tracking-instructions-hidden"/);
@@ -390,6 +404,8 @@ test('só consulta o relatório agregado ao clicar, permite filtrar produto sem 
     await root.fire('change', { target: { id: 'trackingClicksProductFilter', value: 'p:product-a' } });
     const table = root.innerHTML.match(/<table class="tracking-table tracking-clicks-table">([\s\S]*?)<\/table>/)?.[1] || '';
     assert.match(table, /a\.example\.com/);
+    assert.match(table, /<a class="tracking-presell-link" href="https:\/\/a\.example\.com\/" target="_blank" rel="noopener noreferrer"/);
+    assert.match(table, /aria-label="Abrir a pre-sell a\.example\.com em uma nova aba"/);
     assert.doesNotMatch(table, /metabo\.zinvero\.shop/);
     assert.match(table, /<td class="tracking-number">5<\/td>/);
 
@@ -414,6 +430,57 @@ test('só consulta o relatório agregado ao clicar, permite filtrar produto sem 
 
     await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'disconnect' } }) } });
     assert.match(root.innerHTML, /Relatório ainda não consultado/);
+  } finally {
+    globalThis.fetch = savedFetch;
+    local.restore();
+  }
+});
+
+test('presets atualizam a data pelo calendário local e consultam a tela sem gravar no cache manual', async () => {
+  const savedFetch = globalThis.fetch;
+  const local = installLocalStorage();
+  const requests = [];
+  const clicksStorage = makeClicksStorage();
+  const token = 'e'.repeat(64);
+  globalThis.fetch = async (url, options) => {
+    const range = JSON.parse(options.body);
+    requests.push({ url, options, range });
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true, schema_version: 1, generated_at_utc: '2026-10-23T12:00:00Z',
+        start_date: range.start_date, end_date: range.end_date,
+        count_semantics: 'events_not_unique_visitors', rows: [],
+      }),
+    };
+  };
+  try {
+    const root = makeRoot();
+    const controller = mount({ root, clicksStorage, nowFn: () => new Date('2026-10-23T12:00:00.000Z') });
+    await controller.ready;
+    assert.match(root.innerHTML, /id="trackingClicksDatePreset"/);
+    for (const label of ['Hoje', 'Ontem', '7 Dias', '30 Dias', 'Este Mês', 'Mês Passado', 'Total']) {
+      assert.match(root.innerHTML, new RegExp(`>${label}</option>`));
+    }
+    assert.match(root.innerHTML, /“Total” consulta os últimos 366 dias/);
+    assert.equal(root.clicksDatePresetField.value, 'today', 'a seleção padrão é Hoje');
+    assert.equal(root.clicksStartDateField.value, '23/10/2026', 'a data inicial padrão acompanha Hoje em UTC');
+    assert.equal(root.clicksEndDateField.value, '23/10/2026', 'a data final padrão acompanha Hoje em UTC');
+
+    await root.fire('input', { target: { id: 'trackingApiToken', value: token } });
+    root.clicksDatePresetField.value = '7-days';
+    await root.fire('change', { target: { id: 'trackingClicksDatePreset', value: '7-days' } });
+    assert.equal(root.clicksStartDateField.value, '17/10/2026');
+    assert.equal(root.clicksEndDateField.value, '23/10/2026');
+    assert.deepEqual(requests[0].range, { start_date: '2026-10-17', end_date: '2026-10-23', platform: 'clickbank' });
+    assert.equal(clicksStorage.snapshots.length, 0, 'a busca do preset não cria snapshots; isso segue sendo ação do botão manual');
+
+    root.clicksDatePresetField.value = 'total';
+    await root.fire('change', { target: { id: 'trackingClicksDatePreset', value: 'total' } });
+    assert.equal(root.clicksStartDateField.value, '23/10/2025');
+    assert.equal(root.clicksEndDateField.value, '23/10/2026');
+    assert.deepEqual(requests[1].range, { start_date: '2025-10-23', end_date: '2026-10-23', platform: 'clickbank' });
+    assert.equal(clicksStorage.snapshots.length, 0);
   } finally {
     globalThis.fetch = savedFetch;
     local.restore();
@@ -683,7 +750,7 @@ test('cadastra novo domínio pela tela Tracking lembrando token administrativo e
     assert.match(root.innerHTML, /Lembrar token administrativo neste navegador/);
     assert.match(root.innerHTML, /localStorage/);
     assert.match(root.innerHTML, /sem criptografia/);
-    assert.match(root.innerHTML, /<th>Domínio<\/th><th>Nome do Track<\/th><th class="tracking-sales-count">Vendas \(SALE\)<\/th><th>Tag<\/th>/);
+    assert.match(root.innerHTML, /<th>URL da pre-sell<\/th><th>Nome do Track<\/th><th class="tracking-sales-count">Vendas \(SALE\)<\/th><th>Tag<\/th>/);
     assert.match(root.innerHTML, /for="trackingDomainProductKey"><span>Nome do Track<\/span>/);
     assert.doesNotMatch(root.innerHTML, /data-tracking-action="show-presell-tag"/);
     assert.doesNotMatch(root.innerHTML, /id="trackingPresellScript"|data-tracking-action="copy-presell-script"/);
@@ -715,7 +782,7 @@ test('cadastra novo domínio pela tela Tracking lembrando token administrativo e
     assert.equal(local.values.get(TRACKING_DOMAIN_ADMIN_TOKEN_STORAGE_KEY), adminToken, 'the administrative token is stored only under its dedicated key');
     assert.equal(local.values.has(TRACKING_TOKEN_STORAGE_KEY), false, 'the sales token remains independent');
     assert.match(root.innerHTML, /Liberado: presell\.example, www\.presell\.example/);
-    assert.match(root.innerHTML, /<td><code>presell\.example<\/code><\/td><td>Metabo Drops - Zinvero<\/td>/);
+    assert.match(root.innerHTML, /<td><a href="https:\/\/presell\.example\/" target="_blank" rel="noopener noreferrer"><code>https:\/\/presell\.example\/<\/code><\/a><\/td><td>Metabo Drops - Zinvero<\/td>/);
     assert.equal((root.innerHTML.match(/class="tracking-new-track-pulse"/g) || []).length, 2, 'as duas linhas realmente adicionadas, domínio e www, recebem destaque');
     assert.equal(highlightTimers[0].delay, 2250, 'o destaque dura os três pulsos de 0,72 s com uma pequena margem');
     assert.match(root.innerHTML, /data-presell-host="presell\.example"/);
@@ -732,8 +799,77 @@ test('cadastra novo domínio pela tela Tracking lembrando token administrativo e
     const reloadedRoot = makeRoot();
     mount({ root: reloadedRoot });
     await reloadedRoot.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'load-domains' } }) } });
-    assert.match(reloadedRoot.innerHTML, /<td><code>presell\.example<\/code><\/td><td>Metabo Drops - Zinvero<\/td>/);
+    assert.match(reloadedRoot.innerHTML, /<td><a href="https:\/\/presell\.example\/" target="_blank" rel="noopener noreferrer"><code>https:\/\/presell\.example\/<\/code><\/a><\/td><td>Metabo Drops - Zinvero<\/td>/);
     assert.doesNotMatch(reloadedRoot.innerHTML, /id="trackingPresellScript"/);
+  } finally {
+    globalThis.fetch = savedFetch;
+    local.restore();
+  }
+});
+
+test('mostra os cinco nomes de Track distintos mais recentes e preenche o campo sem espaços extras', async () => {
+  const rows = [
+    ['one.example', 'track-one', 'Track One', '2026-10-01 12:00:00'],
+    ['two.example', 'track-two', 'Track Two', '2026-10-02 12:00:00'],
+    ['three.example', 'track-three', 'Track Three', '2026-10-03 12:00:00'],
+    ['four.example', 'track-four', 'Track Four', '2026-10-04 12:00:00'],
+    ['five.example', 'track-five', 'Track Five', '2026-10-05 12:00:00'],
+    ['six.example', 'track-six', 'Track Six', '2026-10-06 12:00:00'],
+    ['three-new.example', 'track-three', 'Track Three', '2026-10-07 12:00:00'],
+  ].map(([host, productKey, productLabel, createdAtUtc]) => ({
+    page_host: host,
+    origin: `https://${host}`,
+    product_key: productKey,
+    product_label: productLabel,
+    created_at_utc: createdAtUtc,
+  }));
+  const local = installLocalStorage(new Map([[TRACKING_DOMAIN_LIST_STORAGE_KEY, JSON.stringify({
+    schemaVersion: 1,
+    updatedAtUtc: '2026-10-24T12:00:00.000Z',
+    domains: rows,
+  })]]));
+  const savedFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({ ok: true, product_key: 'track-two', product_label: 'Track Two', added: ['new.example'], updated: [], already_allowed: [] }),
+    };
+  };
+
+  try {
+    const root = makeRoot();
+    mount({ root, nowFn: () => new Date('2026-10-24T12:00:00.000Z') });
+    const suggestionsStart = root.innerHTML.indexOf('class="tracking-track-suggestions"');
+    const suggestionsEnd = root.innerHTML.indexOf('</div>', suggestionsStart);
+    const suggestionsMarkup = root.innerHTML.slice(suggestionsStart, suggestionsEnd);
+    assert.ok(suggestionsStart >= 0, 'o campo oferece sugestões dos nomes cadastrados');
+    assert.equal((suggestionsMarkup.match(/class="tracking-track-suggestion"/g) || []).length, 5);
+    const expectedOrder = ['Track Three', 'Track Six', 'Track Five', 'Track Four', 'Track Two'];
+    let previousIndex = -1;
+    for (const label of expectedOrder) {
+      const index = suggestionsMarkup.indexOf(`>${label}</button>`);
+      assert.ok(index > previousIndex, `${label} aparece na ordem de cadastro mais recente`);
+      previousIndex = index;
+    }
+    assert.doesNotMatch(suggestionsMarkup, /Track One/, 'nomes além dos cinco mais recentes ficam fora da lista');
+
+    await root.fire('click', { target: { closest: () => ({ dataset: {
+      trackingAction: 'select-track-suggestion', trackLabel: 'Track Two',
+    } }) } });
+    assert.equal(root.productKeyField.value, 'Track Two');
+    assert.equal(root.productKeyField.focused, true, 'o cursor volta para o campo depois da seleção');
+    assert.deepEqual(root.productKeyField.selection, ['Track Two'.length, 'Track Two'.length]);
+    assert.equal(root.productKeyPreviewField.textContent, 'Identificador técnico: track-two');
+
+    await root.fire('input', { target: { id: 'trackingDomainAdminToken', value: 'a'.repeat(64) } });
+    await root.fire('input', { target: { id: 'trackingDomainName', value: 'new.example' } });
+    await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'add-domain' } }) } });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].options.body, JSON.stringify({
+      domain: 'new.example', include_www: false, product_key: 'track-two', product_label: 'Track Two',
+    }));
   } finally {
     globalThis.fetch = savedFetch;
     local.restore();
@@ -789,7 +925,7 @@ test('pisca a linha salva também quando o domínio foi atualizado ou já estava
       await root.fire('input', { target: { id: 'trackingDomainProductKey', value: 'Existing Track' } });
       await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'add-domain' } }) } });
 
-      assert.match(root.innerHTML, /<tr class="tracking-new-track-pulse"><td><code>existing\.example<\/code><\/td>/);
+      assert.match(root.innerHTML, /<tr class="tracking-new-track-pulse"><td><a href="https:\/\/existing\.example\/" target="_blank" rel="noopener noreferrer"><code>https:\/\/existing\.example\/<\/code><\/a><\/td>/);
       assert.equal(timers.length, 1, 'cada salvamento iniciado aciona um ciclo de destaque');
       assert.equal(timers[0].delay, 2250, 'a linha permanece destacada durante três pulsos de 0,72 s');
       timers[0].callback();
@@ -845,10 +981,10 @@ test('restaura a última lista de domínios sem fetch e só consulta o servidor 
     const restoredRoot = makeRoot();
     mount({ root: restoredRoot });
     assert.equal(requests.length, 1, 'mounting a new view must use local cache, not call the endpoint');
-    assert.match(restoredRoot.innerHTML, /<td><code>metabo\.zinvero\.shop<\/code><\/td><td>metabo-zinvero<\/td>/);
+    assert.match(restoredRoot.innerHTML, /<td><a href="https:\/\/metabo\.zinvero\.shop\/" target="_blank" rel="noopener noreferrer"><code>https:\/\/metabo\.zinvero\.shop\/<\/code><\/a><\/td><td>metabo-zinvero<\/td>/);
     assert.match(restoredRoot.innerHTML, /Lista restaurada do navegador/);
     assert.match(restoredRoot.innerHTML, /Cache local atualizado em/);
-    assert.match(restoredRoot.innerHTML, /<th>Domínio<\/th><th>Nome do Track<\/th><th class="tracking-sales-count">Vendas \(SALE\)<\/th><th>Tag<\/th>/);
+    assert.match(restoredRoot.innerHTML, /<th>URL da pre-sell<\/th><th>Nome do Track<\/th><th class="tracking-sales-count">Vendas \(SALE\)<\/th><th>Tag<\/th>/);
     assert.doesNotMatch(restoredRoot.innerHTML, /id="trackingPresellScript"/);
 
     await restoredRoot.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'load-domains' } }) } });
@@ -934,7 +1070,7 @@ test('exibe a tag somente após clique, copia por ação separada e fecha de vol
     assert.match(root.innerHTML, /id="trackingPresellScript"/, 'copiar a tag não fecha a janela');
     await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'close-presell-tag' } }) } });
     assert.doesNotMatch(root.innerHTML, /id="trackingPresellScript"|role="dialog" aria-modal="true"/);
-    assert.match(root.innerHTML, /<td><code>presell\.example<\/code><\/td>/, 'fechar retorna à tabela sem apagar a lista');
+    assert.match(root.innerHTML, /<td><a href="https:\/\/presell\.example\/" target="_blank" rel="noopener noreferrer"><code>https:\/\/presell\.example\/<\/code><\/a><\/td>/, 'fechar retorna à tabela sem apagar a lista');
     await root.fire('click', { target: { closest: () => ({ dataset: { trackingAction: 'show-presell-tag', presellHost: 'presell.example' } }) } });
     let escapePrevented = false;
     await root.fire('keydown', { key: 'Escape', preventDefault() { escapePrevented = true; } });
@@ -1087,7 +1223,7 @@ test('sincroniza vendas explicitamente, persiste o cache local e conta apenas o 
     const controller = mount({ root, salesStorage });
     await controller.ready;
     assert.equal(requests.length, 0, 'abrir a tela não consulta a rede');
-    assert.match(root.innerHTML, /Tracks cadastradas, domínio, nome do Track e vendas/);
+    assert.match(root.innerHTML, /aria-label="Tracks cadastradas, checkouts e vendas ClickBank"/);
     assert.match(root.innerHTML, /<th class="tracking-sales-count">Vendas \(SALE\)<\/th>/);
     assert.match(root.innerHTML, /<td class="tracking-number tracking-sales-count" title="Sincronize as vendas para preencher esta contagem">—<\/td>/);
 

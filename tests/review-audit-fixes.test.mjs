@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {readableHtml} from '../src/review/review-analysis-text.mjs';
+import {prepareRequest,requestPrompt,requestStatus,isStale,blankSections,ANALYSIS_SCHEMA,analysisQuality,createAnalysisState,parseAnalysis,exportAnalysis} from '../src/review/review-analysis-domain.mjs';
+import {createMaterialsController} from '../src/review/review-materials-controller.mjs';
+import {createAnalysisController} from '../src/review/review-analysis-controller.mjs';
+import {loadAnalysis,ANALYSIS_PREFIX} from '../src/review/review-analysis-storage.mjs';
+const records=new Map(),storage={get length(){return records.size},key:index=>[...records.keys()][index]??null,getItem:key=>records.get(key)??null,setItem:(key,value)=>records.set(key,value)};
+let sequence=0;const createId=()=>`fix-${++sequence}`,now=()=> '2026-10-25T12:00:00.000Z';
+const materials=createMaterialsController({storage,createId,now});
+materials.update('product','Produto sintético');materials.update('vslMode','none');materials.update('salesContent','<p>Produto com <strong>ingredientes declarados</strong> &amp; rótulo disponível.</p><script>AFIRMACAO_OCULTA</script>');materials.update('notes','NOTA_DESMARCADA');materials.save();
+const analysis=createAnalysisController({storage,materials,createId,now});const request=analysis.prepare();
+assert.ok(analysis.currentPrompt().includes('NOTA_DESMARCADA'));
+analysis.selectSources(['salesContent']);assert.equal(requestStatus(request,materials.current().draft,analysis.selected()).code,'selection');
+assert.throws(()=>analysis.currentPrompt(),/fontes selecionadas mudaram/);
+analysis.save();const reopened=createAnalysisController({storage,materials,createId,now});assert.throws(()=>reopened.currentPrompt(),/fontes selecionadas mudaram/,'bloqueio persiste ao reabrir');
+const current=reopened.prepare();assert.ok(!reopened.currentPrompt().includes('NOTA_DESMARCADA'));assert.ok(!reopened.currentPrompt().includes('AFIRMACAO_OCULTA'));
+assert.ok(current.sources[0].content.includes('<script>'),'HTML original preservado no registro');
+assert.equal(readableHtml('<p>A&nbsp;<b>B</b> &amp; &#67; &#x44;</p><style>invisivel</style>'),'A B & C D');
+assert.equal(readableHtml('<script>somente código</script>'),'');
+assert.equal(readableHtml('dose < 5 e preço > 2'),'dose < 5 e preço > 2');
+assert.equal(readableHtml('&foo; &#0;'),'&foo; &#0;');
+function response(req,{legacy=false}={}){return {schema:ANALYSIS_SCHEMA,reviewId:req.reviewId,requestId:req.id,sections:blankSections({modelVersion:legacy?1:2})}}
+const answer=response(current);Object.assign(answer.sections.mechanism[0],{text:'Ingredientes declarados e rótulo disponível',classification:'explicit',sourceIds:['salesContent'],evidence:'Produto com ingredientes declarados & rótulo disponível.'});
+assert.doesNotThrow(()=>parseAnalysis(JSON.stringify(answer),current));
+const hidden=structuredClone(answer);hidden.sections.mechanism[0].evidence='AFIRMACAO_OCULTA';assert.throws(()=>parseAnalysis(JSON.stringify(hidden),current));
+assert.equal(answer.sections.tone.length,6);const omitted=structuredClone(answer);omitted.sections.tone.pop();assert.throws(()=>parseAnalysis(JSON.stringify(omitted),current),'novos pedidos exigem campos adicionais');
+for(const [field,value] of [['publicationUrl','https://example.com/review/'],['affiliateUrl','https://example.com/aff'],['portal','Portal atualizado']]){materials.update(field,value);materials.save();assert.equal(isStale(current,materials.current().draft),false,field+' não exige nova análise')}
+materials.update('notes','Outra nota não selecionada');materials.save();assert.equal(isStale(current,materials.current().draft),false);
+reopened.setImport(JSON.stringify(answer));reopened.preview();reopened.apply();reopened.setReviewed(true);assert.equal(analysisQuality(reopened.current().state).code,'gaps');
+materials.update('salesContent',materials.current().draft.salesContent+' Fonte mudou.');materials.save();assert.equal(isStale(current,materials.current().draft),true);
+assert.throws(()=>reopened.currentPrompt(),/mudaram/);assert.equal(analysisQuality(reopened.current().state,{draft:materials.current().draft}).code,'stale');
+const emptyRequest=reopened.prepare();reopened.setImport(JSON.stringify(response(emptyRequest)));reopened.preview();reopened.apply();assert.throws(()=>reopened.setReviewed(true),/não há conteúdo analítico/);assert.equal(analysisQuality(reopened.current().state).code,'empty');
+const full=response(emptyRequest);for(const rows of Object.values(full.sections))for(const row of rows)Object.assign(row,{text:'Validação manual sintética',classification:'confirmed'});
+assert.equal(analysisQuality({...createAnalysisState(full.reviewId),result:{request:emptyRequest,sections:full.sections},reviewed:true}).code,'ready');
+// An actual v1-shaped record must remain readable and byte-for-byte unchanged on load.
+const legacyRequest={...prepareRequest(materials.current().draft,['salesContent'],{requestId:'legacy-request',createdAt:now()})};delete legacyRequest.modelVersion;delete legacyRequest.analysisSnapshot;
+const legacyAnswer=response(legacyRequest,{legacy:true});const legacyResult=parseAnalysis(JSON.stringify(legacyAnswer),legacyRequest);
+const legacyState={...createAnalysisState(materials.current().draft.id),request:legacyRequest,result:legacyResult};
+const oldPayload=JSON.stringify([{revision:1,savedAt:now(),state:legacyState}]);records.set(ANALYSIS_PREFIX+legacyState.reviewId,oldPayload);
+assert.equal(loadAnalysis(storage,legacyState.reviewId).state.result.sections.tone.length,3);assert.equal(records.get(ANALYSIS_PREFIX+legacyState.reviewId),oldPayload);
+const legacyController=createAnalysisController({storage,materials,createId,now});assert.ok(exportAnalysis(legacyController.current().state).includes('Autoridades citadas'));
+legacyController.updateField('tone','authorities','text','Informação manual nova');legacyController.updateField('tone','authorities','classification','confirmed');legacyController.save();
+const preserved=JSON.parse(records.get(ANALYSIS_PREFIX+legacyState.reviewId));assert.equal(preserved.length,2);assert.equal(JSON.stringify(preserved[0].state),JSON.stringify(legacyState));assert.equal(preserved[1].state.result.sections.tone.length,4);
+const onlyDestination={...materials.current().draft,publicationUrl:'https://another.example/review/'};assert.equal(isStale(legacyRequest,onlyDestination),false,'pedidos antigos também separam destino de fonte');
+for(const file of ['review-analysis-domain.mjs','review-analysis-controller.mjs','review-analysis-view.mjs','review-analysis-storage.mjs','review-analysis-text.mjs'])assert.equal(await readFile(new URL('../src/review/'+file,import.meta.url),'utf8'),await readFile(new URL('../dist/review/'+file,import.meta.url),'utf8'));
+console.log('review auditoria: bloqueio persistente, HTML, snapshot analítico, qualidade e compatibilidade v1 ok');

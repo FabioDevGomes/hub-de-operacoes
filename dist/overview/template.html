@@ -1,6 +1,6 @@
         <div id="kpis" class="kpis"></div>
         <div class="card panel">
-          <div class="panel-head"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><div class="panel-controls">
+          <div class="panel-head"><div class="overview-campaign-heading"><div><h2>Campanhas</h2><p id="totalsCaption"></p></div><button id="verifyDuplicateCampaignsButton" class="btn overview-audit-button" type="button" aria-label="Verificar duplicidades" title="Verificar duplicidades">Verif. Dupli.</button></div><div class="panel-controls">
             <button id="usdBrlRateButton" class="btn overview-fx-rate" type="button" aria-label="Cotação do dólar PTAX de venda; atualizar cotação"><span id="usdBrlRateLabel">US$ 1 = R$ 5,1000</span><span class="overview-fx-rate-icon" aria-hidden="true">↻</span></button>
             <div class="hub-month-navigation" role="group" aria-label="Navegar pelas datas de início das campanhas" aria-describedby="campaignDateStatus">
               <button id="campaignPreviousDate" class="btn hub-month-arrow" type="button" aria-label="Data de início anterior" title="Data anterior; em Todas, começa pela mais recente">‹</button>
@@ -13,11 +13,28 @@
               <summary class="btn">Colunas</summary>
               <div class="overview-column-menu hub-column-menu"><strong>Colunas da Visão Geral</strong><p>A campanha permanece visível. ROI das vendas refere-se ao lançamento manual, não ao período selecionado.</p><div id="overviewColumnOptions" data-column-options></div><button id="overviewColumnsReset" class="btn" type="button">Restaurar padrão</button><p id="overviewColumnsMessage" role="status"></p></div>
             </details>
-            <button id="verifyDuplicateCampaignsButton" class="btn overview-audit-button" type="button">Verificar duplicidades</button>
           </div></div>
           <p id="overviewWidthsMessage" role="status"></p>
           <div class="table-wrap"><table class="totals-table hub-table-layout"><thead id="totalsHead"></thead><tbody id="totalsBody"></tbody><tfoot id="totalsFoot" aria-label="Totais das campanhas filtradas"></tfoot></table></div>
         </div>
+        <dialog id="overviewCampaignActionDialog" class="overview-campaign-action-dialog" aria-labelledby="overviewCampaignActionTitle" aria-describedby="overviewCampaignActionDescription">
+          <div class="overview-campaign-action-content">
+            <div class="overview-campaign-action-eyebrow">ALTERAÇÃO DE CAMPANHA NO GOOGLE ADS</div>
+            <h2 id="overviewCampaignActionTitle">Conferindo campanha</h2>
+            <p id="overviewCampaignActionDescription">A ação muda apenas o status da campanha. Orçamento e outras configurações permanecem iguais.</p>
+            <dl class="overview-campaign-action-summary">
+              <div><dt>MCC</dt><dd id="overviewCampaignActionManager">—</dd></div>
+              <div><dt>Conta Google Ads</dt><dd id="overviewCampaignActionAccount">—</dd></div>
+              <div><dt>Campanha</dt><dd id="overviewCampaignActionCampaign">—</dd></div>
+              <div><dt>Status atual lido na API</dt><dd id="overviewCampaignActionCurrentStatus">—</dd></div>
+            </dl>
+            <p id="overviewCampaignActionStatus" class="overview-campaign-action-status" role="status" aria-live="polite">Conferindo permissões e status atual.</p>
+            <div class="overview-roi-actions">
+              <button id="overviewCampaignActionCancel" class="btn" type="button">Cancelar</button>
+              <button id="overviewCampaignActionConfirm" class="btn primary" type="button" disabled>Confirmar alteração</button>
+            </div>
+          </div>
+        </dialog>
         <dialog id="duplicateCampaignAuditDialog" class="overview-roi-dialog overview-paused-today-dialog overview-duplicate-audit-dialog" aria-labelledby="duplicateCampaignAuditTitle">
           <div class="overview-paused-today-content"><div><h2 id="duplicateCampaignAuditTitle">Verificar linhas duplicadas</h2><p>A análise confere linhas da captura já salva pelo nome normalizado, ID completo da conta e métricas D−1/D0. Somente linhas com métricas idênticas podem ser ajustadas após sua confirmação. Isso não muda as próximas capturas nem apaga o manifesto ou o histórico; o ajuste é reversível e vale para as telas e métricas operacionais.</p></div><p id="duplicateCampaignAuditSummary" class="overview-duplicate-audit-summary" role="status" aria-live="polite"></p><ul id="duplicateCampaignAuditList" class="overview-duplicate-audit-list"></ul><p id="duplicateCampaignAuditMessage" class="overview-roi-error" role="alert" aria-live="polite"></p><div class="overview-roi-actions"><button id="duplicateCampaignAuditClose" class="btn" type="button">Fechar</button></div></div>
         </dialog>

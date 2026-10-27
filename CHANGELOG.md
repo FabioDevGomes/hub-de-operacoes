@@ -2,6 +2,526 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.93.0] - 2026-10-27
+
+- Automatiza o aprendizado do ID de oferta GuruMedia
+
+## [1.92.3] - 2026-10-27
+
+- Ajusta quebra da barra de controles da Visão Geral
+
+## [1.92.2] - 2026-10-27
+
+- Completa prévia e atualização explícita de D0
+
+## [1.92.1] - 2026-10-27
+
+- Realça em vermelho discreto somente o valor restante negativo
+
+## [1.92.0] - 2026-10-27
+
+- Adiciona prévia e atualização explícita de D0
+
+## [1.91.0] - 2026-10-27
+
+- Adiciona comparação somente leitura de D0
+
+## [1.90.0] - 2026-10-27
+
+- Vincula ofertas GuruMedia e alerta vendas sem clique
+
+## [1.89.1] - 2026-10-27
+
+- Mantém o botão de verificação de duplicidades fixo no cabeçalho da Visão Geral
+
+## [1.89.0] - 2026-10-27
+
+- Add active-only Google Ads D-1 closeout
+
+## [1.88.1] - 2026-10-27
+
+- Preserva métricas API no consolidado da Visão Geral
+
+## [1.88.0] - 2026-10-27
+
+- Simplify Google Ads D-1 closeout
+
+## [1.87.8] - 2026-10-27
+
+- Reconhece cobertura API e MCC nos indicadores D−1/D0 da Visão Geral
+
+## [1.87.7] - 2026-10-27
+
+- Remove o rótulo de status da coluna Ação
+
+## [1.87.6] - 2026-10-27
+
+- Remove a legenda de vínculo API da coluna Ação
+
+## [1.87.5] - 2026-10-27
+
+- Evita travamento da inicialização da Visão Geral
+
+## [1.87.4] - 2026-10-27
+
+- Load Google Ads campaign actions only on demand
+
+## [1.87.3] - 2026-10-27
+
+- Move campaign pause and activate controls into the Overview table
+
+## [1.87.2] - 2026-10-27
+
+- Fecha capturas de ontem e D−1 pelo calendário de São Paulo
+
+## [1.87.1] - 2026-10-27
+
+- Destaca em verde a fonte operacional Google Ads API ativa
+
+## [1.87.0] - 2026-10-27
+
+- Prévia Google Ads de Ontem em São Paulo e comparação compacta de métricas/configuração
+
+## [1.86.0] - 2026-10-27
+
+- Adiciona ativação manual de campanhas Google Ads ao MVP
+
+## [1.85.0] - 2026-10-27
+
+- Prepara MVP manual e bloqueado para pausar campanhas Google Ads
+
+## [1.84.0] - 2026-10-27
+
+- Adiciona opção Ontem à captura da Google Ads API
+
+## [1.83.6] - 2026-10-27
+
+- Simplifica a comparação da captura API no formato MCC
+
+## [1.83.5] - 2026-10-27
+
+- Recolhe os detalhes da prévia normalizada
+
+## [1.83.4] - 2026-10-27
+
+- Enxuga a prévia normalizada para uma comparação consolidada
+
+## [1.83.3] - 2026-10-27
+
+- Permite escolher a janela de captura Google Ads
+
+## [1.83.2] - 2026-10-27
+
+- Reduz renderização de relatórios Google Ads
+
+## [1.83.1] - 2026-10-27
+
+- Detalha inconsistências de configuração na prévia da API
+
+## [1.83.0] - 2026-10-26
+
+- Cacheia MCCs e captura todas as contas conectadas
+
+## [1.82.0] - 2026-10-26
+
+- Exibe as diferenças da prévia da captura API
+
+## [1.81.1] - 2026-10-26
+
+- Esclarece comparação diária da API
+
+## [1.81.0] - 2026-10-26
+
+- Configura ações de conversão GuruMedia por MCC
+
+## [1.80.1] - 2026-10-26
+
+- Aprimora o fluxo de testes focados
+
+## [1.80.0] - 2026-10-26
+
+- Fecha capturas Google Ads D−1 na janela recente
+
+## [1.79.0] - 2026-10-26
+
+- Normaliza configuração Google Ads e integra agregados API ao Faturamento por perfil
+
+## [1.78.0] - 2026-10-26
+
+- Isola fonte Google Ads API por perfil do navegador
+
+## [1.77.0] - 2026-10-26
+
+- Exibe a MCC associada às Tracks GuruMedia
+
+## [1.76.0] - 2026-10-26
+
+- Projeta métricas da Google Ads API nas leituras operacionais
+
+## [1.75.1] - 2026-10-26
+
+- Documenta cobertura MCC e API para adoção prospectiva
+
+## [1.75.0] - 2026-10-26
+
+- Adiciona captura paralela prospectiva da Google Ads API
+
+## [1.74.3] - 2026-10-26
+
+- Centraliza colunas de métricas GuruMedia
+
+## [1.74.2] - 2026-10-26
+
+- Corrige carregamento da tela Tracking GuruMedia
+
+## [1.74.1] - 2026-10-26
+
+- Preserva plataforma no cache de Tracks
+
+## [1.74.0] - 2026-10-26
+
+- Compara sete dias MCC com API e destaca diferenças
+
+## [1.73.0] - 2026-10-26
+
+- Adiciona prévia e limpeza confirmada de dados legados locais de Observabilidade
+
+## [1.72.0] - 2026-10-26
+
+- Separa métricas de cliques por plataforma
+
+## [1.71.0] - 2026-10-26
+
+- Compara Google Ads API com manifesto MCC por dia
+
+## [1.70.0] - 2026-10-26
+
+- Consulta várias contas Google Ads por vez
+
+## [1.69.0] - 2026-10-26
+
+- Adiciona prévia diária da Google Ads API
+
+## [1.68.0] - 2026-10-26
+
+- Adiciona relatórios Google Ads somente leitura
+
+## [1.67.11] - 2026-10-26
+
+- Adiciona marcador vermelho para cliques duplicados no consolidado
+
+## [1.67.10] - 2026-10-26
+
+- Amplia o marcador de campanhas e inclui D−1 e Consolidado
+
+## [1.67.9] - 2026-10-26
+
+- Move a bolinha D0 para depois do nome e aumenta 10%
+
+## [1.67.8] - 2026-10-26
+
+- Limita o marcador às campanhas com impressões D0 positivas
+
+## [1.67.7] - 2026-10-26
+
+- Marca produtos com múltiplas campanhas ativas com impressões em D0
+
+## [1.67.6] - 2026-10-26
+
+- Exibe nome confirmado da conta 107-473-3248 no Mapa por Conta
+
+## [1.67.5] - 2026-10-26
+
+- Remove automaticamente o alvo quando a captura detecta campanha nova no produto e conta
+
+## [1.67.4] - 2026-10-26
+
+- Mantém o fundo verde suave da célula após definir o alvo de duplicação
+
+## [1.67.3] - 2026-10-26
+
+- Remove a sombra global das células interativas do Mapa por Conta
+
+## [1.67.2] - 2026-10-26
+
+- Suaviza o destaque do alvo de duplicação no Mapa por Conta
+
+## [1.67.1] - 2026-10-26
+
+- Adiciona marcação local do alvo de duplicação por produto e conta no Mapa por Conta
+
+## [1.67.0] - 2026-10-26
+
+- Atualiza todas as abas ao confirmar nova versão
+
+## [1.66.9] - 2026-10-26
+
+- Destaca contas suspensas no cabeçalho do mapa por conta
+
+## [1.66.8] - 2026-10-26
+
+- Renomeia a seção Tracking para Integrações
+
+## [1.66.7] - 2026-10-26
+
+- Propaga aviso de atualização entre janelas abertas
+
+## [1.66.6] - 2026-10-26
+
+- Move e renomeia checkbox de campanhas pausadas
+
+## [1.66.5] - 2026-10-26
+
+- Renomeia filtro de situação da matriz para Campanhas
+
+## [1.66.4] - 2026-10-26
+
+- Ativa Incluir pausadas por padrão no mapa por conta
+
+## [1.66.3] - 2026-10-26
+
+- Remove subtítulo da matriz de produtos por conta
+
+## [1.66.2] - 2026-10-26
+
+- Remove a frase auxiliar do histórico de contas por produto
+
+## [1.66.1] - 2026-10-26
+
+- Mostra o primeiro registro por produto na matriz de contas
+
+## [1.66.0] - 2026-10-26
+
+- Adiciona data do primeiro registro de cada campanha ao Mapa por Conta
+
+## [1.65.18] - 2026-10-26
+
+- Adiciona aviso integrado para novas versões
+
+## [1.65.17] - 2026-10-26
+
+- Limita sinalização de pausa a células sem campanhas ativas
+
+## [1.65.16] - 2026-10-26
+
+- Destaca em vermelho produtos com menos de três contas históricas
+
+## [1.65.15] - 2026-10-26
+
+- Renomeia o checkbox de inclusão de pausadas
+
+## [1.65.14] - 2026-10-26
+
+- Inclui campanhas pausadas no detalhe do produto
+
+## [1.65.13] - 2026-10-26
+
+- Mantém sinalização de campanhas pausadas na linha selecionada
+
+## [1.65.12] - 2026-10-26
+
+- Preserva nome de conta quando D0 traz só domínio
+
+## [1.65.11] - 2026-10-26
+
+- Resolve abreviações inequívocas de Track e formata links Pre-Sell
+
+## [1.65.10] - 2026-10-26
+
+- Exibe a tag de instalação em pop-up no Tracking
+
+## [1.65.9] - 2026-10-26
+
+- Adiciona filtro por MCC ao Mapa por Conta
+
+## [1.65.8] - 2026-10-26
+
+- Mascara tokens sem acionar gerenciador de senhas
+
+## [1.65.7] - 2026-10-26
+
+- Adiciona contas pausadas à matriz de produtos ativos sob demanda
+
+## [1.65.6] - 2026-10-26
+
+- Restaura fundo azul na tag de instalação do Tracking
+
+## [1.65.5] - 2026-10-26
+
+- Corrige sobreposição da coluna fixa na matriz de contas
+
+## [1.65.4] - 2026-10-26
+
+- Compacta os cabeçalhos das contas no Mapa por Conta
+
+## [1.65.3] - 2026-10-26
+
+- Padroniza links de pre-sell na seção Tracking
+
+## [1.65.2] - 2026-10-26
+
+- Mapa por Conta: ocultação reversível de produtos
+
+## [1.65.1] - 2026-10-26
+
+- Mantém a rolagem horizontal na matriz filtrada do Mapa por Conta
+
+## [1.65.0] - 2026-10-25
+
+- Adiciona gerador local para configuração do postback GuruMedia
+
+## [1.64.0] - 2026-10-25
+
+- Centraliza configurações globais do Tracking e notificações GuruMedia
+
+## [1.63.0] - 2026-10-25
+
+- Implementa o passo 7 de Review com prévia responsiva e exportação HTML local
+
+## [1.62.0] - 2026-10-25
+
+- Implementa o passo 6 da Review com copy rastreável nas 20 seções e revisão de fontes, CTAs e assets.
+
+## [1.61.4] - 2026-10-25
+
+- Filtra produto com duplo clique e restaura filtros padrão ao abrir o Mapa por Conta
+
+## [1.61.3] - 2026-10-25
+
+- Compacta em 25% as linhas da matriz do Mapa por Conta
+
+## [1.61.2] - 2026-10-25
+
+- Corrige a sincronização dos campos de Imagens e URLs e atualiza a conferência de oferta e assets.
+
+## [1.61.1] - 2026-10-25
+
+- Adiciona rolagem horizontal à matriz do Mapa por Conta
+
+## [1.61.0] - 2026-10-25
+
+- Implementa o passo 5 da Review com inventário numerado, URLs públicas, assets fixos condicionais, Hero e conferência de oferta.
+
+## [1.60.0] - 2026-10-25
+
+- Adiciona rastreamento de vendas GuruMedia no Hub
+
+## [1.59.0] - 2026-10-25
+
+- Documenta o fluxo Review e adiciona skill local dedicada para orientar sua continuação no Hub.
+
+## [1.58.0] - 2026-10-25
+
+- Implementa o passo 4 da Review com pacotes, preços, frete, desconto validado, garantia e modo de uso por fonte.
+
+## [1.57.1] - 2026-10-25
+
+- Revisa o passo 3 contra o modelo: dúvidas explícitas, orientação da narrativa e reconfirmação dos relatos após alterações.
+
+## [1.57.0] - 2026-10-25
+
+- Implementa o passo 3 da Review com relato real, nota editorial por critérios e depoimentos autorizados por oferta.
+
+## [1.56.0] - 2026-10-25
+
+- Corrige os cinco pontos da auditoria de Review com pedidos atualizados, HTML legível, fontes independentes do destino e compatibilidade das análises.
+
+## [1.55.0] - 2026-10-25
+
+- Implementa a análise assistida da Review com fontes selecionadas, pedido estruturado, importação validada, revisão e histórico por oferta.
+
+## [1.54.1] - 2026-10-25
+
+- Exibe o nome capturado da conta sem domínio no cabeçalho da matriz
+
+## [1.54.0] - 2026-10-25
+
+- Associa URLs de pre-sell do Tracking ao Mapa por Conta por produto e conta
+
+## [1.53.0] - 2026-10-25
+
+- Implementa o passo 1 da Review com múltiplos rascunhos, materiais com ou sem VSL, validações e exportação.
+
+## [1.52.0] - 2026-10-25
+
+- Adiciona Review em Criação de ofertas com roteiro de sete passos, prioridades, observações e exportação do plano.
+
+## [1.51.11] - 2026-10-25
+
+- Destaca também o total histórico de contas em risco
+
+## [1.51.10] - 2026-10-25
+
+- Destaca baixo histórico na barra e em teste
+
+## [1.51.9] - 2026-10-25
+
+- Calcula juros acumulados na reserva CDI
+
+## [1.51.8] - 2026-10-25
+
+- Centraliza os indicadores de contas do histórico por produto
+
+## [1.51.7] - 2026-10-25
+
+- Reordena métricas de contas no histórico por produto
+
+## [1.51.6] - 2026-10-25
+
+- Mostra histórico de campanhas e contas ativas no Mapa por Conta
+
+## [1.51.5] - 2026-10-25
+
+- Destaca produtos com uma única conta no Mapa por Conta
+
+## [1.51.4] - 2026-10-25
+
+- Consolida Planejamento e Organização no Meu Tempo
+
+## [1.51.3] - 2026-10-25
+
+- Reconhece a consolidação concluída no Meu Tempo
+
+## [1.51.2] - 2026-10-25
+
+- Consolidação explícita sem diálogo nativo no Meu Tempo
+
+## [1.51.1] - 2026-10-25
+
+- Protege vínculo de campanhas entre MCCs por ID
+
+## [1.51.0] - 2026-10-25
+
+- Backup local do Meu Tempo e consolidação de históricos
+
+## [1.50.2] - 2026-10-25
+
+- Define Hoje como período inicial do Tracking ClickBank
+
+## [1.50.1] - 2026-10-23
+
+- Ajusta espaçamento dos status nos sinais emergentes do Glimpse
+
+## [1.50.0] - 2026-10-23
+
+- Adiciona classificações Review/Cookies às decisões da Top Offers CB
+
+## [1.49.6] - 2026-10-23
+
+- Move o link OBS para uma linha acima da data no Histórico
+
+## [1.49.5] - 2026-10-23
+
+- Centraliza o link OBS acima da coluna correspondente no Histórico
+
+## [1.49.4] - 2026-10-23
+
+- Remove texto auxiliar da Comparação no Histórico do Meu Tempo
+
+## [1.49.3] - 2026-10-23
+
+- Exibe observações do dia no Histórico
+
 ## [1.49.2] - 2026-10-23
 
 - Remove recurso de campanhas ignoradas

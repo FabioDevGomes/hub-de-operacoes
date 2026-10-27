@@ -18,11 +18,14 @@ Esta é a fonte canônica do conhecimento técnico específico do repositório. 
 - **Prioridade protegida: apresentação D0/D−1.** Não remova nem oculte os cartões, métricas por campanha, períodos e indicadores de cobertura sem pedido explícito do usuário. Novas importações ou refatorações devem preservar os dados já observados na data correta, inclusive D0 após D−1-only. Leia o [contrato prioritário](../../../docs/maintenance.md#contrato-prioritário-de-apresentação-dos-períodos-mcc) e rode `tests/overview-d0-after-d1.test.mjs` com a view real montada: testar só os cálculos não protege contra filtros que escondem a informação.
 - Não deduza pausa, suspensão, reprovação, GEO ou entrega pela falta de linha ou por um zero isolado. Use somente evidência explícita da fonte e as regras registradas.
 - Ao criar uma view principal, use `src/view-registry.js` para rota, título, subtítulo e metadados.
-- Use `apply_patch` para edição. Edite fontes canônicas, execute `node build.mjs` e rode toda a suíte.
+- Use `apply_patch` para edição. Durante o desenvolvimento, rode os testes focados do módulo e dos contratos afetados; faça build e suíte completa uma vez na validação final. O fluxo escalonado e a concorrência validada estão em [engineering-workflow.md](references/engineering-workflow.md).
 - Novas implementações devem seguir [Regras para novas implementações e roteiro](../../../docs/maintenance.md#regras-para-novas-implementações). Escolha o responsável antes de editar; preserve recursos/contratos e não acrescente domínio, templates ou listeners de telas extraídas ao HTML principal. Não importe outra view para reutilizar lógica. Atualize mapa e contratos ao modificar a arquitetura.
 - Validação visual deve usar o servidor local já aberto e apenas leitura da base existente; nunca introduza dados sintéticos nela.
+- Antes do build, execute `node --check` em cada arquivo JavaScript alterado para detectar erros de sintaxe: o build copia scripts do navegador, mas não necessariamente os interpreta. Se a Visão Geral ficar em “Carregando base local…”, inspecione primeiro o Console e confirme se os scripts da view carregaram/definiram seus globais; confira também o parâmetro de cache da view. Consulte [Diagnóstico de carregamento travado](references/engineering-workflow.md#diagnóstico-de-carregamento-travado).
 
 ## Roteamento das referências
+
+- Para desenvolver o fluxo local de criação de páginas de Review, revisar os passos no Hub ou converter a skill de referência em um processo por oferta, siga a skill dedicada [Review page workflow](../review-page-workflow/SKILL.md) e seu [mapa da referência e do que foi implementado](../../../docs/review-workflow.md). A tela Review prepara fontes, assets e copy nos passos 1–6 e permite prévia/exportação local de HTML no passo 7; não publica nem garante indexação.
 
 - [Arquitetura e telas](references/architecture.md): estrutura, rotas, fontes canônicas e build.
 - [Padrão visual reutilizável](references/visual-style.md): tema escuro, navegação compacta, cartões, tabelas, responsividade e adoção gradual do piloto da Visão Geral.

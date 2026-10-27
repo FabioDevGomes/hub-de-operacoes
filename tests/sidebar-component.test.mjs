@@ -54,7 +54,7 @@ const operationItems = source.slice(operationStart, trackingStart);
 assert.ok(operationItems.includes("key: 'tested'") && operationItems.indexOf("key: 'tested'") > operationItems.indexOf("key: 'preparer'"), 'Produtos testados deve ficar diretamente após Preparador MCC em Operação');
 assert.ok(!operationItems.includes("key: 'tracking'"), 'Tracking ClickBank não deve permanecer no grupo Operação');
 const trackingItems = source.slice(trackingStart, analysisStart);
-assert.ok(trackingItems.includes("label: 'Tracking'") && trackingItems.includes("key: 'tracking'") && trackingItems.includes("view: 'tracking'") && trackingItems.includes("href: '/?view=tracking'"), 'o grupo Tracking deve manter Tracking ClickBank e sua rota existente');
+assert.ok(trackingItems.includes("label: 'Integrações'") && trackingItems.includes("key: 'tracking'") && trackingItems.includes("view: 'tracking'") && trackingItems.includes("href: '/?view=tracking'"), 'o grupo Integrações deve manter Tracking ClickBank e sua rota existente');
 const financeStart = source.indexOf("{ id: 'finance'");
 assert.ok(source.indexOf("key: 'account-directory'") > source.indexOf("key: 'accounts'"), 'Contas deve aparecer logo após Mapa por conta em Análises');
 const curationStart = source.indexOf("{ id: 'curation'");

@@ -1,4 +1,4 @@
-import { normalizeTrackingClicksReport } from './tracking-clicks-domain.mjs?v=3';
+import { normalizeTrackingClicksReport } from './tracking-clicks-domain.mjs?v=6';
 
 export const TRACKING_CLICKS_DB_NAME = 'hub-tracking-clicks';
 export const TRACKING_CLICKS_DB_VERSION = 1;
@@ -9,7 +9,8 @@ function normalizedReport(report) {
   const endDate = report?.endDate;
   return normalizeTrackingClicksReport({
     ok: true,
-    schema_version: 1,
+    schema_version: 2,
+    platform: report?.platform ?? 'unsegmented',
     generated_at_utc: report?.generatedAtUtc,
     start_date: startDate,
     end_date: endDate,
@@ -17,6 +18,7 @@ function normalizedReport(report) {
     rows: Array.isArray(report?.rows) ? report.rows.map(row => ({
       date_utc: row?.dateUtc,
       product_key: row?.productKey ?? null,
+      product_label: row?.productLabel ?? null,
       presell_host: row?.presellHost ?? null,
       page_views: row?.pageViews,
       outbound_clicks: row?.outboundClicks,
@@ -83,6 +85,7 @@ export async function appendTrackingClicksSnapshot(report, { indexedDBImpl = glo
   const savedAt = typeof now === 'function' ? now() : now;
   if (!(savedAt instanceof Date) || !Number.isFinite(savedAt.getTime())) throw new Error('O horário local da consulta é inválido.');
   const snapshot = {
+    platform: normalized.platform,
     startDate: normalized.startDate,
     endDate: normalized.endDate,
     generatedAtUtc: normalized.generatedAtUtc,

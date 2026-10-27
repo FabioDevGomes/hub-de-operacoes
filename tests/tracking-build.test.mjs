@@ -36,8 +36,8 @@ test('a tela Tracking ClickBank, seus adaptadores e o estilo são publicados pel
   ]);
 
   assert.ok(html.includes('id="trackingView"') && html.includes('id="trackingModuleRoot"'));
-  assert.ok(html.includes('/tracking/tracking.css?v=29'));
-  assert.ok(html.includes("import('./tracking/tracking-view.mjs?v=32')"));
+  assert.ok(html.includes('/tracking/tracking.css?v=36'));
+  assert.ok(html.includes("import('./tracking/tracking-view.mjs?v=40')"));
   assert.ok(html.includes('controller.activate?.()'));
   assert.ok(sourceView.includes('<h2>Tracks</h2>'));
   assert.ok(sourceView.includes('aria-label="Tracks cadastradas"'));
@@ -67,7 +67,7 @@ test('a tela Tracking ClickBank, seus adaptadores e o estilo são publicados pel
   assert.ok(sourceView.includes("tracking-domain-admin.mjs?v=7"));
   assert.ok(sourceView.includes('title="Consulta no servidor a lista autorizada de Tracks (domínios e produtos), atualiza a tabela e o cache local. Não cadastra nem altera domínios."'));
   assert.ok(sourceView.includes("tracking-domain-list-storage.mjs?v=3"));
-  assert.ok(sourceView.includes("tracking-clicks-domain.mjs?v=3"));
+  assert.ok(sourceView.includes("tracking-clicks-domain.mjs?v=5"));
   assert.ok(sourceView.includes("tracking-clicks-storage.mjs?v=1"));
   assert.ok(sourceView.includes("tracking-sales-domain.mjs?v=1"));
   assert.ok(sourceView.includes("tracking-sales-storage.mjs?v=1"));
@@ -107,9 +107,11 @@ test('a tela Tracking ClickBank, seus adaptadores e o estilo são publicados pel
   assert.match(sourceCss, /\.tracking-domain-form\s*\{[^}]*align-items:\s*start;/);
   assert.match(sourceCss, /@media\s*\(min-width:\s*901px\)\s*\{\s*\.tracking-domain-form\s*>\s*\.tracking-remember-token,\s*\.tracking-domain-form\s*>\s*\.tracking-domain-actions\s*\{\s*align-self:\s*end;/);
   assert.ok(sourceCss.includes('.tracking-tag-dialog-backdrop'));
+  assert.match(sourceCss, /\.tracking-tag-dialog textarea,\s*\.tracking-email-config-body \.tracking-token-field textarea\s*\{[^}]*background: var\(--panel2, #13243a\);[^}]*color: var\(--hub-primary-text, #c3cede\);/);
+  assert.match(sourceCss, /\.tracking-tag-dialog textarea:focus-visible,\s*\.tracking-email-config-body \.tracking-token-field textarea:focus-visible\s*\{[^}]*outline: 2px solid var\(--hub-control-focus, #5ab1ff\);/);
   assert.ok(sourceCss.includes('.tracking-email-config-body[hidden] { display: none; }'));
   assert.ok(sourceCss.includes('.tracking-email-panel .tracking-email-heading { align-items: center; }'));
-  assert.match(sourceCss, /\.tracking-clicks-date-range\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(180px,\s*230px\)\);\s*max-width:\s*474px;/);
+  assert.match(sourceCss, /\.tracking-clicks-date-range\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(180px,\s*230px\)\)\s+minmax\(160px,\s*190px\);\s*max-width:\s*668px;/);
   assert.ok(sourceCss.includes('.tracking-ins-v8-table th:nth-child(n+6):nth-child(-n+9)') && sourceCss.includes('.tracking-ins-v8-table td:nth-child(n+6):nth-child(-n+9) { text-align: center; }'), 'Comissão total, Total bruto, Origem GCLID e Conciliação centralizam cabeçalhos e células somente na tabela INS v8');
   const introHeader = sourceView.match(/<div class="tracking-intro-head">([\s\S]*?)<div id="trackingConnectionConfig" class="tracking-connection-config"/);
   assert.ok(introHeader && introHeader[1].includes('data-tracking-action="toggle-connection-config"'), 'o cabeçalho oferece o controle para exibir/recolher configurações');

@@ -7,7 +7,7 @@ import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as DecisionUI from './clickbank-top-offers-decision.mjs?v=1';
+import * as DecisionUI from './clickbank-top-offers-decision.mjs?v=2';
 import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
 import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
 import {BRAND_BIDDING_TYPES,brandBiddingLabel} from './brand-bidding.mjs?v=1';
@@ -177,6 +177,11 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       <td class="page-type-cell">${escape(pageTypeText(item))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
       <td class="number ${movementClass(item)}" title="${escape(selected?.all ? item.movement==='new'?'Primeira e única aparição desta oferta no histórico salvo; não indica lançamento recente.':`Duas últimas aparições: #${item.priorRank} em ${dateTime(item.priorObservedAt)} → #${item.rank} em ${dateTime(item.observedAt)}. Última posição observada; recortes posteriores não indicam saída.` : item.movement==='new'?'Primeira aparição desta oferta no histórico até esta captura.':item.movement==='uncompared'?'Oferta já observada no histórico; sem posição na captura anterior comparável.':'Variação de posição em relação à captura anterior comparável.')}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
+    const pageClassifications=new Map(state.decisions.map(record=>[record.offerKey,record.pageClassification]));
+    for(const button of $$($('#rows',root),'[data-decision-key]')){
+      const label=DecisionUI.pageClassificationLabel(pageClassifications.get(button.dataset.decisionKey));
+      if(label)button.textContent=button.textContent+' · '+label;
+    }
     columns.apply();
     $('#empty',root).classList.toggle('hidden',offers.length>0);
     $('#empty',root).textContent=selected?'Nenhuma oferta corresponde aos filtros.':'Cole a primeira captura Top Offers da ClickBank para começar.';
@@ -361,7 +366,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       return;
     }
     const decisionButton=event.target.closest('[data-decision-key]');
-    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',onSelect:(status,notes)=>actions.saveDecision(item.offerKey,status,notes)});return;}
+    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',allowPageClassification:true,pageClassification:current.pageClassification,onSelect:(status,notes,pageClassification)=>actions.saveDecision(item.offerKey,status,notes,pageClassification)});return;}
     const button=event.target.closest('[data-action]');if(!button)return;const item=selectedCapture()?.offers.find(offer=>offer.offerKey===button.dataset.key);if(item)openSheet(item,button.dataset.action);
   });
   $('#openTrends',root).onclick=()=>actions.openTrends($('#trendsTerm',root).value.trim()||activeOffer()?.offerName||'');

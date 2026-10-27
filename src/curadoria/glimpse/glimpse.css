@@ -49,3 +49,4 @@ html.reference-presentation:not(.embedded) .people-also-search-item{padding:6px 
 .standalone-bar .glimpse-host-saved{color:#83e5bb;font-size:.72rem;font-weight:400;white-space:nowrap}
 .standalone-bar .glimpse-host-saved[hidden]{display:none!important}
 @media(max-width:560px){.standalone-bar{flex-wrap:wrap}.standalone-bar .hero-actions{margin-left:auto}}
+.stack-row>div>small{margin-inline-start:.4rem}

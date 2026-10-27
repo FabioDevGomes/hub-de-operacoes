@@ -1,4 +1,4 @@
-export const TRACKING_EMAIL_CONFIG_FILE = 'clickbank-email-config.php';
+export const TRACKING_EMAIL_CONFIG_FILE = 'tracking-email-config.php';
 
 function normalizeEmail(value, field) {
   const email = String(value ?? '').trim();

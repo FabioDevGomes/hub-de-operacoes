@@ -1,4 +1,4 @@
-import { normalizeTrackingDomainInput, normalizeTrackingProductKey } from './tracking-domain-admin.mjs?v=7';
+import { normalizeTrackingDomainInput, normalizeTrackingProductKey } from './tracking-domain-admin.mjs?v=11';
 
 export const TRACKING_SALES_PAGE_SIZE = 200;
 export const TRACKING_SALES_MAX_SYNC_PAGES = 250;

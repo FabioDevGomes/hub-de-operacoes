@@ -18,7 +18,7 @@ function setup(rows,preferences,actionOverrides={}){
   const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active',rate:5.1234,exchangeRateQuote:{rate:5.1234,status:'ok',isStale:false,isFallback:false,quoteDate:'2026-10-13'}};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,pausedTodayCampaigns:[],pausedTodayDate:'2026-09-30',referenceDate:'2026-09-30',
-    manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:{ecom:{timestamp:'2026-10-05T17:57:00Z',source:'import'},nutra:{timestamp:'2026-10-05T18:40:00Z',source:'import'}},pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
+    manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:[{id:'111-111-1111',name:'MCC E-com',timestamp:'2026-10-05T17:57:00Z',source:'import'},{id:'222-222-2222',name:'MCC Nutra',timestamp:'2026-10-05T18:40:00Z',source:'import'}],pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
     dates:{d0:'2026-09-30',d1:'2026-09-29'},d1Totals:[{investment:0,impressions:10,clicks:null},{investment:null,impressions:0,clicks:2}]};
   const controller=view.mount({root:dom.root,state,getSnapshot:()=>snapshot,domain,format,preferences,
     actions:{showProduct:(...args)=>calls.push(['product',...args]),editMinimumRoi:(...args)=>calls.push(['roi',...args]),confirmFractionalValue:(...args)=>calls.push(['fractional',...args]),refreshExchangeRate:()=>calls.push(['refresh-rate']),getDuplicateCampaignGroups:()=>({groups:[],unverifiableCount:0}),...actionOverrides}});
@@ -52,6 +52,18 @@ test('overview dims observed zero metrics only, including totals, without dimmin
   assert.match(otherRow,/data-column="conv" class="num">—<\/td>/,'ausência não recebe o estilo de zero');
   assert.doesNotMatch(other.get('#totalsFoot').innerHTML,/data-column="imp" class="num overview-zero-value"/);
   assert.doesNotMatch(other.get('#totalsFoot').innerHTML,/data-column="conv" class="num overview-zero-value"/);
+});
+test('API current qualification is explicit without declaring campaign rejection from a partial reason',()=>{
+  const current=row('API atual','ativa',10);
+  current.c.google_ads_current_configuration={qualificationLabel:'Não qualificada',primaryStatus:'NOT_ELIGIBLE',primaryStatusReasons:['NO_AD_GROUPS']};
+  const s=setup([current]),before=JSON.stringify(current);s.controller.render();
+  assert.match(s.get('#totalsBody').innerHTML,/Ativa · Não qualificada/);
+  assert.doesNotMatch(s.get('#totalsBody').innerHTML,/Ativa · Reprovada/);
+  const removed=row('API removida','pausada',0);removed.c.google_ads_current_configuration={campaignStatus:'REMOVED',qualificationLabel:'Removida'};const removedView=setup([removed]);removedView.controller.render();assert.match(removedView.get('#totalsBody').innerHTML,/Removida/);
+  current.c.google_ads_current_configuration.qualificationLabel='Qualificada · <script>';
+  s.controller.render();
+  assert.match(s.get('#totalsBody').innerHTML,/Qualificada · &lt;script&gt;/);
+  assert.equal(JSON.stringify({...current,c:{...current.c,google_ads_current_configuration:{qualificationLabel:'Não qualificada',primaryStatus:'NOT_ELIGIBLE',primaryStatusReasons:['NO_AD_GROUPS']}}}),before,'a renderização não regrava a campanha');
 });
 test('corner test-limit links follow ROI/commission presence, column visibility and period rerenders without mutation',()=>{
   const budget={limit:200,remaining:190,revenue:240,commissionBrl:100,minimumRoi:20,commissionTestPercent:65,cpaMinimumPercent:80};
@@ -295,7 +307,7 @@ test('overview KPIs cover all rows in every period, filters affect only table',(
     assert.match(kpis,/BRL 100.00/);assert.match(kpis,/BRL 0.00/);assert.doesNotMatch(kpis,/class="kpi-info"|kpi-info-icon|Cliques 1\/2/);
     assert.equal((kpis.match(/class="kpi overview-kpi/g)||[]).length,6,'os seis cartões devem manter a mesma composição');
     const manifestCard=kpis.match(/<section class="kpi overview-kpi overview-kpi-manifest"[\s\S]*?<\/section>/)?.[0],provisionalCard=kpis.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)?.[0];
-    assert.match(manifestCard,/Manifesto MCC[\s\S]*kpi-value">10:25<\/strong>[\s\S]*Última captura[\s\S]*Ecom: 05\/10, 14:57[\s\S]*Nutra: 05\/10, 15:40/);
+    assert.match(manifestCard,/Manifesto MCC[\s\S]*kpi-value">10:25<\/strong>[\s\S]*Última captura[\s\S]*MCC E-com: 05\/10, 14:57[\s\S]*MCC Nutra: 05\/10, 15:40/);
     assert.doesNotMatch(manifestCard,/D−1|D0/,'datas dos períodos não ficam mais no cartão Manifesto MCC');
     assert.match(provisionalCard,/D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/,'datas D−1 e D0 ficam no cartão de Vendas provisórias');
     assert.doesNotMatch(provisionalCard,/MCC Ecom|MCC Nutra/,'horários individuais das MCCs ficam no cartão Manifesto MCC');
@@ -319,17 +331,17 @@ test('overview removes the campaign-count badge from the table header while keep
 test('overview puts D−1/D0 dates with provisional sales and compact MCC timestamps in the manifest card',async()=>{
   const s=setup([]);s.controller.render();
   const html=s.get('#kpis').innerHTML,manifest=html.match(/<section class="kpi overview-kpi overview-kpi-manifest"[\s\S]*?<\/section>/)?.[0],provisional=html.match(/<section class="kpi overview-kpi overview-kpi-base"[\s\S]*?<\/section>/)?.[0];
-  assert.match(manifest,/class="overview-kpi-mcc-updates" aria-label="Últimas atualizações das MCCs"><span aria-label="MCC Ecom: 05\/10, 14:57" title="Horário da última importação desta MCC\.">Ecom: 05\/10, 14:57<\/span><span aria-label="MCC Nutra: 05\/10, 15:40" title="Horário da última importação desta MCC\.">Nutra: 05\/10, 15:40<\/span>/);
+  assert.match(manifest,/class="overview-kpi-mcc-updates" aria-label="Últimas atualizações das MCCs cadastradas"><span aria-label="MCC E-com: 05\/10, 14:57" title="Horário da última importação desta MCC\.">MCC E-com: 05\/10, 14:57<\/span><span aria-label="MCC Nutra: 05\/10, 15:40" title="Horário da última importação desta MCC\.">MCC Nutra: 05\/10, 15:40<\/span>/);
   assert.doesNotMatch(manifest,/MCC (?:Ecom|Nutra): [^<]*2026|MCC (?:Ecom|Nutra): [^<]*captura/,'linha visível não inclui ano nem o sufixo captura');
   assert.match(provisional,/overview-kpi-dates" aria-label="Datas D−1 e D0">[\s\S]*D−1[\s\S]*29\/09\/2026[\s\S]*D0[\s\S]*30\/09\/2026/);
   const css=await readFile(new URL('../src/overview/overview.css',import.meta.url),'utf8');
   const rule=css.match(/#totalsView \.overview-kpi-mcc-updates\{([^}]+)\}/)?.[1];
   assert.match(rule,/display:flex/);
-  assert.match(rule,/flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center/);
-  assert.match(rule,/white-space:nowrap/);
-  assert.match(rule,/font-size:\.65rem/,'rótulos Ecom e Nutra compactos liberam espaço para os horários sem reduzir a legibilidade');
-  assert.match(css, /overview-kpi-mcc-updates span\{flex:0 0 auto;white-space:nowrap\}/);
-  assert.match(css,/overview-kpi-mcc-updates span\+span::before\{[^}]*content:"·"/,'Ecom e Nutra ficam na mesma linha e separados visualmente');
+  assert.match(rule,/flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:center/);
+  assert.match(rule,/white-space:normal/);
+  assert.match(rule,/font-size:\.65rem/,'nomes cadastrados podem ocupar mais espaço e quebram linha no cartão');
+  assert.match(css, /overview-kpi-mcc-updates span\{flex:0 1 auto;max-width:100%;overflow-wrap:anywhere;text-align:center;white-space:normal\}/);
+  assert.match(css,/overview-kpi-mcc-updates span\+span::before\{[^}]*content:"·"/,'nomes continuam separados visualmente');
   assert.match(css,/grid-template-columns:repeat\(5,minmax\(0,1fr\)\) minmax\(235px,1fr\)/,'o cartão da base reserva espaço para exibir a linha sem cortar texto');
   s.snapshot.baseRecordCount=0;s.controller.render();
   assert.doesNotMatch(s.get('#kpis').innerHTML,/Base: 0 registros/);
@@ -415,8 +427,8 @@ test('overview keeps a permanent information icon and distinguishes fractional s
   assert.match(kpis,/class="kpi-label">Venda fracionária,?<\/span>[\s\S]*<strong class="kpi-value">1<\/strong>[\s\S]*1 com valor real a confirmar/);
   s.snapshot.fractionalSaleCount=0;s.controller.render();kpis=s.get('#kpis').innerHTML;
   assert.match(kpis,/class="kpi-label">Vendas provisórias,?<\/span>[\s\S]*<strong class="kpi-value">0<\/strong>/);assert.match(kpis,/class="dot overview-kpi-pending-dot"/,'sem pendências o ponto deve ficar verde');assert.match(kpis,/overview-info-icon/);
-  s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.snapshot.mccImportUpdates={};s.controller.render();kpis=s.get('#kpis').innerHTML;
-  assert.match(kpis,/MCC Ecom: Sem registro[\s\S]*MCC Nutra: Sem registro/);
+  s.snapshot.baseRecordCount=null;s.snapshot.baseUpdatedLabel='';s.snapshot.mccImportUpdates=[];s.controller.render();kpis=s.get('#kpis').innerHTML;
+  assert.match(kpis,/Nenhuma MCC cadastrada/);
   assert.doesNotMatch(kpis,/Histórico não carregado|Atualização indisponível/);
 });
 test('fractional value link opens a compact per-product confirmation dialog and submits only the selected row',async()=>{

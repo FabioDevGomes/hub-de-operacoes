@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hub 2.0</title>
+  <style>
+    :root { color-scheme: dark; font: 14px/1.45 system-ui, sans-serif; }
+    body { box-sizing: border-box; width: 460px; max-height: 680px; overflow: auto; margin: 0; padding: 18px; background: #091426; color: #e8f0ff; }
+    h1 { margin: 0 0 6px; font-size: 17px; }
+    h2 { margin: 0 0 5px; font-size: 14px; }
+    p { margin: 0 0 14px; color: #a9bbd5; }
+    label { display: block; margin-bottom: 14px; font-weight: 600; }
+    input { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; color: #dce8ff; font: inherit; }
+    button { display: inline-flex; align-items: center; justify-content: center; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: #21c79a; color: #061327; font: inherit; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #18314e; color: #e8f0ff; border: 1px solid #294764; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .status { min-height: 20px; margin: 10px 0 0; font-size: 12px; }
+    .status.error { padding: 12px; border: 1px solid #f87171; border-left: 4px solid #f87171; border-radius: 8px; background: #321923; color: #fecaca; overflow-wrap: anywhere; }
+    .status.error strong { display: block; color: #fca5a5; font-size: 13px; }
+    .status.error p { margin: 8px 0 0; color: inherit; white-space: pre-line; }
+    .status.error ul { margin: 8px 0 12px; padding-left: 18px; }
+    .status.error li + li { margin-top: 6px; }
+    section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
+    .note { font-size: 12px; }
+    .vsl-speeds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .vsl-speeds button { padding: 10px 0; }
+    .clickbank-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .clickbank-actions button { min-height: 33px; }
+    #clickbank-status:empty, #dtc-countries-status:empty { display: none; }
+    button.compact-action { min-width: 0; padding: 8px 5px; font-size: 12px; line-height: 1.25; white-space: nowrap; }
+    .vsl-speeds button[aria-pressed="true"] { background: #38bdf8; color: #061327; border-color: transparent; }
+    button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+    #clickbank-manual { margin-top: 12px; }
+    #clickbank-text { box-sizing: border-box; width: 100%; min-height: 140px; padding: 8px; border: 1px solid #294764; border-radius: 8px; background: #101e32; color: #e8f0ff; font: 12px/1.4 monospace; }
+    .asset-capture-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .asset-capture-actions button { min-height:36px; font-size:12px; }
+    #capture-asset-favicon { grid-column:1 / -1; }
+    #asset-capture-status:empty { display:none; }
+  </style>
+  <link rel="stylesheet" href="white-button.css">
+</head>
+<body>
+  <h1>Hub 2.0</h1>
+  <p>Ferramentas locais para ClickBank, VSL e assets.</p>
+  <section aria-labelledby="vsl-title">
+    <h2 id="vsl-title">Velocidade da VSL</h2>
+    <div class="vsl-speeds" role="group" aria-label="Velocidade da VSL">
+      <button id="vsl-speed-1" type="button" class="secondary" aria-pressed="false">1×</button>
+      <button id="vsl-speed-10" type="button" class="secondary" aria-pressed="false">10×</button>
+      <button id="vsl-speed-20" type="button" class="secondary" aria-pressed="false">20×</button>
+      <button id="vsl-speed-30" type="button" class="secondary" aria-pressed="false">30×</button>
+    </div>
+    <div id="vsl-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <p class="note" style="margin-bottom:0">Vídeo principal HTML5 ou VTurb. O áudio em 10× depende do navegador. Não baixa a VSL nem altera a base do Hub.</p>
+  </section>
+  <section aria-labelledby="clickbank-title">
+    <h2 id="clickbank-title">Produtos ClickBank</h2>
+    <div class="clickbank-actions" role="group" aria-label="Ações ClickBank">
+      <button id="capture-clickbank" class="compact-action btn hub-white-button" type="button">Capturar produtos ClickBank</button>
+      <button id="restore-clickbank" class="secondary compact-action" type="button">Restaurar tamanho da tabela</button>
+      <button id="capture-dtc-countries" class="secondary compact-action" type="button">Capturar países comuns da DTC</button>
+    </div>
+    <div id="clickbank-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="dtc-countries-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="clickbank-manual" hidden>
+      <label for="clickbank-text">Texto para cópia manual (confira o aviso de completude acima)</label>
+      <textarea id="clickbank-text" readonly spellcheck="false"></textarea>
+    </div>
+  </section>
+  <section aria-labelledby="asset-capture-title">
+    <h2 id="asset-capture-title">Captura de assets</h2>
+    <p class="note">Captura a área visível da aba atual e envia direto ao Asset Studio local. Para Mobile, ative antes o modo responsivo no F12.</p>
+    <div class="asset-capture-actions" role="group" aria-label="Captura de assets para o Asset Studio">
+      <button id="capture-asset-desktop" class="secondary" type="button">Capturar Desktop</button>
+      <button id="capture-asset-mobile" class="secondary" type="button">Capturar Mobile</button>
+      <button id="capture-asset-favicon" class="secondary" type="button">Importar favicon desta página</button>
+    </div>
+    <div id="asset-capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  </section>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -235,6 +235,22 @@
 .tracking-gurumedia-postback-panel .tracking-table-heading { margin: 0; }
 .tracking-gurumedia-token-grid { margin: 0; }
 .tracking-gurumedia-macro-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+.tracking-gurumedia-postback-check {
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid rgba(157, 178, 205, .2);
+  border-radius: 9px;
+  background: rgba(19, 36, 58, .52);
+}
+.tracking-gurumedia-postback-check h3 { margin: 0 0 4px; color: var(--hub-primary-text, #c3cede); font-size: .88rem; }
+.tracking-gurumedia-postback-check p { margin: 0; }
+.tracking-gurumedia-postback-check ul { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding-left: 18px; color: var(--muted, #91a1b8); font-size: .73rem; }
+.tracking-gurumedia-postback-check li.is-ok,
+.tracking-gurumedia-postback-check .is-ok { color: #77d8a2; }
+.tracking-gurumedia-postback-check li.is-error,
+.tracking-gurumedia-postback-check .is-error { color: #ffbf67; }
+.tracking-gurumedia-check-status { font-size: .78rem; font-weight: 650; }
 .tracking-gurumedia-postback-panel textarea {
   width: 100%;
   min-height: 72px;

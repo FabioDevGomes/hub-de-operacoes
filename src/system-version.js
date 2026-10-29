@@ -87,16 +87,29 @@
         detail.className = 'hub-update-notice__detail';
         copy.append(title, detail);
 
-        const update = document.createElement('button');
-        update.className = 'hub-update-notice__action';
-        update.type = 'button';
-        update.addEventListener('click', () => {
+        const actions = document.createElement('div');
+        actions.className = 'hub-update-notice__actions';
+
+        const updateCurrent = document.createElement('button');
+        updateCurrent.className = 'hub-update-notice__action hub-update-notice__action--current';
+        updateCurrent.type = 'button';
+        updateCurrent.addEventListener('click', () => {
+          updateCurrent.disabled = true;
+          updateCurrent.textContent = 'Atualizando esta tela…';
+          window.location.reload();
+        });
+
+        const updateAll = document.createElement('button');
+        updateAll.className = 'hub-update-notice__action hub-update-notice__action--all';
+        updateAll.type = 'button';
+        updateAll.addEventListener('click', () => {
           const confirmedVersion = confirmUpdateForAllTabs(noticeVersion);
           if (!confirmedVersion) return;
-          update.disabled = true;
-          update.textContent = 'Atualizando todas as telas…';
+          updateAll.disabled = true;
+          updateAll.textContent = 'Atualizando todas…';
           reloadForConfirmedUpdate(confirmedVersion, {retry: true});
         });
+        actions.append(updateCurrent, updateAll);
 
         const dismiss = document.createElement('button');
         dismiss.className = 'hub-update-notice__dismiss';
@@ -109,15 +122,18 @@
           notice?.remove();
           notice = null;
         });
-        notice.append(copy, update, dismiss);
+        notice.append(copy, actions, dismiss);
         document.body.append(notice);
       }
       noticeVersion = nextVersion;
       notice.querySelector('.hub-update-notice__title').textContent = `Nova versão v${nextVersion} disponível`;
-      notice.querySelector('.hub-update-notice__detail').textContent = `Esta tela está na v${version}. Atualize para carregar a versão nova.`;
-      const update = notice.querySelector('.hub-update-notice__action');
-      update.disabled = false;
-      update.textContent = 'Atualizar agora';
+      notice.querySelector('.hub-update-notice__detail').textContent = `Esta tela está na v${version}. Escolha atualizar somente esta tela ou todas as telas abertas.`;
+      const updateCurrent = notice.querySelector('.hub-update-notice__action--current');
+      updateCurrent.disabled = false;
+      updateCurrent.textContent = 'Atualizar somente esta tela';
+      const updateAll = notice.querySelector('.hub-update-notice__action--all');
+      updateAll.disabled = false;
+      updateAll.textContent = 'Atualizar todas as telas';
     };
     let updateChannel = null;
     try {

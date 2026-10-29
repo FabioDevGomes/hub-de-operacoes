@@ -8,7 +8,9 @@ param(
     [string]$FichaJson,
 
     [Parameter(Mandatory = $true)]
-    [string]$TemplateRoot
+    [string]$TemplateRoot,
+
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,6 +44,22 @@ function Get-FichaValue {
 function Encode-Html {
     param([string]$Value)
     return [System.Net.WebUtility]::HtmlEncode($Value)
+}
+
+function Test-TrackingProductBinding {
+    param([object]$Tracking, [string]$Product, [string]$ProductLabel, [string]$ProductKey)
+    $expectedKey = [regex]::Replace($ProductLabel.Trim().ToLowerInvariant(), '[\s-]+', '-')
+    $accountId = [string]$Tracking.accountId
+    if ([string]::IsNullOrWhiteSpace($accountId)) {
+        return $ProductLabel -ceq $Product -and $ProductKey -ceq $expectedKey
+    }
+    $productName = [string]$Tracking.productName
+    if ($accountId -notmatch '^\d{10}$' -or $productName -cne $Product) { return $false }
+    $characters = $Product.ToCharArray()
+    if ($characters.Length -eq 0) { return $false }
+    $characters[0] = [char]::ToUpperInvariant($characters[0])
+    $expectedLabel = ([string]::Join('', $characters)) + ' - conta ' + $accountId.Substring(6, 4)
+    return $ProductLabel -ceq $expectedLabel -and $ProductKey -ceq $expectedKey
 }
 
 function Read-Ficha {
@@ -138,6 +156,30 @@ $affiliateUri = $null
 if (-not [Uri]::TryCreate((Get-FichaValue $ficha 'affiliateUrl'), [UriKind]::Absolute, [ref]$affiliateUri) -or $affiliateUri.Scheme -notin @('http', 'https')) {
     throw 'URL de afiliação inválida.'
 }
+$trackingEnabled = $false
+$trackingScript = ''
+$trackingProperty = $ficha.PSObject.Properties['tracking']
+$tracking = if ($null -ne $trackingProperty) { $trackingProperty.Value } else { $null }
+if ($null -ne $tracking -and [bool]$tracking.enabled) {
+    $trackingHostname = [string]$tracking.hostname
+    $trackingProductKey = [string]$tracking.productKey
+    $trackingProductLabel = [string]$tracking.productLabel
+    $trackingPlatform = [string]$tracking.platform
+    $hostPattern = '^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
+    $productKeyPattern = '^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$'
+    $allowedPlatforms = @($rules.tracking.allowedPlatforms)
+    if ($trackingHostname -cnotmatch $hostPattern) { throw 'Domínio de tracking inválido na ficha.' }
+    if ($trackingProductKey -cnotmatch $productKeyPattern -or $trackingProductKey.Contains('..')) { throw 'Chave de produto do tracking inválida na ficha.' }
+    if (-not (Test-TrackingProductBinding $tracking (Get-FichaValue $ficha 'product') $trackingProductLabel $trackingProductKey)) { throw 'A chave da Track não corresponde ao produto e à conta da ficha.' }
+    if ($trackingPlatform -cnotin $allowedPlatforms) { throw 'Plataforma de tracking não permitida nas regras da Pre-Sell.' }
+    $scriptUrl = [string]$rules.tracking.scriptUrl
+    $collectorUrl = [string]$rules.tracking.collectorUrl
+    if ($scriptUrl -notmatch '^https://[^/]+/[^\s]+$' -or $collectorUrl -notmatch '^https://[^/]+/[^\s]+$') {
+        throw 'URLs do script de tracking inválidas nas regras da Pre-Sell.'
+    }
+    $trackingEnabled = $true
+    $trackingScript = '<script src="' + $scriptUrl + '" data-endpoint="' + $collectorUrl + '" data-product-key="' + $trackingProductKey + '" data-presell-host="' + $trackingHostname + '" async></script>'
+}
 
 if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
     throw "Diretório de destino não encontrado: $Destination"
@@ -218,7 +260,9 @@ $headMatch = [regex]::Match($indexOutput, '(?is)<head\b[^>]*>')
 if (-not $headMatch.Success) {
     throw 'O template HTML precisa conter <head> para declarar a codificação UTF-8.'
 }
-$indexOutput = $indexOutput.Insert($headMatch.Index + $headMatch.Length, "`r`n    <meta charset=`"UTF-8`">")
+$headContent = "`r`n    <meta charset=`"UTF-8`">"
+if ($trackingEnabled) { $headContent += "`r`n    $trackingScript" }
+$indexOutput = $indexOutput.Insert($headMatch.Index + $headMatch.Length, $headContent)
 
 $stylesTemplate = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'styles.css'), [System.Text.Encoding]::UTF8)
 $stylesTemplate = Convert-TemplateIdentifiers $stylesTemplate
@@ -300,6 +344,11 @@ $scriptsOutput = if ([string]::IsNullOrWhiteSpace($scriptWithoutComments)) {
         throw 'O scripts.js do template contém conteúdo proibido.'
     }
     $scriptsTemplate
+}
+
+if ($ValidateOnly) {
+    [PSCustomObject]@{ module='presell-producer'; ready=$true; trackingIncluded=$trackingEnabled } | ConvertTo-Json -Compress
+    return
 }
 
 $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('presell-' + [Guid]::NewGuid().ToString('N'))

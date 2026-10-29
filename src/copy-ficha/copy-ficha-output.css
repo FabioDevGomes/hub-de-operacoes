@@ -5,9 +5,10 @@
 .copy-ficha-output-empty{margin:0;padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:.82rem}
 .copy-ficha-price-field .copy-ficha-input{padding:6px 10px}
 .copy-ficha-price-field .copy-ficha-note{font-size:.7rem;line-height:1.4}
-.copy-ficha-questions{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px}
-.copy-ficha-questions>.copy-ficha-note{margin:0 0 12px}
-.copy-ficha-questions .copy-ficha-output-heading{justify-content:space-between}
+.copy-ficha-questions{grid-column:1/-1}
+.copy-ficha-questions-card>header{flex-wrap:wrap}
+.copy-ficha-questions-card>header>button{flex:0 0 auto}
+.copy-ficha-questions-card .copy-ficha-actions{margin-top:0;margin-bottom:12px}
 .copy-ficha-question-list{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .copy-ficha-question{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:8.8px 14px;border-bottom:1px solid var(--line);background:rgba(4,15,28,.42);font-size:.8rem;line-height:1.5}
 .copy-ficha-question:last-child{border-bottom:0}
@@ -17,8 +18,9 @@
 .copy-ficha-question .copy-ficha-answer-input{display:block;box-sizing:border-box;width:100%;min-height:32px;resize:none;overflow:hidden;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:rgba(4,15,28,.35);color:inherit;font:inherit;line-height:1.5}
 .copy-ficha-answer-input:hover{border-color:#42617c}
 .copy-ficha-answer-input:focus-visible{outline:2px solid #5fd5c7;outline-offset:1px}
-.copy-ficha-questions button:disabled{opacity:.45;cursor:default}
+.copy-ficha-questions-card #copyQuestionsCopy:disabled{opacity:.45;cursor:default}
 .copy-ficha-presell-report{margin-top:12px}
 .copy-ficha-presell-report h4{margin:0 0 7px;font-size:.78rem;color:#c9d9ed}
 .copy-ficha-output.ficha>.presell-message{margin:12px 0}
-@media(max-width:620px){.copy-ficha-question{grid-template-columns:minmax(0,1fr);gap:4px;padding:8px 12px}.copy-ficha-questions .copy-ficha-output-heading button{max-width:100%;white-space:normal}}
+@media(max-width:620px){.copy-ficha-question{grid-template-columns:minmax(0,1fr);gap:4px;padding:8px 12px}.copy-ficha-questions-card>header>button{max-width:100%;white-space:normal}}
+.copy-ficha-presell-report .presell-result-summary.is-compact{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

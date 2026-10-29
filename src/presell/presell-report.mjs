@@ -43,7 +43,7 @@ export function reportHtml(report){
       :overall==='PASS'
         ?'Todas as verificações foram concluídas sem bloqueios.'
         :'Não foi possível identificar um resultado de validação.';
-  const phaseHtml=phases.map(phase=>{
+  const phaseHtml=overall==='PASS'?'':phases.map(phase=>{
     const checks=phase.report?.checks||[];
     const attention=checks.filter(check=>check.status!=='PASS');
     const passed=checks.filter(check=>check.status==='PASS');
@@ -51,5 +51,8 @@ export function reportHtml(report){
     const passedHtml=passed.length?`<details class="presell-passed"><summary>Ver ${passed.length} verificação(ões) aprovada(s)</summary><ul>${passed.map(check=>renderCheck(check,phase.name)).join('')}</ul></details>`:'';
     return `<section class="presell-phase"><h4>${escapeHtml(phaseLabels[phase.name]||phase.name)} <span>${checks.length} verificação(ões)</span></h4>${attentionHtml}${passedHtml||(!checks.length?'<p>Nenhum detalhe retornado.</p>':'')}</section>`;
   }).join('');
-  return `<div class="presell-result ${overall==='BLOCKED'?'is-error':overall==='PASS'?'is-pass':'is-warn'}"><div class="presell-result-summary"><strong>${overall==='BLOCKED'?'BLOQUEADO':overall==='PASS'?'APROVADO':overall==='PASS_WITH_WARNINGS'?'APROVADO COM AVISOS':escapeHtml(overall)}</strong><p>${escapeHtml(summary)} <span>${checkCount} verificação(ões) no total.</span></p></div>${phaseHtml||'<p>Nenhum detalhe retornado.</p>'}</div>`;
+  const summaryHtml=overall==='PASS'
+    ?`<div class="presell-result-summary is-compact"><strong>APROVADO</strong><span>${checkCount} verificação(ões) concluídas sem bloqueios.</span></div>`
+    :`<div class="presell-result-summary"><strong>${overall==='BLOCKED'?'BLOQUEADO':overall==='PASS_WITH_WARNINGS'?'APROVADO COM AVISOS':escapeHtml(overall)}</strong><p>${escapeHtml(summary)} <span>${checkCount} verificação(ões) no total.</span></p></div>`;
+  return `<div class="presell-result ${overall==='BLOCKED'?'is-error':overall==='PASS'?'is-pass':'is-warn'}">${summaryHtml}${phaseHtml|| (overall==='PASS'?'':'<p>Nenhum detalhe retornado.</p>')}</div>`;
 }

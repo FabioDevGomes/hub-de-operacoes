@@ -1,13 +1,16 @@
 import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=8';
 import {createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=5';
+import {validateAccountDirectoryRows} from './accounts-list-api-validation.mjs?v=1';
+import {GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT} from '../google-ads/google-ads-accounts-directory-service.mjs?v=1';
+import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=2';
 
 export const ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY = 'hub:account-directory:column-widths:v1';
-const accountColumns = ['account','email','paymentProfile','mcc','startDate','creationDate','impressions','clicks','campaignCount','conversions','status','edit'];
-const accountSortableColumns = accountColumns.filter(key=>key !== 'edit');
+const accountColumns = ['account','email','paymentProfile','mcc','apiValidation','startDate','creationDate','impressions','clicks','campaignCount','conversions','status','edit'];
+const accountSortableColumns = accountColumns.filter(key=>!['edit','apiValidation'].includes(key));
 const previousAccountColumns = ['account','email','paymentProfile','mcc','startDate','status'];
-const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',startDate:'Data de início',creationDate:'Data de criação',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',conversions:'Conversões totais',status:'Status',edit:'Editar'};
-const accountColumnMinimums = {account:132,email:150,paymentProfile:120,mcc:144,startDate:124,creationDate:124,impressions:92,clicks:84,campaignCount:112,conversions:96,status:136,edit:104};
-const accountColumnDefaults = {account:132,email:150,paymentProfile:190,mcc:144,startDate:124,creationDate:136,impressions:150,clicks:130,campaignCount:158,conversions:154,status:136,edit:104};
+const accountColumnLabels = {account:'Conta',email:'E-mail',paymentProfile:'ID de perfil de pagamento',mcc:'MCC',apiValidation:'Validação API Google Ads',startDate:'Data de início',creationDate:'Data de criação',impressions:'Impressões totais',clicks:'Cliques totais',campaignCount:'Total de campanhas',conversions:'Conversões totais',status:'Status local',edit:'Editar'};
+const accountColumnMinimums = {account:112,email:120,paymentProfile:100,mcc:120,apiValidation:160,startDate:100,creationDate:100,impressions:68,clicks:60,campaignCount:88,conversions:72,status:108,edit:88};
+const accountColumnDefaults = {account:132,email:150,paymentProfile:190,mcc:144,apiValidation:260,startDate:124,creationDate:136,impressions:150,clicks:130,campaignCount:158,conversions:154,status:136,edit:104};
 const accountConversionsFormatter = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:6});
 const accountColumnWidthMinimum = key => accountColumnMinimums[key] || 64;
 const accountColumnDefaultWidth = key => accountColumnDefaults[key] || accountColumnWidthMinimum(key);
@@ -16,14 +19,19 @@ const clampAccountColumnWidth = (key,value) => Math.round(Math.min(1200,Math.max
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-const accountColumnHeader = (key,label) => `<th scope="col" data-column="${key}"${key==='edit'?'': ' aria-sort="none"'}${key==='startDate'?' title="Primeira data encontrada no histórico de capturas"':key==='creationDate'?' title="Data real de criação; não inferida da primeira captura"':key==='impressions'?' title="Soma das impressões diárias registradas no Diário de campanha para esta conta"':key==='clicks'?' title="Soma dos cliques diários registrados no Diário de campanha para esta conta"':key==='campaignCount'?' title="Quantidade de campanhas distintas registradas nesta conta"':key==='conversions'?' title="Soma dos valores registrados nas células F do Diário de campanha; não inclui vendas provisórias"':''}>${key==='edit'?esc(label):`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" title="${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnDefaultWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
+const accountColumnHeader = (key,label) => {
+  const sortable=accountSortableColumns.includes(key);
+  const title=key==='startDate'?'Primeira data encontrada no histórico de capturas':key==='creationDate'?'Data real de criação; não inferida da primeira captura':key==='impressions'?'Soma das impressões diárias registradas no Diário de campanha para esta conta':key==='clicks'?'Soma dos cliques diários registrados no Diário de campanha para esta conta':key==='campaignCount'?'Quantidade de campanhas distintas registradas nesta conta':key==='conversions'?'Soma dos valores registrados nas células F do Diário de campanha; não inclui vendas provisórias':key==='apiValidation'?'Compara ID da conta, MCC e status local com a última consulta Google Ads API':'';
+  return `<th scope="col" data-column="${key}"${sortable?' aria-sort="none"':''}${title?` title="${esc(title)}"`:''}>${sortable?`<button type="button" class="account-directory-sort" data-account-directory-sort="${key}" aria-label="Ordenar por ${esc(label)}" title="${esc(label)}" aria-pressed="false"><span class="account-directory-sort-label">${esc(label)}</span><span class="account-directory-sort-arrow" aria-hidden="true">↕</span></button>`:esc(label)}<span class="account-directory-column-resizer" data-account-column-resizer="${key}" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar coluna ${esc(label)}" aria-valuemin="${accountColumnWidthMinimum(key)}" aria-valuemax="1200" aria-valuenow="${accountColumnDefaultWidth(key)}" title="Arraste para ajustar a largura; use também as setas esquerda e direita"></span></th>`;
+};
 
 export const accountsListTemplate = `<section class="account-directory-status-kpis" aria-label="Resumo do status das contas">
   <article class="account-directory-status-kpi is-active"><span>Contas ativas</span><strong id="accountDirectoryActiveCount" aria-live="polite">0</strong></article>
   <article class="account-directory-status-kpi is-suspended"><span>Contas suspensas</span><strong id="accountDirectorySuspendedCount" aria-live="polite">0</strong></article>
 </section>
 <div class="card panel account-directory-panel">
-  <div class="panel-head"><div><h2>Contas disponíveis</h2><p>A data de início mostra a primeira data encontrada no histórico de capturas.</p></div><div class="account-directory-head-actions"><span id="accountDirectoryCount" class="tag"></span><button id="accountDirectoryAddButton" type="button" class="btn hub-standard-action account-directory-add-button" data-account-create-open aria-haspopup="dialog" aria-controls="accountDirectoryManualAccountDialog">Adicionar conta</button></div></div>
+  <div class="panel-head"><div><h2>Contas disponíveis</h2><p>A data de início mostra a primeira data encontrada no histórico de capturas.</p></div><div class="account-directory-head-actions"><span id="accountDirectoryCount" class="tag"></span><button id="accountDirectoryApiRefresh" type="button" class="btn hub-standard-action account-directory-api-refresh" aria-describedby="accountDirectoryApiStatus">Atualizar e validar</button><button id="accountDirectoryAddButton" type="button" class="btn hub-standard-action account-directory-add-button" data-account-create-open aria-haspopup="dialog" aria-controls="accountDirectoryManualAccountDialog">Adicionar conta</button></div></div>
+  <p id="accountDirectoryApiStatus" class="account-directory-api-status" role="status" aria-live="polite"></p>
   <p id="accountDirectoryWidthsMessage" class="account-directory-widths-message" role="status" aria-live="polite"></p>
   <div class="table-wrap"><table class="account-directory-table"><thead><tr>${accountColumns.map(key=>accountColumnHeader(key,accountColumnLabels[key])).join('')}</tr></thead><tbody id="accountDirectoryBody"></tbody></table></div>
 </div>
@@ -48,8 +56,9 @@ export const accountsListManualAccountDialogTemplate = `<dialog id="accountDirec
 </dialog>`;
 
 const statusLabel = status => status === 'active' ? 'Ativa' : status === 'suspended' ? 'Suspensa' : 'Não definido';
+const apiSyncDateFormatter = new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'});
 
-export function mount({root, getSnapshot, format, storage}) {
+export function mount({root, getSnapshot, format, storage, onRefreshApiDirectory = null}) {
   root.innerHTML = accountsListTemplate + accountsListEditDialogTemplate + accountsListManualAccountDialogTemplate;
   const by = id => root.querySelector('#' + id);
   const table = () => root.querySelector('.account-directory-table');
@@ -58,6 +67,11 @@ export function mount({root, getSnapshot, format, storage}) {
   const paymentProfileStorage = createAccountDirectoryPaymentProfileStorage(storage);
   const detailsStorage = createAccountDirectoryDetailsStorage(storage);
   const manualAccountStorage = createAccountDirectoryManualAccountsStorage(storage);
+  const cachedApiDirectory = loadGoogleAdsAccountsCache({storage});
+  let apiDirectory = cachedApiDirectory ? {...cachedApiDirectory,persisted:true} : null;
+  let apiRefreshPending = false;
+  let apiRefreshMessage = '';
+  let apiRefreshTone = '';
   const dialog = by('accountDirectoryStatusDialog');
   const editDialog = by('accountDirectoryEditDialog');
   const manualAccountDialog = by('accountDirectoryManualAccountDialog');
@@ -155,6 +169,38 @@ export function mount({root, getSnapshot, format, storage}) {
     if (width===current) {columnWidths=previous;return}
     columnWidths[key]=width;applyColumnWidths();saveColumnWidths();
   });
+
+  function updateApiValidationStatus(validation) {
+    const target = by('accountDirectoryApiStatus');
+    const summary = validation.summary;
+    if (apiRefreshMessage) {
+      target.textContent = apiRefreshMessage;
+      target.dataset.state = apiRefreshTone || '';
+      return;
+    }
+    if (!apiDirectory) {
+      target.textContent = 'A API ainda não foi consultada neste perfil. Atualize para conferir ID, MCC e status.';
+      target.dataset.state = 'unverified';
+      return;
+    }
+    const parsedTime = Date.parse(apiDirectory.savedAtUtc || '');
+    const timeLabel = Number.isFinite(parsedTime) ? apiSyncDateFormatter.format(new Date(parsedTime)) : 'horário indisponível';
+    const parts = [`Última consulta: ${timeLabel}.`, `${summary.foundCount}/${summary.localCount} contas locais localizadas.`];
+    if (summary.mccMismatchCount) parts.push(`${summary.mccMismatchCount} MCC divergente(s).`);
+    if (summary.statusMismatchCount) parts.push(`${summary.statusMismatchCount} status local(is) divergente(s).`);
+    if (summary.inconclusiveCount) parts.push(`${summary.inconclusiveCount} conta(s) sem confirmação; a consulta teve avisos.`);
+    else if (summary.notFoundCount) parts.push(`${summary.notFoundCount} conta(s) não localizada(s) no escopo consultado.`);
+    if (summary.apiOnlyCount) parts.push(`${summary.apiOnlyCount} conta(s) acessível(is) pela API não aparecem na base local.`);
+    if (summary.warningCount) parts.push(`A API retornou ${summary.warningCount} aviso(s); ausências não são conclusivas.`);
+    if (apiDirectory.persisted === false) parts.push('A lista atualizada ficou somente nesta sessão porque o cache local não pôde ser salvo.');
+    target.textContent = parts.join(' ');
+    target.dataset.state = summary.mccMismatchCount || summary.statusMismatchCount || summary.notFoundCount || summary.inconclusiveCount || summary.warningCount ? 'attention' : 'success';
+  }
+
+  function renderApiValidationCell(validation) {
+    const checks = [['ID',validation?.account],['MCC',validation?.mcc],['Status',validation?.status]];
+    return `<div class="account-directory-api-checks">${checks.map(([label,item])=>`<span class="account-directory-api-check is-${esc(item?.state||'unknown')}"><b>${label}:</b> ${esc(item?.label||'Não verificado')}</span>`).join('')}</div>`;
+  }
 
   function closeStatusDialog() {
     if (dialog.open) dialog.close();
@@ -257,12 +303,56 @@ export function mount({root, getSnapshot, format, storage}) {
     focusTarget?.focus({preventScroll:true});
   }
 
+  async function refreshApiDirectory() {
+    if (apiRefreshPending) return;
+    if (typeof onRefreshApiDirectory !== 'function') {
+      apiRefreshMessage = 'A atualização Google Ads API não está disponível nesta tela.';
+      apiRefreshTone = 'error';
+      render();
+      return;
+    }
+    apiRefreshPending = true;
+    apiRefreshMessage = 'Consultando as MCCs e contas acessíveis…';
+    apiRefreshTone = 'working';
+    const button = by('accountDirectoryApiRefresh');
+    button.disabled = true;
+    button.textContent = 'Consultando…';
+    render();
+    try {
+      const result = await onRefreshApiDirectory();
+      if (!result?.accounts || !Array.isArray(result.accounts.accounts)) throw new Error('O servidor retornou uma lista de contas inválida.');
+      apiDirectory = {accounts:result.accounts,savedAtUtc:result.savedAtUtc||'',persisted:result.persisted===true};
+      apiRefreshMessage = '';
+      apiRefreshTone = '';
+    } catch (error) {
+      apiRefreshMessage = error?.message || 'Não foi possível atualizar o diretório Google Ads.';
+      apiRefreshTone = 'error';
+    } finally {
+      apiRefreshPending = false;
+      const refreshButton = by('accountDirectoryApiRefresh');
+      refreshButton.disabled = false;
+      refreshButton.textContent = 'Atualizar e validar';
+      render();
+    }
+  }
+
+  function onApiDirectoryUpdated(event) {
+    const detail = event?.detail;
+    if (!detail?.accounts || !Array.isArray(detail.accounts.accounts)) return;
+    apiDirectory = {accounts:detail.accounts,savedAtUtc:detail.savedAtUtc||'',persisted:detail.persisted===true};
+    apiRefreshMessage = '';
+    apiRefreshTone = '';
+    render();
+  }
+
   dialog.addEventListener('close', () => { selectedAccount = null; });
   editDialog.addEventListener('close', () => { selectedEditAccount = null; selectedEditOriginal = null; });
   by('accountDirectoryEditForm').addEventListener('submit', saveEditDetails);
   by('accountDirectoryEmailInput').addEventListener('input', () => { by('accountDirectoryEmailError').textContent = ''; by('accountDirectoryEditError').textContent = ''; });
   by('accountDirectoryPaymentProfileInput').addEventListener('input', () => { by('accountDirectoryPaymentProfileError').textContent = ''; by('accountDirectoryEditError').textContent = ''; });
   by('accountDirectoryManualAccountForm').addEventListener('submit', saveManualAccount);
+  by('accountDirectoryApiRefresh').addEventListener('click', refreshApiDirectory);
+  globalThis.window?.addEventListener?.(GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT,onApiDirectoryUpdated);
   root.addEventListener('click', event => {
     const target = event.target;
     const sortButton = target?.closest?.('[data-account-directory-sort]');
@@ -327,9 +417,11 @@ export function mount({root, getSnapshot, format, storage}) {
     const statuses = statusStorage.read();
     const emails = emailStorage.read();
     const paymentProfileIds = paymentProfileStorage.read();
+    const apiValidation = validateAccountDirectoryRows(rows,apiDirectory,statuses);
     by('accountDirectoryCount').textContent = `${rows.length} conta${rows.length === 1 ? '' : 's'}`;
     by('accountDirectoryActiveCount').textContent = String(rows.filter(row => statuses[row.account] === 'active').length);
     by('accountDirectorySuspendedCount').textContent = String(rows.filter(row => statuses[row.account] === 'suspended').length);
+    updateApiValidationStatus(apiValidation);
     root.querySelectorAll('[data-account-directory-sort]').forEach(button=>{
       const key = button.dataset.accountDirectorySort;
       const active = key === sortKey;
@@ -354,8 +446,8 @@ export function mount({root, getSnapshot, format, storage}) {
       const clicks = row.clicks == null ? '—' : (format.num ? format.num(row.clicks) : new Intl.NumberFormat('pt-BR').format(row.clicks));
       const campaignCount = format.num ? format.num(row.campaignCount) : new Intl.NumberFormat('pt-BR').format(row.campaignCount);
       const conversions = row.conversions == null ? '—' : accountConversionsFormatter.format(row.conversions);
-      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="creationDate" class="account-directory-date">${row.creationDate ? esc(format.date(row.creationDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="conversions" class="account-directory-conversions-cell">${esc(conversions)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
-    }).join('') : '<tr><td colspan="12" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>';
+      return `<tr><td data-column="account">${esc(row.account)}</td><td data-column="email" class="account-directory-email-cell"><span class="account-directory-email-value" title="${esc(email || 'E-mail não definido')}">${esc(email || 'Não definido')}</span></td><td data-column="paymentProfile" class="account-directory-payment-profile-cell"><span class="account-directory-payment-profile-value" title="${esc(paymentProfileId || 'ID de perfil de pagamento não definido')}">${esc(paymentProfileId || 'Não definido')}</span></td><td data-column="mcc" title="${esc(row.mcc)}">${esc(row.mcc)}</td><td data-column="apiValidation" class="account-directory-api-cell">${renderApiValidationCell(apiValidation.results.get(row.account))}</td><td data-column="startDate" class="account-directory-date">${row.startDate ? esc(format.date(row.startDate)) : '—'}</td><td data-column="creationDate" class="account-directory-date">${row.creationDate ? esc(format.date(row.creationDate)) : '—'}</td><td data-column="impressions" class="account-directory-impressions-cell">${esc(impressions)}</td><td data-column="clicks" class="account-directory-clicks-cell">${esc(clicks)}</td><td data-column="campaignCount" class="account-directory-campaign-count-cell">${esc(campaignCount)}</td><td data-column="conversions" class="account-directory-conversions-cell">${esc(conversions)}</td><td data-column="status" class="account-directory-status-cell"><button type="button" class="account-directory-status-button" data-status="${esc(statuses[row.account] || 'unset')}" data-account-status-open="${esc(row.account)}" aria-haspopup="dialog" aria-label="Alterar status local da conta ${esc(row.account)}">${statusLabel(statuses[row.account])}</button></td><td data-column="edit" class="account-directory-edit-cell"><button type="button" class="account-directory-edit-button" data-account-edit-open="${esc(row.account)}" aria-haspopup="dialog" aria-controls="accountDirectoryEditDialog" aria-label="Editar e-mail ou ID de perfil de pagamento da conta ${esc(row.account)}">Editar</button></td></tr>`;
+    }).join('') : `<tr><td colspan="${accountColumns.length}" class="account-directory-empty">Nenhuma conta identificada na base atual.</td></tr>`;
     applyColumnWidths();
   }
   return {render};

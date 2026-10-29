@@ -86,7 +86,7 @@ Nenhuma tag, Release ou publicação remota é criada pelo sistema.
 
 - `scripts/system-version.mjs`: SemVer, coerência documental e decoração das páginas no build.
 - `scripts/set-version.mjs`: atualização explícita da entrega, sem operações Git.
-- `src/system-version.js` / `.css`: título, selo e aviso de atualização compartilhados; a disponibilidade se propaga por `BroadcastChannel`, e a confirmação global da versão é persistida no `localStorage` para recarregar abas abertas e abas suspensas ao voltarem ao foco.
+- `src/system-version.js` / `.css`: título, selo e aviso de atualização compartilhados; “Atualizar somente esta tela” recarrega apenas a aba atual, enquanto “Atualizar todas as telas” propaga a confirmação por `BroadcastChannel` e `localStorage` para recarregar abas abertas e abas suspensas ao voltarem ao foco.
 - `build.mjs`: validação antecipada e publicação em todas as páginas completas.
 - `tests/system-version.test.mjs`: versões inválidas/repetidas, divergências,
   incremento, documentação, publicação, navegação sem duplicar prefixo e iframe.

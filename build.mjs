@@ -1,5 +1,6 @@
 import { cp, readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { Script } from "node:vm";
 import { copyPublicDirectory, isolatePrivateDistributionFiles } from './scripts/distribution-privacy.mjs';
 import { readRelease, versionPage, versionPublicPages } from './scripts/system-version.mjs';
 
@@ -24,6 +25,19 @@ output = output.replace("__CPA_VIEW__", await readFile(resolve(root, "src/cpa/te
 output = output.replace("__TESTED_PRODUCTS_VIEW__", await readFile(resolve(root, "src/tested-products/template.html"), "utf8"));
 output = output.replace("__OVERVIEW_VIEW__", await readFile(resolve(root, "src/overview/template.html"), "utf8"));
 output = output.replace("__PRODUCT_DIARY_VIEW__", await readFile(resolve(root, "src/product-diary/template.html"), "utf8"));
+function validateInlineScripts(html, source) {
+  let inlineIndex = 0;
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+    if (/\bsrc\s*=/i.test(match[1]) || !match[2].trim()) continue;
+    inlineIndex += 1;
+    try {
+      new Script(match[2], {filename:`${source} inline script ${inlineIndex}`});
+    } catch (error) {
+      throw new Error(`JavaScript inline inválido em ${source} (script ${inlineIndex}): ${error.message}`);
+    }
+  }
+}
+validateInlineScripts(output, "src/index.template.html");
 const faviconBase64 = template.match(/<link rel="icon" type="image\/png" href="data:image\/png;base64,([^"]+)"/)?.[1];
 if (!faviconBase64) throw new Error("Favicon do painel não encontrado no template.");
 await mkdir(resolve(root, "dist"), { recursive: true });
@@ -52,12 +66,13 @@ await cp(resolve(root, "src/table-layout.css"), resolve(root, "dist/table-layout
 await cp(resolve(root, "src/table-columns.css"), resolve(root, "dist/table-columns.css"));
 await cp(resolve(root, "src/table-columns.mjs"), resolve(root, "dist/table-columns.mjs"));
 await cp(resolve(root, "src/table-edit-actions.css"), resolve(root, "dist/table-edit-actions.css"));
+await cp(resolve(root, "src/notification-center.css"), resolve(root, "dist/notification-center.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
 await cp(resolve(root, "src/usd-brl-rate.js"), resolve(root, "dist/usd-brl-rate.js"));
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");
-for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking', 'google-ads', 'review']) {
+for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking', 'hostinger', 'google-ads', 'review']) {
   await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
   await versionPublicPages(resolve(root, 'src', directory), resolve(root, 'dist', directory), version);
 }

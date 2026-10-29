@@ -4,7 +4,14 @@ const specs = {
   favicon: { name: '03.png' }
 };
 
-const state = { desktop: null, mobile: null, favicon: null, directory: null, outputDirectory: null, activeSlot: 'desktop', skipFavicon: false };
+const PRODUCT_ROOT_DB = 'hub-asset-studio-settings';
+const PRODUCT_ROOT_STORE = 'settings';
+const PRODUCT_ROOT_KEY = 'productsRoot';
+const PAGE_ONE_FOLDER = 'pag01';
+const PAGE_DIRECTORY_HANDOFF_KEY = 'hub:asset-studio:pending-page-directory:v1';
+const PAGE_DIRECTORY_HANDOFF_EVENT = 'hub:asset-studio-page-directory-generated';
+
+const state = { desktop: null, mobile: null, favicon: null, directory: null, productsRoot: null, rootPermission: false, outputDirectory: null, activeSlot: 'desktop', skipFavicon: false };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -15,8 +22,118 @@ function formatBytes(bytes) {
 }
 
 function updateReadyState() {
-  $('#processAll').disabled = !(state.desktop && state.mobile && (state.favicon || state.skipFavicon) && state.directory);
+  const productName = $('#productName').value.trim();
+  const productNameIsValid = Boolean(productName) && !productFolderNameError(productName);
+  $('#processAll').disabled = !(state.desktop && state.mobile && (state.favicon || state.skipFavicon) && state.productsRoot && state.rootPermission && productNameIsValid);
   $('#processAll').textContent = state.skipFavicon ? 'Gerar 01 e 02' : 'Gerar 01, 02 e 03';
+}
+
+function openProductRootDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error('Este navegador não permite salvar a pasta padrão.'));
+      return;
+    }
+    const request = window.indexedDB.open(PRODUCT_ROOT_DB, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(PRODUCT_ROOT_STORE)) {
+        request.result.createObjectStore(PRODUCT_ROOT_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Não foi possível abrir as preferências locais.'));
+  });
+}
+
+async function loadProductRoot() {
+  const database = await openProductRootDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction(PRODUCT_ROOT_STORE, 'readonly');
+      const request = transaction.objectStore(PRODUCT_ROOT_STORE).get(PRODUCT_ROOT_KEY);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error('Não foi possível recuperar a pasta salva.'));
+      transaction.onabort = () => reject(transaction.error || new Error('A leitura da pasta salva foi cancelada.'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function saveProductRoot(directory) {
+  const database = await openProductRootDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(PRODUCT_ROOT_STORE, 'readwrite');
+      transaction.objectStore(PRODUCT_ROOT_STORE).put(directory, PRODUCT_ROOT_KEY);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error || new Error('Não foi possível salvar a pasta padrão.'));
+      transaction.onabort = () => reject(transaction.error || new Error('O salvamento da pasta padrão foi cancelado.'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+function productFolderNameError(value) {
+  const name = String(value || '').trim();
+  if (!name) return 'Informe o nome do produto.';
+  const invalidCharacter = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'].some(character => name.includes(character));
+  const reservedName = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(name);
+  if (invalidCharacter || /[\u0000-\u001F]/.test(name) || /[. ]$/.test(name) || name === '.' || name === '..' || reservedName) {
+    return 'Use um nome válido para uma pasta do Windows.';
+  }
+  return '';
+}
+
+function renderProductDestination(message = '') {
+  const root = state.productsRoot;
+  const productName = $('#productName').value.trim();
+  const nameError = productName ? productFolderNameError(productName) : '';
+  const hint = $('#productNameHint');
+  if (nameError) {
+    $('#productName').setAttribute('aria-invalid', 'true');
+    hint.textContent = nameError;
+    hint.classList.add('error');
+  } else {
+    $('#productName').removeAttribute('aria-invalid');
+    hint.classList.remove('error');
+    hint.textContent = productName
+      ? 'Destino: ' + productName + '/' + PAGE_ONE_FOLDER + '/assets. As demais páginas ficam na tela de criação da Pre-Sell.'
+      : 'Informe o produto. O Hub criará ' + PAGE_ONE_FOLDER + '/assets dentro dele ao gerar os arquivos.';
+  }
+
+  $('#folderName').textContent = root ? 'Pasta de produtos: ' + root.name : 'Nenhuma pasta de produtos selecionada';
+  $('#chooseFolder').textContent = root ? 'Alterar pasta padrão' : 'Selecionar pasta de produtos';
+  $('#authorizeFolder').hidden = !root || state.rootPermission;
+  if (message) {
+    $('#folderHelp').textContent = message;
+  } else if (!root) {
+    $('#folderHelp').textContent = 'Selecione a pasta raiz uma vez; a escolha será lembrada neste navegador.';
+  } else if (!state.rootPermission) {
+    $('#folderHelp').textContent = 'A pasta está salva. Autorize o acesso para continuar.';
+  } else {
+    $('#folderHelp').textContent = 'Pasta raiz disponível neste navegador · destino em ' + (productName || '<produto>') + '/' + PAGE_ONE_FOLDER + '/assets.';
+  }
+  updateReadyState();
+}
+
+async function hasWritePermission(directory) {
+  if (typeof directory.queryPermission !== 'function') return true;
+  return await directory.queryPermission({ mode: 'readwrite' }) === 'granted';
+}
+
+async function restoreProductRoot() {
+  try {
+    const directory = await loadProductRoot();
+    if (!directory) return;
+    state.productsRoot = directory;
+    state.directory = directory;
+    state.rootPermission = await hasWritePermission(directory);
+    renderProductDestination();
+  } catch (error) {
+    $('#folderHelp').textContent = 'Não foi possível recuperar a pasta padrão: ' + error.message;
+  }
 }
 
 function setSlot(slot, file) {
@@ -223,15 +340,37 @@ $('#chooseFolder').addEventListener('click', async () => {
     return;
   }
   try {
-    state.directory = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.productsRoot = await window.showDirectoryPicker({ mode: 'readwrite' });
+    state.directory = state.productsRoot;
+    state.rootPermission = await hasWritePermission(state.productsRoot);
     state.outputDirectory = null;
     $('#openFolder').hidden = true;
-    $('#folderName').textContent = state.directory.name;
-    $('#folderHelp').textContent = `${state.directory.name} / assets`;
-    updateReadyState();
+    let message = '';
+    try {
+      await saveProductRoot(state.productsRoot);
+    } catch (error) {
+      message = 'A pasta foi selecionada para esta sessão, mas não pôde ser salva como padrão: ' + error.message;
+    }
+    renderProductDestination(message);
   } catch (error) {
     if (error.name !== 'AbortError') $('#folderHelp').textContent = `Falha ao abrir a pasta: ${error.message}`;
   }
+});
+
+$('#authorizeFolder').addEventListener('click', async () => {
+  if (!state.productsRoot || typeof state.productsRoot.requestPermission !== 'function') return;
+  try {
+    state.rootPermission = await state.productsRoot.requestPermission({ mode: 'readwrite' }) === 'granted';
+    renderProductDestination(state.rootPermission ? 'Acesso à pasta padrão autorizado.' : 'O navegador não concedeu acesso. Autorize a pasta para gerar os assets.');
+  } catch (error) {
+    renderProductDestination('Não foi possível autorizar a pasta: ' + error.message);
+  }
+});
+
+$('#productName').addEventListener('input', () => {
+  state.outputDirectory = null;
+  $('#openFolder').hidden = true;
+  renderProductDestination();
 });
 
 $('#openFolder').addEventListener('click', async () => {
@@ -268,6 +407,27 @@ function addResult(text, status = '') {
   $('#results').appendChild(row);
 }
 
+async function notifyHubOfGeneratedPage(productName) {
+  const response = await fetch('/api/asset-studio/page-directory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productName, rootName: state.productsRoot?.name || '' })
+  });
+  let result = {};
+  try { result = await response.json(); } catch { }
+  if (!response.ok || !result.directory) throw new Error(result.error || 'O Hub não confirmou o diretório da página.');
+  const handoff = {
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    directory: result.directory,
+    productName: result.productName || productName,
+    pageFolder: result.pageFolder || PAGE_ONE_FOLDER,
+    generatedAtUtc: new Date().toISOString()
+  };
+  localStorage.setItem(PAGE_DIRECTORY_HANDOFF_KEY, JSON.stringify(handoff));
+  window.dispatchEvent(new CustomEvent(PAGE_DIRECTORY_HANDOFF_EVENT, { detail: handoff }));
+  return handoff;
+}
+
 $('#processAll').addEventListener('click', async () => {
   const button = $('#processAll');
   button.disabled = true;
@@ -275,6 +435,17 @@ $('#processAll').addEventListener('click', async () => {
   $('#openFolder').hidden = true;
   $('#results').replaceChildren();
   try {
+    const productName = $('#productName').value.trim();
+    const nameError = productFolderNameError(productName);
+    if (nameError) {
+      $('#productName').setAttribute('aria-invalid', 'true');
+      $('#productName').focus();
+      throw new Error(nameError);
+    }
+    if (!state.productsRoot || !state.rootPermission) throw new Error('Selecione e autorize a pasta raiz de produtos.');
+    const productDirectory = await state.productsRoot.getDirectoryHandle(productName, { create: true });
+    const pageDirectory = await productDirectory.getDirectoryHandle(PAGE_ONE_FOLDER, { create: true });
+    state.directory = pageDirectory;
     const assetsDirectory = await state.directory.getDirectoryHandle('assets', { create: true });
     const outputs = [
       { spec: specs.desktop, blob: await processBackground(state.desktop, specs.desktop), width: specs.desktop.width, height: specs.desktop.height },
@@ -283,13 +454,23 @@ $('#processAll').addEventListener('click', async () => {
     if (!state.skipFavicon) outputs.push({ spec: specs.favicon, ...(await processFavicon(state.favicon)) });
     for (const { spec, blob, width, height } of outputs) {
       const result = await saveBlob(assetsDirectory, spec.name, blob);
-      if (result.skipped) addResult(`assets/${spec.name} preservado — substituição cancelada.`);
-      else addResult(`assets/${spec.name} · ${width} × ${height} · ${formatBytes(blob.size)} · salvo`, 'ok');
+      if (result.skipped) addResult(`${PAGE_ONE_FOLDER}/assets/${spec.name} preservado — substituição cancelada.`);
+      else addResult(`${PAGE_ONE_FOLDER}/assets/${spec.name} · ${width} × ${height} · ${formatBytes(blob.size)} · salvo`, 'ok');
     }
     state.outputDirectory = assetsDirectory;
     $('#openFolder').hidden = false;
-    $('#folderHelp').textContent = `${state.directory.name} / assets · clique em “Abrir pasta” para abrir o seletor nessa pasta.`;
+    $('#folderHelp').textContent = productName + '/' + PAGE_ONE_FOLDER + '/assets · clique em “Abrir pasta” para abrir o seletor nessa pasta.';
+    try {
+      const handoff = await notifyHubOfGeneratedPage(productName);
+      addResult(`Diretório da Presell atualizado no Hub: ${handoff.directory}`, 'ok');
+    } catch (error) {
+      addResult(`Assets gerados, mas o Hub não conseguiu preencher o Diretório da Presell: ${error.message}`, 'error');
+    }
   } catch (error) {
+    if (error.name === 'NotAllowedError') {
+      state.rootPermission = false;
+      renderProductDestination('A permissão da pasta expirou ou foi revogada. Autorize a pasta salva para continuar.');
+    }
     addResult(`Falha: ${error.message}`, 'error');
   } finally {
     updateReadyState();
@@ -297,3 +478,4 @@ $('#processAll').addEventListener('click', async () => {
 });
 
 markActive('desktop');
+restoreProductRoot();

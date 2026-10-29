@@ -59,7 +59,7 @@ test('shared control surfaces are published and loaded through the existing them
   for (const [path, key] of consumers) {
     const page = await read(`dist/${path}`);
     assert.ok(page.includes(`data-hub-sidebar-active="${key}"`), path);
-    assert.match(page, /sidebar-component\.css\?v=15/, path);
+    assert.match(page, /sidebar-component\.css\?v=17/, path);
     assert.ok(source.includes(`[data-hub-sidebar-active="${key}"]`), path);
     assert.match(page, /<(?:input|select)\b[^>]*class="[^"]*\bcontrol\b/, path);
   }

@@ -134,12 +134,22 @@ if ($null -ne $resolvedDestination -and $null -ne $rules) {
             $checks.Add((New-Check 'placeholders' 'PASS' 'Nenhum placeholder foi encontrado no index.html.'))
         }
 
-        $externalScripts = [regex]::Matches($indexText, '<script\b[^>]+\bsrc\s*=\s*["''][^"'']+https?://[^"'']+["'']', 'IgnoreCase') | ForEach-Object Value
-        if ($externalScripts.Count -gt 0) {
-            $checks.Add((New-Check 'external-scripts' 'BLOCK' 'Scripts externos foram encontrados.' $externalScripts))
+        $externalScripts = @([regex]::Matches($indexText, '<script\b[^>]+\bsrc\s*=\s*["''][^"'']+https?://[^"'']+["''][^>]*>', 'IgnoreCase') | ForEach-Object Value)
+        $allowedTrackingScripts = @()
+        if ($null -ne $rules.tracking) {
+            $scriptUrl = [regex]::Escape([string]$rules.tracking.scriptUrl)
+            $collectorUrl = [regex]::Escape([string]$rules.tracking.collectorUrl)
+            $hostPattern = '(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}'
+            $allowedPattern = '^<script src="' + $scriptUrl + '" data-endpoint="' + $collectorUrl + '" data-product-key="[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?" data-presell-host="' + $hostPattern + '" async>$'
+            $allowedTrackingScripts = @($externalScripts | Where-Object { $_ -cmatch $allowedPattern })
+        }
+        $unexpectedScripts = @($externalScripts | Where-Object { $_ -notin $allowedTrackingScripts })
+        if ($unexpectedScripts.Count -gt 0 -or $allowedTrackingScripts.Count -gt 1) {
+            $checks.Add((New-Check 'external-scripts' 'BLOCK' 'Foi encontrado script externo não autorizado ou mais de uma tag de tracking.' $unexpectedScripts))
         }
         else {
-            $checks.Add((New-Check 'external-scripts' 'PASS' 'Nenhum script externo foi encontrado.'))
+            $message = if ($allowedTrackingScripts.Count -eq 1) { 'Somente a tag de tracking autorizada foi encontrada.' } else { 'Nenhum script externo foi encontrado.' }
+            $checks.Add((New-Check 'external-scripts' 'PASS' $message $allowedTrackingScripts))
         }
 
         $hrefs = [regex]::Matches($indexText, '(?:href|data-url)\s*=\s*["'']([^"'']+)["'']', 'IgnoreCase') | ForEach-Object { $_.Groups[1].Value }

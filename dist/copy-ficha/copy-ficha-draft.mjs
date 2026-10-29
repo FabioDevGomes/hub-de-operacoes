@@ -1,4 +1,4 @@
-// Keep the existing key and unknown legacy properties; pasted ficha is session-only.
+// Keep the existing key and unknown legacy properties; persist the structured ficha in this browser-local draft.
 export const STORAGE_KEY='copy-ficha-draft-v1';
 export function readDraft(storage){
   try{storage??=globalThis.localStorage;return JSON.parse(storage.getItem(STORAGE_KEY)||'null')}catch{return null}

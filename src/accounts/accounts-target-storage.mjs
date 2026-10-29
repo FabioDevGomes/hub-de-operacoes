@@ -1,4 +1,5 @@
 export const ACCOUNT_MAP_DUPLICATION_TARGET_KEY = 'hub:account-map:duplication-target:v1';
+export const ACCOUNT_MAP_DUPLICATION_TARGET_UPDATED_EVENT = 'hub:account-map-duplication-target-updated';
 
 const normalizeTarget = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;

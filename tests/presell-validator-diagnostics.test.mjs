@@ -10,6 +10,24 @@ const engine=fileURLToPath(new URL('../presell-engine/',import.meta.url));
 const windowsOnly={skip:process.platform!=='win32',timeout:15000};
 const quote=value=>`'${value.replaceAll("'","''")}'`;
 
+test('validator invocation binds named arguments, switches and paths containing spaces',windowsOnly,async()=>{
+  const root=await mkdtemp(join(tmpdir(),'presell-validator-args-'));
+  try{
+    const validator=join(root,'synthetic-validator.ps1');
+    const wrapper=join(root,'invoke-validator.ps1');
+    const module=join(engine,'modules','Presell.Validation.Common.psm1');
+    const destination=join(root,'destination with spaces');
+    const fichaPath=join(root,'ficha with spaces.json');
+    await writeFile(validator,"param([string]$Destination,[string]$AssetFolder,[string]$FichaPath,[switch]$Json)\n[PSCustomObject]@{module='synthetic';overall='PASS';checks=@([PSCustomObject]@{name='arguments';status='PASS';message='Named arguments received.';items=@($Destination,$AssetFolder,$FichaPath,[string]$Json.IsPresent)})} | ConvertTo-Json -Depth 5 -Compress\nexit 0\n",'utf8');
+    await writeFile(wrapper,`\uFEFF$ErrorActionPreference = 'Stop'\nImport-Module -Name ${quote(module)} -Force\n$destination = ${quote(destination)}\n$fichaPath = ${quote(fichaPath)}\n$result = Invoke-PresellValidator -ScriptPath ${quote(validator)} -Arguments @('-Destination',$destination,'-AssetFolder','assets','-FichaPath',$fichaPath,'-Json')\n$json = $result | ConvertTo-Json -Depth 8 -Compress\n[Console]::Write([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json)))\n`,'utf8');
+    const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',wrapper],{encoding:'utf8',timeout:10000,windowsHide:true});
+    assert.ifError(result.error);assert.equal(result.status,0,result.stderr);
+    const report=JSON.parse(Buffer.from(result.stdout.trim(),'base64').toString('utf8'));
+    assert.equal(report.overall,'PASS',JSON.stringify(report));
+    assert.deepEqual(report.checks[0].items,[destination,'assets',fichaPath,'True']);
+  }finally{await rm(root,{recursive:true,force:true})}
+});
+
 test('validator-output preserves the PowerShell error and exit code when JSON cannot be read',windowsOnly,async()=>{
   const root=await mkdtemp(join(tmpdir(),"presell-validator-log-é-'test'-"));
   try{

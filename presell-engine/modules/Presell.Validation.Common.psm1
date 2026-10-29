@@ -112,11 +112,26 @@ function Invoke-PresellValidator {
         # Native stderr becomes PowerShell ErrorRecords. Keep it non-terminating here so
         # stdout can be parsed independently and both streams remain available to the log.
         $ErrorActionPreference = 'Continue'
-        $argumentLiterals = @($Arguments | ForEach-Object { ConvertTo-PresellPowerShellLiteral ([string]$_) }) -join ', '
+        $argumentStatements = [System.Collections.Generic.List[string]]::new()
+        for ($index = 0; $index -lt $Arguments.Count; $index++) {
+            $token = [string]$Arguments[$index]
+            if ($token -notmatch '^-[A-Za-z][A-Za-z0-9-]*$') { throw 'Argumento inválido para o validador.' }
+            $parameterName = $token.Substring(1)
+            $parameterKey = ConvertTo-PresellPowerShellLiteral $parameterName
+            if ($index + 1 -lt $Arguments.Count -and ([string]$Arguments[$index + 1]) -notmatch '^-[A-Za-z][A-Za-z0-9-]*$') {
+                $valueLiteral = ConvertTo-PresellPowerShellLiteral ([string]$Arguments[$index + 1])
+                $argumentStatements.Add('$argumentMap[' + $parameterKey + '] = ' + $valueLiteral)
+                $index++
+            }
+            else {
+                $argumentStatements.Add('$argumentMap[' + $parameterKey + '] = $true')
+            }
+        }
         $command = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)' + [Environment]::NewLine +
             ('$scriptPath = ' + (ConvertTo-PresellPowerShellLiteral $ScriptPath)) + [Environment]::NewLine +
-            ('$arguments = @(' + $argumentLiterals + ')') + [Environment]::NewLine +
-            '& $scriptPath @arguments' + [Environment]::NewLine +
+            '$argumentMap = @{}' + [Environment]::NewLine +
+            ($argumentStatements -join [Environment]::NewLine) + [Environment]::NewLine +
+            '& $scriptPath @argumentMap' + [Environment]::NewLine +
             'exit $LASTEXITCODE'
         $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
         $captured = @(& $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand 2>&1)

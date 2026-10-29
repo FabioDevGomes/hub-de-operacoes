@@ -68,8 +68,9 @@ function initialDomainRows() {
   };
 }
 
-export function mount({ root, clipboard = globalThis.navigator?.clipboard, onBaseUpdated = async () => {}, invalidateBaseCache = () => {} }) {
-  if (!root) throw new Error('A área de configurações globais não foi encontrada.');
+export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.clipboard, onBaseUpdated = async () => {}, invalidateBaseCache = () => {} }) {
+  if (!root) throw new Error('A área de Tracking solicitada não foi encontrada.');
+  const panelScope = scope === 'tracker' || scope === 'settings' ? scope : 'all';
   const existing = mountedRoots.get(root);
   if (existing) {
     existing.render();
@@ -269,8 +270,9 @@ export function mount({ root, clipboard = globalThis.navigator?.clipboard, onBas
         <p class="tracking-connection-note">Este é o token de acesso às APIs do Hub. Ele não é o segredo do postback GuruMedia; esse segredo permanece no arquivo privado <code>tracking-config.php</code> e na configuração do postback da plataforma.</p>
       </section>`;
     root.innerHTML = `<div class="tracking-session tracking-global-settings-session">
-      <section class="tracking-panel tracking-intro"><div class="tracking-intro-head"><div class="tracking-intro-copy"><h2>Configurações globais do Tracking</h2><p>Acesso compartilhado, cadastro de Tracks e notificações por e-mail para ClickBank, GuruMedia e as demais integrações do Hub.</p></div></div></section>
+      <section class="tracking-panel tracking-intro"><div class="tracking-intro-head"><div class="tracking-intro-copy"><h2>${panelScope === 'tracker' ? 'Tracker Global' : panelScope === 'settings' ? 'Configurações globais do Hub' : 'Configurações globais do Tracking'}</h2><p>${panelScope === 'tracker' ? 'Cadastre e gerencie os domínios e Tracks permitidos pelas integrações de Tracking.' : panelScope === 'settings' ? 'Acesso compartilhado e notificações por e-mail para as integrações do Hub.' : 'Acesso compartilhado, cadastro de Tracks e notificações por e-mail para ClickBank, GuruMedia e as demais integrações do Hub.'}</p></div></div></section>
 
+      ${panelScope === 'settings' ? '' : `
       <section class="tracking-panel tracking-domain-panel" aria-label="Cadastro global de Tracks">
         <div class="tracking-table-heading tracking-domain-heading"><div><h2>Tracks e domínios permitidos</h2><p>Cadastro global usado para associar cliques e vendas às Pre-Sells.</p></div><div class="tracking-domain-heading-actions"><button type="button" class="btn" data-global-action="refresh-domains"${state.domainPending ? ' disabled' : ''}>${state.domainPending && state.domainAction === 'refresh' ? 'Consultando…' : 'Atualizar lista'}</button></div></div>
         <div class="tracking-domain-admin-config">
@@ -295,8 +297,9 @@ export function mount({ root, clipboard = globalThis.navigator?.clipboard, onBas
         <p class="tracking-domain-message${state.domainError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.domainMessage)}</p>
         <p class="tracking-connection-note" role="status" aria-live="polite">${escapeHtml(cacheStatus())}</p>
       </section>
+      `}
 
-      ${hubTokenPanel}
+      ${panelScope === 'tracker' ? '' : `${hubTokenPanel}
 
       <section class="tracking-panel tracking-email-panel" aria-label="Notificações globais por e-mail">
         <div class="tracking-table-heading"><div><h2>Notificações por e-mail</h2><p>Uma caixa e um destinatário para os avisos de venda de todas as plataformas configuradas.</p></div></div>
@@ -314,8 +317,8 @@ export function mount({ root, clipboard = globalThis.navigator?.clipboard, onBas
         <p class="tracking-conversion-profile-message${state.emailError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.emailMessage)}</p>
         <p class="tracking-connection-note">Os campos ficam somente na memória desta aba. O arquivo <code>${TRACKING_EMAIL_CONFIG_FILE}</code> contém a senha SMTP; mantenha-o em <code>private-tools</code>, fora de <code>public_html</code>, do Git e de backups compartilhados. Após baixar, a senha é removida dos campos.</p>
       </section>
-      ${renderLegacyCleanup()}
-      ${selectedTag ? renderTag(selectedTag) : ''}
+      ${renderLegacyCleanup()}`}
+      ${panelScope === 'settings' ? '' : selectedTag ? renderTag(selectedTag) : ''}
     </div>`;
     if (state.legacyCleanup.dialogNeedsFocus) {
       root.querySelector?.('#legacyObservabilityCleanupDialog')?.focus?.();

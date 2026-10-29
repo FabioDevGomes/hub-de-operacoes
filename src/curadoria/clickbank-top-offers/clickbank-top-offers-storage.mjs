@@ -10,10 +10,15 @@ export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
 
 const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'Ocultar']);
 const PAGE_CLASSIFICATIONS = new Set(['review','cookies']);
+const MARKET_SCOPES = new Set(['world','one-country','some-countries']);
 const MAX_TREND_SEARCH_HISTORY = 10000;
 
 function validPageClassification(value) {
   return value == null || PAGE_CLASSIFICATIONS.has(value);
+}
+
+function validMarketScope(value) {
+  return value == null || MARKET_SCOPES.has(value);
 }
 
 function validTrendSearch(entry) {
@@ -278,9 +283,10 @@ function validDecisionRecord(record) {
   return Boolean(record && typeof record.offerKey === 'string' && record.offerKey.length > 0 && record.offerKey.length <= 1400 &&
     DECISION_VALUES.has(record.currentStatus) && typeof (record.notes ?? '') === 'string' && (record.notes ?? '').length <= 5000 &&
     validPageClassification(record.pageClassification) &&
+    validMarketScope(record.marketScope) &&
     (record.updatedAt == null || Number.isFinite(Date.parse(record.updatedAt))) && Array.isArray(record.history) && record.history.length <= 10000 &&
     record.history.every(item => item && DECISION_VALUES.has(item.status) && typeof item.capturedAt === 'string' && Number.isFinite(Date.parse(item.capturedAt)) &&
-      validPageClassification(item.pageClassification) && typeof (item.notes ?? '') === 'string' && (item.notes ?? '').length <= 5000));
+      validPageClassification(item.pageClassification) && validMarketScope(item.marketScope) && typeof (item.notes ?? '') === 'string' && (item.notes ?? '').length <= 5000));
 }
 
 export async function putDecision(record) {
@@ -370,7 +376,7 @@ function validateBackup(payload) {
 }
 
 function mergeDecisionRecord(existing, incoming) {
-  const history = [...new Map([...existing.history, ...incoming.history].map(item => [`${item.capturedAt}\u0000${item.status}\u0000${item.notes || ''}`, item])).values()]
+  const history = [...new Map([...existing.history, ...incoming.history].map(item => [JSON.stringify([item.capturedAt,item.status,item.notes||'',item.pageClassification??null,item.marketScope??null]), item])).values()]
     .sort((a,b) => String(a.capturedAt).localeCompare(String(b.capturedAt)));
   const latest = [existing, incoming].sort((a,b) => String(a.updatedAt || a.history.at(-1)?.capturedAt || '').localeCompare(String(b.updatedAt || b.history.at(-1)?.capturedAt || ''))).at(-1);
   return {...existing, ...latest, history};

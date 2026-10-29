@@ -47,6 +47,22 @@ function Normalize-Whitespace {
     return (($Value -replace '\s+', ' ').Trim())
 }
 
+function Test-TrackingProductBinding {
+    param([object]$Tracking, [string]$Product, [string]$ProductLabel, [string]$ProductKey)
+    $expectedKey = [regex]::Replace($ProductLabel.Trim().ToLowerInvariant(), '[\s-]+', '-')
+    $accountId = [string]$Tracking.accountId
+    if ([string]::IsNullOrWhiteSpace($accountId)) {
+        return $ProductLabel -ceq $Product -and $ProductKey -ceq $expectedKey
+    }
+    $productName = [string]$Tracking.productName
+    if ($accountId -notmatch '^\d{10}$' -or $productName -cne $Product) { return $false }
+    $characters = $Product.ToCharArray()
+    if ($characters.Length -eq 0) { return $false }
+    $characters[0] = [char]::ToUpperInvariant($characters[0])
+    $expectedLabel = ([string]::Join('', $characters)) + ' - conta ' + $accountId.Substring(6, 4)
+    return $ProductLabel -ceq $expectedLabel -and $ProductKey -ceq $expectedKey
+}
+
 $checks = [System.Collections.Generic.List[object]]::new()
 $indexPath = Join-Path $Destination 'index.html'
 
@@ -109,6 +125,40 @@ if (Test-Path -LiteralPath $stylesPath -PathType Leaf) {
 }
 
 if ($null -ne $ficha -and $null -ne $indexText) {
+    $trackingProperty = $ficha.PSObject.Properties['tracking']
+    $tracking = if ($null -ne $trackingProperty) { $trackingProperty.Value } else { $null }
+    $trackingEnabled = $null -ne $tracking -and [bool]$tracking.enabled
+    $rulesPath = Join-Path $PSScriptRoot '..\config\presell-rules.json'
+    $trackingRules = $null
+    try { $trackingRules = (Get-Content -LiteralPath $rulesPath -Raw | ConvertFrom-Json).tracking } catch {}
+    $trackScriptPattern = if ($null -ne $trackingRules) { '<script\b(?=[^>]*\bsrc\s*=\s*["'']' + [regex]::Escape([string]$trackingRules.scriptUrl) + '["''])[^>]*>' } else { '<script\b(?=[^>]*\bsrc\s*=\s*["'']https://track\.travenzo\.shop/track\.js["''])[^>]*>' }
+    if ($trackingEnabled) {
+        $hostname = [string]$tracking.hostname
+        $productKey = [string]$tracking.productKey
+        $productLabel = [string]$tracking.productLabel
+        $platform = [string]$tracking.platform
+        $hostPattern = '^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
+        if ($null -eq $trackingRules -or $hostname -cnotmatch $hostPattern -or -not (Test-TrackingProductBinding $tracking (Get-PropertyValue $ficha 'product') $productLabel $productKey) -or $platform -cnotin @($trackingRules.allowedPlatforms)) {
+            $checks.Add((New-Check 'tracking-script' 'BLOCK' 'A configuração de tracking na ficha é inválida.'))
+        }
+        else {
+            $expectedTag = '<script src="' + [string]$trackingRules.scriptUrl + '" data-endpoint="' + [string]$trackingRules.collectorUrl + '" data-product-key="' + $productKey + '" data-presell-host="' + $hostname + '" async></script>'
+            $actualTags = @([regex]::Matches($indexText, '<script\b[^>]*\bsrc\s*=\s*["''][^"'']*track\.js[^"'']*["''][^>]*>\s*</script\s*>', 'IgnoreCase') | ForEach-Object Value)
+            if ($actualTags.Count -eq 1 -and $actualTags[0] -ceq $expectedTag) {
+                $checks.Add((New-Check 'tracking-script' 'PASS' 'A tag corresponde ao domínio, produto e plataforma confirmados.' @($hostname, $productKey, $platform)))
+            }
+            else {
+                $checks.Add((New-Check 'tracking-script' 'BLOCK' 'A tag de tracking está ausente, repetida ou divergente da ficha.' @($expectedTag)))
+            }
+        }
+    }
+    elseif ($indexText -match $trackScriptPattern) {
+        $checks.Add((New-Check 'tracking-script' 'BLOCK' 'Há uma tag de tracking, mas a ficha não autorizou sua inclusão.'))
+    }
+    else {
+        $checks.Add((New-Check 'tracking-script' 'PASS' 'A ficha não solicita tag de tracking externa.'))
+    }
+
     $metadataChecks = @(
         @{ Name = 'html-language'; Field = 'htmlLanguage'; Pattern = '<html\b[^>]*\blang\s*=\s*["'']([^"'']+)["'']'; Label = 'idioma HTML' },
         @{ Name = 'page-title'; Field = 'pageTitle'; Pattern = '<title\b[^>]*>(.*?)</title>'; Label = 'título da página' },

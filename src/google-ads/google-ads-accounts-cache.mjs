@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'hub.google-ads-account-directory:v1';
+export const GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY = 'hub.google-ads-account-directory:v1';
 const CUSTOMER_ID = /^\d{10}$/;
 const CURRENCY = /^[A-Z]{3}$/;
 
@@ -25,7 +25,7 @@ export function loadGoogleAdsAccountsCache({ storage = null } = {}) {
   try {
     const target = storage || globalThis.localStorage;
     if (!target) return null;
-    const value = JSON.parse(target.getItem(STORAGE_KEY) || 'null');
+    const value = JSON.parse(target.getItem(GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY) || 'null');
     if (!validDirectory(value)) return null;
     return {
       accounts: {
@@ -56,7 +56,7 @@ export function saveGoogleAdsAccountsCache(accounts, { storage = null, savedAtUt
   };
   if (!validDirectory(value)) throw new Error('A lista de MCCs e contas não passou pela validação local.');
   try {
-    target.setItem(STORAGE_KEY, JSON.stringify(value));
+    target.setItem(GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY, JSON.stringify(value));
   } catch {
     throw new Error('Não foi possível guardar a lista localmente neste perfil do navegador.');
   }

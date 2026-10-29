@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Hub 2.0",
+  "version": "2.0.5",
+  "description": "Ferramentas locais para ClickBank, velocidade de VSL, captura de assets e atalhos do Hub.",
+  "icons": {
+    "64": "icon.png"
+  },
+  "action": {
+    "default_title": "Hub 2.0 · ClickBank, VSL e Assets",
+    "default_icon": "icon.png",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1:8765/*"],
+      "js": ["tab-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "permissions": ["scripting", "activeTab", "clipboardWrite"],
+  "host_permissions": ["http://127.0.0.1:8765/*"]
+}

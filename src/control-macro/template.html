@@ -11,8 +11,8 @@
         </div>
         <div id="macroKpis" class="macro-kpis" aria-live="polite"></div>
         <div class="card panel">
-          <div class="panel-head"><div><h2>Resumo diário da operação</h2><p id="macroCaption">A planilha prevalece por campo; a MCC complementa cliques e vendas ausentes a partir de 13/09.</p></div><div class="macro-header-status"><span id="macroBillingStatus" class="tag" aria-live="polite">Faturamento ainda não conferido nesta sessão.</span><span id="macroRowCount" class="tag"></span></div></div>
-        <div class="macro-table-wrap"><table class="macro-table hub-table-layout"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th></tr></thead><tbody id="macroDailyBody"></tbody><tfoot id="macroDailyFoot" aria-label="Totais do mês"></tfoot></table></div>
+          <div class="panel-head"><div><h2>Resumo diário da operação</h2><p id="macroCaption">O Faturamento consolida a receita; investimento, cliques e conversões vêm da MCC, do histórico ou de uma sincronização API por dia.</p></div><div class="macro-header-status"><span id="macroBillingStatus" class="tag" aria-live="polite">Faturamento ainda não conferido nesta sessão.</span><span id="macroRowCount" class="tag"></span></div></div>
+        <div class="macro-table-wrap"><table class="macro-table hub-table-layout"><thead><tr><th>Data</th><th>Investimento</th><th>Faturamento</th><th>Lucro</th><th>ROI</th><th>Cliques</th><th>Vendas</th><th>Cliques / venda</th><th>Origem</th><th>Observações</th><th>Ação</th></tr></thead><tbody id="macroDailyBody"></tbody><tfoot id="macroDailyFoot" aria-label="Totais do mês"></tfoot></table></div>
         </div>
         <div class="card panel macro-trend-panel">
           <div class="macro-trend-head"><div><h2>Evolução da operação</h2><p id="macroTrendCaption"></p></div><div class="macro-trend-controls">
@@ -24,3 +24,15 @@
           <p class="macro-trend-note">Pontos sem dados ficam em branco, não são tratados como zero. Os rótulos mostram os valores; passe o mouse para ver período e cobertura. No modo Desempenho e na série Cliques por venda, as escalas são independentes.</p>
         </div>
         <p class="footer-note">Valores financeiros exibidos em reais conforme os campos diários da MCC. Vendas ainda não confirmadas aparecem separadas como provisórias até a conciliação do D−1.</p>
+        <div id="macroApiSyncModal" class="macro-import-modal hidden" role="dialog" aria-modal="true" aria-labelledby="macroApiSyncTitle" aria-describedby="macroApiSyncDescription">
+          <div class="macro-import-dialog macro-api-sync-dialog">
+            <div class="macro-import-head"><div><h2 id="macroApiSyncTitle">Editar dados do dia</h2><p id="macroApiSyncDescription">A captura consulta todas as contas Google Ads conectadas e altera somente este dia no Controle Macro.</p></div><button id="closeMacroApiSync" class="sale-close" type="button" aria-label="Fechar">×</button></div>
+            <div class="macro-import-content">
+              <div id="macroApiSyncCurrent" class="macro-api-sync-summary"></div>
+              <div class="macro-api-sync-backup"><div><strong>Backup antes da sincronização</strong><p>Baixe e confira o backup completo da base local. A sincronização só será liberada depois da confirmação.</p></div><button id="downloadMacroApiSyncBackup" class="btn" type="button">Baixar backup completo JSON</button></div>
+              <label class="macro-api-sync-confirm"><input id="confirmMacroApiSyncBackup" type="checkbox" disabled> Baixei e conferi o backup desta base.</label>
+              <p id="macroApiSyncStatus" class="macro-api-sync-status" role="status" aria-live="polite">Nenhuma consulta realizada.</p>
+              <div class="macro-import-actions"><button id="cancelMacroApiSync" class="btn" type="button">Cancelar</button><button id="runMacroApiSync" class="btn primary" type="button" disabled>Sincronizar dados via API Google Ads</button></div>
+            </div>
+          </div>
+        </div>

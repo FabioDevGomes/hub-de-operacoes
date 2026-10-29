@@ -1,7 +1,7 @@
 (function(){
   // UI navigation only: domain renderers and storage remain in their modules.
-  function create({registry,document,history,location,eventTarget,state,entries,onFrame=()=>{},onError=()=>{},extraSectionIds=[],extraNavIds=[],clearBodyClasses=[]}){
-    let revision=0,bound=false;
+  function create({registry,document,history,location,eventTarget,state,entries,onFrame=()=>{},onError=()=>{},guardRoute=id=>id,onRouteBlocked=()=>{},extraSectionIds=[],extraNavIds=[],clearBodyClasses=[]}){
+    let revision=0,bound=false,lastRoutedView=null;
     const views=registry.enabledViews();
     const sectionIds=new Set([...views.map(view=>view.sectionId),...Object.values(entries).map(entry=>entry.sectionId),...extraSectionIds].filter(Boolean));
     const navIds=new Set([...views.map(view=>view.navId),...extraNavIds].filter(Boolean));
@@ -27,13 +27,16 @@
       if(by('pageSubtitle'))by('pageSubtitle').textContent=view.subtitle;
       document.title=view.title;
       const group=entry.group||by(view.navId)?.closest('[data-sidebar-group]')?.dataset.sidebarGroup;
+      by('openAutoPauseReport')?.classList.toggle('hidden',view.id!=='totals');
       by('registerSale')?.classList.toggle('hidden',view.id!=='totals');
       by('correctCampaignDate')?.classList.toggle('hidden',group!=='operation'&&group!=='products');
       if(group)document.defaultView?.HubSidebar?.setOpenGroup(group);
     }
 
     function open(id,{source='programmatic',updateUrl=true}={}){
-      const view=definition(id),entry=entries[view.id];
+      const requestedView=definition(id),guardedId=guardRoute(requestedView.id,{source,state})||requestedView.id;
+      if(guardedId!==requestedView.id)onRouteBlocked(requestedView.id,{source,state});
+      const view=definition(guardedId),entry=entries[view.id];
       if(!entry)throw new Error(`Tela sem adaptador de navegação: ${view.id}`);
       const currentRevision=++revision;
       const isCurrent=()=>revision===currentRevision;
@@ -46,6 +49,10 @@
         // The campaign diary and Meu Tempo provide their own contextual title.
         if(entry.contextualTitle)document.title=by('pageTitle')?.textContent||view.title;
         onFrame(view);
+        const shouldRecord=guardedId===requestedView.id&&source!=='guard'&&(lastRoutedView===null||lastRoutedView!==view.id||source==='menu'||source==='history');
+        lastRoutedView=view.id;
+        const CustomEventConstructor=document.defaultView?.CustomEvent||globalThis.CustomEvent;
+        if(shouldRecord&&CustomEventConstructor)document.dispatchEvent(new CustomEventConstructor('hub:screen-visited',{detail:{viewId:view.id,source}}));
       };
       const result=entry.render?.({isCurrent});
       if(result&&typeof result.then==='function')return result.then(value=>{finish();return value});

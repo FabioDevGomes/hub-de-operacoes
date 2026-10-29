@@ -50,7 +50,7 @@ assert.equal(current.celulas.Q.value, 'Qualificada');
 assert.equal(current.celulas.O.value, 25);
 assert.equal(projected.campanhas[0].status, 'ativa');
 assert.equal(database.manifestOperationalStates(projected.manifesto_atual).get(row.campaign_name.toLowerCase()), 'ativa', 'estado atual explícito prevalece sem reescrever métricas antigas');
-assert.equal(projected.manifesto_atual.campanhas[0].metricas_D_zero.data.valor, '2026-10-25');
+assert.equal(projected.manifesto_atual.campanhas[0].metricas_D_zero.data.valor, '2026-10-26', 'a projeção operacional apresenta o D0 da API; o manifesto persistido segue inalterado');
 
 const sale = prepared.billingCandidates[0];
 assert.equal(sale.sale_id, 'mcc-conversion:cmp_existing:2026-10-26', 'API e MCC precisam reutilizar a mesma chave financeira');
@@ -64,6 +64,26 @@ manualBase.vendas_provisorias = [{id:'manual-1',campanha_id:'cmp_existing',data:
 const residual = database.googleAdsApiBillingSales(manualBase)[0];
 assert.equal(residual.conversion_count, 1);
 assert.equal(residual.value_usd, null, 'valor agregado não pode ser repartido sobre venda manual para duplicar receita');
+
+const batchBase = structuredClone(prepared.base);
+const batchCampaigns = [
+  { id:'cmp_batch_1', nome_mcc:'Campanha CB-BB em lote 1', nome_exibicao:'Lote 1', conta_id:'222-222-2222', mcc_id:'111-111-1111' },
+  { id:'cmp_batch_2', nome_mcc:'Campanha CB-BB em lote 2', nome_exibicao:'Lote 2', conta_id:'222-222-2222', mcc_id:'111-111-1111' },
+  { id:'cmp_batch_3', nome_mcc:'Campanha CB-BB em lote 3', nome_exibicao:'Lote 3', conta_id:'222-222-2222', mcc_id:'111-111-1111' },
+];
+batchBase.campanhas.push(...batchCampaigns);
+batchBase.vendas_provisorias = [{ id:'manual-batch', campanha_id:'cmp_batch_2', data:date, status:'provisoria', valor_brl:50 }];
+batchBase.google_ads_api_daily_captures[0].rows = batchCampaigns.map((campaign, index) => ({
+  campaignInternalId:campaign.id,
+  mappingStatus:'mapped',
+  conversions:index === 1 ? 1 : index + 1,
+  conversionsValue:(index + 1) * 25,
+}));
+const batchSales = database.googleAdsApiBillingSales(batchBase);
+assert.equal(batchSales.length, 3, 'a agregação financeira preserva todos os candidatos de um lote com várias campanhas');
+assert.equal(batchSales.find(item=>item.campaign_id==='cmp_batch_1').conversion_count, 1);
+assert.equal(batchSales.find(item=>item.campaign_id==='cmp_batch_2').conversion_count, 0, 'lançamento manual segue abatido do agregado API');
+assert.equal(batchSales.find(item=>item.campaign_id==='cmp_batch_3').value_usd, 75);
 
 const zeroFallbackBase = structuredClone(base);
 zeroFallbackBase.diario.push({campanha_id:'cmp_existing',data:date,fontes:['manifesto'],celulas:{J:{value:25},K:{value:0.8},L:{value:0.8},R:{value:0.8}}});
@@ -82,7 +102,7 @@ assert.equal(database.googleAdsApiBillingSales(noRows.base)[0].active, false, 'z
 const incomplete = database.saveGoogleAdsDailyCaptures(base, [{ ...report, rows:[], queryComplete:false }], options);
 assert.equal(incomplete.base.google_ads_api_daily_captures[0].rows.length, 0);
 assert.equal(database.googleAdsApiBillingSales(incomplete.base).length, 0, 'falha de cobertura não altera o financeiro');
-assert.throws(() => database.saveGoogleAdsDailyCaptures(base, [{ ...report, configuration:{...configuration,currencyCode:'BRL'} }], options), /mesma conta/);
+assert.throws(() => database.saveGoogleAdsDailyCaptures(base, [{ ...report, configuration:{...configuration,currencyCode:'BRL'} }], options), /moeda:/);
 assert.throws(() => database.saveGoogleAdsDailyCaptures(base, [{ ...report,dateFrom:'2026-10-25',dateTo:'2026-10-25' }], options), /janela/);
 
 const storedSales = new Map(), audit = [];
@@ -119,8 +139,8 @@ function isolatedDatabase({failFinancial=false}={}) {
       assert.ok(names.includes(name), `store ${name} precisa pertencer à mesma transação`);
       if(name==='billing_audit')return{add(){}};
       const source=name==='bases'?rows:sales,staged=name==='bases'?stagedBase:stagedSales;
-      return{get(key){if(failFinancial&&name==='billing_sales')throw new Error('falha financeira sintética');const request={};queueMicrotask(()=>{request.result=source.get(key);request.onsuccess();});return request;},put(value,key){staged.set(key??value.sale_id,structuredClone(value));},add(value){staged.set(value.sale_id,structuredClone(value));}};
-    },abort(){cancelled=true;queueMicrotask(()=>transaction.onabort());}};
+      return{get(key){if(failFinancial&&name==='billing_sales')throw new Error('falha financeira sintética');const request={};queueMicrotask(()=>{request.result=structuredClone(source.get(key));request.onsuccess();});return request;},put(value,key){staged.set(key??value.sale_id,structuredClone(value));},add(value){staged.set(value.sale_id,structuredClone(value));}};
+    },abort(){cancelled=true;stagedBase.clear();stagedSales.clear();queueMicrotask(()=>transaction.onabort());}};
     setImmediate(()=>{if(cancelled)return;for(const[key,value]of stagedBase)rows.set(key,value);for(const[key,value]of stagedSales)sales.set(key,value);transaction.oncomplete();});
     return transaction;
   }})};

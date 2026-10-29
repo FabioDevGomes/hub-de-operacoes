@@ -22,7 +22,7 @@ function mount(initial=false) {
     createElement:()=>({dataset:{},innerHTML:'',querySelector:()=>icon,setAttribute:(k,v)=>attributes.set(k,v),addEventListener:(_event,fn)=>{button.click=fn;}}),
   };
   const localStorage={getItem:k=>values.get(k)??null,setItem:(k,v)=>{writes.push([k,v]);values.set(k,v);},removeItem:k=>{writes.push([k,null]);values.delete(k);}};
-  vm.runInNewContext(source,{window:{__hubWaterReminderStarted:true},document,localStorage,CSS:{escape:v=>v}});
+  vm.runInNewContext(source,{window:{__hubWaterReminderStarted:true,addEventListener:()=>{}},document,localStorage,CSS:{escape:v=>v}});
   return {get button(){return button;},icon,attributes,writes,classes};
 }
 

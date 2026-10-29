@@ -1,9 +1,13 @@
 import {
+  buildGuruMediaPostbackMacroParams,
   formatGuruMediaPayout,
+  GURUMEDIA_POSTBACK_ENDPOINT,
+  GURUMEDIA_POSTBACK_MACRO_DEFAULTS,
+  inspectGuruMediaPostbackUrl,
   guruMediaTrackFilterKey,
   sumGuruMediaPayouts,
   validateGuruMediaSalesDateRange,
-} from './tracking-gurumedia-domain.mjs?v=1';
+} from './tracking-gurumedia-domain.mjs?v=2';
 import { fetchGuruMediaSalesReport, fetchTrackingClicksReport, fetchTrackingDomains } from './tracking-service.mjs?v=18';
 import { readTrackingHubToken } from './tracking-token-storage.mjs?v=2';
 import { readGuruMediaSalesSnapshot, saveGuruMediaSalesSnapshot } from './tracking-gurumedia-storage.mjs?v=1';
@@ -27,7 +31,7 @@ import {
 } from './tracking-gurumedia-conversion-actions-storage.mjs?v=1';
 
 export const TRACKING_GURUMEDIA_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-export const TRACKING_GURUMEDIA_POSTBACK_URL = 'https://track.travenzo.shop/gurumedia-sales-postback.php';
+export const TRACKING_GURUMEDIA_POSTBACK_URL = GURUMEDIA_POSTBACK_ENDPOINT;
 const GURUMEDIA_POSTBACK_TOKEN_PATTERN = /^[a-f0-9]{64}$/i;
 const GURUMEDIA_MACRO_PATTERN = /^\{[a-z][a-z0-9_]*\}$/i;
 const mountedRoots = new WeakMap();
@@ -100,13 +104,11 @@ export function mount({
     lastRefreshAtUtc: '',
     cacheSavedAtUtc: '',
     cacheWarning: '',
+    postbackConfigExpanded: false,
     postbackToken: '',
+    activePostbackUrl: '',
     postbackMacros: {
-      transactionId: '{transaction_id}',
-      offerId: '',
-      offerName: '{offer_name}',
-      payoutAmount: '{payout_amount}',
-      currency: '{offer_currency}',
+      ...GURUMEDIA_POSTBACK_MACRO_DEFAULTS,
     },
     postbackMessage: '',
     postbackError: false,
@@ -282,7 +284,7 @@ export function mount({
     const feedback = state.trafficFeedback
       ? `<p class="tracking-message${state.trafficError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.trafficFeedback)}</p>` : '';
     return `<section class="tracking-panel tracking-clicks-panel tracking-gurumedia-results" aria-label="Visitas e cliques GuruMedia">
-      <div class="tracking-table-heading"><div><h2>Visitas e cliques GuruMedia</h2><p>Contagem dos domínios classificados como GuruMedia nas Configurações globais.</p></div><span class="tracking-count">${formatCount(rows.length)} linha(s)</span></div>
+      <div class="tracking-table-heading"><div><h2>Visitas e cliques GuruMedia</h2><p>Contagem dos domínios classificados como GuruMedia no Tracker Global.</p></div><span class="tracking-count">${formatCount(rows.length)} linha(s)</span></div>
       <p class="tracking-auto-refresh-note">${escapeHtml(autoStatus)}</p>
       <p class="tracking-connection-note">A MCC Ads é associada pelo produto e pela conta do nome da Track com o vínculo MCC do manifesto. “Não identificada” ou “MCC ambígua” indica que não há uma associação única; esta informação é apenas consultiva e não configura nem envia conversões.</p>
       <div class="tracking-summary" aria-label="Resumo de visitas e cliques GuruMedia">
@@ -394,19 +396,11 @@ export function mount({
 
   function postbackUrl() {
     if (!GURUMEDIA_POSTBACK_TOKEN_PATTERN.test(state.postbackToken)) return '';
-    const mappings = [
-      ['transaction_id', state.postbackMacros.transactionId, true],
-      ['click_id', '{sub6}', true],
-      ['offer_id', state.postbackMacros.offerId, false],
-      ['offer_name', state.postbackMacros.offerName, false],
-      ['payout_amount', state.postbackMacros.payoutAmount, true],
-      ['currency', state.postbackMacros.currency, true],
-    ];
-    if (mappings.some(([, macro, required]) => required && !GURUMEDIA_MACRO_PATTERN.test(macro))) return '';
-    if (mappings.some(([, macro]) => macro && !GURUMEDIA_MACRO_PATTERN.test(macro))) return '';
+    const mappings = buildGuruMediaPostbackMacroParams(state.postbackMacros);
+    if (!mappings) return '';
     const params = [
       `token=${encodeURIComponent(state.postbackToken)}`,
-      ...mappings.filter(([, macro]) => macro).map(([key, macro]) => `${key}=${macro}`),
+      ...mappings,
     ];
     return `${TRACKING_GURUMEDIA_POSTBACK_URL}?${params.join('&')}`;
   }
@@ -414,26 +408,14 @@ export function mount({
   function postbackUrlPreview() {
     const generated = postbackUrl();
     if (generated) return generated.replace(/([?&]token=)[^&]*/, '$1••••••••');
-    const requiredMappings = [
-      state.postbackMacros.transactionId,
-      '{sub6}',
-      state.postbackMacros.payoutAmount,
-      state.postbackMacros.currency,
-    ];
+    const requiredMappings = [state.postbackMacros.transactionId, state.postbackMacros.offerId,
+      state.postbackMacros.payoutAmount, state.postbackMacros.currency, state.postbackMacros.conversionTime];
     if (requiredMappings.some(macro => !GURUMEDIA_MACRO_PATTERN.test(macro))) {
-      return 'Preencha cada macro obrigatório com o valor entre chaves do seletor Add Macro da GuruMedia.';
+      return 'Preencha os macros obrigatórios, incluindo ID da oferta e horário da conversão, com os valores entre chaves do seletor Add Macro da GuruMedia.';
     }
-    const mappings = [
-      ['transaction_id', state.postbackMacros.transactionId],
-      ['click_id', '{sub6}'],
-      ['offer_id', state.postbackMacros.offerId],
-      ['offer_name', state.postbackMacros.offerName],
-      ['payout_amount', state.postbackMacros.payoutAmount],
-      ['currency', state.postbackMacros.currency],
-    ].filter(([, macro]) => macro);
-    const validMacros = mappings.every(([, macro]) => GURUMEDIA_MACRO_PATTERN.test(macro));
-    if (!validMacros) return 'Revise os campos de macro: use os valores entre chaves mostrados pelo seletor Add Macro da GuruMedia.';
-    return `${TRACKING_GURUMEDIA_POSTBACK_URL}?token=SEU_SEGREDO_DE_64_CARACTERES&${mappings.map(([key, macro]) => `${key}=${macro}`).join('&')}`;
+    const mappings = buildGuruMediaPostbackMacroParams(state.postbackMacros);
+    if (!mappings) return 'Revise os campos de macro: use os valores entre chaves mostrados pelo seletor Add Macro da GuruMedia.';
+    return `${TRACKING_GURUMEDIA_POSTBACK_URL}?token=SEU_SEGREDO_DE_64_CARACTERES&${mappings.join('&')}`;
   }
 
   function updatePostbackPreview() {
@@ -443,6 +425,31 @@ export function mount({
     if (copyUrl) copyUrl.disabled = !postbackUrl();
     const copySnippet = root.querySelector('[data-gurumedia-action="copy-postback-config"]');
     if (copySnippet) copySnippet.disabled = !GURUMEDIA_POSTBACK_TOKEN_PATTERN.test(state.postbackToken);
+  }
+
+  function postbackCheckSummaryHtml() {
+    if (!state.activePostbackUrl) return '<p class="tracking-gurumedia-check-status">Cole a URL ativa para conferir seus parâmetros. A tela não consulta a conta GuruMedia.</p>';
+    const result = inspectGuruMediaPostbackUrl(state.activePostbackUrl);
+    const status = result.valid
+      ? 'Endpoint e macros conferem com o padrão desta tela.'
+      : 'Há diferenças entre a URL ativa e o padrão esperado.';
+    const endpoint = result.endpointMatches ? 'Endpoint do Hub: confere' : 'Endpoint do Hub: diferente';
+    const token = result.tokenPresent ? 'Segredo: presente (valor oculto)' : 'Segredo: ausente ou repetido';
+    const checkRows = result.checks.map(({ parameter, expectedMacro, status: checkStatus, required }) => {
+      const label = checkStatus === 'ok'
+        ? `${parameter} = ${expectedMacro}`
+        : checkStatus === 'optional-missing'
+          ? `${parameter}: ausente (opcional)`
+          : `${parameter}: corrigir para ${expectedMacro}${required ? ' · obrigatório' : ''}`;
+      const className = checkStatus === 'ok' || checkStatus === 'optional-missing' ? 'is-ok' : 'is-error';
+      return `<li class="${className}">${escapeHtml(label)}</li>`;
+    }).join('');
+    return `<p class="tracking-gurumedia-check-status${result.valid ? ' is-ok' : ' is-error'}" role="status" aria-live="polite">${escapeHtml(status)}</p><ul><li class="${result.endpointMatches ? 'is-ok' : 'is-error'}">${escapeHtml(endpoint)}</li><li class="${result.tokenPresent ? 'is-ok' : 'is-error'}">${escapeHtml(token)}</li>${checkRows}</ul>`;
+  }
+
+  function updatePostbackCheck() {
+    const result = root.querySelector('#guruMediaPostbackCheckResult');
+    if (result) result.innerHTML = postbackCheckSummaryHtml();
   }
 
   async function copyPostbackValue(value, successMessage) {
@@ -517,7 +524,11 @@ export function mount({
       ? `<p class="tracking-message${state.feedbackError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.feedback)}</p>` : '';
     root.innerHTML = `<div class="tracking-session tracking-gurumedia-session">
       <section class="tracking-panel tracking-gurumedia-postback-panel" aria-label="Configuração do postback GuruMedia">
-        <div class="tracking-table-heading"><div><h2>Configuração do postback GuruMedia</h2><p>O postback é configurado uma vez na conta GuruMedia e pode atender várias Tracks; o <code>sub6</code> do clique identifica a Pre-Sell.</p></div></div>
+        <div class="tracking-intro-head tracking-gurumedia-postback-heading">
+          <div class="tracking-intro-copy"><h2>Configuração do postback GuruMedia</h2><p>O postback é configurado uma vez na conta GuruMedia e pode atender várias Tracks; o <code>sub6</code> do clique identifica a Pre-Sell.</p></div>
+          <div class="tracking-intro-head-actions"><button type="button" class="btn tracking-connection-config-toggle" data-gurumedia-action="toggle-postback-config" aria-controls="guruMediaPostbackConfig" aria-expanded="${state.postbackConfigExpanded ? 'true' : 'false'}">${state.postbackConfigExpanded ? 'Recolher configurações' : 'Exibir configurações'}</button></div>
+        </div>
+        <div id="guruMediaPostbackConfig" class="tracking-connection-config"${state.postbackConfigExpanded ? '' : ' hidden'}>
         <div class="tracking-domain-token-grid tracking-gurumedia-token-grid">
           <label class="tracking-token-field" for="guruMediaPostbackToken"><span>Segredo em tracking-config.php</span><input id="guruMediaPostbackToken" type="password" inputmode="text" autocomplete="new-password" spellcheck="false" maxlength="64" placeholder="64 caracteres hexadecimais; mesmo valor no servidor" value="${escapeHtml(state.postbackToken)}"></label>
           <div class="tracking-domain-actions"><button type="button" class="btn" data-gurumedia-action="generate-postback-token">Gerar segredo</button><button type="button" class="btn" data-gurumedia-action="copy-postback-config"${GURUMEDIA_POSTBACK_TOKEN_PATTERN.test(state.postbackToken) ? '' : ' disabled'}>Copiar trecho para o servidor</button></div>
@@ -526,16 +537,24 @@ export function mount({
         <div class="tracking-email-grid tracking-gurumedia-macro-grid">
           <label class="tracking-token-field" for="guruMediaTransactionMacro"><span>ID único da venda · obrigatório</span><input id="guruMediaTransactionMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.transactionId)}"></label>
           <label class="tracking-token-field" for="guruMediaClickMacro"><span>ID do clique do Hub · obrigatório</span><input id="guruMediaClickMacro" type="text" readonly value="{sub6}"><small>O script envia o ID do clique em <code>sub6</code>.</small></label>
-          <label class="tracking-token-field" for="guruMediaOfferIdMacro"><span>ID da oferta · opcional</span><input id="guruMediaOfferIdMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="deixe vazio se não houver macro" value="${escapeHtml(state.postbackMacros.offerId)}"></label>
+          <label class="tracking-token-field" for="guruMediaOfferIdMacro"><span>ID da oferta · necessário para identificação automática</span><input id="guruMediaOfferIdMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.offerId)}"></label>
           <label class="tracking-token-field" for="guruMediaOfferNameMacro"><span>Nome da oferta · opcional</span><input id="guruMediaOfferNameMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.offerName)}"></label>
           <label class="tracking-token-field" for="guruMediaPayoutMacro"><span>Payout · obrigatório</span><input id="guruMediaPayoutMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.payoutAmount)}"></label>
           <label class="tracking-token-field" for="guruMediaCurrencyMacro"><span>Moeda do payout · obrigatória</span><input id="guruMediaCurrencyMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.currency)}"></label>
+          <label class="tracking-token-field" for="guruMediaConversionTimeMacro"><span>Horário real da conversão · obrigatório</span><input id="guruMediaConversionTimeMacro" type="text" autocomplete="off" spellcheck="false" maxlength="64" value="${escapeHtml(state.postbackMacros.conversionTime)}"><small>Envia <code>{timestamp}</code> para gravar <code>conversion_at_utc</code>.</small></label>
         </div>
-        <p class="tracking-connection-note">Use os valores entre chaves que aparecem no menu <strong>Add Macro</strong> da GuruMedia. Os padrões refletem os macros visíveis nos prints enviados; <code>offer_id</code> é opcional e pode ficar vazio se a conta não oferecer esse macro.</p>
+        <p class="tracking-connection-note">O padrão inclui os parâmetros ativos que você mostrou: <code>conversion_time={timestamp}</code> e <code>offer_id={offer_id}</code>. O ID da oferta permite o aprendizado automático; o horário preserva o momento real da conversão. Use os nomes exatos do menu <strong>Add Macro</strong> da GuruMedia.</p>
         <label class="tracking-token-field" for="guruMediaPostbackUrl"><span>URL para cadastrar em GuruMedia → Postbacks</span><textarea id="guruMediaPostbackUrl" rows="3" readonly spellcheck="false">${escapeHtml(postbackUrlPreview())}</textarea></label>
         <div class="tracking-domain-actions"><button type="button" class="btn primary" data-gurumedia-action="copy-postback-url"${postbackUrl() ? '' : ' disabled'}>Copiar URL completa</button></div>
+        <section class="tracking-gurumedia-postback-check" aria-label="Conferência da URL ativa na GuruMedia">
+          <div><h3>Conferir URL ativa</h3><p>Cole a URL copiada de GuruMedia → Postbacks. A conferência roda só nesta aba; a URL e o token não são enviados nem salvos pelo Hub.</p></div>
+          <label class="tracking-token-field" for="guruMediaActivePostbackUrl"><span>URL ativa da GuruMedia · mascarada</span><input id="guruMediaActivePostbackUrl" type="password" autocomplete="off" spellcheck="false" maxlength="4096" value="${escapeHtml(state.activePostbackUrl)}" placeholder="Cole aqui a URL ativa do postback"></label>
+          <div id="guruMediaPostbackCheckResult">${postbackCheckSummaryHtml()}</div>
+          <p class="tracking-connection-note">A conferência valida endpoint, presença do segredo e parâmetros/macros. Ela não confirma se o postback está Active, se usa Conversion/Postback, nem se a GuruMedia já disparou uma venda.</p>
+        </section>
         <p id="guruMediaPostbackMessage" class="tracking-message${state.postbackError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.postbackMessage || 'Na GuruMedia, escolha Conversion, Postback e Global se puder coexistir com a Flow. Se não permitir outro Global, use Specific para a oferta de validação; não altere o postback da Flow.')}</p>
         <p class="tracking-connection-note">Este painel monta os dados localmente e não consulta nem grava configuração na GuruMedia. Para o postback realmente registrar vendas, publique o pacote do servidor e execute a migração SQL antes de ativá-lo.</p>
+        </div>
       </section>
       <section class="tracking-panel tracking-clicks-panel" aria-label="Relatório de vendas GuruMedia">
         <div class="tracking-intro-head tracking-clicks-head"><div class="tracking-intro-copy"><h2>Vendas GuruMedia</h2><p>Consulta postbacks de conversão associados a cliques de saída e Tracks cadastradas no Hub. Checkout e envio de conversões ao Google Ads não fazem parte desta tela.</p></div>
@@ -723,7 +742,10 @@ export function mount({
 
   root.addEventListener('click', event => {
     const action = event.target.closest?.('[data-gurumedia-action]')?.dataset.gurumediaAction;
-    if (action === 'refresh') void refresh();
+    if (action === 'toggle-postback-config') {
+      state.postbackConfigExpanded = !state.postbackConfigExpanded;
+      render();
+    } else if (action === 'refresh') void refresh();
     else if (action === 'load-conversion-actions') void loadConversionActions(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
     else if (action === 'save-conversion-action') saveConversionAction(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
     else if (action === 'remove-conversion-action') removeConversionAction(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
@@ -737,7 +759,13 @@ export function mount({
       guruMediaOfferNameMacro: value => { state.postbackMacros.offerName = value.trim(); },
       guruMediaPayoutMacro: value => { state.postbackMacros.payoutAmount = value.trim(); },
       guruMediaCurrencyMacro: value => { state.postbackMacros.currency = value.trim(); },
+      guruMediaConversionTimeMacro: value => { state.postbackMacros.conversionTime = value.trim(); },
     };
+    if (event.target?.id === 'guruMediaActivePostbackUrl') {
+      state.activePostbackUrl = String(event.target.value ?? '').trim();
+      updatePostbackCheck();
+      return;
+    }
     const update = values[event.target?.id];
     if (update) {
       update(String(event.target.value ?? ''));

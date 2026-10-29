@@ -1,6 +1,7 @@
 # Manutenção deste repositório
 
 - Antes de editar, leia `.agents/skills/painel-operacao-google-ads/SKILL.md` (skill canônica local), `docs/maintenance.md` e as referências do domínio afetado. Não use a cópia global desatualizada como fonte de regras do Hub.
+- Para a resposta final ao usuário, siga `docs/padrao-de-resposta.md`, incluindo uma linha final curta de **Próximo passo**. Em deploy manual, leia também `voc-meu-analista-de-dados-e/tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` no checkout local irmão e o README específico do pacote.
 - Para qualquer nova implementação, siga `docs/maintenance.md` > **Regras para novas implementações** e **Roteiro de execução**. Escolha o módulo responsável antes de editar; não aumente o HTML principal com regras, templates ou eventos de telas já extraídas.
 - Domínio puro calcula sem DOM, banco ou API; view apresenta e encaminha ações; adaptador fornece snapshots/callbacks; storage e service executam efeitos explícitos. Não importe outra view para reutilizar lógica. Reutilize o domínio, serviço ou componente compartilhado apropriado.
 - Refatoração preserva funcionalidades, botões, IDs, APIs, chaves de rascunho, métricas e dados. Remover um recurso exige pedido explícito: teste desatualizado não autoriza sua remoção. Atualize testes para verificar o comportamento, não o antigo endereço físico de uma função.

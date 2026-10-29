@@ -3,7 +3,6 @@
 /* O acabamento vem do padrão compartilhado; preserve a geometria local. */
 .copy-ficha-btn.hub-white-button{padding:8px 12px;font-size:inherit}
 .copy-ficha-textarea.is-pending{border-color:#ff5867!important;box-shadow:0 0 0 2px rgba(255,88,103,.17)}
-#copyFichaSource{min-height:230px}
 .copy-ficha-validation>.copy-ficha-body>.copy-ficha-grid{gap:8px}
 .copy-ficha-validation>.copy-ficha-body>.copy-ficha-grid>.copy-ficha-field>.copy-ficha-input,.copy-ficha-validation>.copy-ficha-body>.copy-ficha-grid>.copy-ficha-field>.copy-ficha-select{padding:7px 8px}
 .copy-ficha-discount-pair{grid-column:span 2;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:6px}
@@ -15,7 +14,61 @@
 .copy-ficha-validation>.copy-ficha-body>.copy-ficha-grid{align-items:start}
 .copy-ficha-validation .copy-ficha-field>label{display:flex;align-items:flex-end;min-height:1.25rem;line-height:1.2}
 .copy-ficha-validation .copy-ficha-input,.copy-ficha-validation .copy-ficha-select{box-sizing:border-box;height:40px;min-height:40px}
+.copy-ficha-auto-update-note{margin-left:5px;color:#ffd590;font-size:.64rem;font-weight:650;line-height:1.2}
 .copy-ficha-discount-pair{align-items:start}
+.copy-ficha-tracking{margin-top:22px;padding:12px;border:1px solid var(--line);border-radius:11px;background:rgba(7,20,38,.5)}
+.copy-ficha-tracking+.copy-ficha-actions{margin-top:24px}
+.copy-ficha-structured-field+.copy-ficha-actions{margin-top:24px}
+.copy-ficha-tracking-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.copy-ficha-tracking-heading h3{margin:0;font-size:.86rem}
+.copy-ficha-tracking-toggle{display:flex;align-items:center;gap:8px;font-size:.76rem;color:#c9d9ed}
+.copy-ficha-tracking-toggle input{width:16px;height:16px;accent-color:#25b77b}
+.copy-ficha-tracking>.copy-ficha-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.copy-ficha-tracking>.copy-ficha-grid>.copy-ficha-field{align-self:start}
+.copy-ficha-tracking [hidden]{display:none!important}
+.copy-ficha-tracking #copyTrackingTitlePreview{color:#8cf0c5;border-color:#236347}
+.copy-ficha-tracking #copyTrackingAccount option[data-map-target="true"]{color:#137a53;font-weight:700}
+.copy-ficha-tracking-hpanel{grid-column:1/-1;display:grid;gap:6px;padding:10px;border:1px solid var(--line);border-radius:9px;background:rgba(8,25,43,.62)}
+.copy-ficha-tracking-hpanel>p{margin:0}
+.copy-ficha-hpanel-links{display:grid;gap:6px}
+.copy-ficha-hpanel-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid #294767;border-radius:8px;background:#0a1a2d}
+.copy-ficha-hpanel-row.is-multi{display:grid;grid-template-columns:auto minmax(150px,.85fr) minmax(220px,1.4fr) auto;align-items:center}
+.copy-ficha-hpanel-row.is-unselected{opacity:.68}
+.copy-ficha-hpanel-choice{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.copy-ficha-hpanel-choice input{width:16px;height:16px;accent-color:#25b77b}
+.copy-ficha-hpanel-count{margin:0 0 2px}
+.copy-ficha-hpanel-setup{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(250px,.8fr);align-items:end;gap:14px}
+.copy-ficha-hpanel-setup>p{margin:0}
+.copy-ficha-hpanel-subdomain{display:grid;gap:4px;min-width:0}
+.copy-ficha-hpanel-subdomain label{font-size:.72rem;font-weight:750;color:#c9d9ed}
+.copy-ficha-hpanel-subdomain input{box-sizing:border-box;height:40px;min-width:0}
+.copy-ficha-hpanel-subdomain .copy-ficha-note{margin:0;font-size:.68rem}
+.copy-ficha-hpanel-account{display:grid;gap:2px;min-width:0}
+.copy-ficha-hpanel-account strong{overflow-wrap:anywhere;font-size:.76rem}
+.copy-ficha-hpanel-account small{color:var(--muted);font-size:.68rem}
+.copy-ficha-hpanel-public-url{display:grid;gap:4px;min-width:0}
+.copy-ficha-hpanel-public-url label{font-size:.68rem;color:#aebfd4}
+.copy-ficha-hpanel-public-url input{width:100%;min-width:0}
+.copy-ficha-hpanel-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;min-width:0}
+.copy-ficha-hpanel-actions>a{color:#70bdff;font-size:.76rem;font-weight:700;white-space:nowrap}
+@media(max-width:820px){.copy-ficha-hpanel-row.is-multi{grid-template-columns:auto minmax(0,1fr)}.copy-ficha-hpanel-row.is-multi>.copy-ficha-hpanel-public-url,.copy-ficha-hpanel-row.is-multi>.copy-ficha-hpanel-actions,.copy-ficha-hpanel-row.is-multi>.copy-ficha-note{grid-column:2}.copy-ficha-hpanel-row.is-multi>.copy-ficha-hpanel-actions{align-items:flex-start}}
+@media(max-width:820px){.copy-ficha-hpanel-setup{grid-template-columns:1fr;align-items:stretch}}
+@media(max-width:620px){.copy-ficha-hpanel-row{align-items:flex-start;flex-direction:column}.copy-ficha-hpanel-row.is-multi{grid-template-columns:auto minmax(0,1fr)}.copy-ficha-hpanel-row.is-multi>.copy-ficha-hpanel-public-url,.copy-ficha-hpanel-row.is-multi>.copy-ficha-hpanel-actions,.copy-ficha-hpanel-row.is-multi>.copy-ficha-note{grid-column:2}.copy-ficha-hpanel-actions{align-items:flex-start}}
+.copy-ficha-tracking>.copy-ficha-note{margin:9px 0 0}
+.copy-ficha-tracking-modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(1,8,17,.78);backdrop-filter:blur(5px)}
+.copy-ficha-tracking-dialog{width:min(760px,100%);max-height:min(85vh,760px);overflow:auto;padding:18px;border:1px solid #31577a;border-radius:16px;background:linear-gradient(180deg,#102139,#091729);box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.copy-ficha-tracking-dialog>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.copy-ficha-tracking-dialog>header h2{margin:0;font-size:1.05rem}
+.copy-ficha-tracking-dialog>p{margin:0 0 14px}
+.copy-ficha-tracking-dialog>label{display:block;margin-bottom:6px;font-size:.76rem;font-weight:750;color:#c9d9ed}
+.copy-ficha-tracking-batch-item{display:grid;gap:7px;margin-top:12px;padding:12px;border:1px solid #294767;border-radius:10px;background:rgba(8,25,43,.72)}
+.copy-ficha-tracking-batch-item h3{margin:0;font-size:.86rem}
+.copy-ficha-tracking-batch-item>p{margin:0}
+.copy-ficha-tracking-batch-item>label{font-size:.76rem;font-weight:750;color:#c9d9ed}
+.copy-ficha-tracking-script{width:100%;min-height:90px;margin:0}
+.copy-ficha-tracking-dialog .copy-ficha-actions{align-items:center}
+.copy-ficha-tracking-dialog a{display:inline-flex;align-items:center;text-decoration:none}
+@media(max-width:620px){.copy-ficha-tracking>.copy-ficha-grid{grid-template-columns:1fr}.copy-ficha-tracking>.copy-ficha-grid>.copy-ficha-field.span-2{grid-column:auto}}
 .copy-ficha-shell{width:100%;margin-inline:auto}
 .copy-ficha-shell .copy-ficha-card,.copy-ficha-shell .copy-ficha-package,.copy-ficha-shell .copy-ficha-question-list,.copy-ficha-shell .copy-ficha-output-empty,.copy-ficha-shell .presell-result,.copy-ficha-shell .copy-ficha-chip{border:0}
 .copy-ficha-clipboard-row{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);align-items:center;gap:10px}
@@ -29,3 +82,14 @@
 .copy-ficha-manual-paste .copy-ficha-textarea{min-height:110px}
 .copy-ficha-manual-paste #copyAnalyzeManual{justify-self:start}
 @media(max-width:620px){.copy-ficha-clipboard-row{grid-template-columns:max-content max-content}.copy-ficha-clipboard-status{grid-column:1/-1}}
+.copy-ficha-structured-toolbar{grid-template-columns:max-content minmax(0,1fr)}
+.copy-ficha-structured-toolbar>.copy-ficha-btn{min-height:38px}
+.copy-ficha-structured-analysis{margin-top:8px;padding:2px;border-radius:8px}
+.copy-ficha-structured-analysis[hidden]{display:none}
+.copy-ficha-structured-analysis.is-pending{box-shadow:0 0 0 2px rgba(255,88,103,.3)}
+.copy-ficha-structured-items{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.copy-ficha-structured-chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:.67rem;line-height:1.25;color:#c9d9ed;background:#132b3f}
+.copy-ficha-structured-chip.is-valid{color:#aaf0d1;background:#0d3429}
+.copy-ficha-structured-chip.is-invalid{color:#ffb7be;background:#42232a}
+.copy-ficha-structured-chip.is-optional{color:#aebfd4;background:#17283a}
+@media(max-width:620px){.copy-ficha-structured-toolbar{grid-template-columns:1fr}.copy-ficha-structured-toolbar .copy-ficha-clipboard-status{grid-column:1}}

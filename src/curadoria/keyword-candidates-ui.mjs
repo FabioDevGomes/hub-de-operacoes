@@ -36,6 +36,7 @@ export function renderKeywordCandidates(container, {
   onSearch = null,
   onSearchAll = null,
   onRemove = null,
+  onEdit = null,
 } = {}) {
   if (!container?.ownerDocument || typeof container.replaceChildren !== 'function') {
     throw new TypeError('A lista de candidatas precisa ser um elemento DOM.');
@@ -68,6 +69,22 @@ export function renderKeywordCandidates(container, {
       text.className = 'keyword-candidate-text';
       text.textContent = value;
       row.append(text);
+
+      if (typeof onEdit === 'function') {
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'keyword-candidate-edit';
+        edit.dataset.keywordCandidateEdit = String(index);
+        edit.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4.5-1 11-11a2.12 2.12 0 0 0-3-3l-11 11L4 20Z"></path></svg>';
+        edit.title = `Editar candidata: ${value}`;
+        edit.setAttribute('aria-label', `Editar candidata à palavra-chave ${value}`);
+        edit.onclick = event => {
+          event.preventDefault();
+          event.stopPropagation();
+          onEdit(value, index, edit);
+        };
+        row.append(edit);
+      }
 
       if ((!saved || showRemoveForSaved) && typeof onRemove === 'function') {
         const remove = document.createElement('button');
@@ -131,6 +148,22 @@ export function renderKeywordCandidates(container, {
         onSearch(value, index);
       };
       row.append(search);
+    }
+
+    if (typeof onEdit === 'function') {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'keyword-candidate-edit';
+      edit.dataset.keywordCandidateEdit = String(index);
+      edit.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4.5-1 11-11a2.12 2.12 0 0 0-3-3l-11 11L4 20Z"></path></svg>';
+      edit.title = `Editar candidata: ${value}`;
+      edit.setAttribute('aria-label', `Editar candidata à palavra-chave ${value}`);
+      edit.onclick = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        onEdit(value, index, edit);
+      };
+      row.append(edit);
     }
 
     if ((!saved || showRemoveForSaved) && typeof onRemove === 'function') {

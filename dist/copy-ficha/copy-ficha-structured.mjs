@@ -1,4 +1,6 @@
 import {dictionaryFor} from './copy-ficha-domain.mjs?v=20';
+import {normalizeTrackingDomainInput,normalizeTrackingPlatform,normalizeTrackingProductKey,normalizeTrackingProductLabel} from '../tracking/tracking-domain-admin.mjs?v=11';
+import {buildTrackingProductLabel,normalizeTrackingAccountId} from './copy-ficha-tracking-domain.mjs?v=1';
 
 const fields={
   PRODUTO:'product',TEXTO_EXPANDIR:'detailsLabel',TITULO_PRINCIPAL:'offerMainTitle',
@@ -45,6 +47,18 @@ export function buildStructuredFicha(text,data={}){
   let url;
   try{url=new URL(trim(data.affiliateUrl))}catch{}
   requireField('affiliateUrl','URL de afiliação: informe uma URL completa http:// ou https://.',url&&['https:','http:'].includes(url.protocol));
+  let tracking={enabled:false};
+  if(data.trackingEnabled){
+    let hostname='',platform='',accountId='',productName='',productLabel='',productKey='';
+    try{hostname=normalizeTrackingDomainInput(trim(data.trackingHostname))}catch{blockers.push('Tracking: informe somente um domínio público HTTPS, sem caminho ou parâmetros.');targets.add('trackingHostname')}
+    try{platform=normalizeTrackingPlatform(trim(data.trackingPlatform));if(!['clickbank','gurumedia'].includes(platform))throw new Error()}catch{blockers.push('Tracking: selecione ClickBank ou GuruMedia.');targets.add('trackingPlatform')}
+    try{accountId=normalizeTrackingAccountId(data.trackingAccountId)}catch(error){blockers.push(`Tracking: ${error.message}`);targets.add('trackingAccountId')}
+    try{productName=normalizeTrackingProductLabel(trim(parsed.values.PRODUTO)).trim()}catch{blockers.push('Tracking: o nome em [PRODUTO] precisa ser válido para identificar a Track.');targets.add('fichaSource')}
+    if(accountId&&productName){
+      try{productLabel=buildTrackingProductLabel(productName,accountId);productKey=normalizeTrackingProductKey(productLabel)}catch{blockers.push('Tracking: não foi possível montar o título com o produto e a conta informados.');targets.add('trackingAccountId');targets.add('fichaSource')}
+    }
+    if(hostname&&platform&&accountId&&productKey)tracking={enabled:true,hostname,platform,accountId,productName,productLabel,productKey};
+  }
   if(blockers.length){const error=new Error('Ficha bloqueada. Revise os campos indicados.');error.blockers=blockers;error.fields=[...targets];error.blocked=true;throw error}
   const {values,faqs}=parsed,t=dictionaryFor(data.htmlLanguage),content=Object.fromEntries(Object.entries(fields).map(([tag,key])=>[key,values[tag]]));
   const warnings=['Textos preservados como fornecidos. Confira preços por unidade/pacote, descontos, frete, garantia e alegações antes de publicar.'];
@@ -54,7 +68,7 @@ export function buildStructuredFicha(text,data={}){
     htmlLanguage:trim(data.htmlLanguage),countryCode:trim(data.countryCode),
     pageTitle:trim(data.pageTitle)||content.offerMainTitle,affiliateUrl:trim(data.affiliateUrl),
     cookieTitle:t.cookieTitle,cookieText:t.cookieText,acceptLabel:t.accept,declineLabel:t.decline,closeAriaLabel:t.close,
-    ...content,faqs,
+    ...content,faqs,tracking,
     mustContain:[...Object.values(content).filter(value=>value!==content.product),...faqs.flatMap(faq=>[faq.question,faq.answer])],
     mustNotContain:['Unverified health or result claims','Results within a specific timeframe','Studies prove the results','Testimonials prove the results'],
     pending:[],assumptions:['Offer details and FAQs were supplied by the user without rewriting or recalculating prices.','Cookie interface labels were generated from the selected language.']

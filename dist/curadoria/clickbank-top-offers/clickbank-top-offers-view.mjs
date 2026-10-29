@@ -7,8 +7,8 @@ import * as TrendsUI from '../trends-ui.mjs';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
-import * as DecisionUI from './clickbank-top-offers-decision.mjs?v=2';
-import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261004-saved-candidate-remove';
+import * as DecisionUI from './clickbank-top-offers-decision.mjs?v=market-scope-1';
+import * as KeywordCandidatesUI from '../keyword-candidates-ui.mjs?v=20261027-keyword-candidate-edit-negative';
 import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
 import {BRAND_BIDDING_TYPES,brandBiddingLabel} from './brand-bidding.mjs?v=1';
 import {productNameFromOfferTitle} from './product-name.mjs?v=1';
@@ -29,8 +29,9 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   let state = {captures:[],offerMetadata:[],trends:[],images:[],decisions:[],glimpse:[]};
   let latestCaptureByOffer = new Map();
   let allCaptures = null;
-  let selectedCaptureId = ALL_CAPTURES, activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', editingAffiliateLink = false;
+  let selectedCaptureId = ALL_CAPTURES, activeOfferKey = '', activeTab = 'trends', pendingProductAge = '', pendingTrendStatus = '', editingAffiliateLink = false, editingKeywordCandidate = null, candidateEditTrigger = null;
   const importDialog = $('#importDialog',root), paste = $('#pasteArea',root), confirmButton = $('#confirmImport',root), sheet = $('#offerSheet',root);
+  const candidateEditDialog=$('#trendCandidateEditDialog',root),candidateEditInput=$('#trendCandidateEditInput',root),candidateEditMessage=$('#trendCandidateEditMessage',root),candidateEditSave=$('#saveTrendCandidateEdit',root);
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
   let sortKey = 'rank', sortDirection = 'asc';
   try {
@@ -177,10 +178,10 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       <td class="page-type-cell">${escape(pageTypeText(item))}</td><td class="number">${escape(metricText(item.epc))}</td>
       <td class="number">${escape(metricText(item.cvr))}</td><td class="number">${escape(metricText(item.gravity))}</td>
       <td class="number ${movementClass(item)}" title="${escape(selected?.all ? item.movement==='new'?'Primeira e única aparição desta oferta no histórico salvo; não indica lançamento recente.':`Duas últimas aparições: #${item.priorRank} em ${dateTime(item.priorObservedAt)} → #${item.rank} em ${dateTime(item.observedAt)}. Última posição observada; recortes posteriores não indicam saída.` : item.movement==='new'?'Primeira aparição desta oferta no histórico até esta captura.':item.movement==='uncompared'?'Oferta já observada no histórico; sem posição na captura anterior comparável.':'Variação de posição em relação à captura anterior comparável.')}">${escape(movementLabel(item))}</td><td>${DecisionUI.buttonHtml(decisionFor(item).currentStatus,'data-decision-key',escape(item.offerKey))}</td>${lastCollectionCell(latestCaptureByOffer.get(item.offerKey))}</tr>`).join('');
-    const pageClassifications=new Map(state.decisions.map(record=>[record.offerKey,record.pageClassification]));
+    const decisionLabels=new Map(state.decisions.map(record=>[record.offerKey,[DecisionUI.pageClassificationLabel(record.pageClassification),DecisionUI.marketScopeLabel(record.marketScope)].filter(Boolean)]));
     for(const button of $$($('#rows',root),'[data-decision-key]')){
-      const label=DecisionUI.pageClassificationLabel(pageClassifications.get(button.dataset.decisionKey));
-      if(label)button.textContent=button.textContent+' · '+label;
+      const labels=decisionLabels.get(button.dataset.decisionKey)||[];
+      if(labels.length)button.textContent=button.textContent+' · '+labels.join(' · ');
     }
     columns.apply();
     $('#empty',root).classList.toggle('hidden',offers.length>0);
@@ -237,10 +238,64 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     if(trendCandidates.length) KeywordCandidatesUI.renderKeywordCandidates(trendCandidateList,{
       candidates:trendCandidates,variant:'positive',searchContext:'Google Trends',showRemoveForSaved:true,
       onSearch:term=>actions.openTrends(term),onRemove:(_candidate,index)=>actions.removeTrendCandidate(item.offerKey,index),
+      onEdit:(candidate,index,button)=>openTrendCandidateEdit(item.offerKey,candidate,index,button),
     });
     else trendCandidateList.replaceChildren();
     renderAffiliateLink(item);
     $('#trendsHistory',root).innerHTML=(record.assessments||[]).slice().reverse().map(entry=>`<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries||[]).join(', '),entry.productAge==='new'?'Produto novo':entry.productAge==='old'?'Produto antigo':''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Sem avaliações de Google Trends.</p>';
+  }
+
+  function openTrendCandidateEdit(offerKey,candidate,index,trigger) {
+    editingKeywordCandidate={type:'trends',offerKey,index};
+    candidateEditTrigger=trigger;
+    candidateEditInput.value=candidate;
+    $('#trendCandidateEditDescription',root).textContent='Atualize a candidata positiva salva para esta oferta.';
+    candidateEditMessage.textContent='';
+    candidateEditDialog.showModal();
+    candidateEditInput.focus({preventScroll:true});
+    candidateEditInput.select();
+  }
+
+  function openImageCandidateEdit(offerKey,country,candidate,index,trigger) {
+    editingKeywordCandidate={type:'images',offerKey,country,index};
+    candidateEditTrigger=trigger;
+    candidateEditInput.value=candidate;
+    $('#trendCandidateEditDescription',root).textContent=`Atualize a candidata negativa salva para ${country}.`;
+    candidateEditMessage.textContent='';
+    candidateEditDialog.showModal();
+    candidateEditInput.focus({preventScroll:true});
+    candidateEditInput.select();
+  }
+
+  function closeTrendCandidateEdit({restoreFocus=true}={}) {
+    if(candidateEditDialog.open)candidateEditDialog.close();
+    const trigger=candidateEditTrigger;
+    editingKeywordCandidate=null;
+    candidateEditTrigger=null;
+    if(restoreFocus)trigger?.focus?.({preventScroll:true});
+  }
+
+  async function submitTrendCandidateEdit() {
+    if(!editingKeywordCandidate)return;
+    const {type,offerKey,country,index}=editingKeywordCandidate;
+    const value=candidateEditInput.value.trim();
+    candidateEditMessage.textContent='';
+    candidateEditSave.disabled=true;
+    try {
+      const saved=type==='images'
+        ? await actions.editImageCandidate(offerKey,country,index,value)
+        : await actions.editTrendCandidate(offerKey,index,value);
+      if(!saved){candidateEditMessage.textContent=$('#sheetMessage',root).textContent||'Não foi possível atualizar a candidata. Revise o texto e tente novamente.';return;}
+      closeTrendCandidateEdit({restoreFocus:false});
+      if(type==='images'){
+        const list=[...root.querySelectorAll('[data-image-candidate-list]')].find(element=>element.dataset.imageCandidateList===country);
+        list?.querySelector(`[data-keyword-candidate-edit="${index}"]`)?.focus?.({preventScroll:true});
+      } else root.querySelector(`#trendCandidates [data-keyword-candidate-edit="${index}"]`)?.focus?.({preventScroll:true});
+    } catch {
+      candidateEditMessage.textContent='Não foi possível atualizar a candidata. Tente novamente.';
+    } finally {
+      candidateEditSave.disabled=false;
+    }
   }
 
   function renderImages(item) {
@@ -264,6 +319,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       KeywordCandidatesUI.renderKeywordCandidates(container,{candidates,variant:'negative',saved:true,showRemoveForSaved:true,
         searchContext:'Google Imagens · '+country,emptyText:'Nenhum outro produto informado ainda.',
         onSearchAll:values=>actions.openImagesExcluding($('#imagesTerm',root).value.trim()||item.offerName,country,values),
+        onEdit:(candidate,index,button)=>openImageCandidateEdit(item.offerKey,country,candidate,index,button),
         onRemove:(_candidate,index)=>{const remaining=[...candidates];remaining.splice(index,1);if(!assessment?.status){actions.showMessage?.('Selecione um resultado visual antes de salvar candidatas.',{error:true});return;}actions.saveImage(item.offerKey,country,assessment.status,remaining,{candidateOnly:true});},
       });
     });
@@ -324,6 +380,10 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
 
   $('#openImport',root).onclick=openImport;
   $$ (root,'[data-close-dialog="importDialog"]').forEach(button=>button.onclick=closeImport);
+  $$ (root,'[data-close-candidate-edit],[data-cancel-candidate-edit]').forEach(button=>button.onclick=()=>closeTrendCandidateEdit());
+  candidateEditSave.onclick=submitTrendCandidateEdit;
+  candidateEditDialog.addEventListener('cancel',event=>{event.preventDefault();closeTrendCandidateEdit();});
+  candidateEditInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();submitTrendCandidateEdit();}});
   $('#validateImport',root).onclick=()=>actions.validateImport(paste.value);
   confirmButton.onclick=()=>actions.confirmImport(paste.value);
   paste.oninput=()=>{confirmButton.disabled=true;$('#previewStatus',root).textContent='A colagem mudou; valide novamente antes de confirmar.';};
@@ -366,7 +426,7 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       return;
     }
     const decisionButton=event.target.closest('[data-decision-key]');
-    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',allowPageClassification:true,pageClassification:current.pageClassification,onSelect:(status,notes,pageClassification)=>actions.saveDecision(item.offerKey,status,notes,pageClassification)});return;}
+    if(decisionButton){const item=selectedCapture()?.offers.find(offer=>offer.offerKey===decisionButton.dataset.decisionKey);if(!item)return;const current=decisionFor(item);DecisionUI.openDecisionPicker({title:item.offerName,currentValue:current.currentStatus,allowNotes:true,notes:current.notes||'',allowPageClassification:true,pageClassification:current.pageClassification,allowMarketScope:true,marketScope:current.marketScope,onSelect:(status,notes,pageClassification,marketScope)=>actions.saveDecision(item.offerKey,status,notes,pageClassification,marketScope)});return;}
     const button=event.target.closest('[data-action]');if(!button)return;const item=selectedCapture()?.offers.find(offer=>offer.offerKey===button.dataset.key);if(item)openSheet(item,button.dataset.action);
   });
   $('#openTrends',root).onclick=()=>actions.openTrends($('#trendsTerm',root).value.trim()||activeOffer()?.offerName||'');

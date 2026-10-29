@@ -77,6 +77,7 @@ export function normalizeGoogleAdsAccounts(payload) {
       currencyCode,
       timeZone: text(item?.time_zone, 80),
       status: text(item?.status, 40).toUpperCase(),
+      creationDate: text(item?.creation_date ?? item?.creationDate ?? item?.account_creation_date, 40),
     }];
   });
   const dedupedManagers = [...new Map(managers.map(item => [item.customerId ?? 'direct', item])).values()];

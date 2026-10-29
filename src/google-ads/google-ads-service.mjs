@@ -1,5 +1,5 @@
 import { normalizeGoogleAdsConversionActions } from './google-ads-conversion-actions-domain.mjs?v=1';
-import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=1';
+import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=2';
 
 export const GOOGLE_ADS_READONLY_ENDPOINT = 'https://track.travenzo.shop/google-ads-readonly.php';
 
@@ -16,12 +16,22 @@ const errorMessages = Object.freeze({
   sao_paulo_active_day_report_unavailable: 'O serviço privado ainda não aceita a consulta somente de campanhas ativas. Publique o PHP privado atualizado do Google Ads.',
   google_ads_timezone_unavailable: 'O servidor não conseguiu confirmar o fuso horário desta conta para montar o dia de São Paulo.',
   sao_paulo_day_timezone_unsupported: 'O fuso desta conta não permite dividir o dia de São Paulo em horas completas; nenhum horário aproximado foi usado.',
-  sao_paulo_day_not_yesterday: 'A consulta de São Paulo aceita somente o dia civil de ontem. Atualize a prévia e tente novamente.',
+  sao_paulo_day_not_yesterday: 'O serviço privado ainda aceita somente ontem; publique a versão atualizada para recuperar D−1 pendente.',
+  sao_paulo_day_outside_window: 'A data D−1 está fora da janela automática de recuperação de 14 dias.',
   invalid_date_range: 'Informe um intervalo de datas válido, com início anterior ao fim.',
   date_range_too_large: 'O período máximo por consulta é de 366 dias.',
   daily_date_range_too_large: 'A prévia diária permite no máximo 14 dias por consulta.',
   report_limit_exceeded: 'A consulta excedeu 1.000 campanhas. Reduza o período e tente novamente.',
   daily_report_limit_exceeded: 'A prévia excedeu 10.000 linhas. Reduza o período e tente novamente.',
+  search_terms_unavailable: 'O serviço PHP privado precisa ser atualizado para consultar termos de pesquisa.',
+  search_terms_date_range_too_large: 'A consulta de termos de pesquisa permite no máximo 31 dias.',
+  search_terms_limit_exceeded: 'A consulta retornou mais de 1.000 linhas nesta conta. Reduza o período e tente novamente.',
+  search_terms_campaign_filter_unavailable: 'O serviço PHP privado precisa ser atualizado para filtrar a consulta de termos pela campanha selecionada.',
+  search_term_campaigns_unavailable: 'O serviço PHP privado precisa ser atualizado para listar campanhas Search nesta tela.',
+  search_term_campaigns_limit_exceeded: 'A conta excede o limite de 1.000 campanhas Search para montar o seletor.',
+  final_url_hosts_unavailable: 'O serviço PHP privado ainda não consulta destinos finais dos anúncios. Publique a versão atualizada do serviço Google Ads.',
+  final_url_hosts_limit_exceeded: 'A conta excede 5.000 anúncios ativos com destino final. O cache anterior foi preservado.',
+  google_ads_report_incomplete: 'O Google Ads devolveu uma resposta incompleta. Nenhum resultado incompleto foi considerado.',
   configuration_limit_exceeded: 'A configuração excedeu o limite de 1.000 campanhas ou estratégias. Nenhuma captura foi aplicada.',
   google_ads_auth_failed: 'A conta de serviço não conseguiu autenticar na Google Ads API. Confira a chave privada no servidor.',
   google_ads_access_denied: 'O Google Ads recusou o acesso. Confira o acesso da conta de serviço à MCC/conta e o nível de acesso do projeto.',
@@ -68,6 +78,20 @@ export async function fetchGoogleAdsConfiguration({ managerCustomerId, customerI
   }
 }
 
+export async function fetchGoogleAdsFinalUrlHosts({ managerCustomerId, customerId }, options) {
+  const manager = managerCustomerId == null || managerCustomerId === '' ? null : String(managerCustomerId).replace(/\D/g, '');
+  const customer = String(customerId ?? '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(customer) || (manager != null && !/^\d{10}$/.test(manager))) {
+    throw new Error('Selecione uma conta Google Ads válida antes de atualizar os domínios dos anúncios.');
+  }
+  try {
+    return await request('final_url_hosts', { manager_customer_id: manager, customer_id: customer }, options);
+  } catch (error) {
+    if (error?.code === 'invalid_payload') throw new Error(errorMessages.final_url_hosts_unavailable);
+    throw error;
+  }
+}
+
 export function fetchGoogleAdsReport({ managerCustomerId, customerId, dateFrom, dateTo }, options) {
   return request('report', {
     manager_customer_id: managerCustomerId || null,
@@ -84,6 +108,41 @@ export function fetchGoogleAdsDailyReport({ managerCustomerId, customerId, dateF
     date_from: dateFrom,
     date_to: dateTo,
   }, options);
+}
+
+export async function fetchGoogleAdsSearchTerms({ managerCustomerId, customerId, dateFrom, dateTo, campaignId = null }, options) {
+  try {
+    const parameters = {
+      manager_customer_id: managerCustomerId || null,
+      customer_id: customerId,
+      date_from: dateFrom,
+      date_to: dateTo,
+    };
+    if (campaignId != null && campaignId !== '') {
+      const normalizedCampaignId = String(campaignId);
+      if (!/^[1-9]\d{0,19}$/.test(normalizedCampaignId)) throw new Error('O ID da campanha selecionada é inválido.');
+      parameters.campaign_id = normalizedCampaignId;
+    }
+    return await request('search_terms', parameters, options);
+  } catch (error) {
+    if (error?.code === 'invalid_payload' && campaignId != null && campaignId !== '') {
+      throw new Error(errorMessages.search_terms_campaign_filter_unavailable);
+    }
+    if (error?.code === 'invalid_payload') throw new Error(errorMessages.search_terms_unavailable);
+    throw error;
+  }
+}
+
+export async function fetchGoogleAdsSearchTermCampaigns({ managerCustomerId, customerId }, options) {
+  try {
+    return await request('search_term_campaigns', {
+      manager_customer_id: managerCustomerId || null,
+      customer_id: customerId,
+    }, options);
+  } catch (error) {
+    if (error?.code === 'invalid_payload') throw new Error(errorMessages.search_term_campaigns_unavailable);
+    throw error;
+  }
 }
 
 export async function fetchGoogleAdsSaoPauloDayReport({ managerCustomerId, customerId, businessDate, campaignStatusFilter = 'ALL' }, options) {

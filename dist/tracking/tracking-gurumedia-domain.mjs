@@ -3,6 +3,72 @@ import { TRACKING_CLICKS_MAX_DAYS } from './tracking-clicks-domain.mjs?v=5';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONEY_PATTERN = /^\d{1,10}(?:\.\d{1,4})?$/;
 const HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const GURUMEDIA_MACRO_PATTERN = /^\{[a-z][a-z0-9_]*\}$/i;
+export const GURUMEDIA_POSTBACK_ENDPOINT = 'https://track.travenzo.shop/gurumedia-sales-postback.php';
+export const GURUMEDIA_POSTBACK_MACRO_DEFAULTS = Object.freeze({
+  transactionId: '{transaction_id}',
+  offerId: '{offer_id}',
+  offerName: '{offer_name}',
+  payoutAmount: '{payout_amount}',
+  currency: '{offer_currency}',
+  conversionTime: '{timestamp}',
+});
+
+const GURUMEDIA_POSTBACK_MACRO_MAPPINGS = Object.freeze([
+  ['transaction_id', 'transactionId', true],
+  ['click_id', null, true],
+  ['offer_name', 'offerName', false],
+  ['payout_amount', 'payoutAmount', true],
+  ['currency', 'currency', true],
+  ['conversion_time', 'conversionTime', true],
+  ['offer_id', 'offerId', true],
+]);
+
+function missingGuruMediaPostbackChecks() {
+  return GURUMEDIA_POSTBACK_MACRO_MAPPINGS.map(([parameter, key, required]) => ({
+    parameter,
+    expectedMacro: key === null ? '{sub6}' : GURUMEDIA_POSTBACK_MACRO_DEFAULTS[key],
+    required,
+    status: required ? 'missing' : 'optional-missing',
+  }));
+}
+
+function guruMediaPostbackMacroValue(key, source) {
+  if (key === null) return '{sub6}';
+  return typeof source?.[key] === 'string' ? source[key].trim() : '';
+}
+
+export function buildGuruMediaPostbackMacroParams(macros = {}) {
+  const mappings = GURUMEDIA_POSTBACK_MACRO_MAPPINGS.map(([parameter, key, required]) => ({
+    parameter,
+    macro: guruMediaPostbackMacroValue(key, macros),
+    required,
+  }));
+  if (mappings.some(({ macro, required }) => required && !GURUMEDIA_MACRO_PATTERN.test(macro))) return null;
+  if (mappings.some(({ macro }) => macro && !GURUMEDIA_MACRO_PATTERN.test(macro))) return null;
+  return mappings.filter(({ macro }) => macro).map(({ parameter, macro }) => `${parameter}=${macro}`);
+}
+
+export function inspectGuruMediaPostbackUrl(value) {
+  let url;
+  try { url = new URL(String(value ?? '').trim()); }
+  catch { return { valid: false, endpointMatches: false, tokenPresent: false, checks: missingGuruMediaPostbackChecks() }; }
+
+  const endpoint = new URL(GURUMEDIA_POSTBACK_ENDPOINT);
+  const endpointMatches = url.origin === endpoint.origin && url.pathname === endpoint.pathname;
+  const tokenValues = url.searchParams.getAll('token');
+  const tokenPresent = tokenValues.length === 1 && tokenValues[0].length > 0;
+  const checks = GURUMEDIA_POSTBACK_MACRO_MAPPINGS.map(([parameter, key, required]) => {
+    const expectedMacro = key === null ? '{sub6}' : GURUMEDIA_POSTBACK_MACRO_DEFAULTS[key];
+    const values = url.searchParams.getAll(parameter);
+    let status = 'ok';
+    if (values.length === 0) status = required ? 'missing' : 'optional-missing';
+    else if (values.length !== 1 || values[0] !== expectedMacro) status = 'mismatch';
+    return { parameter, expectedMacro, required, status };
+  });
+  const checksValid = checks.every(({ required, status }) => status === 'ok' || (!required && status === 'optional-missing'));
+  return { valid: endpointMatches && tokenPresent && checksValid, endpointMatches, tokenPresent, checks };
+}
 
 function isDate(value) {
   if (typeof value !== 'string' || !DATE_PATTERN.test(value)) return false;

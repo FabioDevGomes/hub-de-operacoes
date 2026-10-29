@@ -147,8 +147,10 @@
     return output;
   }
   function annotatedProductSalesCount(observation){return[...String(observation||'').matchAll(/(?:^|[·;]\s*)(\d+)\s+[^·;()]+?\s+\(R\$\s*[\d.,]+\)/gi)].reduce((sum,match)=>sum+Number(match[1]),0)}
-  function combineDailyRows(mccRows=[],historicalRows=[],{authoritativeDates=[]}={}){
-    const authoritative=new Set((authoritativeDates||[]).map(parseDate).filter(Boolean)),mccByDate=new Map((mccRows||[]).map(row=>[row.date,row])),historyByDate=new Map((historicalRows||[]).map(row=>[row.date,row])),dates=new Set([...mccByDate.keys(),...historyByDate.keys(),...authoritative]);
+  function combineDailyRows(mccRows=[],historicalRows=[],{authoritativeDates=[],apiSyncRows=[]}={}){
+    const authoritative=new Set((authoritativeDates||[]).map(parseDate).filter(Boolean)),mccByDate=new Map((mccRows||[]).map(row=>[row.date,row])),historyByDate=new Map((historicalRows||[]).map(row=>[row.date,row])),apiByDate=new Map();
+    for(const sync of apiSyncRows||[]){const date=parseDate(sync?.date);if(!date||![sync?.investment,sync?.clicks,sync?.sales].every(value=>typeof value==='number'&&Number.isFinite(value)))continue;const previous=apiByDate.get(date);if(!previous||String(sync.syncedAt||'')>=String(previous.syncedAt||''))apiByDate.set(date,{...sync,date})}
+    const dates=new Set([...mccByDate.keys(),...historyByDate.keys(),...authoritative,...apiByDate.keys()]);
     for(let time=Date.parse(`${SUSPENSION_START}T00:00:00Z`);time<=Date.parse(`${SUSPENSION_END}T00:00:00Z`);time+=86400000)dates.add(new Date(time).toISOString().slice(0,10));
     const combined=[];
     for(const date of dates){
@@ -174,7 +176,12 @@
       }
       if(mcc)combined.push({...mcc,observation:mcc.observation||'',productSales:reconcileProductSales(mcc.productSales,mcc.officialSales,mcc.pendingSales)});
     }
-    return combined.sort((a,b)=>b.date.localeCompare(a.date));
+    const combinedByDate=new Map(combined.map(row=>[row.date,row]));
+    for(const [date,sync] of apiByDate){
+      const current=combinedByDate.get(date)||historyByDate.get(date)||mccByDate.get(date)||null,pendingSales=parseNumber(current?.pendingSales)||0,pendingRevenue=parseNumber(current?.pendingRevenue)||0,officialSales=parseNumber(sync.sales),productSales=(current?.productSales||[]).filter(item=>item.provisional),syncDate=sync.syncedAt?new Date(sync.syncedAt):null,syncedLabel=syncDate&&!Number.isNaN(syncDate.getTime())?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(syncDate):'',observation=[current?.observation||'',`Google Ads API sincronizada${syncedLabel?` em ${syncedLabel}`:''} · ${parseNumber(sync.accountCount)||0} conta(s)`].filter(Boolean).join(' · ');
+      combinedByDate.set(date,{...current,date,source:'google_ads_api',hasMccData:Boolean(current?.hasMccData),...deriveMetrics({investment:parseNumber(sync.investment),revenue:current?.revenue??null,clicks:parseNumber(sync.clicks),sales:officialSales,pendingSales,pendingRevenue}),billingSales:0,productSales,observation,apiSyncId:sync.id,apiSyncedAt:sync.syncedAt,apiAccountCount:sync.accountCount,apiExchangeRateUsdBrl:sync.exchangeRateUsdBrl??null});
+    }
+    return [...combinedByDate.values()].sort((a,b)=>b.date.localeCompare(a.date));
   }
   function reconcileBillingSales(macroRows=[],billingSales=[],billingRevenueByDate=null){
     const byDate=new Map();let activeRecords=0,billingConversions=0,invalidDateRecords=0;

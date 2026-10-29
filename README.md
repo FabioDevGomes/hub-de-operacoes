@@ -1,7 +1,7 @@
 # Base de Dados Local de Campanhas
 
 <!-- hub-version:start -->
-## Versão atual: v1.93.0
+## Versão atual: v1.188.0
 
 Fonte única: [VERSION](VERSION). Mudanças: [CHANGELOG](CHANGELOG.md).
 A mesma versão aparece junto ao título das telas e no título da aba do navegador.
@@ -52,6 +52,10 @@ O painel pode iniciar mesmo quando o projeto foi extraído em outro local. A pas
 ## Manutenção do código
 
 Consulte [o guia de manutenção](docs/maintenance.md) para localizar fontes, responsabilidades e testes. O conhecimento técnico canônico está em [.agents/skills/painel-operacao-google-ads/SKILL.md](.agents/skills/painel-operacao-google-ads/SKILL.md), não na cópia global da skill.
+
+Para consultar o padrão e o inventário de avisos de erro das telas, veja [Avisos de erro](docs/avisos-de-erros.md).
+
+O formato das respostas dos chats que trabalham neste repositório está em [Padrão de resposta ao usuário](docs/padrao-de-resposta.md). Para deploy manual do Tracking MVP, consulte o padrão canônico `voc-meu-analista-de-dados-e/tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` no checkout local irmão e o README específico do pacote.
 
 Para novas implementações, comece por [Regras para novas implementações](docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](docs/maintenance.md#roteiro-de-execução). O guia define os limites entre domínio, view, template, adaptador, storage e serviço, como integrar uma tela e o checklist de preservação/testes. [AGENTS.md](AGENTS.md) registra as instruções de entrada para agentes que mantêm este repositório.
 

@@ -1,5 +1,5 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "requiredFiles": [
     "index.html",
     "styles.css",
@@ -13,6 +13,11 @@
   ],
   "forbiddenTokens": [],
   "acceptedFaqCounts": [3, 4],
+  "tracking": {
+    "scriptUrl": "https://track.travenzo.shop/track.js",
+    "collectorUrl": "https://track.travenzo.shop/collect.php",
+    "allowedPlatforms": ["clickbank", "gurumedia"]
+  },
   "templateIdentifiers": {
     "detailsId": "offer-details",
     "legacyDetailsIds": ["glp-faq"]

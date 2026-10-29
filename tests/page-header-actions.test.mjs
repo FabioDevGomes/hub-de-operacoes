@@ -19,8 +19,8 @@ test('todas as telas do shell carregam a mesma regra, com cache atualizado', asy
     const source = await read(`src/${path}`);
     const publishedPath = path === 'index.template.html' ? 'index.html' : path;
     const published = await read(`dist/${publishedPath}`);
-    assert.match(source, /sidebar-component\.css\?v=15/, path);
-    assert.match(published, /sidebar-component\.css\?v=15/, publishedPath);
+    assert.match(source, /sidebar-component\.css\?v=17/, path);
+    assert.match(published, /sidebar-component\.css\?v=17/, publishedPath);
   }
   assert.match(await read('src/curadoria/glimpse/index.html'), /curation-header-actions\.css\?v=5/);
   assert.equal(await read('dist/sidebar-component.css'), sidebar);

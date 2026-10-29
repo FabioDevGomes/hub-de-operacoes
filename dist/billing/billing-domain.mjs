@@ -376,6 +376,40 @@ export function aggregateBillingRevenueByDate(sales = [], exchangeRate = null) {
   }));
 }
 
+export function aggregateBillingRevenueByCampaign(sales = [], exchangeRate = null) {
+  const campaigns = new Map();
+  for (const sale of sales || []) {
+    if (!sale || sale.active === false) continue;
+    const campaignId = String(sale.campaign_id || '').trim();
+    const date = sale.sale_date;
+    if (!campaignId || !isIsoDate(date)) continue;
+    let campaign = campaigns.get(campaignId);
+    if (!campaign) {
+      campaign = { all: [], byDate: new Map() };
+      campaigns.set(campaignId, campaign);
+    }
+    campaign.all.push(sale);
+    const dateRows = campaign.byDate.get(date) || [];
+    dateRows.push(sale);
+    campaign.byDate.set(date, dateRows);
+  }
+
+  const summarize = rows => {
+    const total = sumChartAmountsInBrl(rows, exchangeRate);
+    return {
+      amount:total.complete ? (total.amount ?? 0) : null,
+      complete:total.complete,
+      records:rows.length,
+      knownAmounts:total.known,
+      missingAmounts:total.missing,
+    };
+  };
+  return new Map([...campaigns].map(([campaignId, campaign]) => [campaignId, {
+    all:summarize(campaign.all),
+    byDate:new Map([...campaign.byDate].map(([date, rows]) => [date, summarize(rows)])),
+  }]));
+}
+
 export function monthlyFinancialSeries({ sales = [], movements = [], salesById = new Map(), start, end, mode = 'competence', exchangeRate = null } = {}) {
   if (!isIsoDate(start) || !isIsoDate(end) || start > end) return [];
   const aggregates = mode === 'cash'

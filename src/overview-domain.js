@@ -91,10 +91,12 @@
   // Sum the table's existing projections, not cards, commission or hidden campaigns.
   function overviewTableTotals(rows){
     const entries=(Array.isArray(rows)?rows:[]).map(row=>({...row.totals,profit:row.profit}));
-    return Object.fromEntries(['investment','impressions','clicks','conversions','profit'].map(field=>{
+    const billedEntries=(Array.isArray(rows)?rows:[]).map(row=>row?.billedRevenue).filter(item=>item?.applicable),billedObserved=billedEntries.filter(item=>typeof item.amount==='number'&&Number.isFinite(item.amount)),billedComplete=billedObserved.length===billedEntries.length;
+    const billedTotal={value:billedComplete&&billedEntries.length?money(billedObserved.reduce((sum,item)=>sum+item.amount,0)):null,observedCount:billedObserved.length,totalCount:billedEntries.length,complete:billedComplete};
+    return Object.fromEntries([...['investment','impressions','clicks','conversions','profit'].map(field=>{
       const total=sumObservedMetric(entries,field);
       return[field,{...total,value:total.value==null?null:['investment','profit'].includes(field)?money(total.value):total.value}];
-    }));
+    }),['billedRevenue',billedTotal]]);
   }
   function sumObservedProfit(totalsList){const entries=Array.isArray(totalsList)?totalsList:[];let investment=0,commission=0,observedCount=0;for(const totals of entries){const spent=numeric(totals?.investment),revenue=numeric(totals?.commission);if(spent==null||revenue==null)continue;investment+=spent;commission+=revenue;observedCount++}return{value:observedCount?profitForTotals({investment,commission}):null,observedCount,totalCount:entries.length}}
   function previousIsoDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return'';const date=new Date(`${value}T00:00:00.000Z`);if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)return'';date.setUTCDate(date.getUTCDate()-1);return date.toISOString().slice(0,10)}
@@ -175,9 +177,10 @@
     return typeof manager?.nome==='string'&&manager.nome.trim()?manager.nome.trim():null;
   }
   function totalsColumns(mode,totalLabel='total'){
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['actions','Ação']];
+    const billedLabel=totalLabel==='D zero'?'D0':totalLabel==='D−1'?'D−1':'total';
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['billedRevenue',`Faturado ${billedLabel} (R$)`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['actions','Ação']];
   }
-  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,actions:122});
+  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,billedRevenue:128,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,actions:122});
   function visibleColumns(columns,selected){
     return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
   }
@@ -254,21 +257,35 @@
     return{limit,remaining:spent==null?null:money(limit-spent),minimumRoi,salesCount:saleCount,revenue:totalRevenue};
   }
   function sortRows(input,state,sortCell){const rows=[...(input||[])];
-      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name.toLocaleLowerCase('pt-BR'),zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,conv:r=>r.totals?.conversions??null,roi:r=>r.roi,saleRoiFirst:r=>r.saleHistory?.[0]?.snapshot?.roi_percent??null,saleRoiSecond:r=>r.saleHistory?.[1]?.snapshot?.roi_percent??null,profit:r=>r.profit,account:r=>r.account,mcc:r=>r.mcc,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining)};
+      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name.toLocaleLowerCase('pt-BR'),zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,billedRevenue:r=>r.billedRevenue?.amount??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,conv:r=>r.totals?.conversions??null,roi:r=>r.roi,saleRoiFirst:r=>r.saleHistory?.[0]?.snapshot?.roi_percent??null,saleRoiSecond:r=>r.saleHistory?.[1]?.snapshot?.roi_percent??null,profit:r=>r.profit,account:r=>r.account,mcc:r=>r.mcc,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining)};
        rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?av.localeCompare(bv,'pt-BR',{numeric:true,sensitivity:'base'}):av-bv;return state.sortDir==='asc'?result:-result});
     return rows;
   }
-  function activeMetricProductCounts(rows=[],field='impressions'){
+  function activeMetricProductCounts(rows=[],field='impressions',minimumValue=1){
     const counts=new Map();
+    const threshold=Number.isFinite(Number(minimumValue))?Math.max(0,Number(minimumValue)):1;
     for(const row of Array.isArray(rows)?rows:[]){
       const key=String(row?.productKey??'').trim(),value=numeric(row?.totals?.[field]);
-      if(!key||row?.c?._status!=='ativa'||value==null||value<=0)continue;
+      if(!key||row?.c?._status!=='ativa'||value==null||value<threshold||value<=0)continue;
       counts.set(key,(counts.get(key)||0)+1);
     }
     return counts;
   }
   const activeImpressionProductCounts=rows=>activeMetricProductCounts(rows,'impressions');
-  const activeClickProductCounts=rows=>activeMetricProductCounts(rows,'clicks');
+  function activeClickProductGroups(rows=[],minimumClicks=1){
+    const groups=new Map(),threshold=Number.isFinite(Number(minimumClicks))?Math.max(1,Number(minimumClicks)):1;
+    for(const row of Array.isArray(rows)?rows:[]){
+      const key=String(row?.productKey??'').trim(),value=numeric(row?.consolidatedTotals?.clicks??row?.totals?.clicks);
+      if(!key||row?.c?._status!=='ativa'||value==null||value<threshold)continue;
+      const group=groups.get(key)||[];group.push(row);groups.set(key,group);
+    }
+    return groups;
+  }
+  function qualifyingActiveClickProductGroups(rows=[],{minimumClicks=1,minimumCampaigns=2}={}){
+    const threshold=Number.isInteger(Number(minimumCampaigns))?Math.max(2,Number(minimumCampaigns)):2;
+    return new Map([...activeClickProductGroups(rows,minimumClicks)].filter(([,group])=>group.length>=threshold));
+  }
+  const activeClickProductCounts=(rows,minimumClicks=1)=>new Map([...activeClickProductGroups(rows,minimumClicks)].map(([key,group])=>[key,group.length]));
   const activeD0ImpressionProductCounts=activeImpressionProductCounts;
   function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',historical=row.c._status==='historico',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&(paused||historical)||filter==='history'&&!paused&&!historical||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
   // Navigation-only entries preserve the old History access without inventing MCC metrics.
@@ -290,14 +307,44 @@
     return {dates,date,canPrevious:dates.length>0&&(current<0||current>0),canNext:dates.length>0&&(current<0||current<dates.length-1)};
   }
   function campaignRowsOnStartDate(rows,date){return (rows||[]).filter(row=>!date||row.identity?.dateSort===date)}
-  function pausedCampaignNamesOnDate(campaigns,date){
+  function pausedCampaignNamesOnDate(campaigns,date,{sourceMode='manifest',apiCaptures=[],apiChangeHistory=[]}={}){
     const target=String(date??'');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(target))return[];
-    return (Array.isArray(campaigns)?campaigns:[])
-      .filter(campaign=>campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target)
-      .map(campaign=>String(campaign.nome_mcc||campaign.nome_exibicao||'').trim())
-      .filter(Boolean)
-      .sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
+    const rows=Array.isArray(campaigns)?campaigns:[],campaignName=campaign=>String(campaign?.nome_mcc||campaign?.nome_exibicao||'').trim(),
+      legacy=()=>rows.filter(campaign=>campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target).map(campaign=>campaignName(campaign)).filter(Boolean);
+    if(sourceMode!=='api')return legacy().sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
+    const digits=value=>String(value??'').replace(/\D/g,''),accountKey=(manager,customer,campaign)=>`${digits(manager)||'direct'}|${digits(customer)}|${String(campaign??'')}`,
+      validTimestamp=value=>{const time=Date.parse(value||'');return Number.isFinite(time)?time:null;},
+      campaignById=new Map(rows.filter(campaign=>campaign?.id!=null).map(campaign=>[String(campaign.id),campaign])),latestByCampaign=new Map(),latestByIdentity=new Map();
+    for(const capture of Array.isArray(apiCaptures)?apiCaptures:[]){
+      if(Number(capture?.captureSchemaVersion)<2||capture?.configuration?.complete!==true||!Array.isArray(capture.configuration.campaigns))continue;
+      const capturedAt=validTimestamp(capture.capturedAtUtc),customer=digits(capture.customerId),manager=digits(capture.managerCustomerId);
+      if(capturedAt==null||!/^\d{10}$/.test(customer)||manager&&!/^\d{10}$/.test(manager))continue;
+      for(const config of capture.configuration.campaigns){
+        const internalId=String(config?.campaignInternalId||''),campaignId=String(config?.campaignId||''),campaign=campaignById.get(internalId);
+        if(config?.mappingStatus!=='mapped'||!campaign||!/^\d{1,20}$/.test(campaignId)||digits(campaign.conta_id)!==customer||digits(campaign.mcc_id)!==manager)continue;
+        const observed={capturedAt,status:String(config.campaignStatus||'').toUpperCase(),campaign,identity:accountKey(manager,customer,campaignId)},previousCampaign=latestByCampaign.get(internalId),previousIdentity=latestByIdentity.get(observed.identity);
+        if(!previousCampaign||capturedAt>=previousCampaign.capturedAt)latestByCampaign.set(internalId,observed);
+        if(!previousIdentity||capturedAt>=previousIdentity.capturedAt)latestByIdentity.set(observed.identity,observed);
+      }
+    }
+    const selected=new Map();
+    rows.forEach((campaign,index)=>{
+      const latest=campaign?.id==null?null:latestByCampaign.get(String(campaign.id)),stillPaused=!latest||!['ENABLED','PAUSED','REMOVED'].includes(latest.status)||latest.status==='PAUSED';
+      if(stillPaused&&campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target){const name=campaignName(campaign);if(name)selected.set(campaign?.id==null?`legacy:${index}`:String(campaign.id),name)}
+    });
+    for(const entry of Array.isArray(apiChangeHistory)?apiChangeHistory:[]){
+      const completedAt=validTimestamp(entry?.completedAtUtc);
+      if(completedAt==null||new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(new Date(completedAt))!==target)continue;
+      for(const change of Array.isArray(entry?.changes)?entry.changes:[]){
+        const statusChanged=(Array.isArray(change?.fields)?change.fields:[]).some(field=>field?.key==='campaignStatus'&&String(field.before||'').toUpperCase()==='ENABLED'&&String(field.after||'').toUpperCase()==='PAUSED');
+        if(!statusChanged)continue;
+        const latest=latestByIdentity.get(accountKey(change.managerCustomerId,change.customerId,change.campaignId)),campaign=latest?.campaign;
+        if(!latest||latest.status!=='PAUSED'||latest.capturedAt<completedAt||String(change.campaignInternalId||'')!==String(campaign?.id||''))continue;
+        const name=campaignName(campaign);if(name)selected.set(String(campaign.id),name);
+      }
+    }
+    return[...selected.values()].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
   }
-  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,mccCollectionCoverage,manifestCaptureInfo,latestMccImportUpdates,mccNameForCampaign,sortRows,activeMetricProductCounts,activeImpressionProductCounts,activeClickProductCounts,activeD0ImpressionProductCounts,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
+  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,mccCollectionCoverage,manifestCaptureInfo,latestMccImportUpdates,mccNameForCampaign,sortRows,activeMetricProductCounts,activeImpressionProductCounts,activeClickProductCounts,activeClickProductGroups,qualifyingActiveClickProductGroups,activeD0ImpressionProductCounts,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
 })(typeof window==='object'?window:globalThis);

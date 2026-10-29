@@ -12,7 +12,10 @@
 .macro-table{min-width:1000px}
 .macro-table th,.macro-table td{text-align:right;padding:6px 9px}
 .macro-table th:first-child,.macro-table td:first-child{text-align:left}
-.macro-table th:last-child,.macro-table td:last-child{text-align:left;white-space:normal;min-width:180px}
+.macro-table th:nth-last-child(2),.macro-table td:nth-last-child(2){text-align:left;white-space:normal;min-width:180px}
+.macro-table th:last-child,.macro-table td:last-child{text-align:center;white-space:nowrap;min-width:86px}
+.macro-row-edit{padding:5px 9px;font-size:.7rem}
+#controlMacroView .macro-row-edit{border:1px solid var(--line)}
 .macro-table tfoot th,.macro-table tfoot td{position:static;padding:6px 9px;line-height:1.2;font-weight:650;white-space:nowrap;background:var(--panel2);border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
 .macro-table tfoot th:first-child{color:var(--text);font-weight:750}
 .macro-table .macro-date{font-weight:750;white-space:nowrap}
@@ -63,4 +66,16 @@
 #controlMacroView .macro-chart-switch,
 #controlMacroView .macro-import-dialog,
 #controlMacroView .macro-import-conflicts{border:0}
+.macro-api-sync-dialog{width:min(760px,100%)}
+#controlMacroView .macro-api-sync-dialog{border:1px solid var(--line)}
+.macro-api-sync-summary{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(5,14,28,.42);font-size:.75rem;color:var(--muted)}
+.macro-api-sync-summary strong{color:var(--text);margin-right:3px}
+.macro-api-sync-backup{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,187,84,.35);border-radius:10px;background:rgba(255,187,84,.055)}
+.macro-api-sync-backup strong{display:block;font-size:.8rem;margin-bottom:3px}
+.macro-api-sync-backup p,.macro-api-sync-status{font-size:.72rem;color:var(--muted);margin:0}
+.macro-api-sync-backup .btn{white-space:nowrap}
+.macro-api-sync-confirm{display:flex;align-items:center;gap:8px;font-size:.75rem;color:#dce7f3}
+.macro-api-sync-confirm input{accent-color:var(--cyan)}
+.macro-api-sync-status{min-height:1.2em;color:#a9d6ff}
+@media(max-width:700px){.macro-api-sync-backup{align-items:stretch;flex-direction:column}.macro-api-sync-backup .btn{width:100%}}
 #controlMacroView .macro-chart-switch .btn.active{box-shadow:none}

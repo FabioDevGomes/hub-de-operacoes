@@ -2,6 +2,1614 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.188.0] - 2026-10-29
+
+- Importa sitelinks do Gemini no rascunho/lote e normaliza URLs com âncoras #1–#6
+
+## [1.187.4] - 2026-10-29
+
+- Move exclusão do rascunho para dentro do seletor
+
+## [1.187.3] - 2026-10-29
+
+- Separa perguntas e respostas em quadro principal
+
+## [1.187.2] - 2026-10-29
+
+- Adiciona exclusão de rascunhos e seleção automática do contexto mais recente
+
+## [1.187.1] - 2026-10-29
+
+- Preserva a resposta do Gemini no cache até iniciar novo rascunho
+
+## [1.187.0] - 2026-10-29
+
+- Registra pausas automáticas nos históricos
+
+## [1.186.8] - 2026-10-29
+
+- Reorganiza prévia e edição de sitelinks
+
+## [1.186.7] - 2026-10-29
+
+- Exibe nome e ID da MCC nas exportações de públicos
+
+## [1.186.6] - 2026-10-29
+
+- Remove atalhos individuais para pastas Pre-Sell
+
+## [1.186.5] - 2026-10-29
+
+- Remove ação individual da tela de lotes
+
+## [1.186.4] - 2026-10-29
+
+- Aumenta o espaço antes do botão de validação da ficha
+
+## [1.186.3] - 2026-10-29
+
+- Aumenta a separação antes do bloco de tracking da Pre-Sell
+
+## [1.186.2] - 2026-10-29
+
+- Aumenta o espaço após o bloco de tracking da Pre-Sell
+
+## [1.186.1] - 2026-10-29
+
+- Agrupa recurso de promoção em seção recolhível com chevron e hover suave
+
+## [1.186.0] - 2026-10-29
+
+- Gera planilha de exclusões por MCC
+
+## [1.185.4] - 2026-10-29
+
+- Atalhos frequentes ativam abas compatíveis pela extensão Hub 2.0
+
+## [1.185.3] - 2026-10-29
+
+- Normaliza cabeçalho CSV de segmentação
+
+## [1.185.2] - 2026-10-29
+
+- Corrige renderização do lote e mantém o progresso do CSV
+
+## [1.185.1] - 2026-10-29
+
+- Identifica o limite de impressões da segunda campanha
+
+## [1.185.0] - 2026-10-29
+
+- Mostra progresso por grupo ao gerar CSV de segmentação
+
+## [1.184.5] - 2026-10-29
+
+- Discretiza a numeração e amplia a área dos atalhos
+
+## [1.184.4] - 2026-10-29
+
+- Refina o visual e a altura dos atalhos laterais
+
+## [1.184.3] - 2026-10-29
+
+- Organiza os atalhos em três fileiras e duas colunas
+
+## [1.184.2] - 2026-10-29
+
+- Conta a retomada de abas e janelas nos atalhos frequentes
+
+## [1.184.1] - 2026-10-29
+
+- Encerra a espera do CSV de segmentação e informa timeout
+
+## [1.184.0] - 2026-10-29
+
+- Agrupa títulos e descrições em seção recolhível
+
+## [1.183.0] - 2026-10-29
+
+- Atalhos para as telas mais acessadas
+
+## [1.182.2] - 2026-10-29
+
+- Exibe indicador ao gerar CSV de segmentação
+
+## [1.182.1] - 2026-10-29
+
+- Adiciona atalhos Reiniciar e HPanel na lateral
+
+## [1.182.0] - 2026-10-29
+
+- CSV de segmentação visível no formulário e remoção da aplicação via API
+
+## [1.181.1] - 2026-10-29
+
+- Rótulo de dias consecutivos sem impressões
+
+## [1.181.0] - 2026-10-29
+
+- CSV de segmentação positiva em lote por MCC
+
+## [1.180.0] - 2026-10-29
+
+- Pausa automática por dias sem impressões
+
+## [1.179.0] - 2026-10-29
+
+- Janela configurável da pausa por desempenho
+
+## [1.178.0] - 2026-10-29
+
+- Pausa por desempenho com limite de impressões
+
+## [1.177.0] - 2026-10-29
+
+- Notificações de pausas automáticas
+
+## [1.176.0] - 2026-10-29
+
+- Adiciona exportação Excel de exclusões por conta
+
+## [1.175.1] - 2026-10-29
+
+- Remove explicação do intervalo de captura D0
+
+## [1.175.0] - 2026-10-29
+
+- Permite escolher campanhas para segmentação por públicos
+
+## [1.174.3] - 2026-10-29
+
+- Unifica a seleção de rascunhos e lotes da criação de campanhas
+
+## [1.174.2] - 2026-10-29
+
+- Move ações da criação de campanha para o topo do cartão
+
+## [1.174.1] - 2026-10-29
+
+- Esclarece a diferença entre rascunhos de criação e lotes de campanhas existentes
+
+## [1.174.0] - 2026-10-29
+
+- Adiciona escopo geográfico às decisões da Top Offers CB
+
+## [1.173.14] - 2026-10-29
+
+- Esclarece o alcance individual da segmentação e oculta alertas de prévia em lotes
+
+## [1.173.13] - 2026-10-29
+
+- Esclarece que segmentação se aplica à campanha selecionada
+
+## [1.173.12] - 2026-10-29
+
+- Remove aviso de prévia no modo de lote associado
+
+## [1.173.11] - 2026-10-29
+
+- Remove textos explicativos da conexão Hostinger
+
+## [1.173.10] - 2026-10-29
+
+- Oculta a prévia de criação ao reabrir lotes existentes
+
+## [1.173.9] - 2026-10-29
+
+- Alinha os seletores de análise e lotes abaixo do título
+
+## [1.173.8] - 2026-10-29
+
+- Oculta os indicadores globais na tela de criação de campanha
+
+## [1.173.7] - 2026-10-29
+
+- Mantém os três botões do cabeçalho da campanha em uma linha
+
+## [1.173.6] - 2026-10-29
+
+- Indica validação manual como destino funcionando
+
+## [1.173.5] - 2026-10-29
+
+- Alinha o cabeçalho da criação de campanha ao topo do cartão
+
+## [1.173.4] - 2026-10-29
+
+- Permite reduzir manualmente as colunas da tela Contas
+
+## [1.173.3] - 2026-10-29
+
+- Oculta inventário após validação manual
+
+## [1.173.2] - 2026-10-29
+
+- Torna a confirmação de imagens posterior e não bloqueante para prévia
+
+## [1.173.1] - 2026-10-29
+
+- Adiciona atalho HPanel aos cartões do lote
+
+## [1.173.0] - 2026-10-29
+
+- Adiciona validação manual dos destinos Hostinger
+
+## [1.172.6] - 2026-10-29
+
+- Remove D0 dos títulos e avisos automáticos
+
+## [1.172.5] - 2026-10-29
+
+- Esclarece a validação de lotes associados e informa campos inválidos
+
+## [1.172.4] - 2026-10-29
+
+- Amplia em 20% os seletores de análises e lotes salvos
+
+## [1.172.3] - 2026-10-29
+
+- Aumenta em 20% a largura do seletor de análises salvas
+
+## [1.172.2] - 2026-10-29
+
+- Amplia cartões de destino, alinha a verificação de imagem à direita e exibe data de criação quando disponível
+
+## [1.172.1] - 2026-10-29
+
+- Esclarece divergências no inventário Hostinger
+
+## [1.172.0] - 2026-10-29
+
+- Associa campanhas existentes a um lote recuperável
+
+## [1.171.9] - 2026-10-29
+
+- Remove texto explicativo do cabeçalho de criação de campanhas
+
+## [1.171.8] - 2026-10-29
+
+- Esclarece que caminhos ausentes não foram encontrados na Hostinger
+
+## [1.171.7] - 2026-10-29
+
+- Adiciona verificação local de imagens por conta e confirmação obrigatória no lote
+
+## [1.171.6] - 2026-10-29
+
+- Corrige o diagnóstico de conflitos no deploy Hostinger
+
+## [1.171.5] - 2026-10-29
+
+- Direciona links de contas à tela de associações de recursos
+
+## [1.171.4] - 2026-10-29
+
+- Exibe o e-mail cadastrado nas contas de destino da campanha
+
+## [1.171.3] - 2026-10-29
+
+- Replica o padrão de navegação direta por conta Google Ads
+
+## [1.171.2] - 2026-10-29
+
+- Mantém azul o resumo das páginas prontas para publicação
+
+## [1.171.1] - 2026-10-29
+
+- Corrige atalhos para recursos por conta Google Ads
+
+## [1.171.0] - 2026-10-29
+
+- Adiciona revisão automática D−1 após 24 horas
+
+## [1.170.0] - 2026-10-29
+
+- Integra validação de contas à lista Google Ads
+
+## [1.169.3] - 2026-10-29
+
+- Explicita arquivos locais na prévia de publicação
+
+## [1.169.2] - 2026-10-29
+
+- Remove o resumo quantitativo do cabeçalho do histórico Google Ads
+
+## [1.169.1] - 2026-10-29
+
+- Remove botão de atualização geral do modal de deploy
+
+## [1.169.0] - 2026-10-29
+
+- Recupera fechamentos D−1 após indisponibilidade
+
+## [1.168.6] - 2026-10-29
+
+- Destaca destinos prontos para publicar em verde
+
+## [1.168.5] - 2026-10-29
+
+- Exibe campanhas únicas no histórico de capturas Google Ads
+
+## [1.168.4] - 2026-10-29
+
+- Move o resumo de execuções para junto do título do histórico
+
+## [1.168.3] - 2026-10-29
+
+- Encaminha avisos de erro para investigação no Codex
+
+## [1.168.2] - 2026-10-29
+
+- Eleva o histórico na tela Google Ads ao compactar o cabeçalho
+
+## [1.168.1] - 2026-10-29
+
+- Sincroniza subdomínio confirmado com a prévia
+
+## [1.168.0] - 2026-10-29
+
+- Confirma o inventário do deploy no Hub
+
+## [1.167.14] - 2026-10-29
+
+- Esclarece arquivos tentados e estado do deploy no histórico
+
+## [1.167.13] - 2026-10-29
+
+- Explica possível conflito de arquivo no histórico de envio
+
+## [1.167.12] - 2026-10-29
+
+- Reconcilia subdomínios já existentes antes do deploy
+
+## [1.167.11] - 2026-10-29
+
+- Direciona hospedagem para a Pre-Sell ativa
+
+## [1.167.10] - 2026-10-29
+
+- Atualiza cache da tela de Ficha para aplicar o novo modal
+
+## [1.167.9] - 2026-10-29
+
+- Corrige contagem de páginas pendentes no deploy
+
+## [1.167.8] - 2026-10-29
+
+- Remove campo de diretório manual no modal de hospedagem
+
+## [1.167.7] - 2026-10-29
+
+- Orientação para reiniciar servidor sem diagnóstico de datas Hostinger
+
+## [1.167.6] - 2026-10-29
+
+- Documenta o padrão de resposta dos chats do Hub
+
+## [1.167.5] - 2026-10-29
+
+- Corrige sobrescrita das Pre-Sells em lote
+
+## [1.167.4] - 2026-10-29
+
+- Diagnostica datas ausentes no inventário Hostinger
+
+## [1.167.3] - 2026-10-29
+
+- Esclarece conflito HTTP 409 no deploy Hostinger
+
+## [1.167.2] - 2026-10-29
+
+- Corrige a verificação de destinos locais da Pre-Sell
+
+## [1.167.1] - 2026-10-29
+
+- Corrige leitura da data de criação Hostinger
+
+## [1.167.0] - 2026-10-29
+
+- Adiciona data de criação e ordenação aos sites Hostinger
+
+## [1.166.9] - 2026-10-29
+
+- Mostra todos os destinos locais da Pre-Sell e identifica pastas existentes e a criar.
+
+## [1.166.8] - 2026-10-29
+
+- Corrige verificação e reconciliação de subdomínios ausentes na Hostinger
+
+## [1.166.7] - 2026-10-29
+
+- Protege o subdomínio do servidor do Hub
+
+## [1.166.6] - 2026-10-29
+
+- Exclusão em lote de subdomínios Hostinger
+
+## [1.166.5] - 2026-10-29
+
+- Ajusta a largura da notificação automática ao conteúdo
+
+## [1.166.4] - 2026-10-29
+
+- Permite verificar exclusões de subdomínio não confirmadas
+
+## [1.166.3] - 2026-10-29
+
+- Abre o HPanel do domínio principal na tabela de subdomínios
+
+## [1.166.2] - 2026-10-29
+
+- Anima a remoção confirmada de subdomínios Hostinger
+
+## [1.166.1] - 2026-10-29
+
+- Simplifica o rótulo de subdomínio no inventário Hostinger
+
+## [1.166.0] - 2026-10-29
+
+- Mantém avisos de erro da Hostinger visíveis durante a rolagem
+
+## [1.165.0] - 2026-10-29
+
+- Sincroniza um dia do Controle Macro pela API Google Ads
+
+## [1.164.0] - 2026-10-29
+
+- Adiciona atalhos para recursos por conta na criação de campanhas
+
+## [1.163.0] - 2026-10-29
+
+- Permite ajustar manualmente as colunas da tabela Hostinger
+
+## [1.162.0] - 2026-10-29
+
+- Mostra as contas Ads ativas associadas a cada subdomínio
+
+## [1.161.9] - 2026-10-29
+
+- Usar link de campanhas do Google Ads com parâmetros de conta
+
+## [1.161.8] - 2026-10-29
+
+- Linkar ID da campanha no histórico ao Google Ads
+
+## [1.161.7] - 2026-10-29
+
+- Adicionar intervalos D0 de 70 e 80 minutos
+
+## [1.161.6] - 2026-10-29
+
+- Manter lista de notificações aberta ao marcar como lida
+
+## [1.161.5] - 2026-10-29
+
+- Expandir mensagem de atualização automática até o botão de fechar
+
+## [1.161.4] - 2026-10-29
+
+- Corrige inicialização do Hub e valida scripts inline no build
+
+## [1.161.3] - 2026-10-29
+
+- Exibe referência do limite de subdomínios Hostinger
+
+## [1.161.2] - 2026-10-29
+
+- Mostra a contagem de subdomínios no inventário Hostinger
+
+## [1.161.1] - 2026-10-29
+
+- Mantém inventário de subdomínios somente na tela Hostinger
+
+## [1.161.0] - 2026-10-29
+
+- Vincula e aplica sitelinks em campanhas de lotes salvos
+
+## [1.160.1] - 2026-10-29
+
+- Limitar notificações a 15 e permitir remoção individual
+
+## [1.160.0] - 2026-10-28
+
+- Identifica e permite excluir subdomínios na lista Hostinger
+
+## [1.159.2] - 2026-10-28
+
+- Vincula lotes às análises e recupera a prévia original
+
+## [1.159.1] - 2026-10-28
+
+- Agrupa subdomínios pelos domínios principais na análise de hospedagem
+
+## [1.159.0] - 2026-10-28
+
+- Ativação em massa e retomada de lotes de campanhas
+
+## [1.158.3] - 2026-10-28
+
+- Compacta resultados de subdomínios e reduz botão de exclusão
+
+## [1.158.2] - 2026-10-28
+
+- Adiciona teste separado da conexão Hostinger e esclarece falhas na consulta de subdomínios
+
+## [1.158.1] - 2026-10-28
+
+- Mantém os atalhos de subdomínios Hostinger em uma única linha
+
+## [1.158.0] - 2026-10-28
+
+- Adicionar regra configurável de pausa por tempo ativo
+
+## [1.157.3] - 2026-10-28
+
+- Reutilizar prévias salvas sem prazo quando a análise não muda
+
+## [1.157.2] - 2026-10-28
+
+- Alinhar critérios da pausa automática em uma linha
+
+## [1.157.1] - 2026-10-28
+
+- Remover cartões de resumo e aviso de execução da pausa automática
+
+## [1.157.0] - 2026-10-28
+
+- Integra inventário e exclusão assistida de subdomínios Hostinger
+
+## [1.156.7] - 2026-10-28
+
+- Mostra o total de pausas automáticas confirmadas no contador
+
+## [1.156.6] - 2026-10-28
+
+- Remove texto explicativo do cabeçalho das regras de pausa
+
+## [1.156.5] - 2026-10-28
+
+- Compacta linha de ações dos critérios da pausa por produto
+
+## [1.156.4] - 2026-10-28
+
+- Marca notificação como lida ao abrir seu detalhamento
+
+## [1.156.3] - 2026-10-28
+
+- Reports existing campaign IDs/status/groups and enables compatible audience actions from preview
+
+## [1.156.2] - 2026-10-28
+
+- Alinha e amplia o indicador de carregamento do deploy da Pre-Sell
+
+## [1.156.1] - 2026-10-28
+
+- Resume aprovações da Pre-Sell em uma linha
+
+## [1.156.0] - 2026-10-28
+
+- Persiste prévias validadas e vincula o resumo aos lotes de campanhas
+
+## [1.155.1] - 2026-10-28
+
+- Explica o impacto de alterar o prefixo nos destinos e análises
+
+## [1.155.0] - 2026-10-28
+
+- Salva e reabre lotes de campanhas Google Ads neste navegador
+
+## [1.154.1] - 2026-10-28
+
+- Expõe os detalhes da validação de subdomínio da Hostinger
+
+## [1.154.0] - 2026-10-28
+
+- Aplica exclusões de públicos em lote nas campanhas criadas
+
+## [1.153.23] - 2026-10-28
+
+- Exibe detalhes de diagnóstico ao falhar a aplicação de exclusões
+
+## [1.153.22] - 2026-10-28
+
+- Destaca em amarelo a prévia pendente
+
+## [1.153.21] - 2026-10-28
+
+- Esclarece pasta local existente versus Pre-Sell gerada
+
+## [1.153.20] - 2026-10-28
+
+- Explica prévia invalidada e destaca confirmação do lote
+
+## [1.153.19] - 2026-10-28
+
+- Agrupa numeração do lote de campanhas por conta
+
+## [1.153.18] - 2026-10-28
+
+- Atalho direto para a pasta da Pre-Sell no File Manager Hostinger
+
+## [1.153.17] - 2026-10-28
+
+- Mostra destinos do rascunho atual no deploy de Pre-Sells
+
+## [1.153.15] - 2026-10-28
+
+- Mover ativação da atualização automática para Abrir configurações
+
+## [1.153.14] - 2026-10-28
+
+- Salvar edições manuais do desconto no rascunho da Ficha
+
+## [1.153.13] - 2026-10-28
+
+- Remove seletor de lotes de hospedagem
+
+## [1.153.12] - 2026-10-28
+
+- Atualiza contador de pendências do lote
+
+## [1.153.11] - 2026-10-28
+
+- Compacta horizontalmente os arquivos da prévia
+
+## [1.153.10] - 2026-10-28
+
+- Orienta atualização após criação incerta de subdomínio
+
+## [1.153.9] - 2026-10-28
+
+- Remove selo confuso de pausa manual
+
+## [1.153.8] - 2026-10-28
+
+- Move os controles manuais de D0 para Abrir configurações
+
+## [1.153.7] - 2026-10-28
+
+- Remove orientação antiga após reanálise liberada
+
+## [1.153.6] - 2026-10-28
+
+- Simplifica a atualização manual da API para D0
+
+## [1.153.5] - 2026-10-28
+
+- Move a retenção dos snapshots para Abrir configurações
+
+## [1.153.4] - 2026-10-28
+
+- Aprimora captura de diagnósticos da Hostinger
+
+## [1.153.3] - 2026-10-28
+
+- Exibe referência Hostinger em falhas de prévia
+
+## [1.153.2] - 2026-10-28
+
+- Adiciona intervalos D0 de 30, 40 e 50 minutos e padroniza o seletor
+
+## [1.153.1] - 2026-10-28
+
+- Esclarece diagnóstico e próxima ação do deploy Hostinger
+
+## [1.153.0] - 2026-10-28
+
+- Registra falhas de capturas automáticas
+
+## [1.152.11] - 2026-10-28
+
+- Bloqueia sobrescrita e esclarece resultado de envio incerto
+
+## [1.152.10] - 2026-10-28
+
+- Remove o marcador de fuso dos resumos de notificação
+
+## [1.152.9] - 2026-10-28
+
+- Distingue prévia liberada de publicação concluída
+
+## [1.152.8] - 2026-10-28
+
+- Destaca deploy confirmado e detalha falhas de upload
+
+## [1.152.7] - 2026-10-28
+
+- Corrige estado de publicação parcial e rótulo de conclusão
+
+## [1.152.6] - 2026-10-28
+
+- Registra execuções de hospedagem e preserva destinos publicados
+
+## [1.152.5] - 2026-10-28
+
+- Amplia modal de hospedagem e padroniza a rolagem
+
+## [1.152.4] - 2026-10-28
+
+- Alinha links do deploy à página HPanel da Track
+
+## [1.152.3] - 2026-10-28
+
+- Identifica a origem da ficha como IA Gemini
+
+## [1.152.2] - 2026-10-28
+
+- Orienta limpeza seletiva de arquivos após falha Hostinger
+
+## [1.152.1] - 2026-10-28
+
+- Mostra arquivo e motivo em envios Hostinger parciais
+
+## [1.152.0] - 2026-10-28
+
+- Abre cada Pre-Sell local no Chrome e exibe links por página
+
+## [1.151.0] - 2026-10-28
+
+- Permite reanalisar e substituir arquivos de Pre-Sells em lote no Hub
+
+## [1.150.2] - 2026-10-28
+
+- Corrige caminhos de assets ao achatar a pasta na publicação
+
+## [1.150.1] - 2026-10-28
+
+- Abre links das Pre-Sells no resumo de destinos
+
+## [1.150.0] - 2026-10-28
+
+- Adiciona links HPanel por domínio na lista Hostinger
+
+## [1.149.2] - 2026-10-28
+
+- Mostra indicador animado durante análise dos subdomínios
+
+## [1.149.1] - 2026-10-28
+
+- Reduz os espaços internos dos cartões do modal de deploy
+
+## [1.149.0] - 2026-10-28
+
+- Adiciona remoção de lotes da fila de deploy
+
+## [1.148.0] - 2026-10-28
+
+- Adiciona atalhos manuais para arquivos da Hostinger
+
+## [1.147.0] - 2026-10-28
+
+- Exibe o status de geração por conta no lote de hospedagem
+
+## [1.146.0] - 2026-10-28
+
+- Enfileira automaticamente todas as páginas confirmadas pela geração
+
+## [1.145.1] - 2026-10-28
+
+- Mostra resumo de destinos no modal de deploy
+
+## [1.145.0] - 2026-10-28
+
+- Unifica os critérios da bolinha vermelha e pausa por produto
+
+## [1.144.0] - 2026-10-28
+
+- Aceita deploy com assets na raiz e mantém compatibilidade com a pasta assets
+
+## [1.143.3] - 2026-10-28
+
+- Add confirmação por produto com timeout de 10 segundos na pausa automática
+
+## [1.143.2] - 2026-10-28
+
+- Adiciona link do HPanel por subdomínio no modal de deploy
+
+## [1.143.1] - 2026-10-28
+
+- Corrige o destino dos subdomínios na prévia e no deploy
+
+## [1.143.0] - 2026-10-28
+
+- Cria campanhas em várias contas com numeração única por produto
+
+## [1.142.2] - 2026-10-28
+
+- Aceita pastas do OneDrive e confirma subdomínio após erro ambíguo da Hostinger
+
+## [1.142.1] - 2026-10-28
+
+- Abre o histórico da captura pela notificação automática
+
+## [1.142.0] - 2026-10-28
+
+- Persiste a ficha estruturada no rascunho local
+
+## [1.141.4] - 2026-10-28
+
+- Repete o status da criação junto ao botão de prévia
+
+## [1.141.3] - 2026-10-28
+
+- Exibe diagnóstico seguro nas falhas da Google Ads API
+
+## [1.141.2] - 2026-10-28
+
+- Simplifica avisos temporários de capturas automáticas
+
+## [1.141.1] - 2026-10-28
+
+- Preenche o Item da promoção pelo produto identificado na campanha
+
+## [1.141.0] - 2026-10-28
+
+- Abre hospedagem ou sobrescrita segura quando a pasta Pre-Sell existe
+
+## [1.140.5] - 2026-10-28
+
+- Registra aprendizado de eficiência em ajustes de notificação
+
+## [1.140.4] - 2026-10-28
+
+- Integra URL da Pre-Sell salva ao campo de URL final da campanha
+
+## [1.140.3] - 2026-10-28
+
+- Preserva fuso de São Paulo no resumo das notificações
+
+## [1.140.2] - 2026-10-28
+
+- Resume notificações automáticas em campanhas, campos e contas
+
+## [1.140.1] - 2026-10-28
+
+- Amplia modal de pausas e recolhe explicação da regra
+
+## [1.140.0] - 2026-10-28
+
+- Adiciona leitura e conferência local da ficha via área de transferência
+
+## [1.139.0] - 2026-10-28
+
+- Centraliza subdomínios e deploy de Pre-Sells na Ficha
+
+## [1.138.1] - 2026-10-28
+
+- Usa retenção compartilhada no limite da pausa automática
+
+## [1.138.0] - 2026-10-28
+
+- Unifica retenção de snapshots automáticos D0 e D−1
+
+## [1.137.7] - 2026-10-28
+
+- Padroniza o seletor de prazo Hostinger
+
+## [1.137.6] - 2026-10-28
+
+- Move Duplicar campanha após Criar campanha
+
+## [1.137.5] - 2026-10-28
+
+- Separa o cadastro global do Tracker
+
+## [1.137.4] - 2026-10-28
+
+- Corrige a abertura de Domínios por conta
+
+## [1.137.3] - 2026-10-28
+
+- Unifica importação de palavras-chave da Curadoria
+
+## [1.137.2] - 2026-10-28
+
+- Move Criar campanha abaixo de Ficha e Presell
+
+## [1.137.1] - 2026-10-28
+
+- Corrige a chamada dos validadores de Pre-Sell
+
+## [1.137.0] - 2026-10-28
+
+- Adiciona botão para reiniciar o servidor local
+
+## [1.136.0] - 2026-10-28
+
+- Confirma individualmente as Pre-Sells do lote
+
+## [1.135.0] - 2026-10-28
+
+- Centraliza associação de domínios por conta
+
+## [1.134.0] - 2026-10-28
+
+- Vincula o Asset Studio ao diretório da Presell
+
+## [1.133.1] - 2026-10-28
+
+- Centraliza o favicon das telas do Hub
+
+## [1.133.0] - 2026-10-28
+
+- Exibe histórico confirmado de pausas automáticas
+
+## [1.132.1] - 2026-10-28
+
+- Corrige o pré-preenchimento da origem na duplicação
+
+## [1.132.0] - 2026-10-28
+
+- Importa destinos finais Google Ads para o filtro Hostinger
+
+## [1.131.1] - 2026-10-28
+
+- Unifica o layout da navegação lateral
+
+## [1.131.0] - 2026-10-28
+
+- Implementa retenção de snapshots D0 e regra de pausa por desempenho
+
+## [1.130.1] - 2026-10-28
+
+- Simplifica cartões do centro de notificações automáticas
+
+## [1.130.0] - 2026-10-28
+
+- Abre a duplicação pelo Mapa por Conta
+
+## [1.129.4] - 2026-10-28
+
+- Corrige disponibilidade do menu no Asset Studio
+
+## [1.129.3] - 2026-10-28
+
+- Expande o histórico da API para 24 execuções
+
+## [1.129.2] - 2026-10-28
+
+- Ajusta seletores Hostinger e filtra domínios principais ativos
+
+## [1.129.1] - 2026-10-28
+
+- Centro de notificações para execuções automáticas Google Ads
+
+## [1.129.0] - 2026-10-28
+
+- Adiciona filtro de subdomínios de Pre-Sell com campanhas ativas
+
+## [1.128.14] - 2026-10-28
+
+- Reduz espaço entre a marca e a navegação lateral
+
+## [1.128.13] - 2026-10-28
+
+- Alinha a marca ao controle de recolher o menu
+
+## [1.128.12] - 2026-10-28
+
+- Corrige limite de exibição e recuperação do histórico Google Ads
+
+## [1.128.11] - 2026-10-28
+
+- Restringe filtro de sites ativos a domínios exatos
+
+## [1.128.10] - 2026-10-28
+
+- Remove fundo branco da marca lateral
+
+## [1.128.9] - 2026-10-28
+
+- Clareia a identidade Zeus para o modo escuro
+
+## [1.128.8] - 2026-10-28
+
+- Adiciona filtro para mostrar todos os sites Hostinger, inclusive ocultos
+
+## [1.128.7] - 2026-10-28
+
+- Atualiza a identidade Zeus no site e na extensão
+
+## [1.128.6] - 2026-10-28
+
+- Ajusta o seletor do filtro Hostinger ao tema escuro
+
+## [1.128.5] - 2026-10-28
+
+- Adiciona filtro local de domínios com campanhas ativas
+
+## [1.128.4] - 2026-10-28
+
+- Adiciona criação de subdomínios à integração Hostinger
+
+## [1.128.3] - 2026-10-28
+
+- Adiciona controle para ocultar domínios Hostinger
+
+## [1.128.2] - 2026-10-28
+
+- Corrige carregamento do módulo de segurança Hostinger
+
+## [1.128.1] - 2026-10-28
+
+- Limita a busca da sequência às contas selecionadas
+
+## [1.128.0] - 2026-10-28
+
+- Adiciona prévia e publicação de arquivos na Hostinger pelo Hub
+
+## [1.127.1] - 2026-10-28
+
+- Automatiza pasta de produto e pag01 no Asset Studio
+
+## [1.127.0] - 2026-10-28
+
+- Adiciona lembrete de validade do token Hostinger
+
+## [1.126.3] - 2026-10-28
+
+- Notificações visíveis das capturas automáticas D0 e D−1
+
+## [1.126.2] - 2026-10-28
+
+- Atualiza o ícone da extensão Hub 2.0 para tema escuro
+
+## [1.126.1] - 2026-10-28
+
+- Remove o Preparador MCC da extensão Hub 2.0
+
+## [1.126.0] - 2026-10-28
+
+- Adiciona a extensão Hub 2.0 para captura local de assets
+
+## [1.125.1] - 2026-10-28
+
+- Aumenta em 25% o horário da próxima atualização automática
+
+## [1.125.0] - 2026-10-28
+
+- Adiciona conexão segura com Hostinger
+
+## [1.124.3] - 2026-10-28
+
+- Aumenta o histórico Google Ads API para 10 execuções
+
+## [1.124.2] - 2026-10-28
+
+- Usa a URL do produtor para sugerir o subdomínio
+
+## [1.124.1] - 2026-10-28
+
+- Bloqueia recursos Search não preservados
+
+## [1.124.0] - 2026-10-28
+
+- Sugere subdomínio público por conta na criação da Pre-Sell
+
+## [1.123.0] - 2026-10-28
+
+- Cria Pre-Sells e Tracks para várias contas MCC
+
+## [1.122.0] - 2026-10-28
+
+- Adiciona tela de duplicação de campanhas Search
+
+## [1.121.1] - 2026-10-28
+
+- Alinha os campos MCC, conta e título da Track
+
+## [1.121.0] - 2026-10-28
+
+- Restringe Criar campanha e Termos de Pesquisa à API ativa
+
+## [1.120.17] - 2026-10-28
+
+- Permite selecionar contas MCC para publicação da Pre-Sell
+
+## [1.120.16] - 2026-10-28
+
+- Reutiliza preflight da pausa automática por conta
+
+## [1.120.15] - 2026-10-28
+
+- Adiciona seleção MCC/conta e atalhos HPanel à criação de Pre-Sell
+
+## [1.120.14] - 2026-10-28
+
+- Corrige o cálculo do CPA como percentual da comissão
+
+## [1.120.13] - 2026-10-28
+
+- Documenta chamadas e consumo da cota Google Ads
+
+## [1.120.12] - 2026-10-27
+
+- Gera o título do Track com produto e conta selecionada
+
+## [1.120.11] - 2026-10-27
+
+- Integra tracking à criação local da Pre-Sell
+
+## [1.120.10] - 2026-10-27
+
+- Agrupa impressões e cliques por conta no Mapa por Conta
+
+## [1.120.9] - 2026-10-27
+
+- Filtra métricas de campanha por contas ativas
+
+## [1.120.8] - 2026-10-27
+
+- Substitui distribuição CPA por métricas por campanha no Mapa por Conta
+
+## [1.120.7] - 2026-10-27
+
+- Limita o histórico da API do Google Ads a duas execuções
+
+## [1.120.6] - 2026-10-27
+
+- Mostra lembrete Situação somente em linhas destacadas
+
+## [1.120.5] - 2026-10-27
+
+- Permite níveis de CPA dinâmicos a partir de 30% até 80%
+
+## [1.120.4] - 2026-10-27
+
+- Move a seleção da fonte para Abrir configurações
+
+## [1.120.3] - 2026-10-27
+
+- Mostra próxima captura D0 no botão de atualização automática
+
+## [1.120.2] - 2026-10-27
+
+- Cria campanhas Search em lote por faixas de CPA
+
+## [1.120.1] - 2026-10-27
+
+- Lembra Situação quando a coluna está oculta
+
+## [1.120.0] - 2026-10-27
+
+- Adiciona total faturado por campanha na Visão Geral
+
+## [1.119.0] - 2026-10-27
+
+- Aplica lista fixa de públicos à campanha
+
+## [1.118.8] - 2026-10-27
+
+- Define padrão para declaração política UE na criação
+
+## [1.118.7] - 2026-10-27
+
+- Importa negativas ClickBank para criação de campanhas
+
+## [1.118.6] - 2026-10-27
+
+- Permite editar candidatas negativas por país na ficha de Google Imagens da ClickBank
+
+## [1.118.5] - 2026-10-27
+
+- Vincula candidatas ClickBank à criação de campanhas
+
+## [1.118.4] - 2026-10-27
+
+- Permite editar candidatas de palavra-chave na ficha Google Trends da ClickBank
+
+## [1.118.3] - 2026-10-27
+
+- Abre importação Gemini com clipboard organizado
+
+## [1.118.2] - 2026-10-27
+
+- Simplifica os controles da API Google Ads
+
+## [1.118.1] - 2026-10-27
+
+- Ajusta orçamento e alinhamento na criação de campanhas
+
+## [1.118.0] - 2026-10-27
+
+- Adiciona exclusões de público no nível da campanha
+
+## [1.117.10] - 2026-10-27
+
+- Detecta desconto percentual na copy
+
+## [1.117.9] - 2026-10-27
+
+- Adiciona botão para fechar diagnóstico da consulta Google Ads
+
+## [1.117.8] - 2026-10-27
+
+- Limpa o destaque da conta quando o alvo é removido
+
+## [1.117.7] - 2026-10-27
+
+- Move Criar campanha para Criação de ofertas
+
+## [1.117.6] - 2026-10-27
+
+- Remove instrução auxiliar do histórico de capturas API
+
+## [1.117.5] - 2026-10-27
+
+- Oculta indicadores gerais na tela Google Ads API
+
+## [1.117.4] - 2026-10-27
+
+- Destaca a conta alvo do Mapa por conta no seletor de criação
+
+## [1.117.3] - 2026-10-27
+
+- Simplifica rótulos dos botões de campanhas ativas
+
+## [1.117.2] - 2026-10-27
+
+- Remove textos descritivos dos cartões de fonte e D0
+
+## [1.117.1] - 2026-10-27
+
+- Exibe fonte operacional e atualização automática em uma linha
+
+## [1.117.0] - 2026-10-27
+
+- Importa e aplica públicos em campanhas Search
+
+## [1.116.2] - 2026-10-27
+
+- Adiciona espaço entre histórico de atualizações e diretório MCC
+
+## [1.116.1] - 2026-10-27
+
+- Adiciona ação para remover alvo de duplicação no Mapa por Conta
+
+## [1.116.0] - 2026-10-27
+
+- Adiciona estratégias de lance e leitura do padrão da campanha
+
+## [1.115.2] - 2026-10-27
+
+- Espaça os blocos de histórico e MCC
+
+## [1.115.1] - 2026-10-27
+
+- Expande a tabela de histórico e simplifica a captura selecionada
+
+## [1.115.0] - 2026-10-27
+
+- Notifica diferenças na captura D0
+
+## [1.114.0] - 2026-10-27
+
+- Salva rascunhos de campanha no navegador e permite iniciar novas análises
+
+## [1.113.0] - 2026-10-27
+
+- Notifica fechamento D−1 concluído e histórico disponível
+
+## [1.112.5] - 2026-10-27
+
+- Mantém os contadores de seleção fixos durante a rolagem do importador
+
+## [1.112.4] - 2026-10-27
+
+- Salva edições da copy ao pressionar Enter
+
+## [1.112.3] - 2026-10-27
+
+- Aumenta a largura do pop-up de importação de copy em 20%
+
+## [1.112.2] - 2026-10-27
+
+- Permite editar frases de destaque, snippets e sitelinks no importador
+
+## [1.112.1] - 2026-10-27
+
+- Abre o importador de copy com leitura automática do clipboard
+
+## [1.112.0] - 2026-10-27
+
+- Configura intervalo da atualização automática Google Ads
+
+## [1.111.1] - 2026-10-27
+
+- Atualização automática Google Ads D0/D−1 por perfil
+
+## [1.111.0] - 2026-10-27
+
+- Adiciona importação estruturada de copy do Gemini na criação de campanhas
+
+## [1.110.3] - 2026-10-27
+
+- Corrige a exibição do histórico API após recarregar
+
+## [1.110.2] - 2026-10-27
+
+- Recolhe configurações do postback GuruMedia
+
+## [1.110.1] - 2026-10-27
+
+- Show safely matched pre-sell links in campaign diary
+
+## [1.110.0] - 2026-10-27
+
+- Atualiza macros e conferência local do postback GuruMedia
+
+## [1.109.0] - 2026-10-27
+
+- Adiciona avaliação automática por termo de pesquisa
+
+## [1.108.4] - 2026-10-27
+
+- Persist campaign row selection across overview periods and navigation
+
+## [1.108.3] - 2026-10-27
+
+- Exibe o indicador de carregamento ao lado de Campanhas durante a leitura inicial da base local
+
+## [1.108.2] - 2026-10-27
+
+- Explica a situação após pausa automática
+
+## [1.108.1] - 2026-10-27
+
+- Corrige a contagem de campanhas pausadas hoje na fonte Google Ads API e preserva o critério do manifesto
+
+## [1.108.0] - 2026-10-27
+
+- Liga o Diário de campanha aos Termos de Pesquisa
+
+## [1.107.3] - 2026-10-27
+
+- Documenta recuperação e retenção do histórico Google Ads API
+
+## [1.107.2] - 2026-10-27
+
+- Protege o histórico das capturas API contra sobrescrita entre abas
+
+## [1.107.1] - 2026-10-27
+
+- Adiciona opções de atualização por tela ou global
+
+## [1.107.0] - 2026-10-27
+
+- Alinha o formulário da promoção às preferências do Google Ads
+
+## [1.106.0] - 2026-10-27
+
+- Detecta automaticamente o idioma da copy da campanha
+
+## [1.105.9] - 2026-10-27
+
+- Usa a campanha visível no seletor ao consultar termos
+
+## [1.105.8] - 2026-10-27
+
+- Aceita filtro vazio como pesquisa de todas as campanhas
+
+## [1.105.7] - 2026-10-27
+
+- Organiza contas em até seis colunas na tela Termos de Pesquisa
+
+## [1.105.6] - 2026-10-27
+
+- Detalha divergências no escopo de respostas de termos de pesquisa
+
+## [1.105.5] - 2026-10-27
+
+- Remove o grupo de anúncios das linhas de Termos de Pesquisa
+
+## [1.105.4] - 2026-10-27
+
+- Reaproveita cache local das campanhas Search por conta
+
+## [1.105.3] - 2026-10-27
+
+- Mostra data e horário da consulta nos termos de pesquisa
+
+## [1.105.2] - 2026-10-27
+
+- Exibe somente os quatro últimos dígitos da conta em Termos de Pesquisa
+
+## [1.105.1] - 2026-10-27
+
+- Indica consulta Google Ads em andamento
+
+## [1.105.0] - 2026-10-27
+
+- Cria campanha Search sem modelo e informa os parâmetros no formulário
+
+## [1.104.1] - 2026-10-27
+
+- Recolhe detalhes de etapas do diagnóstico
+
+## [1.104.0] - 2026-10-27
+
+- Filtra termos de pesquisa por campanha
+
+## [1.103.5] - 2026-10-27
+
+- Compacta histórico Google Ads
+
+## [1.103.4] - 2026-10-27
+
+- Reutiliza cache MCC e adia consulta dos modelos de campanha
+
+## [1.103.3] - 2026-10-27
+
+- Apresenta diferenças por botão em grade
+
+## [1.103.2] - 2026-10-27
+
+- Remove rótulo de cache da lista de MCCs
+
+## [1.103.1] - 2026-10-27
+
+- Remove complemento textual do fechamento D-1
+
+## [1.103.0] - 2026-10-27
+
+- Adiciona tela Termos de Pesquisa
+
+## [1.102.3] - 2026-10-27
+
+- Move atualização da lista MCC para o cabeçalho do diretório
+
+## [1.102.2] - 2026-10-27
+
+- Recolhe histórico de capturas e retém D0 por dois dias
+
+## [1.102.1] - 2026-10-27
+
+- Renomeia o item do menu para Criar campanha
+
+## [1.102.0] - 2026-10-27
+
+- Separa criação de campanhas Google Ads em tela própria
+
+## [1.101.3] - 2026-10-27
+
+- Remove subtítulo genérico do cabeçalho Google Ads API
+
+## [1.101.2] - 2026-10-27
+
+- Protege e recupera o histórico de capturas Google Ads entre recargas
+
+## [1.101.1] - 2026-10-27
+
+- Reavalia pausa automática após nova captura Google Ads
+
+## [1.101.0] - 2026-10-27
+
+- Consulta manual de termos de pesquisa Google Ads
+
+## [1.100.0] - 2026-10-27
+
+- Adiciona criação assistida de campanhas Google Ads
+
+## [1.99.3] - 2026-10-27
+
+- Organiza as ações dos cartões D0 e D−1
+
+## [1.99.2] - 2026-10-27
+
+- Exibe pausas anteriores no Diário e no nome da campanha
+
+## [1.99.1] - 2026-10-27
+
+- Registra execuções D0 sem diferenças
+
+## [1.99.0] - 2026-10-27
+
+- Registra pausas automáticas no Diário de campanha
+
+## [1.98.1] - 2026-10-27
+
+- Aproveita o espaço livre no diagnóstico por conta
+
+## [1.98.0] - 2026-10-27
+
+- Exibe confirmação de pausa automática na campanha
+
+## [1.97.6] - 2026-10-27
+
+- Mantém visíveis as diferenças do histórico Google Ads API
+
+## [1.97.5] - 2026-10-27
+
+- Reutiliza contexto financeiro na gravação de capturas Google Ads
+
+## [1.97.4] - 2026-10-27
+
+- Remove textos explicativos redundantes da prévia D0 e preservar callbacks do módulo Google Ads
+
+## [1.97.3] - 2026-10-27
+
+- Documenta pausa automática e aviso por e-mail do Google Ads
+
+## [1.97.2] - 2026-10-27
+
+- Documenta desempenho da gravação Google Ads
+
+## [1.97.1] - 2026-10-27
+
+- Otimiza prévias e instrumenta a gravação Google Ads
+
+## [1.97.0] - 2026-10-27
+
+- Notifica pausas automáticas do Google Ads por e-mail
+
+## [1.96.1] - 2026-10-27
+
+- Exibe os painéis de atualização D−1 e D0 lado a lado
+
+## [1.96.0] - 2026-10-27
+
+- Atualiza a Visão Geral após capturas Google Ads API
+
+## [1.95.1] - 2026-10-27
+
+- Compacta a lista de MCCs e contas conectadas
+
+## [1.95.0] - 2026-10-27
+
+- Adiciona histórico compacto das diferenças das capturas Google Ads API
+
+## [1.94.2] - 2026-10-27
+
+- Evita projeção operacional redundante na prévia D0
+
+## [1.94.1] - 2026-10-27
+
+- Mostra relatório de pausa automática em modal e filtra campanhas ativas
+
+## [1.94.0] - 2026-10-27
+
+- Adiciona pausa automática por saldo negativo com simulação e confirmação
+
+## [1.93.10] - 2026-10-27
+
+- Exibe diagnóstico de duração das consultas Google Ads
+
+## [1.93.9] - 2026-10-27
+
+- Remove repetição de limitação por política no rótulo de situação
+
+## [1.93.8] - 2026-10-27
+
+- Remove a legenda de explicação no período D0 da Visão Geral
+
+## [1.93.7] - 2026-10-27
+
+- Remove textos explicativos apontados na tela Google Ads API
+
+## [1.93.6] - 2026-10-27
+
+- Mantém o botão de duplicidades junto aos controles nas três visões
+
+## [1.93.5] - 2026-10-27
+
+- Remove textos explicativos da tela Google Ads API
+
+## [1.93.4] - 2026-10-27
+
+- Adiciona MCC à comparação D0
+
+## [1.93.3] - 2026-10-27
+
+- Paraleliza com limite a consulta D0
+
+## [1.93.2] - 2026-10-27
+
+- Remove fuso repetido da comparação D0
+
+## [1.93.1] - 2026-10-27
+
+- Separa métricas na comparação D0
+
 ## [1.93.0] - 2026-10-27
 
 - Automatiza o aprendizado do ID de oferta GuruMedia

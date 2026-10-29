@@ -30,6 +30,12 @@
 .keyword-candidate.trends-keyword-candidate .keyword-candidate-search:hover{border-color:#35c691;background:rgba(20,76,59,.3);color:#eafff5}
 .keyword-candidate.trends-keyword-candidate .keyword-candidate-search:hover:not(:focus-visible){outline:none;outline-offset:0}
 .keyword-candidate.trends-keyword-candidate .keyword-candidate-search:focus-visible{outline:2px solid rgba(53,198,145,.75);outline-offset:2px}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-edit{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:transparent;color:#83e5bb;cursor:pointer;opacity:.82}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-edit:hover{background:rgba(20,76,59,.3);color:#eafff5;opacity:1}
+.keyword-candidate.trends-keyword-candidate .keyword-candidate-edit:focus-visible{outline:2px solid rgba(53,198,145,.75);outline-offset:1px}
+.keyword-candidate.image-candidate .keyword-candidate-edit{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:transparent;color:#ffb5c3;cursor:pointer;opacity:.82}
+.keyword-candidate.image-candidate .keyword-candidate-edit:hover{background:rgba(255,91,110,.13);color:#ffe1e7;opacity:1}
+.keyword-candidate.image-candidate .keyword-candidate-edit:focus-visible{outline:2px solid rgba(255,181,195,.75);outline-offset:1px}
 
 .trends-keyword-candidate{font-size:.9rem}.image-candidate{font-size:.9rem;font-weight:400}.image-candidate.saved{font-size:.9rem}
 

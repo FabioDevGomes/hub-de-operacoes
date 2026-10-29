@@ -5,6 +5,9 @@ const html=await readFile(new URL('../dist/asset-studio/index.html',import.meta.
 const app=await readFile(new URL('../dist/asset-studio/app.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../dist/asset-studio/styles.css',import.meta.url),'utf8');
 
+assert.match(html,/<link rel="icon" type="image\/png" href="\/favicon\.png\?v=[^"]+">/,'Asset Studio deve usar o favicon compartilhado do Hub');
+assert.ok(!html.includes('data:image/png;base64'),'Asset Studio não deve manter o favicon antigo embutido');
+assert.match(html,/src="\/brand-logo\.png\?v=[^"]+"/,'marca lateral deve carregar a imagem atual com cache invalidado');
 assert.ok(html.includes('PNG, JPG, WebP ou SVG · mantém tamanho e fundo'));
 assert.ok(html.includes('accept="image/*,.svg,image/svg+xml"'),'seletor do favicon não aceita SVG explicitamente');
 assert.ok(!html.includes('id="removeLightBg"'),'controle de remoção de fundo ainda aparece');
@@ -21,6 +24,9 @@ assert.ok(app.includes("async function setFaviconBlob")&&app.includes("$('#favic
 assert.ok(!app.includes('removeLightBackground'),'remoção de fundo ainda está ativa');
 assert.ok(html.includes('data-hub-sidebar-active="asset-studio"')&&html.includes('data-hub-sidebar-products'),'Asset Studio não monta o menu compartilhado nem marca a rota ativa');
 assert.ok(html.includes('/sidebar-component.js')&&html.includes('/sidebar-component.css'),'Asset Studio não carrega o componente lateral compartilhado');
+const sourcePreferenceScript=html.indexOf('/google-ads/google-ads-source-preference.js?v=1');
+const sidebarScript=html.indexOf('/sidebar-component.js');
+assert.ok(sourcePreferenceScript>=0&&sourcePreferenceScript<sidebarScript,'Asset Studio deve carregar a preferência de fonte antes do menu que determina a disponibilidade das telas de criação');
 const uploadPanel=html.match(/<section class="panel">([\s\S]*?)<\/section>/)?.[1]||'';
 for(const slot of ['desktop','mobile','favicon'])assert.ok(uploadPanel.includes(`data-slot="${slot}"`),`upload ${slot} deve ficar no painel compartilhado`);
 assert.ok(uploadPanel.includes('id="skipFavicon"'),'opção para pular o favicon deve continuar dentro do painel compartilhado');

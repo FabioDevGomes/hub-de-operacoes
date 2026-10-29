@@ -103,14 +103,23 @@ body:has(#clickbankTopOffersRoot #offerSheet:not(.hidden)):not(:has(#offerSheet 
 body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(1000px,calc(100% - 28px))}
 body:has(#clickbankTopOffersRoot) #sharedDecisionActions{grid-template-columns:repeat(7,minmax(126px,1fr));justify-content:center;overflow-x:auto;overscroll-behavior-inline:contain}
 body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{box-sizing:border-box;width:100%;white-space:nowrap;padding-inline:2px}
-body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification:not([hidden]){display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 21px 0}
+body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification:not([hidden]){display:inline-flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 21px 0;vertical-align:middle}
 body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification label{display:inline-flex;align-items:center;gap:8px;color:var(--cb-muted);font-size:.82rem;font-weight:700;cursor:pointer}
 body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification input[type="checkbox"]{width:16px;height:16px;margin:0;accent-color:#34d399}
 body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification input[type="checkbox"]:focus-visible{outline:2px solid rgba(90,177,255,.72);outline-offset:2px}
+body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope:not([hidden]){display:inline-flex;align-items:center;gap:18px;flex-wrap:wrap;margin:0 0 0 6px;padding:14px 21px 0 16px;border-left:1px solid var(--line);vertical-align:middle}
+body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope label{display:inline-flex;align-items:center;gap:8px;color:var(--cb-muted);font-size:.82rem;font-weight:700;cursor:pointer}
+body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope input[type="checkbox"]{width:16px;height:16px;margin:0;accent-color:#34d399}
+body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope input[type="checkbox"]:focus-visible{outline:2px solid rgba(90,177,255,.72);outline-offset:2px}
 @media(max-width:868px){
   body:has(#clickbankTopOffersRoot) #sharedDecisionDialog{width:min(1000px,calc(100% - 16px))}
   body:has(#clickbankTopOffersRoot) #sharedDecisionActions{display:grid;grid-template-columns:repeat(7,minmax(126px,1fr));justify-content:start;overflow-x:auto}
   body:has(#clickbankTopOffersRoot) #sharedDecisionActions .decision-option{grid-column:auto}
+}
+@media(max-width:620px){
+  body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification:not([hidden]),
+  body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope:not([hidden]){display:flex;width:100%;box-sizing:border-box}
+  body:has(#clickbankTopOffersRoot) #sharedDecisionMarketScope:not([hidden]){margin:10px 0 0;padding:12px 21px 0;border-left:0;border-top:1px solid var(--line)}
 }
 
 /* Ações do diálogo de captura: mesmo padrão compacto, sem borda e com sombra preta. */
@@ -118,6 +127,7 @@ body:has(#clickbankTopOffersRoot) #sharedDecisionPageClassification input[type="
 .import-dialog .btn.primary{background:var(--curation-header-action-accent,#38bdf8);color:var(--curation-header-action-accent-text,#052037)}
 .import-dialog .btn:hover:not(:disabled){box-shadow:0 5px 12px rgba(0,0,0,.65)}
 .import-dialog .btn:focus-visible{outline:2px solid rgba(101,169,255,.45);outline-offset:2px}
+.candidate-edit-dialog{width:min(560px,calc(100% - 24px))}.candidate-edit-dialog .modalbody{max-height:none}.candidate-edit-dialog .field input{width:100%;margin-top:4px}.candidate-edit-message{min-height:1em;margin:9px 0 0;color:var(--cb-red);font-size:.76rem}
 @media(prefers-reduced-motion:reduce){.import-dialog .btn{transition:none}}
 @media(max-width:520px){#offerSheet .candidate-entry{grid-template-columns:minmax(0,1fr)}#offerSheet .clickbank-trends-search-history{justify-self:end}}
 #offerSheet .trends-manual-country-chip{display:inline-flex;align-items:center;border:1px dashed #536c8a;border-radius:999px;background:#121f31;color:#a9bbd5}

@@ -7,6 +7,8 @@ param(
 
     [string]$FichaJson,
 
+    [switch]$AssetStudioValidated,
+
     [switch]$Json
 )
 
@@ -83,7 +85,7 @@ if (-not [string]::IsNullOrWhiteSpace($FichaPath)) {
         $checks.Add((New-Check 'ficha' 'BLOCK' 'Arquivo da ficha não encontrado.' @($FichaPath)))
     }
     else {
-        $rawFicha = Get-Content -LiteralPath $FichaPath -Raw
+        $rawFicha = [System.IO.File]::ReadAllText($FichaPath, [System.Text.Encoding]::UTF8)
     }
 }
 elseif (-not [string]::IsNullOrWhiteSpace($FichaJson)) {
@@ -205,7 +207,17 @@ if ($null -ne $ficha -and $null -ne $indexText) {
     $assetFolder = Get-PropertyValue $ficha 'assetFolder'
     if (-not [string]::IsNullOrWhiteSpace($assetFolder)) {
         $expectedFavicon = "./$assetFolder/03.png"
-        if ($indexText -notmatch [regex]::Escape($expectedFavicon)) {
+        $skipFavicon = [string]::Equals((Get-PropertyValue $ficha 'skipFavicon'), 'true', [StringComparison]::OrdinalIgnoreCase)
+        if ($AssetStudioValidated) {
+            $checks.Add((New-Check 'asset-folder' 'PASS' 'A checagem de favicon foi concluída no Asset Studio e não é repetida na Ficha e Pre-Sell.' @()))
+        }
+        elseif ($skipFavicon -and $indexText -match [regex]::Escape($expectedFavicon)) {
+            $checks.Add((New-Check 'asset-folder' 'BLOCK' 'A ficha marcou Sem favicon, mas a página ainda referencia assets/03.png.' @($expectedFavicon)))
+        }
+        elseif ($skipFavicon) {
+            $checks.Add((New-Check 'asset-folder' 'PASS' 'A página omite assets/03.png conforme a escolha registrada na ficha.' @()))
+        }
+        elseif ($indexText -notmatch [regex]::Escape($expectedFavicon)) {
             $checks.Add((New-Check 'asset-folder' 'BLOCK' 'A referência ao favicon diverge da pasta de assets informada na ficha.' @($expectedFavicon)))
         }
         else {

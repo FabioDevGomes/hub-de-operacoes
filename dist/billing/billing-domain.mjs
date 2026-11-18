@@ -75,7 +75,7 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     value_usd: amount(input.value_usd, 'Comissão em US$'),
     payment_status: status,
     observed_payment_status: input.observed_payment_status ?? status,
-    confirmation_status: ['manual', 'provisional', 'confirmed', 'not_confirmed', 'represented_by_manual'].includes(input.confirmation_status) ? input.confirmation_status : null,
+    confirmation_status: ['manual', 'provisional', 'confirmed', 'not_confirmed', 'represented_by_manual', 'represented_by_billing_sale'].includes(input.confirmation_status) ? input.confirmation_status : null,
     confirmation_source: text(input.confirmation_source) || null,
     confirmed_at: input.confirmed_at || null,
     campaign_id: text(input.campaign_id) || null,
@@ -90,12 +90,147 @@ export function normalizeSale(input, { now = new Date().toISOString(), id } = {}
     source_captured_at: input.source_captured_at || null,
     manual_value_override: input.manual_value_override === true,
     external_id: text(input.external_id) || null,
+    source_conversion_at_utc: text(input.source_conversion_at_utc) || null,
+    source_received_at_utc: text(input.source_received_at_utc) || null,
+    source_date_basis: ['conversion_time', 'received_time_fallback'].includes(input.source_date_basis) ? input.source_date_basis : null,
+    mcc_match_aggregate_id: text(input.mcc_match_aggregate_id) || null,
+    mcc_match_confirmed_at: text(input.mcc_match_confirmed_at) || null,
+    mcc_linked_sale_ids: input.source === 'mcc_conversion_aggregate' && Array.isArray(input.mcc_linked_sale_ids)
+      ? [...new Set(input.mcc_linked_sale_ids.map(value => text(value)).filter(Boolean))]
+      : [],
+    mcc_reported_conversion_count: input.source === 'mcc_conversion_aggregate' && input.mcc_reported_conversion_count != null
+      ? Math.max(0, Number.isFinite(Number(input.mcc_reported_conversion_count)) ? Number(input.mcc_reported_conversion_count) : 0)
+      : null,
+    mcc_reported_value_brl: input.source === 'mcc_conversion_aggregate' ? amount(input.mcc_reported_value_brl, 'Valor MCC reportado em R$') : null,
+    mcc_reported_value_usd: input.source === 'mcc_conversion_aggregate' ? amount(input.mcc_reported_value_usd, 'Valor MCC reportado em US$') : null,
+    mcc_reported_confirmation_status: input.source === 'mcc_conversion_aggregate'
+      && ['manual', 'provisional', 'confirmed', 'not_confirmed', 'represented_by_manual', 'represented_by_billing_sale'].includes(input.mcc_reported_confirmation_status)
+      ? input.mcc_reported_confirmation_status : null,
+    mcc_reported_confirmation_source: input.source === 'mcc_conversion_aggregate' ? text(input.mcc_reported_confirmation_source) || null : null,
+    mcc_reported_active: input.source === 'mcc_conversion_aggregate' && typeof input.mcc_reported_active === 'boolean' ? input.mcc_reported_active : null,
+    mcc_reported_notes: input.source === 'mcc_conversion_aggregate' ? text(input.mcc_reported_notes) : '',
+    mcc_reported_manual_value_override: input.source === 'mcc_conversion_aggregate' && input.mcc_reported_manual_value_override === true,
+    source_overrides: Array.isArray(input.source_overrides)
+      ? [...new Set(input.source_overrides.filter(field => ['sale_date', 'sale_time', 'product', 'platform', 'commission_type', 'account', 'value_brl', 'value_usd', 'notes'].includes(field)))]
+      : [],
     active: input.active !== false,
     cancelled_at: input.cancelled_at || null,
     cancellation_reason: text(input.cancellation_reason),
     created_at: input.created_at || now,
     updated_at: input.updated_at || now,
   };
+}
+
+function canonicalAccountDigits(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return /^\d{10}$/.test(digits) ? digits : '';
+}
+
+function accountSuffixHint(sale) {
+  const full = canonicalAccountDigits(sale?.account);
+  if (full) return { kind:'full', value:full };
+  const suffix = String(sale?.account || sale?.product || '').match(/\b(?:conta|account)\s*[-:#]?\s*(\d{4})\b/i)?.[1];
+  return suffix ? { kind:'suffix', value:suffix } : null;
+}
+
+function campaignAccountDigits(campaign, aggregate) {
+  return canonicalAccountDigits(aggregate?.account) || canonicalAccountDigits(campaign?.conta_id);
+}
+
+function campaignAccountTimeZone(campaign, captures, snapshots) {
+  const account = canonicalAccountDigits(campaign?.conta_id);
+  if (!account) return '';
+  const manager = canonicalAccountDigits(campaign?.mcc_id);
+  const observations = [];
+  for (const capture of captures || []) {
+    if (canonicalAccountDigits(capture?.customerId) !== account
+        || manager && canonicalAccountDigits(capture?.managerCustomerId) && canonicalAccountDigits(capture?.managerCustomerId) !== manager
+        || !String(capture?.timeZone || '').trim()) continue;
+    observations.push({ timeZone:String(capture.timeZone).trim(), at:String(capture.capturedAtUtc || capture.generatedAtUtc || '') });
+  }
+  for (const snapshot of snapshots || []) for (const item of snapshot?.accounts || []) {
+    if (canonicalAccountDigits(item?.customerId) !== account
+        || manager && canonicalAccountDigits(item?.managerCustomerId) && canonicalAccountDigits(item?.managerCustomerId) !== manager
+        || !String(item?.timeZone || '').trim()) continue;
+    observations.push({ timeZone:String(item.timeZone).trim(), at:String(item.capturedAtUtc || snapshot.completedAtUtc || '') });
+  }
+  observations.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  return observations.at(-1)?.timeZone || '';
+}
+
+export function dateInTimeZone(timestamp, timeZone) {
+  const instant = new Date(timestamp);
+  if (!Number.isFinite(instant.getTime()) || !timeZone) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(instant);
+    return `${parts.find(item => item.type === 'year')?.value}-${parts.find(item => item.type === 'month')?.value}-${parts.find(item => item.type === 'day')?.value}`;
+  } catch { return ''; }
+}
+
+function dateDistanceDays(a, b) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(b || ''))) return Infinity;
+  return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000);
+}
+
+function comparableMccAmount(sale, aggregate) {
+  const currency = typeof sale?.value_usd === 'number' && typeof aggregate?.value_usd === 'number' ? 'USD'
+    : typeof sale?.value_brl === 'number' && typeof aggregate?.value_brl === 'number' ? 'BRL' : '';
+  if (!currency) return { comparable:false, matches:false, difference:null, currency:null };
+  const saleValue = Number(sale[currency === 'USD' ? 'value_usd' : 'value_brl']);
+  const aggregateValue = Number(aggregate[currency === 'USD' ? 'value_usd' : 'value_brl']);
+  const difference = Number(Math.abs(saleValue - aggregateValue).toFixed(2));
+  const tolerance = Math.max(0.01, Math.max(Math.abs(saleValue), Math.abs(aggregateValue)) * 0.005);
+  return { comparable:true, matches:difference <= tolerance, difference, currency };
+}
+
+/** Returns reviewable candidates only; it never writes or links a sale automatically. */
+export function guruMediaMccMatchCandidates({ sales = [], campaigns = [], dailyCaptures = [], captureSnapshots = [] } = {}) {
+  const campaignsById = new Map((campaigns || []).filter(item => item?.id).map(item => [String(item.id), item]));
+  const aggregates = (sales || []).filter(item => item?.source === 'mcc_conversion_aggregate' && item.active !== false
+    && Number.isInteger(Number(item.conversion_count)) && Number(item.conversion_count) > 0);
+  const candidates = [];
+  for (const sale of sales || []) {
+    if (sale?.source !== 'gurumedia_postback' || sale.active === false || sale.cancelled_at || sale.mcc_match_aggregate_id) continue;
+    const accountHint = accountSuffixHint(sale);
+    for (const aggregate of aggregates) {
+      const campaign = campaignsById.get(String(aggregate.campaign_id || ''));
+      if (!campaign) continue;
+      const accountDigits = campaignAccountDigits(campaign, aggregate);
+      const accountMatch = accountHint?.kind === 'full' ? accountHint.value === accountDigits
+        : accountHint?.kind === 'suffix' ? Boolean(accountDigits && accountDigits.endsWith(accountHint.value))
+          : false;
+      if (accountHint && !accountMatch) continue;
+      const timeZone = campaignAccountTimeZone(campaign, dailyCaptures, captureSnapshots);
+      const eventDate = dateInTimeZone(sale.source_conversion_at_utc, timeZone)
+        || dateInTimeZone(sale.source_received_at_utc, timeZone)
+        || String(sale.sale_date || '');
+      const dateDeltaDays = dateDistanceDays(eventDate, aggregate.sale_date);
+      if (timeZone ? dateDeltaDays !== 0 : Math.abs(dateDeltaDays) > 1) continue;
+      const count = Number(aggregate.conversion_count);
+      const hasPriorLinks = Array.isArray(aggregate.mcc_linked_sale_ids) && aggregate.mcc_linked_sale_ids.length > 0;
+      const amount = count === 1 && !hasPriorLinks ? comparableMccAmount(sale, aggregate) : { comparable:false, matches:false, difference:null, currency:null };
+      if (amount.comparable && !amount.matches) continue;
+      if (!accountMatch && !(dateDeltaDays === 0 && amount.matches)) continue;
+      const period = aggregate.source_period;
+      candidates.push({
+        sale_id:String(sale.sale_id), aggregate_sale_id:String(aggregate.sale_id), mcc_campaign_id:String(aggregate.campaign_id),
+        campaign_name:String(campaign.nome_mcc || campaign.nome_exibicao || aggregate.product || ''),
+        account:String(aggregate.account || campaign.conta_id || campaign.conta_sufixo || ''),
+        date:String(aggregate.sale_date || ''), source_period:period,
+        conversion_count_before:count, amount_comparable:amount.comparable, amount_matches:amount.matches,
+        amount_difference:amount.difference, amount_currency:amount.currency,
+        sale_value_brl:sale.value_brl, sale_value_usd:sale.value_usd,
+        mcc_value_brl:aggregate.value_brl ?? aggregate.mcc_reported_value_brl,
+        mcc_value_usd:aggregate.value_usd ?? aggregate.mcc_reported_value_usd,
+        account_match:accountMatch, account_hint_kind:accountHint?.kind || '',
+        event_date:eventDate, time_zone:timeZone, date_delta_days:dateDeltaDays,
+        date_basis:timeZone ? 'account_time_zone' : 'billing_date_fallback',
+      });
+    }
+  }
+  return candidates.sort((a, b) => a.sale_id.localeCompare(b.sale_id) || Math.abs(a.date_delta_days) - Math.abs(b.date_delta_days)
+    || Number(b.account_match) - Number(a.account_match) || Number(b.amount_matches) - Number(a.amount_matches)
+    || a.campaign_name.localeCompare(b.campaign_name, 'pt-BR'));
 }
 
 export function resolveMccSalePlatforms(sales, campaigns, inferPlatformFromCampaignName) {

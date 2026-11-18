@@ -11,8 +11,8 @@ export async function controlVslSpeed(rate, action = 'set') {
       })]);
     } finally { clearTimeout(timer); }
   };
-  if (!['set', 'read'].includes(action) || (action === 'set' && ![1, 10, 20, 30].includes(rate))) {
-    return { ok:false, message:'Velocidade inválida. Use 1×, 10×, 20× ou 30×.' };
+  if (!['set', 'read'].includes(action) || (action === 'set' && ![1, 20, 30, 40, 50].includes(rate))) {
+    return { ok:false, message:'Velocidade inválida. Use 1×, 20×, 30×, 40× ou 50×.' };
   }
   const previous = window[key];
   if (action === 'read' && previous?.signature === 'hub-vsl-v1') return previous.snapshot();
@@ -92,10 +92,10 @@ export async function controlVslSpeed(rate, action = 'set') {
     }
 
     if (!video && (typeof player.seek !== 'function' || !canRestoreAudio || typeof player.paused !== 'boolean')) {
-      throw new Error('Este player não oferece avanço e controle de áudio seguros. Use 1× ou 10×.');
+      throw new Error('Este player não oferece avanço e controle de áudio seguros. Use 1×.');
     }
     // Reprodução base em 1× + saltos calculados pelo relógio. Não é
-    // decodificação contínua a 20/30×; rede/buffering podem reduzir o avanço.
+    // decodificação contínua a partir de 20×; rede/buffering podem reduzir o avanço.
     if (video) {
       video.defaultPlaybackRate = 1;
       video.playbackRate = 1;

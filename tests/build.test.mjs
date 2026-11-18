@@ -12,7 +12,7 @@ const sidebarComponent=await readFile(new URL('../dist/sidebar-component.js',imp
 const sidebarCss=await readFile(new URL('../dist/sidebar-component.css',import.meta.url),'utf8');
 const navigation=await readFile(new URL('../dist/navigation-controller.js',import.meta.url),'utf8');
 assert.equal(navigation,await readFile(new URL('../src/navigation-controller.js',import.meta.url),'utf8'),'o build deve publicar o controlador canônico');
-assert.ok(html.includes('navigation-controller.js?v=1')&&html.includes('PanelNavigation.create('),'o painel deve carregar e configurar o controlador único');
+assert.ok(html.includes('navigation-controller.js?v=5')&&html.includes('PanelNavigation.create('),'o painel deve carregar e configurar o controlador único');
 assert.match(html,/<p id="pageSubtitle" class="subtitle"><\/p>/,'a Visão Geral não deve exibir o subtítulo removido ao carregar');
 assert.doesNotMatch(html,/viewsBefore|baseShowProduct|timeBaseShow|withRegisterSaleVisibility/,'a navegação não deve redefinir funções em camadas');
 const databaseModule=await readFile(new URL('../dist/database.js',import.meta.url),'utf8');
@@ -31,7 +31,7 @@ const diaryCss=await readFile(new URL('../dist/product-diary/product-diary.css',
 const panelSource=html+overviewView+overviewDomain+overviewCss+diaryView+diaryDomain+diaryCss;
 assert.equal(usdBrlRate,await readFile(new URL('../src/usd-brl-rate.js',import.meta.url),'utf8'),'serviço PTAX deve ser publicado exatamente da fonte canônica');
 assert.equal(overviewBaseSessionCache,await readFile(new URL('../src/overview/base-session-cache.js',import.meta.url),'utf8'),'cache de sessão da base deve ser publicado exatamente da fonte canônica');
-assert.ok(html.includes('overview/base-session-cache.js?v=1')&&overviewBaseSessionCache.includes("CACHE_KEY='hub:overview:base-session-cache:v1'"),'a Visão Geral deve carregar o cache por aba publicado');
+assert.ok(html.includes('overview/base-session-cache.js?v=5')&&overviewBaseSessionCache.includes("CACHE_KEY='hub:overview:base-session-cache:v1'"),'a Visão Geral deve carregar o cache por aba publicado');
 assert.ok(html.includes('usd-brl-rate.js?v=1')&&html.includes('id="usdBrlRateButton"')&&overviewView.includes('refreshExchangeRate')&&overviewCss.includes('.overview-fx-rate.is-stale'),'cotação PTAX e alerta de taxa desatualizada devem ser publicados e ligados à Visão Geral');
 assert.ok(databaseModule.includes('exchange_rate_usd_brl')&&overviewDomain.includes('metrics.exchange_rate_usd_brl'),'metadado de câmbio por captura deve ser preservado e usado nos cálculos históricos');
 assert.ok(!overviewView.includes('totalsCount')&&!html.includes('id="totalsCount"'),'badge de contagem de campanhas não deve aparecer no cabeçalho da tabela');
@@ -245,7 +245,7 @@ assert.ok(copyFichaView.includes('id="copyGuaranteeStatus"')&&copyFichaView.incl
 assert.ok(copyFichaDomain.includes('export function buildFicha')&&copyFichaDomain.includes('mustContain'),'contrato JSON da ficha não foi copiado para dist');
 assert.ok(copyFichaDomain.includes('export function generationBlockers'),'validação de bloqueios não foi copiada para dist');
 assert.ok(copyFichaCss.includes('.copy-ficha-shell'),'CSS da tela Copy e Ficha não foi copiado para dist');
-assert.ok(html.includes('copy-ficha/copy-ficha-pending.css?v=2')&&copyFichaPendingCss.includes('.copy-ficha-warning-count')&&copyFichaPendingCss.includes('.copy-ficha-warning-list li::marker'),'pendências de Copy e Ficha não são exibidas como itens numerados com contagem destacada');
+assert.ok(html.includes('copy-ficha/copy-ficha-pending.css?v=3')&&copyFichaPendingCss.includes('.copy-ficha-warning-count')&&copyFichaPendingCss.includes('.copy-ficha-warning-list li::marker')&&copyFichaPendingCss.includes('.copy-ficha-warning-listing:not(.is-blocked)')&&copyFichaPendingCss.includes('color:#ffd16f'),'recomendações da Ficha devem usar superfície neutra e manter amarelo apenas no texto do item');
 assert.ok(sidebarComponent.includes("key: 'asset-studio'")&&sidebarComponent.includes('/asset-studio/'),'menu Asset Studio ausente do componente compartilhado');
 assert.ok(html.includes('id="timeView"'),'tela Meu Tempo ausente');
 assert.ok((html+macroView).includes('id="controlMacroView"')&&(html+macroView).includes("navId:'controlMacroNav'"),'tela ou menu Controle Macro ausente');

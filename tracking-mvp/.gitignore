@@ -1,0 +1,24 @@
+# Configuração de servidor e credenciais — não versionar.
+# Cópia histórica de preparação do Hub; preservada localmente.
+/.phase2-hub-stage/
+/tracking-config.php
+**/tracking-config.php
+/tracking-domain-admin-config.php
+**/tracking-domain-admin-config.php
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# Modelo com identificadores específicos da conta Hostinger; manter fora do Git.
+# Use como referência manual e não como configuração ativa sem preencher os segredos.
+/tracking-config.example.php
+
+# Exportações e dados operacionais locais podem conter identificadores de clique/compra.
+*.csv
+*.log
+
+# Pacotes compactados gerados não são necessários; a entrega fica em deploy/current/.
+*.zip

@@ -1,5 +1,6 @@
 import {isSalesPageType} from './sales-page-type.mjs?v=3';
 import {isBrandBidding,withBrandBidding} from './brand-bidding.mjs?v=1';
+import {isClickBankCommissionUsd,parseClickBankCommissionUsd} from '../../campaign-delivery/commission-domain.mjs?v=1';
 
 export const DB_NAME = 'radar-clickbank-top-offers';
 export const DB_VERSION = 3;
@@ -8,8 +9,8 @@ export const BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v3';
 export const LEGACY_BACKUP_V2_FORMAT = 'radar-clickbank-top-offers-backup-v2';
 export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
 
-const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'Ocultar']);
-const PAGE_CLASSIFICATIONS = new Set(['review','cookies']);
+const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'VSL', 'Ocultar']);
+const PAGE_CLASSIFICATIONS = new Set(['review','cookies','vsl']);
 const MARKET_SCOPES = new Set(['world','one-country','some-countries']);
 const MAX_TREND_SEARCH_HISTORY = 10000;
 
@@ -124,6 +125,8 @@ function validOfferRecord(storeName, record) {
       record.manualCountries.every(code => typeof code === 'string' && /^[A-Z]{2}$/.test(code)) &&
       isSalesPageType(record.salesPageType) &&
       isBrandBidding(record.brandBidding) &&
+      (record.commissionUsd == null || isClickBankCommissionUsd(record.commissionUsd)) &&
+      (record.canonicalProductName == null || (typeof record.canonicalProductName === 'string' && record.canonicalProductName.trim().length > 0 && record.canonicalProductName.length <= 200)) &&
       (record.affiliateLink == null || normalizeAffiliateLink(record.affiliateLink) === record.affiliateLink) &&
       (record.dtcCountryCapture == null || (record.dtcCountryCapture.source === 'clickbank-dtc-checkout' &&
         typeof record.dtcCountryCapture.productName === 'string' && record.dtcCountryCapture.productName.trim().length > 0 &&
@@ -147,6 +150,8 @@ function validOfferRecord(storeName, record) {
   }
   if (storeName === STORES.images) {
     return typeof record.searchTerm === 'string' && record.searchTerm.length <= 1000 &&
+      (record.negativeKeywordCandidates == null || (Array.isArray(record.negativeKeywordCandidates) && record.negativeKeywordCandidates.length <= 1000 &&
+        record.negativeKeywordCandidates.every(value => typeof value === 'string' && value.trim().length > 0 && value.length <= 500))) &&
       Array.isArray(record.assessments) && record.assessments.length <= 10000 && record.assessments.every(item =>
         item && typeof item.assessmentId === 'string' && item.assessmentId.length <= 160 &&
         typeof item.country === 'string' && /^[A-Z]{2}$/.test(item.country) &&
@@ -202,6 +207,50 @@ export async function saveAffiliateLink(identity, value) {
     tx.oncomplete=()=>resolve(stored);
     tx.onerror=()=>reject(tx.error);
     tx.onabort=()=>reject(tx.error||new Error('Não foi possível salvar o link de afiliado.'));
+  });
+}
+
+// Patch only the explicitly saved ClickBank commission in USD, preserving other offer metadata.
+export async function saveCommissionUsd(identity, value) {
+  const commissionUsd = parseClickBankCommissionUsd(value);
+  if (!identity || commissionUsd == null) throw new Error('Informe uma comissão ClickBank em USD válida, com até duas casas decimais.');
+  const initial={...identity,manualCountries:[],commissionUsd};
+  if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Comissão ClickBank inválida.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
+    let stored;
+    const request=store.get(identity.offerKey);
+    request.onsuccess=()=>{
+      stored={manualCountries:[],...request.result,...identity,commissionUsd};
+      if(!validOfferRecord(STORES.offerMetadata,stored)){tx.abort();return;}
+      store.put(stored);
+    };
+    tx.oncomplete=()=>resolve(stored);
+    tx.onerror=()=>reject(tx.error||new Error('Não foi possível salvar a comissão ClickBank.'));
+    tx.onabort=()=>reject(tx.error||new Error('Não foi possível salvar a comissão ClickBank.'));
+  });
+}
+
+// Patch only the explicitly chosen product name, preserving all other offer metadata.
+export async function saveCanonicalProductName(identity, value) {
+  const canonicalProductName=String(value ?? '').trim();
+  if (!identity || !canonicalProductName || canonicalProductName.length > 200) throw new Error('Informe um nome de produto com até 200 caracteres.');
+  const initial={...identity,manualCountries:[],canonicalProductName};
+  if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Nome de produto inválido.');
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
+    let stored;
+    const request=store.get(identity.offerKey);
+    request.onsuccess=()=>{
+      stored={manualCountries:[],...request.result,...identity,canonicalProductName};
+      if(!validOfferRecord(STORES.offerMetadata,stored)){tx.abort();return;}
+      store.put(stored);
+    };
+    tx.oncomplete=()=>resolve(stored);
+    tx.onerror=()=>reject(tx.error||new Error('Não foi possível salvar o nome do produto.'));
+    tx.onabort=()=>reject(tx.error||new Error('Não foi possível salvar o nome do produto.'));
   });
 }
 

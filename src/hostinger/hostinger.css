@@ -1,4 +1,4 @@
-.hostinger-page{display:grid;gap:16px;max-width:1180px;margin:0 auto}
+.hostinger-page{display:grid;gap:16px;width:100%;max-width:90vw;margin:0 auto}
 .hostinger-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 2px}
 .hostinger-eyebrow{color:var(--cyan,#35d2d0);font-size:.7rem;font-weight:850;letter-spacing:.13em}
 .hostinger-page-header h2{margin:5px 0 6px;font-size:1.35rem}
@@ -73,6 +73,8 @@
 .hostinger-hpanel-link{color:#72d8ff;font-size:.73rem;font-weight:750;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
 .hostinger-hpanel-link:focus-visible{outline:2px solid rgba(53,210,208,.7);outline-offset:2px;border-radius:2px}
 .hostinger-campaign-account-empty{color:#91a7c0}
+.hostinger-campaign-active-yes{color:#5ce0a5;font-weight:800}
+.hostinger-campaign-active-no{color:#91a7c0}
 .hostinger-subdomain-action-cell{min-width:260px}
 .hostinger-subdomain-cell{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:240px}
 .hostinger-subdomain-kind{color:#aebfd2;font-size:.72rem;line-height:1.35}

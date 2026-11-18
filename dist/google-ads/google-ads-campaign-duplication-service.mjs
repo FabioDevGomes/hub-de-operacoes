@@ -1,9 +1,9 @@
-import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=2';
-import { GOOGLE_ADS_CAMPAIGN_ACTION_ENDPOINT } from './google-ads-campaign-actions-service.mjs?v=1';
+import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=6';
+import { GOOGLE_ADS_CAMPAIGN_ACTION_ENDPOINT } from './google-ads-campaign-actions-service.mjs?v=2';
 
 const errors = Object.freeze({
   campaign_duplication_unavailable: 'O serviço privado ainda não oferece duplicação. Publique a atualização do PHP antes de usar esta tela.',
-  campaign_duplication_unsupported: 'A campanha tem recursos que não podem ser copiados para esta conta. Confira a lista de bloqueios da prévia.',
+  campaign_duplication_unsupported: 'A cópia foi bloqueada por recursos que o fluxo atual não reproduz com segurança. A resposta do serviço não informou os detalhes.',
   campaign_duplication_plan_expired: 'A prévia expirou. Valide a cópia novamente antes de criar.',
   campaign_duplication_changed: 'A campanha de origem ou a lista de destinos mudou após a prévia. Atualize e valide novamente.',
   campaign_duplication_name_invalid: 'O nome da campanha não segue o padrão necessário para calcular a comissão e a sequência.',
@@ -16,6 +16,13 @@ const errors = Object.freeze({
   campaign_duplication_plan_unavailable: 'Não foi possível guardar a prévia temporária no servidor.',
   campaign_duplication_entry_already_attempted: 'Esta cópia já foi tentada e não pode ser repetida com segurança. Faça uma nova prévia.',
   campaign_duplication_name_too_long: 'O nome calculado excede o limite aceito pelo Google Ads.',
+  campaign_replacement_unavailable: 'A substituição de campanha não está disponível no serviço privado. Publique a atualização indicada no pacote de deploy.',
+  campaign_replacement_not_eligible: 'Esta campanha não atende aos requisitos da substituição segura. Ela precisa ser Search ativa, usar CPA desejado direto e ter nome no padrão do Hub.',
+  campaign_replacement_name_exists: 'Já existe uma campanha com o sufixo B nesta conta. Nenhuma alteração foi feita.',
+  campaign_replacement_changed: 'A campanha mudou depois da prévia. Nenhuma alteração foi feita; gere uma nova prévia.',
+  campaign_replacement_expired: 'A prévia expirou. Gere uma nova prévia antes de substituir.',
+  campaign_replacement_already_attempted: 'Esta prévia já foi executada ou teve resultado incerto. Confira as duas campanhas no Google Ads antes de iniciar outra ação.',
+  campaign_replacement_unverified: 'A API não confirmou o novo status das duas campanhas. Confira a conta no Google Ads antes de repetir.',
   campaign_duplication_source_changed: 'A campanha de origem mudou. Faça a inspeção e a prévia novamente.',
   campaign_creation_disabled: 'A criação de campanhas está desativada no servidor. Nenhuma cópia foi criada.',
   campaign_account_not_allowed: 'A conta de origem ou destino não está ativa e vinculada a uma MCC autorizada para criação.',
@@ -249,6 +256,88 @@ export async function createGoogleAdsCampaignDuplicationEntry({ planToken, entry
     campaignId: String(payload.campaign_id),
     campaignName: String(payload.campaign_name ?? ''),
     status: 'PAUSED',
+    verifiedAtUtc: String(payload.verified_at_utc ?? ''),
+  };
+}
+
+export async function previewGoogleAdsCampaignReplacement({ managerCustomerId, customerId, campaignId }, options) {
+  const campaign = String(campaignId ?? '');
+  if (!/^[1-9]\d{0,19}$/.test(campaign)) throw new Error('Selecione uma campanha Google Ads identificada por ID.');
+  const accountIds = ids(managerCustomerId, customerId);
+  const payload = await request('campaign_duplication_replace_preview', {
+    ...accountIds, campaign_id: campaign,
+  }, options);
+  const sameAccount = payload?.source_customer_id === accountIds.customer_id
+    && payload?.target_customer_id === accountIds.customer_id && payload?.destination_scope === 'same_account';
+  if (payload?.schema_version === 1 && payload.operation === 'campaign_duplication_replace_preview'
+      && payload.validated_only === false && sameAccount && Array.isArray(payload.blockers) && payload.blockers.length) {
+    const blockers = payload.blockers.map(value => String(value).trim()).filter(Boolean);
+    const visible = blockers.slice(0, 8).map(value => value.slice(0, 300));
+    const remainder = blockers.length > visible.length ? `; mais ${blockers.length - visible.length} bloqueio(s)` : '';
+    throw new Error(`Destino confirmado: mesma conta da campanha original. A prévia encontrou ${blockers.length} bloqueio(s): ${visible.join(' · ')}${remainder}`);
+  }
+  if (payload?.schema_version !== 1 || payload.operation !== 'campaign_duplication_replace_preview'
+      || payload.validated_only !== true || payload.will_pause_source !== true || payload.will_create_enabled !== true
+      || !sameAccount
+      || payload.asset_automation_settings_status !== 'manual_check_required'
+      || String(payload.source_campaign_id) !== campaign || typeof payload.plan_token !== 'string'
+      || payload.plan_token.length < 32 || !payload.source || !payload.replacement || !payload.resources) {
+    throw new Error('O servidor não confirmou uma prévia completa para a substituição.');
+  }
+  if (!Array.isArray(payload.blockers) || payload.blockers.length) {
+    throw new Error((payload.blockers || []).map(String).join(' ') || 'A campanha não pode ser copiada com segurança.');
+  }
+  const result = {
+    planToken: payload.plan_token,
+    sourceCampaignId: campaign,
+    sourceCampaignName: String(payload.source.campaign_name ?? ''),
+    sourceStatus: String(payload.source.status ?? '').toUpperCase(),
+    replacementCampaignName: String(payload.replacement.campaign_name ?? ''),
+    currencyCode: String(payload.replacement.currency_code ?? '').toUpperCase(),
+    targetCpaMicros: String(payload.replacement.target_cpa_micros ?? ''),
+    dailyBudgetMicros: String(payload.replacement.daily_budget_micros ?? ''),
+    startDate: String(payload.replacement.start_date ?? ''),
+    endDate: payload.replacement.end_date == null ? null : String(payload.replacement.end_date),
+    timeZone: String(payload.replacement.time_zone ?? ''),
+    resources: payload.resources,
+    assetAutomationSettingsStatus: 'manual_check_required',
+    expiresAtUtc: String(payload.expires_at_utc ?? ''),
+  };
+  if (result.sourceStatus !== 'ENABLED' || !result.sourceCampaignName || !result.replacementCampaignName
+      || !/^[A-Z]{3}$/.test(result.currencyCode) || !/^\d+$/.test(result.targetCpaMicros)
+      || !/^\d+$/.test(result.dailyBudgetMicros) || !/^\d{4}-\d{2}-\d{2}$/.test(result.startDate)
+      || !result.timeZone || (result.endDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(result.endDate))) {
+    throw new Error('A prévia contém dados ausentes ou não confirma uma substituição válida.');
+  }
+  return result;
+}
+
+export async function executeGoogleAdsCampaignReplacement({ managerCustomerId, customerId, campaignId, planToken }, options) {
+  const sourceId = String(campaignId ?? '');
+  const token = String(planToken ?? '');
+  const accountIds = ids(managerCustomerId, customerId);
+  if (!/^[1-9]\d{0,19}$/.test(sourceId) || !/^[A-Za-z0-9_-]{40,60}$/.test(token)) {
+    throw new Error('A prévia desta substituição não é válida. Gere uma nova prévia.');
+  }
+  const payload = await request('campaign_duplication_replace_execute', {
+    ...accountIds, campaign_id: sourceId, plan_token: token, confirm: true,
+  }, options);
+  if (payload?.schema_version !== 1 || payload.operation !== 'campaign_duplication_replace_execute'
+      || payload.replaced !== true || payload.verified !== true
+      || String(payload.source_campaign_id) !== sourceId
+      || String(payload.source_status) !== 'PAUSED' || String(payload.replacement_status) !== 'ENABLED'
+      || !/^[1-9]\d{0,19}$/.test(String(payload.replacement_campaign_id ?? ''))) {
+    const error = new Error('A API não confirmou a pausa da original e a ativação da variante B. Confira a conta antes de repetir.');
+    error.code = 'campaign_replacement_unverified';
+    throw error;
+  }
+  return {
+    sourceCampaignId: sourceId,
+    sourceCampaignName: String(payload.source_campaign_name ?? ''),
+    sourceStatus: 'PAUSED',
+    replacementCampaignId: String(payload.replacement_campaign_id),
+    replacementCampaignName: String(payload.replacement_campaign_name ?? ''),
+    replacementStatus: 'ENABLED',
     verifiedAtUtc: String(payload.verified_at_utc ?? ''),
   };
 }

@@ -1,10 +1,8 @@
-.product-summary{display:grid;grid-template-columns:1.6fr repeat(3,1fr);gap:14px;margin-bottom:18px}.product-name{padding:18px 20px}.product-name h2{margin:4px 0 5px;font-size:1.2rem}.product-name p{margin:0;color:var(--muted);font-size:.8rem}.metric-mini{padding:18px}.metric-mini span{display:block;color:var(--muted);font-size:.74rem;text-transform:uppercase}.metric-mini strong{display:block;margin-top:8px;font-size:1.2rem}
-.product-summary.has-search-terms-action{grid-template-columns:minmax(280px,1.6fr) repeat(3,minmax(140px,1fr)) minmax(190px,.9fr)}.product-search-terms-card{display:flex;align-items:center;padding:8px 12px}.product-search-terms-card .btn{width:100%;white-space:nowrap}
+.product-summary{display:grid;grid-template-columns:1.6fr repeat(5,minmax(0,1fr));gap:14px;margin-bottom:18px}.product-name{padding:18px 20px}.product-name h2{margin:4px 0 5px;font-size:1.2rem}.product-name p{margin:0;color:var(--muted);font-size:.8rem}.metric-mini{padding:18px}.metric-mini span{display:block;color:var(--muted);font-size:.74rem;text-transform:uppercase}.metric-mini strong{display:block;margin-top:8px;font-size:1.2rem}
+.product-summary:not(.has-campaign-title){grid-template-columns:repeat(5,minmax(0,1fr))}.product-campaign-actions-card{grid-column:1;grid-row:1/span 2;align-self:center;justify-self:end;display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;max-width:100%;padding:0}.product-campaign-actions-card .btn{width:auto;max-width:100%;padding:6px 9px;font-size:.68rem;line-height:1.15;white-space:nowrap}.product-campaign-actions-card .product-campaign-action-hint,.product-campaign-actions-card .product-campaign-action-status{font-size:.68rem;line-height:1.3;color:var(--muted);overflow-wrap:anywhere}.product-campaign-actions-card .product-campaign-action-status.is-success{color:var(--green)}.product-campaign-actions-card .product-campaign-action-status.is-error{color:var(--red)}
     .product-table th{white-space:normal;line-height:1.25;text-align:center;vertical-align:middle;padding:11px 10px;min-width:78px;border-right:1px solid rgba(36,52,77,.8)}.product-table th:first-child{min-width:94px}.product-table th:nth-child(4),.product-table th:nth-child(5){min-width:112px}.product-table th:nth-child(9),.product-table th:nth-child(10){min-width:104px}.product-table th:nth-child(11),.product-table th:nth-child(12){min-width:102px}.product-table th:nth-child(13){min-width:106px}.product-table th:nth-child(14){min-width:112px}.product-table th:nth-child(15){min-width:124px}.product-table th:nth-child(16),.product-table th:nth-child(17){min-width:96px}.product-table th:last-child{min-width:240px;text-align:left}.product-table th:last-child,.product-table td:last-child{border-right:0}
     @media(max-width:980px){.product-summary{grid-template-columns:1fr 1fr}}
     @media(max-width:560px){.product-summary{grid-template-columns:1fr}}
-@media(max-width:1180px){.product-summary.has-search-terms-action{grid-template-columns:1fr 1fr}}
-@media(max-width:560px){.product-summary.has-search-terms-action{grid-template-columns:1fr}}
 /* Shared daily table: all campaigns, without changing fonts or observation layout. */
 #productView .product-table th,#productView .product-table td:not(.empty){padding-block:6px}
 #productView .product-table td.num{text-align:center;vertical-align:middle}
@@ -27,31 +25,120 @@
 .product-table tbody tr.has-sales td{background:rgba(48,205,150,.075)}.product-table tbody tr.has-sales:hover td{background:rgba(48,205,150,.13)}.product-table .product-manual-sale-note{display:block;margin-top:3px;color:#f3c96b;font-size:11px;line-height:1.2;font-weight:500;white-space:nowrap}.product-table .product-pause-note{display:block;margin-top:3px;color:#ff8792;font-size:11px;line-height:1.2;font-weight:600;white-space:nowrap}
 #productView .product-campaign-events{margin:0 0 12px;padding:10px 14px;border-radius:10px;background:var(--panel2)}
 #productView .product-campaign-events-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-#productView .product-campaign-events h3{margin:0;font-size:.82rem}
+#productView .product-campaign-events h3{display:none;margin:0;font-size:.82rem}
 #productView .product-campaign-events-head>span{color:var(--muted);font-size:.68rem}
-#productView .product-campaign-events-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-#productView .product-campaign-event-backfill{display:flex;flex:1 1 auto;align-items:center;flex-wrap:wrap;gap:7px;margin-top:8px}
-#productView .product-campaign-event-backfill label{color:var(--muted);font-size:.7rem}
-#productView .product-campaign-event-backfill input{padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--hub-input-bg,#081321);color:var(--text);font:inherit;font-size:.72rem}
-#productView .product-campaign-event-backfill button{padding:5px 9px;font-size:.7rem}
-#productView .product-campaign-presell{display:flex;align-items:center;justify-content:flex-end;flex:0 1 auto;flex-wrap:wrap;gap:9px;max-width:100%;margin:8px 0 0 auto;color:var(--muted);font-size:.72rem}
+#productView .product-campaign-events-toolbar{display:grid;grid-template-columns:minmax(0,1fr) max-content max-content;grid-template-rows:auto auto;align-items:start;gap:6px 12px}
+#productView .product-search-terms-history{grid-column:3;grid-row:1;align-self:center;justify-self:start;width:fit-content;max-width:100%;min-width:0;padding:6px 9px;border-radius:7px;background:rgba(8,19,35,.34)}
+#productView .product-search-terms-history h4{margin:0 0 4px;color:var(--muted);font-size:.66rem;font-weight:600}
+#productView .product-search-terms-history ol{display:grid;gap:3px;margin:0;padding:0;list-style:none}
+#productView .product-search-terms-history li{min-width:0;font-size:.65rem;line-height:1.25}
+#productView .product-search-terms-history a{color:#9bcaff;text-decoration:underline;text-underline-offset:2px;font-variant-numeric:tabular-nums;white-space:nowrap}#productView .product-search-terms-history a:hover{color:#d3e8ff}
+#productView .product-campaign-cpa-adjustment{grid-column:2;grid-row:1/span 2;justify-self:start;box-sizing:border-box;width:fit-content;max-width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(8,19,35,.34)}
+#productView .product-campaign-cpa-adjustment[hidden]{display:none}
+#productView .product-campaign-cpa-adjustment h4{margin:0 0 4px;color:var(--muted);font-size:.66rem;font-weight:600}
+#productView .product-campaign-cpa-adjustment>p{margin:0 0 4px;color:var(--muted);font-size:.64rem;line-height:1.3}
+#productView .product-campaign-cpa-adjustment-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#productView .product-campaign-cpa-adjustment-group{min-width:0}
+#productView .product-campaign-cpa-adjustment-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:3px 0}
+#productView .product-campaign-cpa-adjustment-row button{padding:5px 8px;font-size:.66rem;white-space:nowrap}
+#productView .product-campaign-cpa-adjustment-status{display:flex;align-items:center;justify-content:center;width:16px;height:16px;flex:0 0 16px}
+#productView .product-campaign-cpa-adjustment-status[hidden]{display:none}
+#productView .product-campaign-cpa-adjustment-status.is-confirmed{color:#38d996;font-size:1rem;font-weight:800;line-height:1}
+#productView .product-campaign-cpa-adjustment-status.is-error{box-sizing:border-box;border:1px solid #ff657b;border-radius:50%;color:#ff8792;font-size:.7rem;font-weight:800;line-height:14px}
+#productView .product-campaign-cpa-adjustment-status svg{display:block;width:16px;height:16px}
+#productView .product-campaign-presell{display:flex;align-items:center;justify-content:flex-end;flex:0 1 auto;flex-wrap:wrap;gap:9px;max-width:100%;margin:0 0 0 auto;color:var(--muted);font-size:.72rem}
 #productView .product-campaign-presell[hidden]{display:none}
 #productView .product-campaign-presell a{color:#9bcaff;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
 #productView .product-campaign-presell a:hover{color:#d3e8ff}
 #productView .product-campaign-presell a:focus-visible{outline:2px solid #9bcaff;outline-offset:2px;border-radius:2px}
-#productView .product-campaign-event-message{margin:5px 0 0;color:var(--muted);font-size:.68rem}
-#productView .product-campaign-event-message:empty{display:none}
 #productView .product-campaign-events ul{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}
 #productView .product-campaign-events li{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #productView .product-auto-pause-event-badge{display:inline-flex;align-items:center;padding:2px 6px;border:1px solid #ef5964;border-radius:5px;background:rgba(239,89,100,.08);color:#ff9aa5;font-size:.66rem;font-weight:600;line-height:1.25}
+#productView .product-cpa-adjustment-note{display:block;color:#65dfbf;font-size:.72rem;font-weight:600;line-height:1.4}
 #productView .product-auto-pause-event-rule{display:block;margin-top:3px;color:#8fa8c6;font-size:.67rem}
 #productView .product-campaign-events time{color:var(--muted);font-size:.7rem}
+#productView .product-campaign-primary{grid-column:1;grid-row:1/span 2;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0}
+#productView .product-campaign-primary>#productCampaignEventList{width:fit-content;max-width:100%;margin:0;align-self:flex-start}
+#productView .product-campaign-primary>#productCampaignActions{align-self:flex-start;justify-self:auto;margin-left:auto}
+.product-pause-exception-options{display:grid;gap:8px;margin:12px 0}.product-pause-exception-options label{display:flex;align-items:flex-start;gap:8px;color:var(--text);font-size:.8rem}.product-pause-exception-options input{margin-top:2px}
+@media(max-width:1300px){#productView .product-campaign-primary{grid-column:1;grid-row:1/span 2}}
+@media(max-width:760px){#productView .product-campaign-primary{grid-column:1;grid-row:auto;flex-direction:column;align-items:flex-start}#productView .product-campaign-primary>#productCampaignActions{margin-left:0}}
+@media(max-width:1300px){#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr) max-content max-content;grid-template-rows:auto auto}#productView .product-campaign-actions-card{grid-column:1;grid-row:1/span 2}#productView .product-campaign-cpa-adjustment{grid-column:2;grid-row:1/span 2}#productView .product-search-terms-history{grid-column:3;grid-row:1;width:fit-content}}
+@media(max-width:1100px){#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);grid-template-rows:auto auto auto}#productView .product-campaign-actions-card{grid-column:1;grid-row:1}#productView .product-campaign-cpa-adjustment{grid-column:2;grid-row:1}#productView .product-search-terms-history{grid-column:2;grid-row:2;width:auto}}
+@media(max-width:760px){#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}#productView .product-campaign-actions-card,#productView .product-search-terms-history,#productView .product-campaign-cpa-adjustment{grid-column:1;grid-row:auto}#productView .product-search-terms-history{width:auto}}
 @media(max-width:560px){#productView .product-campaign-events{padding:9px 10px}#productView .product-campaign-events li{align-items:flex-start;flex-direction:column;gap:3px}}
+@media(max-width:760px){#productView .product-campaign-cpa-adjustment-groups{grid-template-columns:minmax(0,1fr)}}
 /* product-diary-summary-compact-style */
 .product-summary>.card{min-height:54px;border-radius:10px}.product-summary .product-name{display:grid;grid-template-columns:max-content minmax(0,1fr);grid-template-rows:auto auto;align-content:center;align-items:center;gap:3px 10px;min-width:0;padding:8px 14px}.product-summary .product-name .eyebrow{grid-column:1;grid-row:1;font-size:.65rem;font-weight:400;letter-spacing:.1em;white-space:nowrap}.product-summary .product-name h2{grid-column:2;grid-row:1;min-width:0;margin:0;font-size:1rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.product-summary .product-name p{grid-column:1/-1;grid-row:2;min-width:0;margin:0;color:var(--muted);font-size:.7rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.product-summary .metric-mini{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:8px 12px}.product-summary .metric-mini span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem}.product-summary .metric-mini strong{margin-top:0;font-size:1rem;line-height:1;white-space:nowrap}
 /* legacy-totais-style */
 .legacy-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px}.legacy-summary-item{min-width:0;border:1px solid var(--line);border-radius:10px;background:rgba(8,19,35,.58);padding:12px}.legacy-summary-item span{display:block;color:var(--muted);font-size:.72rem}.legacy-summary-item strong{display:block;margin-top:5px;font-size:.98rem;overflow-wrap:anywhere}.legacy-summary-item small{display:block;margin-top:4px;color:#7890aa;font-size:.68rem}@media(max-width:760px){.legacy-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.legacy-summary-grid{grid-template-columns:1fr}}
 /* product-diary-viewport-layout */
+/* Read-only chart of retained D0 campaign snapshots. */
+#productView .product-capture-analysis{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(320px,.9fr);align-items:start;gap:14px;margin-top:10px}
+#productView .product-capture-chart,#productView .product-campaign-keyword-inventory{min-width:0;padding:14px;border:0;border-radius:12px;background:var(--panel)}
+#productView .product-capture-chart{margin-top:0}
+#productView .product-capture-chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+#productView .product-capture-chart-head h3{margin:0;font-size:.9rem}
+#productView .product-capture-chart-head p{margin:5px 0 0;color:var(--muted);font-size:.72rem;line-height:1.4}
+#productView .product-capture-chart-head label{display:flex;align-items:center;gap:8px;flex:0 0 auto;color:var(--muted);font-size:.72rem}
+#productView .product-capture-chart-head select{min-width:165px;max-width:240px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--hub-input-bg,#081321);color:var(--text);font:inherit;font-size:.74rem}
+#productView .product-capture-chart-head select:focus-visible{outline:2px solid var(--blue,#65a9ff);outline-offset:2px}
+#productView .product-capture-chart-content{min-width:0;margin-top:12px}
+#productView .product-campaign-keyword-inventory{display:grid;grid-template-rows:auto auto;align-content:start;gap:10px;align-self:start}
+#productView .product-campaign-keyword-group{display:flex;flex-direction:column;min-width:0;min-height:0;padding:9px 10px;border-radius:9px;background:rgba(8,19,35,.34)}
+#productView .product-campaign-keyword-group h4{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;color:var(--text);font-size:.72rem;font-weight:600}
+#productView .product-campaign-keyword-group h4 span{color:var(--muted);font-size:.65rem;font-weight:500;font-variant-numeric:tabular-nums}
+#productView .product-campaign-keyword-group.is-positive h4{color:#57dbb5}
+#productView .product-campaign-keyword-group.is-negative h4{color:#ff8792}
+#productView .product-campaign-keyword-table-wrap{min-height:0;overflow:auto;overscroll-behavior:contain}
+#productView .product-campaign-keyword-group table{width:100%;border-collapse:collapse;font-size:.66rem;line-height:1.25}
+#productView .product-campaign-keyword-group th,#productView .product-campaign-keyword-group td{padding:5px 6px;border-bottom:1px solid rgba(129,157,190,.16);text-align:left;vertical-align:top}
+#productView .product-campaign-keyword-group th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:500}
+#productView .product-campaign-keyword-group th:last-child,#productView .product-campaign-keyword-group td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#productView .product-campaign-keyword-group td.product-keyword-term{overflow-wrap:anywhere}
+#productView .product-campaign-keyword-group td.product-keyword-term small{display:block;margin-top:2px;color:var(--muted);font-size:.6rem}
+#productView .product-campaign-keyword-group td.empty{padding:12px 6px;color:var(--muted);text-align:center}
+#productView .product-capture-chart-empty{margin:0;padding:20px 12px;border-radius:9px;background:rgba(8,19,35,.34);color:var(--muted);font-size:.78rem;text-align:center}
+#productView .product-capture-chart-stats{display:flex;flex-wrap:wrap;gap:1px;margin:0 0 10px}
+#productView .product-capture-chart-stats>div{display:flex;min-width:140px;flex-direction:column;gap:5px;padding:8px 12px;background:var(--panel2);color:var(--text)}
+#productView .product-capture-chart-stats>div:first-child{border-radius:7px 0 0 7px}
+#productView .product-capture-chart-stats>div:last-child{border-radius:0 7px 7px 0}
+#productView .product-capture-chart-stats>div.clicks{background:#1a73e8;color:#fff}
+#productView .product-capture-chart-stats>div.impressions{background:#d93025;color:#fff}
+#productView .product-capture-chart-stats>div.conversions{background:#087f5b;color:#fff}
+#productView .product-capture-chart-stats span{font-size:.68rem;line-height:1.2}
+#productView .product-capture-chart-stats strong{font-size:1.12rem;font-weight:600;font-variant-numeric:tabular-nums}
+#productView .product-capture-chart-legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 6px;color:var(--muted);font-size:.7rem}
+#productView .product-capture-chart-legend span{display:inline-flex;align-items:center;gap:6px}
+#productView .product-capture-chart-legend i{width:9px;height:9px;border-radius:50%}
+#productView .product-capture-chart-legend .clicks{background:#1a73e8}
+#productView .product-capture-chart-legend .impressions{background:#d93025}
+#productView .product-capture-chart-legend .conversions{background:#36d399}
+#productView .product-capture-chart-svg{display:block;width:100%;height:auto;overflow:visible}
+#productView .product-capture-chart-grid{stroke:rgba(129,157,190,.2);stroke-width:1}
+#productView .product-capture-chart-axis{fill:var(--muted,#91a7c2);font:8.8px system-ui,sans-serif}
+#productView .product-capture-chart-axis-title{fill:var(--muted,#91a7c2);font:11px system-ui,sans-serif}
+#productView .product-capture-chart-axis-title.clicks{fill:#65a9ff}
+#productView .product-capture-chart-axis-title.impressions{fill:#ff766d}
+#productView .product-capture-chart-axis-title.conversions{fill:#36d399}
+#productView .product-capture-chart-axis-conversions{fill:#36d399}
+#productView .product-capture-chart-line-clicks{fill:none;stroke:#1a73e8;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#productView .product-capture-chart-line-impressions{fill:none;stroke:#d93025;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#productView .product-capture-chart-line-conversions{fill:none;stroke:#36d399;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#productView .product-capture-chart-point-clicks{fill:#1a73e8;stroke:#0b1728;stroke-width:2}
+#productView .product-capture-chart-point-impressions{fill:#d93025;stroke:#0b1728;stroke-width:2}
+#productView .product-capture-chart-point-conversions{fill:#36d399;stroke:#0b1728;stroke-width:2}
+#productView .product-capture-chart-point:focus{outline:none}
+#productView .product-capture-chart-point:focus circle{stroke:#fff;stroke-width:3}
+#productView .product-capture-chart-values{margin-top:8px;color:var(--muted);font-size:.72rem}
+#productView .product-capture-chart-values>summary{cursor:pointer}
+#productView .product-capture-chart-values-wrap{max-height:260px;margin-top:8px;overflow:auto;overscroll-behavior:contain}
+#productView .product-capture-chart-values table{min-width:720px;width:100%;border-collapse:collapse;font-size:.72rem}
+#productView .product-capture-chart-values th,#productView .product-capture-chart-values td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+#productView .product-capture-chart-values th:first-child,#productView .product-capture-chart-values td:first-child{text-align:left}
+#productView .product-capture-chart-values th{position:sticky;top:0;background:var(--panel2);color:var(--muted)}
+@media(max-width:980px){#productView .product-capture-analysis{grid-template-columns:minmax(0,1fr)}#productView .product-campaign-keyword-inventory{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto}}
+@media(max-width:620px){#productView .product-capture-chart-head{align-items:stretch;flex-direction:column}#productView .product-capture-chart-head label{justify-content:space-between}#productView .product-capture-chart-head select{max-width:none;flex:1}#productView .product-campaign-keyword-inventory{grid-template-columns:minmax(0,1fr)}}
 .product-sale-history{flex:0 0 auto;margin-top:10px;padding:12px 14px;border:0;border-radius:12px;background:var(--panel)}
 .product-sale-history>summary{cursor:pointer;font-size:.9rem;font-weight:600}
 .product-sale-history>p{margin:7px 0;color:var(--muted);font-size:.73rem}
@@ -64,14 +151,38 @@
 .product-sales-wrap td.negative{color:var(--red)}
 .product-sales-wrap td.positive{color:var(--green)}
 .product-sales-wrap td.empty{padding:16px}
+/* Daily budget adjustment mirrors the existing CPA control in the campaign diary. */
+#productView .product-campaign-budget-adjustment{grid-column:3;grid-row:1/span 2;justify-self:start;box-sizing:border-box;width:fit-content;max-width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(8,19,35,.34)}
+#productView .product-campaign-budget-adjustment[hidden]{display:none}
+#productView .product-campaign-budget-adjustment>p{margin:0 0 4px;color:var(--muted);font-size:.64rem;line-height:1.3;white-space:nowrap}
+#productView .product-campaign-budget-adjustment-groups{display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px}
+#productView .product-campaign-budget-adjustment-group{display:flex;flex-direction:column}
+#productView .product-campaign-budget-adjustment-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:3px 0}
+#productView .product-campaign-budget-adjustment-row button{padding:5px 8px;font-size:.66rem;white-space:nowrap}
+#productView .product-campaign-budget-adjustment-status{display:flex;align-items:center;justify-content:center;width:16px;height:16px;flex:0 0 16px}
+#productView .product-campaign-budget-adjustment-status[hidden]{display:none}
+#productView .product-campaign-budget-adjustment-status.is-confirmed{color:#38d996;font-size:1rem;font-weight:800;line-height:1}
+#productView .product-campaign-budget-adjustment-status.is-error{box-sizing:border-box;border:1px solid #ff657b;border-radius:50%;color:#ff8792;font-size:.7rem;font-weight:800;line-height:14px}
+#productView .product-campaign-budget-adjustment-status svg{display:block;width:16px;height:16px}
+#productView .product-budget-adjustment-note{display:block;color:#65dfbf;font-size:.72rem;font-weight:600;line-height:1.4}
+#productView .product-budget-adjustment-confirmation{display:block;margin:5px 0 0;color:#ffd166;font-size:.68rem;line-height:1.35}
+#productView .product-budget-adjustment-confirmation[hidden]{display:none}
+#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr) max-content max-content max-content}
+#productView .product-campaign-cpa-adjustment{grid-column:2;grid-row:1/span 2}
+#productView .product-campaign-budget-adjustment{grid-column:3;grid-row:1/span 2}
+@media(max-width:620px){#productView .product-campaign-budget-adjustment-groups{gap:6px}#productView .product-campaign-budget-adjustment-row{gap:4px}#productView .product-campaign-budget-adjustment-row button{padding:5px 6px;font-size:.6rem}}
+#productView .product-search-terms-history{grid-column:4;grid-row:1}
+@media(max-width:1300px){#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto auto}#productView .product-campaign-actions-card{grid-column:1;grid-row:1/span 2}#productView .product-campaign-cpa-adjustment{grid-column:2;grid-row:1}#productView .product-campaign-budget-adjustment{grid-column:2;grid-row:2}#productView .product-search-terms-history{grid-column:1;grid-row:3;width:auto}}
+@media(max-width:760px){#productView .product-campaign-events-toolbar{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}#productView .product-campaign-actions-card,#productView .product-search-terms-history,#productView .product-campaign-cpa-adjustment,#productView .product-campaign-budget-adjustment{grid-column:1;grid-row:auto}#productView .product-campaign-budget-adjustment,#productView .product-campaign-cpa-adjustment,#productView .product-search-terms-history{width:100%}#productView #productDiaryPanel>.panel-head{align-items:flex-start;flex-wrap:wrap}#productView #productDiaryPanel>.panel-head .product-campaign-presell{margin-left:0}#productView .product-diary-controls{margin-left:auto}}
 /* Resumo, indicadores e quadro do diário seguem o padrão de superfícies do Hub. */
 #productView .card,#productView .legacy-summary-item,#productView .table-wrap,#productView .tag,#productView .view-toggle{border:0}
 body.product-diary-mode #statusbar .pill{border:0}
+body.product-diary-mode #statusbar{display:none!important}
 .product-diary-controls{display:flex;align-items:center;gap:10px;flex:0 0 auto}
 #productDiaryPanel>.panel-head>div:first-child{min-width:0}
 #productDiaryPanel:has(#productColumnPicker[open]){overflow:visible}
 #productDiaryPanel:has(#productColumnPicker[open]) #productTableWrap{border-radius:0 0 15px 15px}
-body.product-diary-mode #productTableWrap{min-height:0;max-height:var(--product-diary-table-max-height,calc(100dvh - 280px));overflow:auto}
+body.product-diary-mode #productTableWrap{min-height:0;max-height:none;overflow-x:auto;overflow-y:visible}
 body.product-diary-mode #productTableWrap::-webkit-scrollbar{width:10px;height:10px}
 body.product-diary-mode #productTableWrap::-webkit-scrollbar-track,body.product-diary-mode #productTableWrap::-webkit-scrollbar-corner{background:var(--panel2)}
 body.product-diary-mode #productTableWrap::-webkit-scrollbar-thumb{background:#52657d;border-radius:8px}

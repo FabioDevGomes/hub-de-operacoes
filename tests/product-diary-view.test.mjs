@@ -7,10 +7,10 @@ const context=vm.createContext({window:{}});
 vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);
 vm.runInContext(await readFile(new URL('../src/product-diary/view.js',import.meta.url),'utf8'),context);
 const domain=context.window.ProductDiaryDomain,view=context.window.ProductDiaryView;
-function setup(initial){
+function setup(initial,actionOverrides={}){
   const dom=createRoot(),titles=[],requests=[];let snapshot=initial;
   const controller=view.mount({root:dom.root,domain,format,getSnapshot:(...args)=>{requests.push(args);return snapshot},
-    actions:{setTitle:(...args)=>titles.push(args)}});
+    actions:{setTitle:(...args)=>titles.push(args),...actionOverrides}});
   return {...dom,titles,requests,controller,setSnapshot:value=>snapshot=value};
 }
 const empty=()=>({sheetName:'Oferta <Teste>',rows:[],displayRows:[],manualSalesByDate:new Map(),summary:null,pauseConfirmedAt:null,investment:null,clicks:null,conversions:null});
@@ -18,7 +18,7 @@ test('native diary preserves columns, empty data, escaping and selection argumen
   const s=setup(empty());s.controller.render('MCC exata','workbook','campaign-123');
   assert.deepEqual(s.requests,[['MCC exata','workbook','campaign-123']]);
   assert.equal((s.get('#productHead').innerHTML.match(/<th\b[^>]*>/g)||[]).length,18);
-  assert.match(s.get('#productBody').innerHTML,/colspan="18"/);assert.match(s.get('#productSummary').innerHTML,/&lt;Teste&gt;/);
+  assert.match(s.get('#productBody').innerHTML,/colspan="18"/);assert.deepEqual(s.titles[0],['Oferta <Teste>','Aba histórica da base local']);
   assert.match(s.get('#productSummary').innerHTML,/<strong>—<\/strong>/);assert.equal(s.get('#rowCount').textContent,'0 dias');
   assert.equal(s.get('#legacySummaryBody').classList.contains('hidden'),true);
 });
@@ -88,6 +88,49 @@ test('diary cards show accumulated investment, Google clicks and conversions eve
   assert.match(html,/<span>Conversões · total<\/span><strong>2<\/strong>/);
   assert.doesNotMatch(html,/Investimento atual/);assert.equal(JSON.stringify(rows),before);
 });
+test('search-term history stays out of layout while loading, then displays the stored consultation time',async()=>{
+  let resolveHistory;const historyPromise=new Promise(resolve=>{resolveHistory=resolve}),scope={mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'},s=setup({...empty(),storedCampaignId:'campaign-local-id',googleAdsCampaignAction:scope},{listSearchTermsQuerySnapshots:()=>historyPromise});
+  s.controller.render('Campanha Search');
+  const panel=s.get('#productSearchTermsAccessHistory'),list=s.get('#productSearchTermsAccessHistoryList');
+  assert.equal(panel.classList.contains('hidden'),true);assert.equal(panel.getAttribute('aria-busy'),'true');assert.equal(list.innerHTML,'');
+  await Promise.resolve();resolveHistory([{id:'gsts-12345678-1234-1234-1234-123456789012',completedAtUtc:'2026-11-05T04:45:00.000Z'}]);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(panel.getAttribute('aria-busy'),'false');assert.match(list.innerHTML,/05\/11\/2026, 01:45/);assert.match(list.innerHTML,/data-search-terms-snapshot=/);
+});
+test('search-term history remains hidden when the selected campaign has no saved consultations',async()=>{
+  const scope={mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'},s=setup({...empty(),storedCampaignId:'campaign-local-id',googleAdsCampaignAction:scope},{listSearchTermsQuerySnapshots:async()=>[]});
+  s.controller.render('Campanha Search');await new Promise(resolve=>setImmediate(resolve));
+  const panel=s.get('#productSearchTermsAccessHistory');
+  assert.equal(panel.getAttribute('aria-busy'),'false');assert.equal(panel.classList.contains('hidden'),true);
+});
+test('search-term history keeps the current entries visible during a same-campaign refresh',async()=>{
+  const saved=[{id:'gsts-12345678-1234-1234-1234-123456789012',completedAtUtc:'2026-11-05T04:45:00.000Z'}];let resolveRefresh,calls=0;
+  const scope={mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'},s=setup({...empty(),storedCampaignId:'campaign-local-id',googleAdsCampaignAction:scope},{listSearchTermsQuerySnapshots:()=>++calls===1?Promise.resolve(saved):new Promise(resolve=>{resolveRefresh=resolve})});
+  s.controller.render('Campanha Search');await new Promise(resolve=>setImmediate(resolve));
+  const panel=s.get('#productSearchTermsAccessHistory'),list=s.get('#productSearchTermsAccessHistoryList'),currentMarkup=list.innerHTML;
+  assert.equal(panel.classList.contains('hidden'),false);
+  s.controller.render('Campanha Search');
+  await Promise.resolve();
+  assert.equal(calls,2);assert.equal(panel.classList.contains('hidden'),false);assert.equal(panel.getAttribute('aria-busy'),'true');assert.equal(list.innerHTML,currentMarkup);assert.doesNotMatch(list.innerHTML,/Carregando consultas salvas/);
+  resolveRefresh(saved);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(panel.classList.contains('hidden'),false);assert.equal(list.innerHTML,currentMarkup);assert.equal(panel.getAttribute('aria-busy'),'false');
+});
+test('search-term button records the campaign analysis before opening the search screen',async()=>{
+  const order=[],notices=[],button={disabled:false,isConnected:true},s=setup({...empty(),storedCampaignId:'id-campaign',googleAdsCampaignAction:{mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'}},{
+    async recordSearchTermsAnalysisInDiary(input){order.push('record');assert.equal(input.campaignId,'id-campaign');assert.ok(Number.isFinite(Date.parse(input.occurredAtUtc)));return{recorded:true}},
+    openSearchTerms(context){order.push('open');assert.deepEqual(JSON.parse(JSON.stringify(context)),{managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search',includeToday:true,autoQuery:false})},
+    notifySearchTermsAnalysisError:message=>notices.push(message)
+  });
+  s.controller.render('Campanha Search');
+  await s.get('#productCampaignEventsToolbar').onclick({target:{closest:selector=>selector==='[data-product-search-terms]'?button:null}});
+  assert.deepEqual(order,['record','open']);assert.deepEqual(notices,[]);assert.equal(button.disabled,true);
+});
+test('search-term screen still opens when local event recording fails and reports the failure',async()=>{
+  const opened=[],notices=[],button={disabled:false,isConnected:true},s=setup({...empty(),storedCampaignId:'id-campaign',googleAdsCampaignAction:{mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'}},{
+    async recordSearchTermsAnalysisInDiary(){throw new Error('Base local indisponível')},openSearchTerms(){opened.push(true)},notifySearchTermsAnalysisError:message=>notices.push(message)
+  });
+  s.controller.render('Campanha Search');await s.get('#productCampaignEventsToolbar').onclick({target:{closest:()=>button}});
+  assert.deepEqual(opened,[true]);assert.deepEqual(notices,['Base local indisponível']);assert.equal(button.disabled,true);
+});
 
 test('diary totals use inclusive pause cutoff and only unconfirmed manual-sale excess without modifying official cells',()=>{
   const rows=[{date:'2026-09-29',cells:{O:{value:0.1},C:{value:3},F:{value:1}}},{date:'2026-09-30',cells:{O:{value:0.2},C:{value:2},F:{value:0}}},{date:'2026-10-02',cells:{O:{value:999},C:{value:999},F:{value:99}}}],
@@ -96,19 +139,27 @@ test('diary totals use inclusive pause cutoff and only unconfirmed manual-sale e
   assert.equal(JSON.stringify(rows),before);assert.equal(rows[1].cells.F.value,0);
   assert.equal(domain.productDiaryTotals([],null,new Map([['2026-09-30',{pendingConversions:2}]])).conversions,2);
 });
-test('confirmed pause marks its diary date and hides later daily and provisional rows without mutating history',()=>{
+test('confirmed pause stops every campaign diary until reactivation, then resumes without filling the gap',()=>{
   const rows=[
-    {date:'2026-09-29',cells:{A:{value:'2026-09-29'},B:{value:10},Q:{value:'Estado informado pela MCC'}}},
-    {date:'2026-09-30',cells:{A:{value:'2026-09-30'},B:{value:99}}},
-  ],manualSalesByDate=new Map([['2026-09-29',{pendingConversions:1}],['2026-10-01',{pendingConversions:2}]]),before=JSON.stringify(rows);
-  const s=setup({...empty(),rows,displayRows:rows,manualSalesByDate,pauseConfirmedAt:'2026-09-29'});
-  s.controller.render('Oferta pausada');
-  const html=s.get('#productBody').innerHTML;
-  assert.match(html,/Campanha pausada na data 29\/09\/2026/);
-  assert.match(html,/Estado informado pela MCC/);
-  assert.doesNotMatch(html,/2026-09-30|2026-10-01/,'linhas posteriores e vendas provisórias posteriores não aparecem');
-  assert.equal(s.get('#rowCount').textContent,'1 dia');
-  assert.match(s.get('#productCaption').textContent,/encerrado na pausa confirmada em 29\/09\/2026/);
+    {date:'2026-09-29',cells:{A:{value:'2026-09-29'},B:{value:10},C:{value:1},O:{value:5},Q:{value:'Estado informado pela MCC'}}},
+    {date:'2026-09-30',cells:{A:{value:'2026-09-30'},B:{value:99},C:{value:2},O:{value:9}}},
+    {date:'2026-10-01',cells:{A:{value:'2026-10-01'},B:{value:50},C:{value:50},O:{value:50}}},
+    {date:'2026-10-03',cells:{A:{value:'2026-10-03'},B:{value:30},C:{value:3},O:{value:7}}},
+    {date:'2026-10-04',cells:{A:{value:'2026-10-04'},B:{value:40},C:{value:4},O:{value:8}}},
+  ],manualSalesByDate=new Map([['2026-09-29',{pendingConversions:1}],['2026-10-01',{pendingConversions:2}],['2026-10-04',{pendingConversions:1}]]),before=JSON.stringify(rows);
+  const s=setup({...empty(),rows,displayRows:rows,manualSalesByDate,pauseConfirmedAt:'2026-09-30',pauseReactivatedAt:'2026-10-03'});
+  for(const source of ['manifest','workbook']){
+    s.controller.render('Oferta pausada',source,'campaign-id');
+    const html=s.get('#productBody').innerHTML;
+    assert.match(html,/Campanha pausada na data 30\/09\/2026/);
+    assert.match(html,/Estado informado pela MCC/);
+    assert.doesNotMatch(html,/01\/10\/2026|50/,'linhas e vendas provisórias no intervalo pausado não aparecem');
+    assert.match(html,/2026-10-03|2026-10-04/,'o diário volta a mostrar linhas a partir da reativação');
+    assert.equal(s.get('#rowCount').textContent,'4 dias');
+    assert.match(s.get('#productCaption').textContent,/intervalo sem registros após a pausa confirmada em 30\/09\/2026; diário retomado em 03\/10\/2026/i);
+  }
+  const totals=domain.productDiaryTotals(rows,'2026-09-30',manualSalesByDate,'2026-10-03');
+  assert.equal(totals.investment,29);assert.equal(totals.clicks,10);assert.equal(totals.conversions,2);
   assert.equal(JSON.stringify(rows),before,'o recorte da view não altera o diário persistido');
 });
 test('legacy summary stays separate, preserves observed zero/absence and returns cleanly to native diary',()=>{

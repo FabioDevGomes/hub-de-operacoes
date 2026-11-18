@@ -1,0 +1,38 @@
+#offerSheet .top-trends-keyword-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+#offerSheet .top-trends-keyword-summary-head{grid-column:1/-1;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+#offerSheet .top-trends-keyword-summary-head b{color:#83e5bb;font-size:.82rem}
+#offerSheet .top-trends-keyword-summary-head p{margin:3px 0 0;color:var(--muted);font-size:.74rem}
+#offerSheet .top-trends-keyword-summary .top-trends-search-history{align-self:flex-start}
+#offerSheet .top-trends-keyword-entry{grid-column:1;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:8px;min-width:0}
+#offerSheet .top-trends-keyword-entry-label{color:var(--muted);font-size:.78rem;font-weight:600}
+#offerSheet .top-trends-keyword-entry textarea{width:100%;min-height:150px;resize:vertical;font-family:inherit;font-size:.88rem;line-height:1.45}
+#offerSheet .top-trends-keyword-entry-actions{display:flex;align-items:flex-start}
+#offerSheet .top-trends-keyword-entry-actions .btn.primary{border:0;background:linear-gradient(100deg,#2a91eb,#32b9c1);color:#061626;box-shadow:none}
+#offerSheet .top-trends-keyword-entry-actions .btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+#offerSheet .top-trends-keyword-output{grid-column:2;grid-row:2/span 2;align-self:stretch;display:flex;flex-direction:column;gap:7px;min-width:0;min-height:150px;max-height:260px;overflow:auto;padding:10px 12px;border:1px solid #31506e;border-radius:10px;background:#071222}
+#offerSheet .top-trends-keyword-output-head{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.68rem;font-weight:700}
+#offerSheet #topTrendsKeywordList{min-width:0}
+#offerSheet #topTrendsKeywordList .keyword-candidate-items{display:grid;grid-template-columns:minmax(0,1fr);gap:0;width:100%;max-width:none;align-items:stretch}
+#offerSheet #topTrendsKeywordList .keyword-candidate.trends-keyword-candidate{display:grid;grid-template-columns:minmax(0,1fr) auto 26px 26px;align-items:center;justify-self:stretch;gap:5px;width:100%;max-width:none;padding:5px 0;border:0;border-bottom:1px solid rgba(96,124,157,.24);border-radius:0;background:transparent;box-shadow:none;color:#83e5bb;font-size:.84rem;font-weight:400;line-height:1.35}
+#offerSheet #topTrendsKeywordList .keyword-candidate-text{min-width:0;overflow-wrap:anywhere;font-size:.84rem}
+#offerSheet #topTrendsKeywordList .keyword-candidate-search{padding:3px 7px;border-color:rgba(53,198,145,.42);background:rgba(5,34,24,.38);color:#83e5bb;font-size:.68rem;font-weight:500}
+#offerSheet #topTrendsKeywordList .keyword-candidate-edit,#offerSheet #topTrendsKeywordList .keyword-candidate-remove{display:inline-grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:#83e5bb;cursor:pointer}
+#offerSheet #topTrendsKeywordList .keyword-candidate-edit svg{width:16px;height:16px}
+#offerSheet #topTrendsKeywordList .keyword-candidate-remove{font-size:1.2rem;line-height:1}
+#offerSheet #topTrendsKeywordList .keyword-candidate-search:focus-visible,#offerSheet #topTrendsKeywordList .keyword-candidate-edit:focus-visible,#offerSheet #topTrendsKeywordList .keyword-candidate-remove:focus-visible{outline:2px solid rgba(131,229,187,.75);outline-offset:2px}
+#offerSheet #topTrendsKeywordList .keyword-candidate-search:hover,#offerSheet #topTrendsKeywordList .keyword-candidate-edit:hover,#offerSheet #topTrendsKeywordList .keyword-candidate-remove:hover{background:rgba(53,198,145,.1);color:#eafff5}
+#offerSheet #topTrendsKeywordList .keyword-candidate-empty{padding:12px 0;color:var(--muted);font-size:.78rem}
+#offerSheet .top-trends-keyword-feedback{grid-column:1/-1;min-height:0;margin:0;color:#83e5bb;font-size:.74rem}
+#offerSheet .top-trends-keyword-feedback:empty{display:none}
+#offerSheet .top-trends-keyword-feedback[data-state="error"]{color:#ff9aaa}
+.top-trends-candidate-edit-dialog{width:min(520px,calc(100% - 28px));max-height:calc(100vh - 28px);padding:0;border:1px solid #31506e;border-radius:14px;background:#091627;color:var(--text)}
+.top-trends-candidate-edit-dialog::backdrop{background:rgba(1,6,14,.8)}
+.top-trends-candidate-edit-form>header,.top-trends-candidate-edit-form>footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.top-trends-candidate-edit-form>header p{margin:3px 0 0;color:var(--muted);font-size:.75rem}
+.top-trends-candidate-edit-form>footer{justify-content:flex-end;border:0;border-top:1px solid var(--line)}
+.top-trends-candidate-edit-body{display:grid;gap:7px;padding:16px}
+.top-trends-candidate-edit-body label{font-size:.78rem;color:var(--muted);font-weight:700}
+.top-trends-candidate-edit-body input{width:100%}
+.top-trends-candidate-edit-body p{min-height:0;margin:0;color:#ff9aaa;font-size:.76rem}
+.top-trends-candidate-edit-body p:empty{display:none}
+@media(max-width:760px){#offerSheet .top-trends-keyword-summary{grid-template-columns:minmax(0,1fr);gap:10px}#offerSheet .top-trends-keyword-summary-head,#offerSheet .top-trends-keyword-entry,#offerSheet .top-trends-keyword-output{grid-column:1}#offerSheet .top-trends-keyword-summary-head{align-items:stretch;flex-direction:column}#offerSheet .top-trends-keyword-output{grid-row:auto;min-height:110px;max-height:220px}}

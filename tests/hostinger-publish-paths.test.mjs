@@ -14,7 +14,7 @@ test('Hostinger inventory paths normalize both query-relative and root-relative 
     '$tokens=$null;$parseErrors=$null',
     '$ast=[System.Management.Automation.Language.Parser]::ParseFile($sourcePath,[ref]$tokens,[ref]$parseErrors)',
     "if($parseErrors.Count){throw ($parseErrors | ForEach-Object { $_.Message } | Out-String)}",
-    "$names=@('ConvertTo-HostingerRootRelativePath','ConvertTo-HostingerRemoteEntryMap','Get-HostingerPublishPathCollision')",
+    "$names=@('ConvertTo-HostingerRootRelativePath','ConvertTo-HostingerRemoteEntryMap','Get-HostingerPublishPathCollision','Test-HostingerPublishExcludedFile')",
     '$functions=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $names -contains $node.Name},$true)',
     'foreach($fn in $functions){. ([scriptblock]::Create($fn.Extent.Text))}',
     'function Assert-Case($condition,$message){if(-not $condition){throw $message}}',
@@ -30,7 +30,14 @@ test('Hostinger inventory paths normalize both query-relative and root-relative 
     "$link=Get-HostingerPublishPathCollision -Path 'tryly/link.html' -RemoteEntries $entries;Assert-Case ($link.kind -ceq 'symlink') 'symlink occupying a file path was not classified'",
     "$parentFile=Get-HostingerPublishPathCollision -Path 'tryly/current-file' -RemoteEntries $entries -ExpectedDirectory;Assert-Case ($parentFile.kind -ceq 'file-blocks-directory') 'file blocking a required directory was not classified'",
     "$inferred=Get-HostingerPublishPathCollision -Path 'tryly/sub' -RemoteEntries $entries -ExpectedDirectory;Assert-Case ($null -eq $inferred) 'parent directory inferred from a descendant file was treated as a collision'",
-    "$missing=Get-HostingerPublishPathCollision -Path 'tryly/missing.png' -RemoteEntries $entries;Assert-Case ($null -eq $missing) 'a missing path was reported as a collision'"
+    "$missing=Get-HostingerPublishPathCollision -Path 'tryly/missing.png' -RemoteEntries $entries;Assert-Case ($null -eq $missing) 'a missing path was reported as a collision'",
+    "Assert-Case (Test-HostingerPublishExcludedFile -RelativePath 'assets/imagem-produto-01.png') 'numbered product image 01 was not excluded'",
+    "Assert-Case (Test-HostingerPublishExcludedFile -RelativePath 'ASSETS/IMAGEM-PRODUTO-2.jpg') 'case-insensitive numbered product image was not excluded'",
+    "Assert-Case (Test-HostingerPublishExcludedFile -RelativePath 'assets/imagem-produto-04.webp') 'higher numbered product image was not excluded'",
+    "Assert-Case (-not (Test-HostingerPublishExcludedFile -RelativePath 'assets/01.png')) 'page background image was incorrectly excluded'",
+    "Assert-Case (-not (Test-HostingerPublishExcludedFile -RelativePath 'assets/imagem-produto.png')) 'unnumbered product image was incorrectly excluded'",
+    "Assert-Case (-not (Test-HostingerPublishExcludedFile -RelativePath 'assets/imagem-produto-01-ajustada.png')) 'a differently named product asset was incorrectly excluded'",
+    "Assert-Case (Test-HostingerPublishExcludedFile -RelativePath 'assets/imagens-produto.json') 'legacy product-image manifest was no longer excluded'"
   ].join(';');
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
     encoding: 'utf8',

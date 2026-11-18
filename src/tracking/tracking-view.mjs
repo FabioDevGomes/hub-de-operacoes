@@ -14,7 +14,8 @@ import {
   fetchTrackingDomains,
   fetchTrackingReport,
   fetchTrackingSalesPage,
-} from './tracking-service.mjs?v=18';
+} from './tracking-service.mjs?v=22';
+import { resolveTrackingCheckoutCampaign } from './tracking-checkouts-domain.mjs?v=2';
 import {
   createTrackingDomainAdminToken,
   buildTrackingPresellScriptTag,
@@ -41,15 +42,16 @@ import {
   trackingClicksDateRangeForPreset,
   trackingClicksRate,
   validateTrackingClicksDateRange,
-} from './tracking-clicks-domain.mjs?v=7';
+} from './tracking-clicks-domain.mjs?v=8';
 
 const CLICKBANK_INS_V8_INSTANT_NOTIFICATION_URL = 'https://track.travenzo.shop/clickbank-ins-v8.php';
 import {
   appendTrackingClicksSnapshot,
   readTrackingClicksSnapshots,
-} from './tracking-clicks-storage.mjs?v=3';
-import { summarizeTrackingSales, TRACKING_SALES_MAX_SYNC_PAGES, TRACKING_SALES_MAX_SYNC_RECORDS } from './tracking-sales-domain.mjs?v=1';
-import { readTrackingSalesSnapshot, replaceTrackingSalesSnapshot } from './tracking-sales-storage.mjs?v=1';
+} from './tracking-clicks-storage.mjs?v=4';
+import { summarizeTrackingSales, resolveTrackingSaleCampaign, TRACKING_SALES_MAX_SYNC_PAGES, TRACKING_SALES_MAX_SYNC_RECORDS } from './tracking-sales-domain.mjs?v=4';
+import { syncClickBankSalesToBilling } from './tracking-billing-service.mjs?v=2';
+import { readTrackingSalesSnapshot, replaceTrackingSalesSnapshot, readTrackingSalesDetectionCursor, writeTrackingSalesDetectionCursor } from './tracking-sales-storage.mjs?v=5';
 import {
   clearTrackingHubToken,
   readTrackingHubToken,
@@ -69,6 +71,11 @@ const mountedRoots = new WeakMap();
 const PREVIEW_LIMIT = 100;
 export const TRACKING_CLICKS_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const TRACKING_SALES_AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+function compareTrackingSaleIds(left, right) {
+  const a = String(left || '0'), b = String(right || '0');
+  return a.length !== b.length ? (a.length < b.length ? -1 : 1) : a < b ? -1 : a > b ? 1 : 0;
+}
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -106,12 +113,14 @@ export function mount({
   root,
   clipboard = globalThis.navigator?.clipboard,
   clicksStorage = { read: readTrackingClicksSnapshots, append: appendTrackingClicksSnapshot },
-  salesStorage = { read: readTrackingSalesSnapshot, replace: replaceTrackingSalesSnapshot },
+  salesStorage = { read: readTrackingSalesSnapshot, replace: replaceTrackingSalesSnapshot, readDetectionCursor: readTrackingSalesDetectionCursor, writeDetectionCursor: writeTrackingSalesDetectionCursor },
   setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
   clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis),
   scheduleAutoRefreshFn = globalThis.setTimeout?.bind(globalThis),
   clearAutoRefreshFn = globalThis.clearTimeout?.bind(globalThis),
   isTrackingViewVisibleFn = null,
+  getGoogleAdsCampaignRows = () => [],
+  onClickBankSalesDetected = null,
   nowFn = () => new Date(),
 }) {
   if (!root) throw new Error('A área da sessão Tracking não foi encontrada.');
@@ -143,7 +152,7 @@ export function mount({
     salesRows: [], salesCacheLoaded: false, salesCacheAvailable: true, salesSyncMeta: null,
     salesDataLoaded: false, salesLastServerRefreshAtUtc: null, salesAutoOnlyData: false,
     salesPending: false, salesFeedback: '', salesError: false,
-    checkoutsReport: null, checkoutsCountsByTrack: new Map(), checkoutsPending: false,
+    checkoutsReport: null, checkoutsCountsByTrack: new Map(), checkoutsCampaignCountsByTrack: new Map(), checkoutsPending: false,
     checkoutsFeedback: '', checkoutsError: false, checkoutsLastServerRefreshAtUtc: null,
     clicksStartDateInput: formatTrackingDatePtBr(defaultClicksRange.startDate),
     clicksEndDateInput: formatTrackingDatePtBr(defaultClicksRange.endDate),
@@ -182,6 +191,17 @@ export function mount({
         : 'Cadastre um perfil para cada conta/MCC e informe o nome exato da ação de conversão.',
     conversionProfileError: Boolean(savedConversionProfiles.invalid),
   };
+
+  function attachCampaignResolution(sales) {
+    let campaignRows = [];
+    try {
+      campaignRows = typeof getGoogleAdsCampaignRows === 'function' ? getGoogleAdsCampaignRows() : [];
+    } catch {}
+    return (Array.isArray(sales) ? sales : []).map(sale => Object.freeze({
+      ...sale,
+      campaignAttribution: resolveTrackingSaleCampaign(sale, campaignRows),
+    }));
+  }
 
   const autoRefreshTimers = { clicks: null, sales: null };
   let autoRefreshActive = false;
@@ -586,7 +606,7 @@ export function mount({
   async function loadTrackingSalesCache() {
     try {
       const cached = await salesStorage.read();
-      state.salesRows = Array.isArray(cached?.sales) ? cached.sales : [];
+      state.salesRows = attachCampaignResolution(cached?.sales);
       state.salesSyncMeta = cached?.metadata || null;
       state.salesDataLoaded = Boolean(cached?.metadata);
       state.salesLastServerRefreshAtUtc = cached?.metadata?.lastSyncedAtUtc || null;
@@ -662,21 +682,56 @@ export function mount({
       }
 
       if (automatic) {
-        state.salesRows = allSales;
+        state.salesRows = attachCampaignResolution(allSales);
         state.salesDataLoaded = true;
         state.salesLastServerRefreshAtUtc = nowFn().toISOString();
         state.salesAutoOnlyData = true;
       } else {
         const saved = await salesStorage.replace(allSales, { snapshotMaxId, generatedAtUtc });
-        state.salesRows = saved.sales;
+        state.salesRows = attachCampaignResolution(saved.sales);
         state.salesSyncMeta = saved.metadata;
         state.salesDataLoaded = true;
         state.salesLastServerRefreshAtUtc = saved.metadata.lastSyncedAtUtc;
         state.salesAutoOnlyData = false;
         state.salesCacheAvailable = true;
       }
+      let saleDetectionFeedback = '';
+      if (typeof salesStorage.readDetectionCursor === 'function' && typeof salesStorage.writeDetectionCursor === 'function') {
+        try {
+          const storedCursor = await salesStorage.readDetectionCursor();
+          const initialCursor = storedCursor ?? state.salesSyncMeta?.snapshotMaxId ?? snapshotMaxId;
+          const newlyDetected = allSales.filter(sale => compareTrackingSaleIds(sale.transactionId, initialCursor) > 0);
+          if (newlyDetected.length) {
+            if (typeof onClickBankSalesDetected !== 'function') throw new Error('O histórico de vendas não está disponível nesta tela.');
+            const enriched = newlyDetected.map(sale => {
+              const track = sale.attributionStatus === 'matched'
+                ? state.domainRows.find(row => row.platform === 'clickbank' && row.hostname === sale.presellHost && row.productKey === sale.productKey)
+                : null;
+              return { sale, productName: track?.productLabel || productLabel(sale.productKey) || sale.productKey || 'Produto não identificado' };
+            });
+            await onClickBankSalesDetected(enriched);
+          }
+          await salesStorage.writeDetectionCursor(snapshotMaxId);
+        } catch (error) {
+          saleDetectionFeedback = ` O registro da venda no histórico ficou pendente e será repetido na próxima sincronização: ${error instanceof Error ? error.message : 'erro de armazenamento'}.`;
+        }
+      }
       const summary = summarizeTrackingSales(state.salesRows, state.domainRows.filter(row => row.platform === 'clickbank'));
-      state.salesFeedback = `${automatic ? 'Busca automática concluída' : 'Atualização concluída'}: ${summary.matchedCount.toLocaleString('pt-BR')} venda(s) associada(s) a uma Track; ${summary.unmatchedCount.toLocaleString('pt-BR')} sem clique correspondente e ${summary.ambiguousCount.toLocaleString('pt-BR')} com mais de uma Track possível. Atualizado em ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}.${automatic ? ' Os dados desta consulta ficam nesta tela; use Atualizar vendas para salvar no cache local.' : ''}`;
+      let billingFeedback = '';
+      if (!automatic) {
+        try {
+          const billing = await syncClickBankSalesToBilling(allSales, state.domainRows.filter(row => row.platform === 'clickbank'));
+          billingFeedback = ` Faturamento local: ${billing.inserted.toLocaleString('pt-BR')} nova(s), ${billing.updated.toLocaleString('pt-BR')} atualizada(s), ${billing.unchanged.toLocaleString('pt-BR')} sem alteração.`;
+          if (billing.missingCommission) billingFeedback += ` ${billing.missingCommission.toLocaleString('pt-BR')} venda(s) sem comissão/moeda válida; confira se a API privada ClickBank atualizada está publicada.`;
+          if (billing.unsupportedCurrency) billingFeedback += ` ${billing.unsupportedCurrency.toLocaleString('pt-BR')} venda(s) em moeda ainda não suportada pelo Faturamento foram ignoradas.`;
+          if (billing.missingTime) billingFeedback += ` ${billing.missingTime.toLocaleString('pt-BR')} venda(s) sem horário da transação nem de recebimento foram ignoradas.`;
+          if (billing.conflicts) billingFeedback += ` ${billing.conflicts.toLocaleString('pt-BR')} conflito(s) de origem/ID exigem revisão.`;
+          if (billing.mccReconciliationPending) billingFeedback += ' As possíveis sobreposições com agregados MCC ficam para a Fase 3 de conciliação.';
+        } catch (error) {
+          billingFeedback = ` Tracking atualizado, mas a sincronização local do Faturamento falhou: ${error instanceof Error ? error.message : 'erro de armazenamento'}. Clique novamente para repetir com segurança.`;
+        }
+      }
+      state.salesFeedback = `${automatic ? 'Busca automática concluída' : 'Atualização concluída'}: ${summary.matchedCount.toLocaleString('pt-BR')} venda(s) associada(s) a uma Track; ${summary.unmatchedCount.toLocaleString('pt-BR')} sem Track associada e ${summary.ambiguousCount.toLocaleString('pt-BR')} com mais de uma Track possível. Atualizado em ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}.${automatic ? ' Os dados desta consulta ficam nesta tela; use Atualizar vendas para salvar no cache local.' : billingFeedback}${saleDetectionFeedback}`;
       state.salesError = false;
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Não foi possível sincronizar as vendas.';
@@ -716,8 +771,22 @@ export function mount({
         JSON.stringify([row.hostname, row.productKey]),
         row.checkoutCount,
       ]));
+      const campaignCountsByTrack = new Map();
+      for (const row of report.campaignCounts) {
+        const key = JSON.stringify([row.hostname, row.productKey]);
+        const rows = campaignCountsByTrack.get(key) || [];
+        rows.push(row);
+        campaignCountsByTrack.set(key, rows);
+      }
+      state.checkoutsCampaignCountsByTrack = campaignCountsByTrack;
       state.checkoutsLastServerRefreshAtUtc = report.generatedAtUtc;
-      state.checkoutsFeedback = `${automatic ? 'Busca automática concluída' : 'Consulta concluída'}: ${report.matchedCount.toLocaleString('pt-BR')} checkout(s) associado(s) a uma única Track; ${report.unmatchedCount.toLocaleString('pt-BR')} sem Track identificada e ${report.ambiguousCount.toLocaleString('pt-BR')} com associação ambígua. Atualizado em ${formatTrackingCacheTimestamp(report.generatedAtUtc)}.`;
+      const campaignAttributedCount = report.campaignCounts
+        .filter(row => row.attributionStatus === 'attributed')
+        .reduce((total, row) => total + row.checkoutCount, 0);
+      const campaignAttributionSummary = report.campaignAttributionAvailable
+        ? ` ${campaignAttributedCount.toLocaleString('pt-BR')} com ID de campanha válido; ${(report.matchedCount - campaignAttributedCount).toLocaleString('pt-BR')} sem associação segura à campanha.`
+        : ' O serviço ainda não envia o detalhamento por campanha.';
+      state.checkoutsFeedback = `${automatic ? 'Busca automática concluída' : 'Consulta concluída'}: ${report.matchedCount.toLocaleString('pt-BR')} checkout(s) associado(s) a uma única Track; ${report.unmatchedCount.toLocaleString('pt-BR')} sem Track identificada e ${report.ambiguousCount.toLocaleString('pt-BR')} com associação ambígua.${campaignAttributionSummary} Atualizado em ${formatTrackingCacheTimestamp(report.generatedAtUtc)}.`;
       state.checkoutsError = false;
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Não foi possível consultar os checkouts.';
@@ -785,13 +854,97 @@ export function mount({
     const tagDialogRow = state.domainRows.find(row => row.hostname === state.tagDialogHost) || null;
     const clickBankDomains = state.domainRows.filter(row => row.platform === 'clickbank');
     const salesSummary = summarizeTrackingSales(state.salesRows, clickBankDomains);
+    const clickLinkDiagnosticLabels = {
+      not_available: 'Diagnóstico não disponível nesta resposta da API',
+      extclid_missing: 'A venda chegou sem extclid',
+      extclid_unusable: 'O extclid recebido não pôde ser usado',
+      exact_click_not_found: 'Nenhum clique de saída com esse extclid foi encontrado',
+      click_missing_track_metadata: 'Clique encontrado, mas sem domínio/produto válidos da Track',
+      click_matches_multiple_tracks: 'Clique relacionado a mais de uma Track',
+      track_matched: 'Clique ligado a uma única Track',
+    };
+    const campaignCandidateLabels = {
+      not_evaluated: 'Não avaliado',
+      click_not_found: 'Sem clique correspondente',
+      campaign_id_missing: 'Clique encontrado, sem ID de campanha no utm_campaign',
+      campaign_id_invalid: 'ID de campanha inválido no clique',
+      campaign_ambiguous: 'Mais de um ID de campanha nos cliques relacionados',
+      source_conflict: 'Dados de campanha conflitantes nos cliques relacionados',
+      candidate: 'ID candidato',
+    };
+    const campaignResolutionLabels = {
+      matched: 'Identidade local resolvida',
+      candidate_unmapped: 'ID sem cadastro local correspondente',
+      campaign_ambiguous: 'ID associado a mais de uma identidade local',
+      campaign_identity_incomplete: 'Cadastro local sem MCC/conta/campanha completos',
+      campaign_source_unverified: 'Origem do ID ainda não verificada',
+      not_evaluated: 'Não avaliada',
+      click_not_found: 'Sem clique para resolver',
+      campaign_id_missing: 'Sem ID de campanha no clique',
+      campaign_id_invalid: 'ID de campanha inválido',
+      source_conflict: 'Fontes de campanha conflitantes',
+    };
+    const diagnosticSales = state.salesRows.slice(-100).reverse();
+    const saleDiagnosticRows = diagnosticSales.map(sale => {
+      const candidate = sale.clickCampaignCandidate || { status: 'not_evaluated', campaignId: null };
+      const resolution = sale.campaignAttribution || { status: 'not_evaluated' };
+      const track = sale.attributionStatus === 'matched'
+        ? `${productLabel(sale.productKey)} · ${sale.presellHost}`
+        : sale.attributionStatus === 'ambiguous' ? 'Mais de uma Track' : 'Sem Track associada';
+      const campaignValue = resolution.status === 'matched'
+        ? `MCC ${resolution.managerCustomerId || 'direta'} · conta ${resolution.customerId} · campanha ${resolution.campaignId}`
+        : `${campaignResolutionLabels[resolution.status] || 'Não resolvida'}${candidate.campaignId ? ` · ID candidato ${candidate.campaignId}` : ''}`;
+      return `<tr><td>${escapeHtml(`#${sale.transactionId} · ID interno`)}</td><td>${escapeHtml(formatTrackingCacheTimestamp(sale.transactionTimeUtc) || 'Horário indisponível')}</td><td>${escapeHtml(track)}</td><td>${escapeHtml(clickLinkDiagnosticLabels[sale.clickLinkDiagnosticStatus] || clickLinkDiagnosticLabels.not_available)}</td><td>${escapeHtml(`${campaignCandidateLabels[candidate.status] || 'Não avaliado'}${candidate.campaignId ? ` · ${candidate.campaignId}` : ''}`)}</td><td>${escapeHtml(campaignValue)}</td></tr>`;
+    }).join('');
+    const salesDiagnosticMarkup = state.salesDataLoaded
+      ? `<details class="tracking-sales-diagnostic"><summary>Diagnóstico por venda · mostrando ${diagnosticSales.length.toLocaleString('pt-BR')} das ${state.salesRows.length.toLocaleString('pt-BR')} vendas</summary><p class="tracking-connection-note">O ID exibido é interno do banco, não é o recibo ClickBank. Os estados distinguem ausência do extclid, falha de correspondência exata e metadados incompletos da Track; nenhum identificador de clique é exibido.</p><div class="tracking-table-wrap"><table class="tracking-table tracking-sales-diagnostic-table" aria-label="Diagnóstico individual de vendas ClickBank"><thead><tr><th>Venda</th><th>Horário UTC</th><th>Track</th><th>Vínculo do clique</th><th>Campanha no clique</th><th>Resolução local</th></tr></thead><tbody>${saleDiagnosticRows || '<tr><td colspan="6" class="tracking-domain-empty">Nenhuma venda SALE no snapshot.</td></tr>'}</tbody></table></div></details>`
+      : '';
+    let googleAdsCampaignRows = [];
+    try {
+      const suppliedCampaignRows = getGoogleAdsCampaignRows();
+      if (Array.isArray(suppliedCampaignRows)) googleAdsCampaignRows = suppliedCampaignRows;
+    } catch { /* The campaign-name lookup is optional; IDs remain visible. */ }
     const saleCountForTrack = row => salesSummary.countsByTrack.get(JSON.stringify([row.hostname, row.productKey])) || 0;
     const checkoutCountForTrack = row => state.checkoutsCountsByTrack.get(JSON.stringify([row.hostname, row.productKey])) || 0;
-    const domainRows = `<div class="tracking-table-wrap"><table class="tracking-table tracking-domain-table" aria-label="Tracks cadastradas, checkouts e vendas ClickBank"><thead><tr><th>URL da pre-sell</th><th>Nome do Track</th><th class="tracking-checkout-count">Checkouts</th><th class="tracking-sales-count">Vendas (SALE)</th></tr></thead><tbody>${clickBankDomains.length
-      ? clickBankDomains.map(row => `<tr${state.highlightedDomainHosts.includes(row.hostname) ? ' class="tracking-new-track-pulse"' : ''}><td><a class="tracking-presell-link" href="${escapeHtml(row.origin + '/')}" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(row.origin + '/')}</code></a></td><td>${escapeHtml(row.productLabel || productLabel(row.productKey))}</td><td class="tracking-number tracking-checkout-count"${state.checkoutsReport ? ` title="${checkoutCountForTrack(row)} checkout(s) ORDER_IMPRESSION associado(s) por extclid a esta combinação exata de domínio e produto"` : ' title="Aguardando a consulta de checkouts ao servidor"'}>${state.checkoutsReport ? new Intl.NumberFormat('pt-BR').format(checkoutCountForTrack(row)) : '—'}</td><td class="tracking-number tracking-sales-count"${state.salesDataLoaded ? ` title="${saleCountForTrack(row)} venda(s) associada(s) por extclid a esta combinação exata de domínio e produto"` : ' title="Sincronize as vendas para preencher esta contagem"'}>${state.salesDataLoaded ? new Intl.NumberFormat('pt-BR').format(saleCountForTrack(row)) : '—'}</td></tr>`).join('')
-      : `<tr><td colspan="4" class="tracking-domain-empty">${state.domainListLoaded ? 'A lista não contém domínios cadastrados por esta tela.' : 'A lista de Tracks é gerenciada em Tracker Global.'}</td></tr>`}</tbody></table></div>`;
+    const campaignCheckoutsForTrack = row => state.checkoutsCampaignCountsByTrack.get(JSON.stringify([row.hostname, row.productKey])) || [];
+    const campaignCheckoutsMarkup = row => {
+      if (!state.checkoutsReport) return '—';
+      if (!state.checkoutsReport.campaignAttributionAvailable) {
+        return '<span title="Atualize o serviço privado de checkouts para receber a atribuição por campanha.">Aguardando atualização do serviço</span>';
+      }
+      const entries = campaignCheckoutsForTrack(row);
+      if (!entries.length) return '—';
+      const attributedEntries = entries.filter(entry => entry.attributionStatus === 'attributed');
+      const attributedCampaignCount = new Set(attributedEntries.map(entry => entry.campaignId)).size;
+      const attributedCheckoutCount = attributedEntries.reduce((total, entry) => total + entry.checkoutCount, 0);
+      const unassignedCheckoutCount = entries
+        .filter(entry => entry.attributionStatus !== 'attributed')
+        .reduce((total, entry) => total + entry.checkoutCount, 0);
+      const summary = attributedCampaignCount
+        ? `${attributedCampaignCount} ${attributedCampaignCount === 1 ? 'campanha' : 'campanhas'} · ${attributedCheckoutCount.toLocaleString('pt-BR')} checkout(s)`
+        : 'Sem campanha identificada';
+      const summarySuffix = unassignedCheckoutCount
+        ? ` · ${unassignedCheckoutCount.toLocaleString('pt-BR')} sem atribuição segura`
+        : '';
+      const detailRows = entries.map(entry => {
+        let label;
+        if (entry.attributionStatus === 'attributed') {
+          const resolved = resolveTrackingCheckoutCampaign(entry.campaignId, googleAdsCampaignRows);
+          if (resolved.status === 'resolved') label = resolved.campaignName;
+          else if (resolved.status === 'ambiguous') label = `ID Google Ads ${entry.campaignId} · mais de um cadastro local`;
+          else label = `ID Google Ads ${entry.campaignId} · nome não encontrado no cadastro local`;
+        } else if (entry.attributionStatus === 'missing') label = 'Clique sem ID de campanha salvo';
+        else if (entry.attributionStatus === 'invalid') label = 'ID de campanha inválido no clique';
+        else label = 'IDs de campanha conflitantes para o clique';
+        return `<li><span>${escapeHtml(label)}</span><strong>${entry.checkoutCount.toLocaleString('pt-BR')} checkout(s)</strong></li>`;
+      }).join('');
+      return `<details class="tracking-checkout-campaign-details"><summary>${escapeHtml(summary + summarySuffix)}</summary><ul>${detailRows}</ul></details>`;
+    };
+    const domainRows = `<div class="tracking-table-wrap"><table class="tracking-table tracking-domain-table" aria-label="Tracks cadastradas, checkouts por campanha e vendas ClickBank"><thead><tr><th>URL da pre-sell</th><th>Nome do Track</th><th class="tracking-checkout-count">Checkouts</th><th>Campanhas · checkouts</th><th class="tracking-sales-count">Vendas (SALE)</th></tr></thead><tbody>${clickBankDomains.length
+      ? clickBankDomains.map(row => `<tr${state.highlightedDomainHosts.includes(row.hostname) ? ' class="tracking-new-track-pulse"' : ''}><td><a class="tracking-presell-link" href="${escapeHtml(row.origin + '/')}" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(row.origin + '/')}</code></a></td><td>${escapeHtml(row.productLabel || productLabel(row.productKey))}</td><td class="tracking-number tracking-checkout-count"${state.checkoutsReport ? ` title="${checkoutCountForTrack(row)} checkout(s) ORDER_IMPRESSION associado(s) por extclid a esta combinação exata de domínio e produto"` : ' title="Aguardando a consulta de checkouts ao servidor"'}>${state.checkoutsReport ? new Intl.NumberFormat('pt-BR').format(checkoutCountForTrack(row)) : '—'}</td><td class="tracking-campaign-checkouts">${campaignCheckoutsMarkup(row)}</td><td class="tracking-number tracking-sales-count"${state.salesDataLoaded ? ` title="${saleCountForTrack(row)} venda(s) associada(s) por extclid a esta combinação exata de domínio e produto"` : ' title="Sincronize as vendas para preencher esta contagem"'}>${state.salesDataLoaded ? new Intl.NumberFormat('pt-BR').format(saleCountForTrack(row)) : '—'}</td></tr>`).join('')
+      : `<tr><td colspan="5" class="tracking-domain-empty">${state.domainListLoaded ? 'A lista não contém domínios cadastrados por esta tela.' : 'A lista de Tracks é gerenciada em Tracker Global.'}</td></tr>`}</tbody></table></div>`;
     const salesCacheSummary = state.salesDataLoaded
-      ? `Dados de vendas: ${salesSummary.totalCount.toLocaleString('pt-BR')} SALE(s) real(is) de afiliado; ${salesSummary.matchedCount.toLocaleString('pt-BR')} associada(s) a uma única Track, ${salesSummary.unmatchedCount.toLocaleString('pt-BR')} sem clique correspondente e ${salesSummary.ambiguousCount.toLocaleString('pt-BR')} com associação ambígua. ${salesSummary.historicalCount ? `${salesSummary.historicalCount.toLocaleString('pt-BR')} pertence(m) a combinações históricas não presentes na lista atual. ` : ''}Última atualização: ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}. ${state.salesAutoOnlyData ? 'O resultado automático está só nesta tela; Atualizar vendas salva a sincronização no cache local.' : 'A sincronização está salva no cache local deste navegador.'}`
+      ? `Dados de vendas: ${salesSummary.totalCount.toLocaleString('pt-BR')} SALE(s) real(is) de afiliado; ${salesSummary.matchedCount.toLocaleString('pt-BR')} associada(s) a uma única Track, ${salesSummary.unmatchedCount.toLocaleString('pt-BR')} sem Track associada e ${salesSummary.ambiguousCount.toLocaleString('pt-BR')} com associação ambígua. ${salesSummary.historicalCount ? `${salesSummary.historicalCount.toLocaleString('pt-BR')} pertence(m) a combinações históricas não presentes na lista atual. ` : ''}Última atualização: ${formatTrackingCacheTimestamp(state.salesLastServerRefreshAtUtc)}. ${state.salesAutoOnlyData ? 'O resultado automático está só nesta tela; Atualizar vendas salva a sincronização no cache local.' : 'A sincronização está salva no cache local deste navegador.'}`
       : state.salesCacheAvailable
         ? 'As vendas ainda não foram sincronizadas neste navegador. A busca automática tentará carregar o histórico; Atualizar vendas também inicia uma consulta e salva o resultado no cache local.'
         : 'O cache local das vendas não está disponível neste navegador; tente atualizar do servidor novamente.';
@@ -841,11 +994,12 @@ export function mount({
         <p class="tracking-scope-note tracking-instruction">O Hub não grava a base operacional nem envia conversões ao Google Ads. O CSV INS v8 é somente preparado e baixado manualmente. Não reenvie linhas já aceitas.</p>
       </section>
       <section class="tracking-panel tracking-domain-panel" aria-label="Tracks cadastradas">
-        <div class="tracking-table-heading tracking-domain-heading"><div><h2>Tracks ClickBank</h2><p>Contagem de checkouts ClickBank e vendas por domínio e Track; o cadastro global fica em Tracker Global.</p></div><div class="tracking-domain-heading-actions"><span class="tracking-count">${clickBankDomains.length} ${clickBankDomains.length === 1 ? 'Track' : 'Tracks'} na tabela</span><button type="button" class="btn" data-tracking-action="refresh-track-sales" title="Consulta vendas SALE reais de afiliado e eventos ORDER_IMPRESSION de checkout. Ambos são associados somente por extclid a uma única combinação de domínio e produto; a sincronização de vendas é salva no cache local, os checkouts são consultados ao vivo. Não envia conversões ao Google Ads."${state.salesPending || state.checkoutsPending ? ' disabled' : ''}>${state.salesPending || state.checkoutsPending ? 'Atualizando vendas e checkouts…' : 'Atualizar vendas e checkouts'}</button><a class="btn" href="/?view=tracker-global">Tracker Global</a></div></div>
+        <div class="tracking-table-heading tracking-domain-heading"><div><h2>Tracks ClickBank</h2><p>Contagem de checkouts ClickBank e vendas por domínio e Track; o cadastro global fica em Tracker Global.</p></div><div class="tracking-domain-heading-actions"><span class="tracking-count">${clickBankDomains.length} ${clickBankDomains.length === 1 ? 'Track' : 'Tracks'} na tabela</span><button type="button" class="btn" data-tracking-action="refresh-track-sales" title="Consulta vendas SALE reais e checkouts; atualiza o cache local e sincroniza as comissões elegíveis no Faturamento deste navegador. Não envia conversões ao Google Ads."${state.salesPending || state.checkoutsPending ? ' disabled' : ''}>${state.salesPending || state.checkoutsPending ? 'Atualizando vendas e checkouts…' : 'Atualizar vendas e checkouts'}</button><a class="btn" href="/?view=tracker-global">Tracker Global</a></div></div>
         <p class="tracking-auto-refresh-note">${escapeHtml(salesAutoRefreshStatus)}</p>
         ${domainRows}
         <p class="tracking-connection-note${state.salesCacheAvailable || state.salesAutoOnlyData ? '' : ' is-error'}">${escapeHtml(salesCacheSummary)}</p>
         ${state.salesFeedback ? `<p class="tracking-domain-message${state.salesError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.salesFeedback)}</p>` : ''}
+        ${salesDiagnosticMarkup}
         ${state.checkoutsFeedback ? `<p class="tracking-domain-message${state.checkoutsError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.checkoutsFeedback)}</p>` : ''}
         <p class="tracking-connection-note tracking-instruction">Checkouts contam eventos ClickBank <code>ORDER_IMPRESSION</code> e só são atribuídos quando o <code>extclid</code> corresponde a uma única Track ainda cadastrada. Checkouts sem correspondência ou ambíguos não entram na coluna; eles não representam vendas.</p>
         <p class="tracking-connection-note tracking-instruction">Para cadastrar ou atualizar domínios e copiar as tags, abra Tracker Global.</p>

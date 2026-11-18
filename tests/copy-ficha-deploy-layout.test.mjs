@@ -11,7 +11,7 @@ test('arquivos da prévia pronta ocupam linhas horizontais e quebram em telas es
   assert.ok(css.includes('.copy-ficha-deploy-plan.is-ready>ul{display:flex;flex-wrap:wrap;'), 'a lista usa fluxo horizontal com quebra de linha');
   assert.ok(css.includes('.copy-ficha-deploy-plan.is-ready>ul>li{display:inline-flex;'), 'cada arquivo permanece legível como item próprio');
   assert.ok(css.includes('.copy-ficha-deploy-plan.is-ready>ul>li::before{content:\'•\';'), 'os itens mantêm marcador sem ocupar uma linha inteira');
-  assert.match(html, /copy-ficha\/copy-ficha-deploy\.css\?v=23/, 'a folha de estilos do modal usa sua chave atual de cache');
+  assert.match(html, /copy-ficha\/copy-ficha-deploy\.css\?v=28/, 'a folha de estilos do modal usa sua chave atual de cache');
 });
 
 test('deploy mostra indicador de carregamento durante análise e publicação', () => {
@@ -19,6 +19,18 @@ test('deploy mostra indicador de carregamento durante análise e publicação', 
   assert.match(deploy, /const showSpinner=value&&\['analyze','publish'\]\.includes\(action\)/, 'análise e publicação ativam o indicador');
   assert.match(deploy, /setBusy\(true,'Enviando os arquivos para os destinos confirmados…','publish'\)/, 'o envio identifica sua ação para a interface');
   assert.match(deploy, /publishButton\.setAttribute\('aria-busy',String\(Boolean\(value&&action==='publish'\)\)\)/, 'o botão de publicação expõe o estado ocupado');
+});
+
+test('a publicação mostra progresso por destino e só contabiliza arquivos após a resposta da Hostinger', () => {
+  assert.match(deploy, /data-deploy-publish-progress[^>]*hidden/, 'o painel de acompanhamento aparece quando a publicação começa');
+  assert.match(deploy, /data-deploy-publish-bar[^>]*aria-label="Destinos concluídos"/, 'a barra mede destinos concluídos');
+  assert.match(deploy, /data-deploy-publish-count/, 'o resumo informa destinos e arquivos confirmados');
+  assert.match(deploy, /A Hostinger não informa progresso por arquivo durante o envio/);
+  assert.match(deploy, /Aguardando a resposta da Hostinger; ainda não há contagem confirmada/);
+  assert.match(deploy, /Hostinger confirmou \$\{item\.uploadedCount\}\/\$\{item\.responseTotal\} arquivos/);
+  const sendState=deploy.indexOf("progressItem.state='sending';renderPublishProgress()"),requestStart=deploy.indexOf("await request('/api/hostinger/publish'"),responseRefresh=deploy.indexOf('renderPublishProgress();',requestStart),inventoryCheck=deploy.indexOf('await queryHostingerInventory(attemptRecord,target,fetchImpl)',responseRefresh);
+  assert.ok(sendState>=0&&requestStart>sendState, 'a interface marca o destino antes de iniciar o envio');
+  assert.ok(responseRefresh>requestStart&&inventoryCheck>responseRefresh, 'a resposta do envio aparece antes da consulta ao inventário');
 });
 
 test('a conferência diferencia ausência na resposta da API de ausência real no HPanel', () => {

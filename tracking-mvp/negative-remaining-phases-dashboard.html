@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09111f">
+  <title>Plano de avanço · negative_remaining</title>
+  <style>
+    :root{color-scheme:dark;--bg:#09111f;--panel:#101c2e;--panel2:#14233a;--line:#263b59;--text:#edf4ff;--muted:#9bb0cc;--blue:#76a9ff;--cyan:#65d8e8;--green:#61d6a3;--amber:#f0bd59;--red:#fb8790;--shadow:0 20px 55px #0005}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(1100px 600px at 85% -15%,#163259 0,transparent 62%),var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,select{font:inherit;color:inherit}button{cursor:pointer}
+    .shell{max-width:1250px;margin:auto;padding:34px 26px 60px}.eyebrow{color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}.head h1{font-size:clamp(29px,4vw,45px);line-height:1.08;letter-spacing:-.04em;margin:8px 0 12px}.head p{max-width:720px;margin:0;color:var(--muted)}.scope{max-width:275px;border:1px solid #31527d;background:#11233c;padding:13px 15px;border-radius:14px;color:#c7d8f0;font-size:12px}.scope b{display:block;color:#fff;margin-bottom:4px}
+    .summary{display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:12px;margin:28px 0 18px}.summary-card,.phase,.callout{background:linear-gradient(145deg,#13233a,#0f1a2b);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.summary-card{padding:16px 18px;min-height:98px}.summary-card span{display:block;color:var(--muted);font-size:12px}.summary-card strong{display:block;font-size:26px;letter-spacing:-.04em;margin-top:5px}.summary-card.primary{background:linear-gradient(120deg,#16335c,#112139);border-color:#345782}.summary-card.primary strong{font-size:18px;letter-spacing:0}.progress-track{height:7px;background:#253752;border-radius:10px;margin-top:13px;overflow:hidden}.progress-track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:inherit;transition:width .25s}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:18px 0}.tabs{display:flex;gap:8px;flex-wrap:wrap}.tabs a{color:#c5d7f0;text-decoration:none;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#0d1929;font-size:12px}.tabs a:hover{border-color:var(--blue);color:#fff}.actions{display:flex;gap:8px;align-items:center}.action{background:#13243a;border:1px solid #365276;border-radius:10px;padding:8px 11px;color:#d6e5fb;font-size:12px}.action:hover{background:#1a3150}.save-state{font-size:11px;color:var(--green);white-space:nowrap}
+    .callout{padding:15px 18px;margin-bottom:17px;display:flex;gap:13px;align-items:flex-start;border-color:#55482b;background:linear-gradient(120deg,#292416,#171c25)}.callout .dot{color:var(--amber);font-size:18px;line-height:1}.callout b{display:block;margin-bottom:3px}.callout p{margin:0;color:#c9c4b4;font-size:13px}
+    .phase-list{display:grid;gap:14px}.phase{overflow:hidden;scroll-margin-top:16px}.phase-top{display:grid;grid-template-columns:auto 1fr auto;gap:15px;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}.phase-no{height:42px;width:42px;display:grid;place-items:center;border-radius:13px;background:#1c3454;color:var(--blue);font-weight:900;font-size:16px}.phase[data-status="active"] .phase-no{background:#3a301a;color:var(--amber)}.phase[data-status="done"] .phase-no{background:#153c35;color:var(--green)}.phase h2{font-size:18px;margin:0;letter-spacing:-.02em}.phase-desc{color:var(--muted);font-size:12px;margin:4px 0 0}.phase-meta{text-align:right}.phase-state{display:inline-block;padding:5px 9px;border-radius:999px;background:#20314a;color:#b4c7e1;font-size:11px;font-weight:750}.phase[data-status="active"] .phase-state{background:#41341c;color:#ffd881}.phase[data-status="done"] .phase-state{background:#153c35;color:#8be9bd}.phase-count{font-size:11px;color:var(--muted);margin-top:5px}
+    .items{padding:7px 20px 15px}.item{display:grid;grid-template-columns:24px 1fr minmax(140px,175px);align-items:center;gap:11px;padding:13px 0;border-bottom:1px solid #1d2e46}.item:last-child{border-bottom:0}.item input[type=checkbox]{appearance:none;width:19px;height:19px;border:1.5px solid #526986;border-radius:6px;background:#0b1523;display:grid;place-items:center;margin:0;cursor:pointer}.item input[type=checkbox]:checked{background:#1e9e77;border-color:#42d4a5}.item input[type=checkbox]:checked:after{content:"✓";font-size:13px;font-weight:900;color:#06130f}.item-title{font-weight:650;color:#e4edfb;font-size:13px}.item-note{display:block;color:#8fa5c2;font-size:11px;margin-top:2px}.status-select{appearance:none;width:100%;background:#0b1523;border:1px solid #2a405e;border-radius:9px;padding:8px 28px 8px 10px;font-size:11px;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,#9bb0cc 50%),linear-gradient(135deg,#9bb0cc 50%,transparent 50%);background-position:calc(100% - 13px) 13px,calc(100% - 9px) 13px;background-size:4px 4px;background-repeat:no-repeat}.status-select[data-value="Em andamento"]{color:#ffd881;border-color:#68572e}.status-select[data-value="Concluído"]{color:#8be9bd;border-color:#28634f}.status-select[data-value="Bloqueado"]{color:#ff9ea5;border-color:#703a46}
+    .phase-foot{display:flex;justify-content:space-between;align-items:center;padding:0 20px 17px;color:#7f96b5;font-size:11px}.phase-foot .meter{height:5px;width:min(220px,35%);background:#20314a;border-radius:9px;overflow:hidden}.phase-foot .meter i{display:block;height:100%;background:var(--green);width:0}
+    .footer{margin-top:18px;color:#758aa7;font-size:11px;display:flex;justify-content:space-between;gap:20px}.footer a{color:#9dc0ff;text-decoration:none}.footer a:hover{text-decoration:underline}
+    @media(max-width:760px){.shell{padding:24px 14px 42px}.head{display:block}.scope{margin-top:16px;max-width:none}.summary{grid-template-columns:1fr 1fr}.summary-card.primary{grid-column:1/-1}.toolbar{align-items:flex-start;flex-direction:column}.phase-top{grid-template-columns:auto 1fr;gap:12px;padding:15px}.phase-meta{grid-column:2;text-align:left;display:flex;gap:8px;align-items:center}.phase-count{margin:0}.items{padding:4px 15px 11px}.item{grid-template-columns:23px 1fr;gap:10px}.status-select{grid-column:2;width:100%;max-width:220px}.phase-foot{padding:0 15px 14px}.footer{display:block}.footer span{display:block;margin-top:7px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="head">
+      <div><div class="eyebrow">Acompanhamento técnico · modo sombra</div><h1>negative_remaining</h1><p>Plano de trabalho para reproduzir no servidor a regra de saldo negativo do Hub, com comparação auditável e sem executar pausas nesta trilha.</p></div>
+      <aside class="scope"><b>Limite deste acompanhamento</b>Não inclui a chave global Hub/servidor, criação de jobs, chamadas à Google Ads API ou pausa de campanhas.</aside>
+    </header>
+    <section class="summary" aria-label="Resumo do avanço">
+      <div class="summary-card primary"><span>Fase atual</span><strong id="current-phase">Fase 1 · Auditoria da regra</strong><div class="progress-track"><i id="overall-bar"></i></div></div>
+      <div class="summary-card"><span>Itens concluídos</span><strong id="done-count">0 / 0</strong></div>
+      <div class="summary-card"><span>Em andamento</span><strong id="active-count">0</strong></div>
+      <div class="summary-card"><span>Bloqueios registrados</span><strong id="blocked-count">0</strong></div>
+    </section>
+    <div class="toolbar">
+      <nav class="tabs" aria-label="Ir para fase"><a href="#fase-1">01 Auditoria</a><a href="#fase-2">02 Contrato</a><a href="#fase-3">03 Avaliação sombra</a><a href="#fase-4">04 Paridade</a></nav>
+      <div class="actions"><span class="save-state" id="save-state">Salvo neste navegador</span><button class="action" id="export-btn" type="button">Exportar andamento</button><button class="action" id="import-btn" type="button">Importar</button><input id="import-file" type="file" accept="application/json" hidden></div>
+    </div>
+    <aside class="callout"><span class="dot">●</span><div><b>Critério confirmado</b><p>Usar o Valor restante já calculado pelo Hub: negativo gera candidata; zero ou positivo não gera. As proteções, exceções e configurações atuais continuam valendo. Não criar fórmula nem critérios de negócio novos. Os status ficam neste navegador; exporte um JSON para levar o andamento a outra máquina.</p></div></aside>
+    <section class="phase-list" id="phase-list" aria-label="Fases e itens"></section>
+    <footer class="footer"><span>Progresso local deste painel · nenhum dado é enviado ao servidor de pausas.</span><span>Documentos: <a href="google-ads-auto-pause-negative-remaining-audit.md" target="_blank" rel="noopener">auditoria da fase 1</a> · <a href="google-ads-auto-pause-negative-remaining-spec.md" target="_blank" rel="noopener">especificação sombra</a></span></footer>
+  </main>
+  <script>
+    const PHASES=[
+      {id:1,title:"Auditoria da regra",short:"Auditoria",desc:"Confirmar a regra existente e impedir que a avaliação do servidor acrescente critérios de negócio.",items:[
+        {id:"p1-formula",title:"Mapear a origem do Valor restante e o corte negativo",note:"A Visão geral já calcula remainingValue e a regra considera candidato somente quando o valor é menor que zero.",status:"Concluído"},
+        {id:"p1-sources",title:"Definir a Visão geral como fonte do valor",note:"O servidor recebe o valor pronto do caminho atual do Hub; não soma fontes nem reimplementa a fórmula.",status:"Concluído"},
+        {id:"p1-coverage",title:"Evitar critérios financeiros paralelos",note:"Sem requisitos novos de cobertura MCC/ClickBank, reconciliação ou composição de receita para esta regra.",status:"Concluído"},
+        {id:"p1-domain",title:"Preservar cálculo e parâmetros atuais do Hub",note:"Fallbacks e parâmetros que o Hub já usa permanecem encapsulados no resultado remainingValue.",status:"Concluído"},
+        {id:"p1-fallbacks",title:"Não criar fallback próprio no servidor",note:"Se o Hub não fornecer valor numérico, registrar falha técnica de avaliação; não inventar outro saldo.",status:"Concluído"},
+        {id:"p1-sales",title:"Respeitar vendas e proteções como o Hub já faz",note:"Vendas só entram no saldo pelo cálculo atual do Hub; proteções e exceções existentes continuam sendo aplicadas.",status:"Concluído"},
+        {id:"p1-manual-cb",title:"Não ampliar a regra para fontes não usadas pelo Hub",note:"Venda manual, GuruMedia ou ClickBank não ganham novos efeitos financeiros ou filtros nesta especificação.",status:"Concluído"},
+        {id:"p1-signoff",title:"Registrar a semântica aprovada",note:"Negativo = candidata; zero/positivo = não candidata; configurações, exceções e proteções existentes são preservadas.",status:"Concluído"}
+      ]},
+      {id:2,title:"Contrato do snapshot",short:"Contrato",desc:"Transportar o valor existente do Hub por campanha e manter compatibilidade.",items:[
+        {id:"p2-schema",title:"Incluir remainingValue no snapshot schema 3",note:"Transportar o valor já calculado por overviewSnapshot(), sem componentes financeiros internos.",status:"Concluído"},
+        {id:"p2-identity",title:"Associar o valor à campanha correta",note:"Usa campaignInternalId no Hub e a identidade MCC, conta e campanha no payload validado pelo servidor.",status:"Concluído"},
+        {id:"p2-provenance",title:"Vincular configuração e revisão da política existente",note:"Usa a regra e exceções explícitas; saleProtected permanece no schema 3, mas não veta negative_remaining.",status:"Concluído"},
+        {id:"p2-fx",title:"Não transportar cálculo redundante",note:"Sem novas taxas, fontes de receita, linhas de venda ou fórmula financeira paralela.",status:"Concluído"},
+        {id:"p2-compat",title:"Preservar idempotência e compatibilidade com snapshots antigos",note:"Schema 1 e 2 continuam aceitos; schema 3 leva remainingValue. Não há reconstrução retroativa.",status:"Concluído"},
+        {id:"p2-validation",title:"Validar integridade do valor e da identidade",note:"Valor ausente/inválido é não avaliável; identidade deve corresponder à campanha do snapshot.",status:"Concluído"}
+      ]},
+      {id:3,title:"Avaliador do servidor em sombra",short:"Avaliação sombra",desc:"Aplicar o corte existente ao valor do Hub, sem efeitos de execução.",items:[
+        {id:"p3-formula",title:"Aplicar remainingValue < 0",note:"Sem recalcular saldo ou adicionar limiares; zero e positivo não são candidatos.",status:"Concluído"},
+        {id:"p3-blocks",title:"Respeitar configuração e exceções explícitas",note:"Venda não veta negative_remaining; a regra usa remainingValue < 0. Exceções explícitas continuam aplicáveis.",status:"Concluído"},
+        {id:"p3-gurumedia-gate",title:"Não aplicar veto de venda a negative_remaining",note:"Ajuste local remove os vetos por venda da avaliação sombra e da validação do job desta regra; demais regras preservadas.",status:"Concluído"},
+        {id:"p3-diagnostic",title:"Persistir diagnóstico ligado ao snapshot",note:"Guarda valor, estado por campanha e contagens na avaliação associada; mantém o payload original intacto.",status:"Concluído"},
+        {id:"p3-no-effects",title:"Manter a trilha sem efeitos de execução",note:"O código continua em sombra: sem chamadas à API, jobs, pausas ou e-mails.",status:"Concluído"}
+      ]},
+      {id:4,title:"Comparação e aceite de paridade",short:"Paridade",desc:"Confirmar que o servidor usa o mesmo valor e preserva os controles atuais do Hub.",items:[
+        {id:"p4-worker-fix",title:"Publicar worker corrigido e receber nova avaliação schema 3",note:"Pendente de upload do arquivo privado e do próximo ciclo de captura/avaliação; manter o worker em prévia, sem --execute.",status:"Pendente"},
+        {id:"p4-scenarios",title:"Conferir negativo, zero e positivo",note:"Comparar o corte simples com o valor exibido na Visão geral.",status:"Pendente"},
+        {id:"p4-edge",title:"Conferir regra desabilitada e proteções existentes",note:"Validar somente as opções, exceções e proteções que já fazem parte da política do Hub.",status:"Pendente"},
+        {id:"p4-compare",title:"Comparar valores e campanhas candidatas por snapshot",note:"Paridade monetária até R$ 0,01 e conjunto de candidatas idêntico nas campanhas cobertas.",status:"Pendente"},
+        {id:"p4-evidence",title:"Registrar evidências e concluir o aceite da sombra",note:"Divergências e coberturas parciais permanecem bloqueadas.",status:"Pendente"},
+        {id:"p4-next",title:"Preparar proposta separada para a próxima etapa",note:"Qualquer criação de jobs ou execução real exige escopo e aprovação próprios.",status:"Pendente"}
+      ]}
+    ];
+    const STORAGE_KEY="codex.negative_remaining.phases.v1";let saved={};
+    try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}")}catch{}
+    for(const id of ["p1-formula","p1-sources","p1-coverage","p1-domain","p1-fallbacks","p1-sales","p1-manual-cb","p1-signoff"])saved[id]="Concluído";
+    for(const id of ["p2-schema","p2-identity","p2-provenance","p2-fx","p2-compat","p2-validation","p3-formula","p3-blocks","p3-diagnostic","p3-no-effects"])saved[id]="Concluído";
+    const safeStatus=s=>["Pendente","Em andamento","Concluído","Bloqueado"].includes(s)?s:"Pendente";
+    function render(){
+      const list=document.getElementById("phase-list");list.innerHTML="";let total=0,done=0,active=0,blocked=0,firstOpen=null;
+      for(const phase of PHASES){let pDone=0,pActive=0,pBlocked=0;const card=document.createElement("article");card.className="phase";card.id=`fase-${phase.id}`;
+        const rows=phase.items.map(item=>{const status=safeStatus(saved[item.id]??item.status);total++;if(status==="Concluído"){done++;pDone++}else{if(!firstOpen)firstOpen=phase;if(status==="Em andamento"){active++;pActive++}if(status==="Bloqueado"){blocked++;pBlocked++}}
+          return `<div class="item"><input type="checkbox" data-item="${item.id}" ${status==="Concluído"?"checked":""} aria-label="Marcar ${item.title} como concluído"><span><span class="item-title">${item.title}</span><span class="item-note">${item.note}</span></span><select class="status-select" data-item="${item.id}" data-value="${status}" aria-label="Status: ${item.title}"><option${status==="Pendente"?" selected":""}>Pendente</option><option${status==="Em andamento"?" selected":""}>Em andamento</option><option${status==="Concluído"?" selected":""}>Concluído</option><option${status==="Bloqueado"?" selected":""}>Bloqueado</option></select></div>`;
+        }).join("");
+        const phaseStatus=pDone===phase.items.length?"Concluída":pActive||pDone?"Em andamento":pBlocked?"Com bloqueio":"Pendente";card.dataset.status=phaseStatus==="Concluída"?"done":phaseStatus==="Em andamento"?"active":"pending";
+        const pct=Math.round(pDone/phase.items.length*100);card.innerHTML=`<div class="phase-top"><div class="phase-no">0${phase.id}</div><div><h2>Fase ${phase.id} · ${phase.title}</h2><p class="phase-desc">${phase.desc}</p></div><div class="phase-meta"><span class="phase-state">${phaseStatus}</span><div class="phase-count">${pDone}/${phase.items.length} concluídos</div></div></div><div class="items">${rows}</div><div class="phase-foot"><span>Progresso da fase</span><span class="meter"><i style="width:${pct}%"></i></span><span>${pct}%</span></div>`;list.appendChild(card);
+      }
+      document.getElementById("done-count").textContent=`${done} / ${total}`;document.getElementById("active-count").textContent=active;document.getElementById("blocked-count").textContent=blocked;document.getElementById("overall-bar").style.width=`${Math.round(done/total*100)}%`;
+      const current=firstOpen||PHASES[PHASES.length-1];document.getElementById("current-phase").textContent=`Fase ${current.id} · ${current.short}`;
+      list.querySelectorAll("select[data-item]").forEach(el=>el.addEventListener("change",()=>{saved[el.dataset.item]=safeStatus(el.value);store();render()}));
+      list.querySelectorAll("input[data-item]").forEach(el=>el.addEventListener("change",()=>{saved[el.dataset.item]=el.checked?"Concluído":"Pendente";store();render()}));
+    }
+    function store(){localStorage.setItem(STORAGE_KEY,JSON.stringify(saved));const state=document.getElementById("save-state");state.textContent="Salvo neste navegador";state.style.color="var(--green)"}
+    document.getElementById("export-btn").addEventListener("click",()=>{const payload={schema:"negative_remaining_progress_v1",exportedAt:new Date().toISOString(),items:saved};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="andamento-negative-remaining.json";a.click();URL.revokeObjectURL(a.href)});
+    const input=document.getElementById("import-file");document.getElementById("import-btn").addEventListener("click",()=>input.click());input.addEventListener("change",async()=>{const file=input.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());const items=data.items||data;if(!items||typeof items!=="object"||Array.isArray(items))throw new Error("Formato inválido");for(const phase of PHASES)for(const item of phase.items)if(items[item.id])saved[item.id]=safeStatus(items[item.id]);store();render()}catch{alert("Não consegui importar esse arquivo de andamento.")}finally{input.value=""}});
+    render();
+  </script>
+</body>
+</html>

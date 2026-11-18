@@ -1,5 +1,5 @@
 import { openDatabase } from '../storage/hub-database.mjs?v=1';
-import { fetchGoogleAdsFinalUrlHosts } from './google-ads-service.mjs?v=13';
+import { fetchGoogleAdsFinalUrlHosts } from './google-ads-service.mjs?v=16';
 
 export const GOOGLE_ADS_FINAL_URL_HOST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const FAILURE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;

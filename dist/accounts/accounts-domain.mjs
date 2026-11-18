@@ -16,14 +16,65 @@ function accountMccFilterKey(row) {
   return name ? `name:${name.toLocaleLowerCase('pt-BR')}` : 'unknown';
 }
 
+const customerDigits = value => String(value ?? '').replace(/\D/g, '');
+
+function formatCustomerId(value) {
+  const digits = customerDigits(value);
+  return /^\d{10}$/.test(digits) ? `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}` : '';
+}
+
+export function projectAccountDirectory(rows, directoryAccounts = []) {
+  const accountByCustomerId = new Map();
+  for (const row of rows || []) {
+    const customerId = customerDigits(row?.accountId || row?.account);
+    if (/^\d{10}$/.test(customerId) && row?.account && row.account !== 'Sem conta' && !accountByCustomerId.has(customerId)) {
+      accountByCustomerId.set(customerId, row.account);
+    }
+  }
+  const seen = new Set();
+  const accounts = [];
+  for (const entry of Array.isArray(directoryAccounts) ? directoryAccounts : []) {
+    const customerId = customerDigits(entry?.customerId);
+    if (!/^\d{10}$/.test(customerId) || seen.has(customerId)) continue;
+    seen.add(customerId);
+    const managerCustomerId = customerDigits(entry?.managerCustomerId);
+    const account = accountByCustomerId.get(customerId) || formatCustomerId(customerId);
+    accounts.push({
+      customerId,
+      account,
+      mccId:/^\d{10}$/.test(managerCustomerId) ? managerCustomerId : '',
+      mccName:String(entry?.managerName || '').trim(),
+      accountName:String(entry?.name || '').trim(),
+    });
+  }
+  const accountsByCustomerId = new Map(accounts.map(account => [account.customerId, account]));
+  const projectedRows = (rows || []).map(row => {
+    const customerId = customerDigits(row?.accountId || row?.account);
+    const directoryAccount = accountsByCustomerId.get(customerId);
+    if (!directoryAccount) return row;
+    const accountNames = [
+      ...(Array.isArray(row.accountNames) ? row.accountNames : [row.accountName]),
+      directoryAccount.accountName,
+    ].filter(value => String(value || '').trim());
+    return {
+      ...row,
+      account:row.account && row.account !== 'Sem conta' ? row.account : directoryAccount.account,
+      mccId:directoryAccount.mccId,
+      mccName:directoryAccount.mccName,
+      accountNames,
+    };
+  });
+  return {rows:projectedRows, accounts};
+}
+
 function formatAccountMccId(value) {
   const raw = String(value ?? '').trim(), digits = raw.replace(/\D/g, '');
   return /^\d{10}$/.test(digits) ? `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}` : raw;
 }
 
-export function accountMccFilterOptions(rows) {
+export function accountMccFilterOptions(rows, directoryAccounts = []) {
   const groups = new Map();
-  for (const row of rows) {
+  for (const row of [...(rows || []), ...(Array.isArray(directoryAccounts) ? directoryAccounts : [])]) {
     const key = accountMccFilterKey(row);
     const group = groups.get(key) || {names:new Set(), ids:new Set()};
     const name = String(row?.mccName ?? '').replace(/\s+/g, ' ').trim();
@@ -43,6 +94,10 @@ export function accountMccFilterOptions(rows) {
 
 export function filterAccountRowsByMcc(rows, mcc = 'all') {
   return mcc === 'all' ? rows : rows.filter(row => accountMccFilterKey(row) === mcc);
+}
+
+export function filterAccountDirectoryByMcc(accounts, mcc = 'all') {
+  return mcc === 'all' ? (accounts || []) : (accounts || []).filter(account => accountMccFilterKey(account) === mcc);
 }
 
 export function filterAccountCpaCoverageRows(rows, status, account) {
@@ -185,7 +240,7 @@ function sortAccountsByMcc(accounts, idsByAccount) {
   });
 }
 
-export function buildAccountReport(allRows, filters, accountStatuses = {}) {
+export function buildAccountReport(allRows, filters, accountStatuses = {}, directoryAccounts = []) {
   const activeAccounts = accountStatuses && typeof accountStatuses === 'object' && !Array.isArray(accountStatuses)
     ? [...new Set(Object.entries(accountStatuses)
       .filter(([, status]) => status === 'active')
@@ -195,15 +250,29 @@ export function buildAccountReport(allRows, filters, accountStatuses = {}) {
   const accountMccLabels = accountMccHeaderLabels(allRows);
   const accountNames = accountHeaderNames(allRows);
   const accountMccIds = accountMccHeaderIds(allRows);
+  for (const entry of Array.isArray(directoryAccounts) ? directoryAccounts : []) {
+    const account = String(entry?.account || '').trim();
+    if (!account || account === 'Sem conta') continue;
+    accountMccLabels.set(account, String(entry.mccName || '').trim() || 'MCC não identificada');
+    const name = String(entry.accountName || '').trim();
+    if (name) {
+      const names = new Set([...(accountNames.get(account) || '').split(' · ').filter(Boolean), name]);
+      accountNames.set(account, [...names].sort(compare).join(' · '));
+    }
+    const digits = customerDigits(entry.mccId);
+    if (/^\d{10}$/.test(digits)) accountMccIds.set(account, [digits]);
+  }
   for (const account of activeAccounts) if (!accountMccLabels.has(account)) accountMccLabels.set(account, 'MCC não identificada');
-  const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts]), accountMccIds);
+  const directoryAccountKeys = (Array.isArray(directoryAccounts) ? directoryAccounts : []).map(entry => String(entry?.account || '').trim()).filter(Boolean);
+  const accountOptions = sortAccountsByMcc(new Set([...allRows.map(row => row.account), ...activeAccounts, ...directoryAccountKeys]), accountMccIds);
   const productOptions = [...new Set(allRows.map(row => row.product))].sort(compare);
   const account = accountOptions.includes(filters.account) ? filters.account : 'all';
   const product = productOptions.includes(filters.product) ? filters.product : 'all';
   const accountRows = filterAccountCpaCoverageRows(allRows, filters.status, account);
   const rows = accountRows.filter(row => product === 'all' || row.product === product);
   const activeAccountColumns = account === 'all' ? activeAccounts : activeAccounts.filter(value => value === account);
-  const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns]), accountMccIds);
+  const directoryAccountColumns = account === 'all' ? directoryAccountKeys : directoryAccountKeys.filter(value => value === account);
+  const accounts = sortAccountsByMcc(new Set([...rows.map(row => row.account), ...activeAccountColumns, ...directoryAccountColumns]), accountMccIds);
   const groups = new Map();
   for (const row of rows) {
     const group = groups.get(row.productKey) || {key:row.productKey, name:row.product, firstRecordDate:row.productFirstRecordDate ?? null, rows:[]};

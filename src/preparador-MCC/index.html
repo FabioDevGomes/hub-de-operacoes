@@ -229,9 +229,10 @@
       .capture-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=23">
+  <link rel="stylesheet" href="/sidebar-component.css?v=26">
   <link rel="stylesheet" href="/table-headers.css?v=9">
-<link rel="stylesheet" href="/input-standard.css?v=1"></head>
+<link rel="stylesheet" href="/input-standard.css?v=1">  <link rel="stylesheet" href="/hub-scrollbars.css?v=1">
+</head>
 <body>
   <div class="hub-app">
     <aside class="hub-sidebar">
@@ -379,7 +380,7 @@
     </div>
   </div>
 
-  <script src="/sidebar-component.js?v=20261029-frequent-screen-shortcuts-tab-activation"></script>
+  <script src="/sidebar-component.js?v=20261101-quick-access-pins"></script>
   <script src="/database.js?v=7"></script>
   <script src="/overview-domain.js?v=21"></script>
   <script src="/overview/cards-domain.js?v=2"></script>
@@ -856,7 +857,7 @@
         const linkedSales=applied.reconciledSales||[];
         const mccSales=applied.mccBillingSales||[];
         const accountAliases=base.contas_identidade||{};
-        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=15'):null;
+        const billingStorage=linkedSales.length||mccSales.length||Object.keys(accountAliases).length?await import('../billing/billing-storage.mjs?v=21'):null;
         window.OverviewBaseSessionCache?.invalidate();
         await writePanelBase(db, base, { billingStorage, provisionalSales:linkedSales, mccSales, accountAliases });
         window.OverviewBaseSessionCache?.invalidate();

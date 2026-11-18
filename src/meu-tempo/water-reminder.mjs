@@ -6,10 +6,15 @@ export const WATER_REMINDER_SNOOZE_OPTIONS = Object.freeze([10, 20, 30, 60]);
 export const WATER_REMINDER_STORAGE_KEY = 'painel-water-reminder-v1';
 export const WATER_REMINDER_SETTINGS_KEY = 'painel-water-reminder-settings-v1';
 export const WATER_TRACKER_ITEM_ID = 'item-agua';
-const DEFAULT_REMINDER_SETTINGS = Object.freeze({ intervalMinutes:90, snoozeMinutes:20 });
 const REMINDER_START_HOUR = 8;
 const REMINDER_END_HOUR = 20;
-const UPDATE_EVENT = 'hub-water-reminder-updated';
+const DEFAULT_REMINDER_SETTINGS = Object.freeze({
+  intervalMinutes:90,
+  snoozeMinutes:20,
+  startTime:`${String(REMINDER_START_HOUR).padStart(2, '0')}:00`,
+  endTime:`${String(REMINDER_END_HOUR).padStart(2, '0')}:00`,
+});
+export const WATER_REMINDER_UPDATED_EVENT = 'hub-water-reminder-updated';
 
 const asDate = value => {
   if (value == null || value === '') return null;
@@ -21,17 +26,26 @@ export function isWaterTrackerItem(itemId) {
   return String(itemId ?? '') === WATER_TRACKER_ITEM_ID;
 }
 
-export function isWithinWaterReminderHours(value) {
+export function isWithinWaterReminderHours(value, settings = null) {
   const date = asDate(value);
-  return Boolean(date && date.getHours() >= REMINDER_START_HOUR && date.getHours() < REMINDER_END_HOUR);
+  if (!date) return false;
+  const normalized = normalizeReminderSettings(settings ?? readReminderSettings());
+  const startMinute = reminderTimeToMinutes(normalized.startTime);
+  const endMinute = reminderTimeToMinutes(normalized.endTime);
+  const currentMinute = date.getHours() * 60 + date.getMinutes();
+  if (startMinute === endMinute) return false;
+  return startMinute < endMinute
+    ? currentMinute >= startMinute && currentMinute < endMinute
+    : currentMinute >= startMinute || currentMinute < endMinute;
 }
 
 export function isWaterReminderDue({ lastLoggedAt, lastNotifiedAt = null, snoozedUntil = null, pausedUntil = null, settings = null, now = new Date() } = {}) {
   const current = asDate(now), lastLogged = asDate(lastLoggedAt), lastNotified = asDate(lastNotifiedAt);
-  if (!current || !lastLogged || !isWithinWaterReminderHours(current)) return false;
+  const normalizedSettings = normalizeReminderSettings(settings ?? readReminderSettings());
+  if (!current || !lastLogged || !isWithinWaterReminderHours(current, normalizedSettings)) return false;
   const pause = asDate(pausedUntil);
   if (pause && current.getTime() < pause.getTime()) return false;
-  const intervalMs = normalizeReminderSettings(settings).intervalMinutes * 60 * 1000;
+  const intervalMs = normalizedSettings.intervalMinutes * 60 * 1000;
   if (current.getTime() - lastLogged.getTime() < intervalMs) return false;
   const snooze = asDate(snoozedUntil);
   if (snooze && lastNotified && lastNotified.getTime() >= lastLogged.getTime()) return current.getTime() >= snooze.getTime();
@@ -44,15 +58,35 @@ export function snoozeWaterReminderState(state, now = new Date()) {
   const pause = asDate(state?.pausedUntil);
   if (pause && current.getTime() < pause.getTime()) return state;
   const settings = normalizeReminderSettings(state?.settings);
-  return { ...state, snoozedUntil:new Date(current.getTime() + settings.snoozeMinutes * 60 * 1000).toISOString(), pausedUntil:null };
+  const snoozedUntil = new Date(current.getTime() + settings.snoozeMinutes * 60 * 1000);
+  if (!Number.isFinite(snoozedUntil.getTime())) return null;
+  return { ...state, snoozedUntil:snoozedUntil.toISOString(), pausedUntil:null };
 }
 
 function normalizeReminderSettings(value = {}) {
   const intervalMinutes = Number(value?.intervalMinutes), snoozeMinutes = Number(value?.snoozeMinutes);
+  const startTime = reminderTimeToMinutes(value?.startTime) === null ? DEFAULT_REMINDER_SETTINGS.startTime : String(value.startTime);
+  const endTime = reminderTimeToMinutes(value?.endTime) === null ? DEFAULT_REMINDER_SETTINGS.endTime : String(value.endTime);
   return {
-    intervalMinutes:WATER_REMINDER_INTERVAL_OPTIONS.includes(intervalMinutes) ? intervalMinutes : DEFAULT_REMINDER_SETTINGS.intervalMinutes,
-    snoozeMinutes:WATER_REMINDER_SNOOZE_OPTIONS.includes(snoozeMinutes) ? snoozeMinutes : DEFAULT_REMINDER_SETTINGS.snoozeMinutes,
+    intervalMinutes:Number.isSafeInteger(intervalMinutes) && intervalMinutes > 0 ? intervalMinutes : DEFAULT_REMINDER_SETTINGS.intervalMinutes,
+    snoozeMinutes:Number.isSafeInteger(snoozeMinutes) && snoozeMinutes > 0 ? snoozeMinutes : DEFAULT_REMINDER_SETTINGS.snoozeMinutes,
+    startTime,
+    endTime,
   };
+}
+
+function reminderTimeToMinutes(value) {
+  const match = /^(?:([01]\d|2[0-3])):([0-5]\d)$/.exec(String(value ?? ''));
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function isValidReminderSettings(value = {}) {
+  const intervalMinutes = Number(value?.intervalMinutes), snoozeMinutes = Number(value?.snoozeMinutes);
+  const startTime = reminderTimeToMinutes(value?.startTime ?? DEFAULT_REMINDER_SETTINGS.startTime);
+  const endTime = reminderTimeToMinutes(value?.endTime ?? DEFAULT_REMINDER_SETTINGS.endTime);
+  return Number.isSafeInteger(intervalMinutes) && intervalMinutes > 0
+    && Number.isSafeInteger(snoozeMinutes) && snoozeMinutes > 0
+    && startTime !== null && endTime !== null && startTime !== endTime;
 }
 
 function formatReminderInterval(minutes) {
@@ -66,8 +100,9 @@ function formatReminderInterval(minutes) {
 function nextReminderWindowStart(value) {
   const current = asDate(value);
   if (!current) return null;
+  const startMinute = reminderTimeToMinutes(readReminderSettings().startTime) ?? REMINDER_START_HOUR * 60;
   const date = new Date(current.getTime());
-  date.setHours(REMINDER_START_HOUR, 0, 0, 0);
+  date.setHours(Math.floor(startMinute / 60), startMinute % 60, 0, 0);
   if (date.getTime() <= current.getTime()) date.setDate(date.getDate() + 1);
   return date.toISOString();
 }
@@ -86,10 +121,11 @@ function readReminderSettings() {
 }
 
 function writeReminderSettings(settings) {
+  if (!isValidReminderSettings(settings)) return false;
   const normalized = normalizeReminderSettings(settings);
   try {
     globalThis.localStorage?.setItem(WATER_REMINDER_SETTINGS_KEY, JSON.stringify(normalized));
-    globalThis.dispatchEvent?.(new CustomEvent(UPDATE_EVENT, { detail:{ ...readReminderState(), settings:normalized } }));
+    globalThis.dispatchEvent?.(new CustomEvent(WATER_REMINDER_UPDATED_EVENT, { detail:{ ...readReminderState(), settings:normalized } }));
     return true;
   } catch {
     return false;
@@ -123,11 +159,26 @@ function writeReminderState(state) {
       pausedUntil:asDate(state?.pausedUntil)?.toISOString() || null,
     };
     globalThis.localStorage?.setItem(WATER_REMINDER_STORAGE_KEY, JSON.stringify(normalized));
-    globalThis.dispatchEvent?.(new CustomEvent(UPDATE_EVENT, { detail:{ ...normalized, settings:readReminderSettings() } }));
+    globalThis.dispatchEvent?.(new CustomEvent(WATER_REMINDER_UPDATED_EVENT, { detail:{ ...normalized, settings:readReminderSettings() } }));
     return true;
   } catch {
     return false;
   }
+}
+
+export function readWaterReminderSettings() {
+  return readReminderSettings();
+}
+
+export function saveWaterReminderSettings(settings) {
+  return writeReminderSettings(settings);
+}
+
+export function pauseWaterReminderUntilTomorrow(now = new Date()) {
+  const state = readReminderState();
+  const pausedUntil = nextReminderWindowStart(now);
+  if (!pausedUntil || !writeReminderState({ ...state, snoozedUntil:null, pausedUntil })) return null;
+  return pausedUntil;
 }
 
 export function recordWaterTrackerLog({ itemId, value, now = new Date() } = {}) {
@@ -141,10 +192,6 @@ export function recordWaterTrackerLog({ itemId, value, now = new Date() } = {}) 
 function formatTime(value) {
   const date = asDate(value);
   return date ? new Intl.DateTimeFormat('pt-BR', { hour:'2-digit', minute:'2-digit' }).format(date) : 'horário não disponível';
-}
-
-function optionMarkup(values, selectedValue, format) {
-  return values.map(value => `<option value="${value}"${value === selectedValue ? ' selected' : ''}>${format(value)}</option>`).join('');
 }
 
 export function mountGlobalWaterReminder({ documentRef = globalThis.document, windowRef = globalThis.window, now = () => new Date() } = {}) {
@@ -177,7 +224,7 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
   banner.setAttribute('role', 'status');
   banner.setAttribute('aria-live', 'polite');
   banner.hidden = true;
-  banner.innerHTML = `<div class="hub-water-reminder__head"><span class="hub-water-reminder__icon" aria-hidden="true">⌁</span><strong>Hora de registrar Água</strong><button class="hub-water-reminder__configure" type="button" data-water-reminder-configure aria-label="Configurar aviso de água" aria-expanded="false" title="Configurar aviso">⚙</button><button class="hub-water-reminder__close" type="button" aria-label="Dispensar lembrete">×</button></div><p data-water-reminder-message></p><div class="hub-water-reminder__actions"><button type="button" data-water-reminder-dismiss>Dispensar</button><a href="/?view=time">Abrir Meu Tempo</a></div><div class="hub-water-reminder__settings" data-water-reminder-settings hidden><label>Intervalo entre avisos<select data-water-reminder-interval>${optionMarkup(WATER_REMINDER_INTERVAL_OPTIONS, DEFAULT_REMINDER_SETTINGS.intervalMinutes, value => formatReminderInterval(value))}</select></label><label>Reaparecer após dispensar<select data-water-reminder-snooze>${optionMarkup(WATER_REMINDER_SNOOZE_OPTIONS, DEFAULT_REMINDER_SETTINGS.snoozeMinutes, value => `${value} minutos`)}</select></label><p data-water-reminder-error role="alert" hidden></p><div class="hub-water-reminder__settings-actions"><button type="button" data-water-reminder-cancel>Cancelar</button><button type="button" data-water-reminder-save>Salvar opções</button></div><button type="button" data-water-reminder-pause>Não avisar até amanhã</button></div>`;
+  banner.innerHTML = `<div class="hub-water-reminder__head"><span class="hub-water-reminder__icon" aria-hidden="true">⌁</span><strong>Hora de registrar Água</strong><button class="hub-water-reminder__configure" type="button" data-water-reminder-configure aria-label="Configurar aviso de água" title="Configurar aviso">⚙</button><button class="hub-water-reminder__close" type="button" aria-label="Dispensar lembrete">×</button></div><p data-water-reminder-message></p><div class="hub-water-reminder__actions"><button type="button" data-water-reminder-dismiss>Dispensar</button><a href="/?view=time">Abrir Meu Tempo</a></div>`;
   documentRef.body.append(banner);
 
   let stopped = false;
@@ -187,58 +234,16 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
   const hide = () => {
     banner.hidden = true;
     reminderVisible = false;
-    const panel = banner.querySelector('[data-water-reminder-settings]');
-    panel.hidden = true;
-    banner.querySelector('[data-water-reminder-configure]')?.setAttribute('aria-expanded', 'false');
   };
   const snooze = () => {
     hide();
     const state = snoozeWaterReminderState(readReminderState(), now());
     if (state) writeReminderState(state);
   };
-  const settingsPanel = banner.querySelector('[data-water-reminder-settings]');
   const settingsButton = banner.querySelector('[data-water-reminder-configure]');
-  const intervalSelect = banner.querySelector('[data-water-reminder-interval]');
-  const snoozeSelect = banner.querySelector('[data-water-reminder-snooze]');
-  const settingsError = banner.querySelector('[data-water-reminder-error]');
-  const fillSettings = settings => {
-    const normalized = normalizeReminderSettings(settings);
-    intervalSelect.value = String(normalized.intervalMinutes);
-    snoozeSelect.value = String(normalized.snoozeMinutes);
-    settingsError.hidden = true;
-    settingsError.textContent = '';
-  };
-  const closeSettings = () => {
-    settingsPanel.hidden = true;
-    settingsButton.setAttribute('aria-expanded', 'false');
-    fillSettings(readReminderState().settings);
-  };
-  const showSettings = () => {
-    fillSettings(readReminderState().settings);
-    settingsPanel.hidden = false;
-    settingsButton.setAttribute('aria-expanded', 'true');
-  };
-  settingsButton.addEventListener('click', () => settingsPanel.hidden ? showSettings() : closeSettings());
-  banner.querySelector('[data-water-reminder-cancel]')?.addEventListener('click', closeSettings);
-  banner.querySelector('[data-water-reminder-save]')?.addEventListener('click', () => {
-    const state = readReminderState();
-    const settings = normalizeReminderSettings({ intervalMinutes:Number(intervalSelect.value), snoozeMinutes:Number(snoozeSelect.value) });
-    if (!writeReminderSettings(settings)) {
-      settingsError.textContent = 'Não foi possível salvar as opções neste navegador.';
-      settingsError.hidden = false;
-      return;
-    }
-    banner.querySelector('[data-water-reminder-message]').textContent = `Já se passaram pelo menos ${formatReminderInterval(settings.intervalMinutes)} desde o último lançamento de Água (${formatTime(state.lastLoggedAt)}). Abra Meu Tempo para lançar.`;
-    closeSettings();
-  });
-  banner.querySelector('[data-water-reminder-pause]')?.addEventListener('click', () => {
-    const state = readReminderState(), pausedUntil = nextReminderWindowStart(now());
-    if (!pausedUntil || !writeReminderState({ ...state, snoozedUntil:null, pausedUntil })) {
-      settingsError.textContent = 'Não foi possível salvar a pausa neste navegador.';
-      settingsError.hidden = false;
-      return;
-    }
+  settingsButton.addEventListener('click', () => {
     hide();
+    if (!windowRef.HubSidebar?.openMenuDestination?.('notifications')) windowRef.location.href = '/?view=notifications';
   });
   banner.querySelector('.hub-water-reminder__close')?.addEventListener('click', snooze);
   banner.querySelector('[data-water-reminder-dismiss]')?.addEventListener('click', snooze);
@@ -291,7 +296,8 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
     const state = readReminderState();
     const newLog = state.lastLoggedAt !== observedLastLoggedAt;
     observedLastLoggedAt = state.lastLoggedAt;
-    if (newLog || !state.lastLoggedAt || (state.lastNotifiedAt && state.lastNotifiedAt >= state.lastLoggedAt)) hide();
+    const pausedUntil = asDate(state.pausedUntil);
+    if (newLog || !state.lastLoggedAt || (state.lastNotifiedAt && state.lastNotifiedAt >= state.lastLoggedAt) || (pausedUntil && pausedUntil > now())) hide();
     claimAndNotify();
   };
   const handlePageHide = () => { if (reminderVisible) snooze(); };
@@ -299,14 +305,15 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
     const state = event.detail || readReminderState();
     const newLog = state.lastLoggedAt !== observedLastLoggedAt;
     observedLastLoggedAt = state.lastLoggedAt;
-    if (newLog || !state.lastLoggedAt || !state.lastNotifiedAt) hide();
+    const pausedUntil = asDate(state.pausedUntil);
+    if (newLog || !state.lastLoggedAt || !state.lastNotifiedAt || (pausedUntil && pausedUntil > now())) hide();
     claimAndNotify();
   };
   documentRef.addEventListener('visibilitychange', handleVisibility);
   windowRef.addEventListener('focus', handleVisibility);
   windowRef.addEventListener('storage', handleStorage);
   windowRef.addEventListener('pagehide', handlePageHide);
-  windowRef.addEventListener(UPDATE_EVENT, handleUpdate);
+  windowRef.addEventListener(WATER_REMINDER_UPDATED_EVENT, handleUpdate);
   claimAndNotify();
 
   const cleanup = () => {
@@ -317,7 +324,7 @@ export function mountGlobalWaterReminder({ documentRef = globalThis.document, wi
     windowRef.removeEventListener('focus', handleVisibility);
     windowRef.removeEventListener('storage', handleStorage);
     windowRef.removeEventListener('pagehide', handlePageHide);
-    windowRef.removeEventListener(UPDATE_EVENT, handleUpdate);
+    windowRef.removeEventListener(WATER_REMINDER_UPDATED_EVENT, handleUpdate);
     banner.remove();
     delete windowRef.__hubWaterReminderCleanup;
   };

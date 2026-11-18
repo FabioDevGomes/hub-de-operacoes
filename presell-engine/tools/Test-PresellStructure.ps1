@@ -7,6 +7,10 @@ param(
 
     [string]$AssetFolder,
 
+    [switch]$SkipFavicon,
+
+    [switch]$AssetStudioValidated,
+
     [switch]$Json
 )
 
@@ -97,6 +101,7 @@ if ($null -ne $resolvedDestination -and $null -ne $rules) {
     if ($assetNames.Count -eq 0) {
         $assetNames = @($rules.requiredAssets | ForEach-Object { Split-Path -Leaf $_ })
     }
+    if ($SkipFavicon -or $AssetStudioValidated) { $assetNames = @($assetNames | Where-Object { $_ -ne '03.png' }) }
     $requiredAssets = @($assetNames | ForEach-Object { "$AssetFolder/$_" })
     $missingAssets = @(
         foreach ($relativePath in $requiredAssets) {
@@ -166,7 +171,16 @@ if ($null -ne $resolvedDestination -and $null -ne $rules) {
         }
 
         $expectedFavicon = "./$AssetFolder/03.png"
-        if ($hrefs -notcontains $expectedFavicon) {
+        if ($AssetStudioValidated) {
+            $checks.Add((New-Check 'favicon-reference' 'PASS' 'A presença do favicon foi verificada no Asset Studio; esta validação não repete a checagem de assets/03.png.' @()))
+        }
+        elseif ($SkipFavicon -and $hrefs -contains $expectedFavicon) {
+            $checks.Add((New-Check 'favicon-reference' 'BLOCK' 'A ficha marcou Sem favicon, mas a página ainda referencia assets/03.png.' @($expectedFavicon)))
+        }
+        elseif ($SkipFavicon) {
+            $checks.Add((New-Check 'favicon-reference' 'PASS' 'Favicon omitido conforme a escolha registrada na ficha.' @()))
+        }
+        elseif ($hrefs -notcontains $expectedFavicon) {
             $checks.Add((New-Check 'favicon-reference' 'BLOCK' 'O favicon não referencia o asset obrigatório esperado.' @($expectedFavicon)))
         }
         else {

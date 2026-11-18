@@ -219,7 +219,7 @@ export async function saveEntry(entry) {
   } finally { db.close(); }
 }
 
-export async function applyDailyActualTargets({ monthKey, dayKey, entries = [] }) {
+export async function applyDailyActualTargets({ monthKey, dayKey, entries = [], applyMeals = true, applyWeeks = false }) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(monthKey || '')) || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(dayKey || '')) || !dayKey.startsWith(`${monthKey}-`) || new Date(`${dayKey}T00:00:00Z`).toISOString().slice(0, 10) !== dayKey) {
     throw new Error('Data inválida para atualizar as metas diárias.');
   }
@@ -237,11 +237,17 @@ export async function applyDailyActualTargets({ monthKey, dayKey, entries = [] }
       monthRequest.onsuccess = () => {
         if (!monthRequest.result) { failure = new Error('O mês atual ainda não foi criado.'); tx.abort(); return; }
         const month = normalizeMonth(monthRequest.result);
-        if (month.daily_actual_targets_applied_on === dayKey) {
+        const mealsAlreadyApplied = !applyMeals || month.daily_actual_targets_applied_on === dayKey;
+        const weeksAlreadyApplied = !applyWeeks || month.weekly_actual_targets_applied_on === dayKey;
+        if (mealsAlreadyApplied && weeksAlreadyApplied) {
           result = { applied:false, month, entries:[] };
           return;
         }
-        const updatedMonth = normalizeMonth({ ...month, daily_actual_targets_applied_on:dayKey });
+        const updatedMonth = normalizeMonth({
+          ...month,
+          ...(applyMeals ? { daily_actual_targets_applied_on:dayKey } : {}),
+          ...(applyWeeks ? { weekly_actual_targets_applied_on:dayKey } : {}),
+        });
         tx.objectStore(STORES.months).put(updatedMonth);
         for (const entry of normalizedEntries) tx.objectStore(STORES.entries).put(entry);
         result = { applied:true, month:updatedMonth, entries:normalizedEntries };

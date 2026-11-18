@@ -268,24 +268,24 @@
   outline-offset: 2px;
 }
 .tracking-gurumedia-postback-panel button:disabled { opacity: .5; cursor: not-allowed; }
-.tracking-gurumedia-action-table th,
-.tracking-gurumedia-action-table td { vertical-align: top; }
-.tracking-gurumedia-action-field { min-width: 260px; }
-.tracking-gurumedia-action-field select {
+.tracking-conversion-action-table th,
+.tracking-conversion-action-table td { vertical-align: top; }
+.tracking-conversion-action-field { min-width: 260px; }
+.tracking-conversion-action-field select {
   width: 100%; min-height: 36px; padding: 7px 9px;
   border: 1px solid var(--line, #24344d); border-radius: 8px;
   background: var(--panel2, #13243a); color: var(--hub-primary-text, #c3cede);
 }
-.tracking-gurumedia-action-field select:focus-visible { outline: 2px solid var(--hub-control-focus, #5ab1ff); outline-offset: 2px; }
-.tracking-gurumedia-action-field small,
-.tracking-gurumedia-action-message { display: block; margin-top: 5px; color: var(--muted, #91a1b8); font-size: .7rem; line-height: 1.45; }
-.tracking-gurumedia-action-warning,
-.tracking-gurumedia-action-message.is-error { color: #ffbf67; }
+.tracking-conversion-action-field select:focus-visible { outline: 2px solid var(--hub-control-focus, #5ab1ff); outline-offset: 2px; }
+.tracking-conversion-action-field small,
+.tracking-conversion-action-message { display: block; margin-top: 5px; color: var(--muted, #91a1b8); font-size: .7rem; line-height: 1.45; }
+.tracking-conversion-action-warning,
+.tracking-conversion-action-message.is-error { color: #ffbf67; }
 .tracking-gurumedia-resource { min-width: 220px; max-width: 300px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .72rem; }
-.tracking-gurumedia-action-buttons { display: flex; flex-wrap: wrap; gap: 6px; min-width: 180px; }
-.tracking-gurumedia-action-buttons .btn { min-height: 32px; padding: 6px 9px; }
-.tracking-gurumedia-action-table td:nth-child(2),
-.tracking-gurumedia-action-table td:nth-child(5) { white-space: nowrap; }
+.tracking-conversion-action-buttons { display: flex; flex-wrap: wrap; gap: 6px; min-width: 180px; }
+.tracking-conversion-action-buttons .btn { min-height: 32px; padding: 6px 9px; }
+.tracking-conversion-action-table td:nth-child(2),
+.tracking-conversion-action-table td:nth-child(5) { white-space: nowrap; }
 
 .tracking-domain-token-grid {
   display: grid;
@@ -366,10 +366,16 @@
   overflow-wrap: anywhere;
 }
 
-.tracking-domain-table { min-width: 820px; }
+.tracking-domain-table { min-width: 1040px; }
 .tracking-domain-table th:last-child,
-.tracking-domain-table td:last-child { min-width: 250px; text-align: right; }
-.tracking-domain-table th:last-child { text-align: right; }
+.tracking-domain-table td:last-child { min-width: 0; text-align: center; }
+.tracking-domain-table .tracking-campaign-checkouts { min-width: 260px; text-align: left; white-space: normal; }
+.tracking-checkout-campaign-details { max-width: 420px; }
+.tracking-checkout-campaign-details summary { color: var(--hub-primary-text, #c3cede); cursor: pointer; line-height: 1.4; }
+.tracking-checkout-campaign-details ul { display: grid; gap: 6px; margin: 8px 0 0; padding-left: 18px; }
+.tracking-checkout-campaign-details li { display: flex; justify-content: space-between; gap: 12px; line-height: 1.35; }
+.tracking-checkout-campaign-details li > span { overflow-wrap: anywhere; }
+.tracking-checkout-campaign-details li > strong { flex: 0 0 auto; color: var(--hub-primary-text, #c3cede); font-variant-numeric: tabular-nums; }
 .tracking-domain-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .tracking-domain-table .tracking-registration-date { width: 132px; text-align: center; white-space: nowrap; }
 .tracking-domain-table td:first-child code { color: var(--hub-primary-text, #c3cede); overflow-wrap: anywhere; }
@@ -590,9 +596,19 @@
 
 .tracking-table-wrap {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
   border-radius: 9px;
 }
+
+.tracking-sales-diagnostic { margin-top: 16px; border: 1px solid var(--hub-border, #263b56); border-radius: 10px; background: rgba(10, 22, 39, .42); }
+.tracking-sales-diagnostic > summary { padding: 12px 14px; color: var(--hub-primary-text, #c3cede); cursor: pointer; font-weight: 650; }
+.tracking-sales-diagnostic > .tracking-connection-note { padding: 0 14px; }
+.tracking-sales-diagnostic .tracking-table-wrap { max-height: 440px; }
+.tracking-sales-diagnostic-table { min-width: 1120px; }
+.tracking-sales-diagnostic-table td { vertical-align: top; white-space: normal; }
+.tracking-sales-diagnostic-table td:first-child { white-space: nowrap; }
 
 .tracking-table {
   width: 100%;
@@ -634,6 +650,12 @@
 .tracking-clicks-results .tracking-scope-note { margin-top: 0; }
 .tracking-clicks-results .tracking-table-heading { margin-top: 4px; }
 .tracking-clicks-table { min-width: 850px; }
+.tracking-gurumedia-results > * { min-width: 0; max-width: 100%; }
+.tracking-gurumedia-results .tracking-table-wrap { overflow-x: auto; }
+.tracking-gurumedia-results .tracking-table td { overflow-wrap: anywhere; white-space: normal; }
+.tracking-gurumedia-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted, #91a1b8); font-size: .75rem; }
+.tracking-gurumedia-pagination > div { display: flex; gap: 8px; }
+.tracking-gurumedia-pagination button:disabled { opacity: .45; cursor: not-allowed; }
 .tracking-presell-link {
   color: #9bcaff;
   text-decoration: underline;
@@ -668,6 +690,7 @@
 .tracking-table .tracking-number { text-align: right; font-variant-numeric: tabular-nums; }
 .tracking-domain-table .tracking-sales-count,
 .tracking-domain-table .tracking-checkout-count { text-align: center; }
+.tracking-domain-table .tracking-campaign-checkouts { text-align: left; }
 .tracking-clicks-table .tracking-number { text-align: left; }
 .tracking-gurumedia-table th:nth-child(n+4):nth-child(-n+6),
 .tracking-gurumedia-table td:nth-child(n+4):nth-child(-n+6) { text-align: center; }
@@ -711,8 +734,8 @@
   .tracking-domain-heading-actions { align-self: stretch; justify-content: space-between; }
   .tracking-ins-v8-url > small { grid-column: 1; }
   .tracking-email-panel .tracking-email-heading { align-items: center; flex-direction: row; }
-  .tracking-gurumedia-action-field { min-width: 180px; }
-  .tracking-gurumedia-action-buttons { min-width: 140px; }
+  .tracking-conversion-action-field { min-width: 180px; }
+  .tracking-conversion-action-buttons { min-width: 140px; }
   .tracking-tag-dialog { padding: 16px; }
   .tracking-tag-dialog-actions > * { flex: 1 1 100%; justify-content: center; }
 }

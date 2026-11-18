@@ -1,6 +1,6 @@
 # Inventário das chamadas Google Ads API do Hub
 
-**Revisado em:** 2026-10-28  
+**Revisado em:** 2026-11-03  
 **Escopo:** código local do Hub e os dois serviços PHP-fonte que chamam diretamente `googleads.googleapis.com`; não mede o tráfego real nem confirma, por si só, o conteúdo instalado na Hostinger. A varredura do checkout local encontrou esses dois serviços como os caminhos diretos da Google Ads API.
 
 ## Como contar
@@ -24,8 +24,8 @@ Confira os limites atuais no projeto, pois o nível pode mudar. A documentação
 | Cliente HTTP comum | `src/google-ads/google-ads-http-client.mjs` | POST com Bearer do Hub, CORS, `cache: no-store`, timeout de 45 s; não implementa retry automático. |
 | Serviço de consulta | `src/google-ads/google-ads-service.mjs` | `https://track.travenzo.shop/google-ads-readonly.php`. |
 | Serviço de ações/criação | `src/google-ads/google-ads-campaign-actions-service.mjs`, `src/google-ads/google-ads-campaign-creation-service.mjs` | `https://track.travenzo.shop/google-ads-campaign-action.php`. |
-| Consulta Google Ads | Checkout irmão `voc-meu-analista-de-dados-e/tracking-mvp/tools/google-ads-readonly-service.php` | Autenticação OAuth em cada POST e helper `hub_google_ads_search()` via `googleAds:searchStream`. |
-| Ações e criação | Checkout irmão `voc-meu-analista-de-dados-e/tracking-mvp/tools/google-ads-campaign-action-service.php` | Reutiliza OAuth/GAQL do PHP de consulta e envia mutate quando a operação autorizada exige alteração. |
+| Consulta Google Ads | Projeto integrado `tracking-mvp/tools/google-ads-readonly-service.php` | Autenticação OAuth em cada POST e helper `hub_google_ads_search()` via `googleAds:searchStream`. |
+| Ações e criação | Projeto integrado `tracking-mvp/tools/google-ads-campaign-action-service.php` | Reutiliza OAuth/GAQL do PHP de consulta e envia mutate quando a operação autorizada exige alteração. |
 
 No cliente há um POST do Hub por operação; esse número **não** é a cota Google Ads. Um POST de relatório pode resultar em três `SearchStream`s. A resposta pública `google-ads-readonly.php` é um wrapper e não é uma consulta Google Ads adicional.
 
@@ -35,14 +35,15 @@ O custo abaixo é por uma chamada bem-sucedida do endpoint, salvo quando a linha
 
 | Operação enviada pelo Hub | Chamadas Google Ads dentro do PHP | Custo típico | Uso encontrado no Hub |
 |---|---|---:|---|
-| `accounts` | 1 `customers:listAccessibleCustomers`; para cada customer acessível, 1 consulta de detalhes; se essa consulta falhar, há uma tentativa alternativa com `login-customer-id`; para cada raiz que é MCC, 1 consulta `customer_client`. | `1 + detalhes por raiz + fallback que ocorrer + 1 por MCC`. | Botão para atualizar MCCs/contas nas telas Google Ads API, termos de pesquisa e criação. A rotina automática lê o diretório em cache e não repete esta descoberta. |
-| `conversion_actions` | Uma consulta fixa ao recurso `conversion_action`. | 1 | Seleção de ação de conversão por MCC na tela Tracking GuruMedia. Apenas leitura. |
-| `campaign_config` | Inventário de campanhas + moeda/fuso da conta; se alguma campanha usar estratégia de portfólio, também consulta `accessible_bidding_strategy`. | 2; condicionalmente 3 | Captura/prévia e atualização automática; também preflight da pausa automática na Visão Geral. |
-| `report` | Consulta principal de métricas + consulta de parcela de impressão + consulta de moeda/fuso. | 3 no caminho completo | Relatório agregado por conta/período na tela Google Ads API. |
-| `daily_report` | Métricas por campanha/data + parcelas de impressão por data + moeda/fuso. | 3 no caminho completo | Prévia, comparação, captura manual e captura D0 automática. |
+| `accounts` | 1 `customers:listAccessibleCustomers`; para cada customer acessível, 1 consulta de detalhes; se essa consulta falhar, há uma tentativa alternativa com `login-customer-id`; para cada raiz que é MCC, 1 consulta `customer_client`. | `1 + detalhes por raiz + fallback que ocorrer + 1 por MCC`. | Botão para atualizar MCCs/contas na tela Snapshots da Operação, em Termos de Pesquisa e na tela de criação. A rotina automática lê o diretório em cache e não repete esta descoberta. |
+| `conversion_actions` | Uma consulta fixa ao recurso `conversion_action`. | 1 | Seleção de ação de conversão por MCC em **Integrações → Configurações globais**. Apenas leitura. |
+| `campaign_config` | Inventário de campanhas + moeda/fuso da conta; se alguma campanha usar estratégia de portfólio, também consulta `accessible_bidding_strategy`. | 2; condicionalmente 3. Na captura D0 automática com contexto assinado válido, elimina a busca de moeda/fuso. | Captura/prévia e atualização automática; também preflight da pausa automática na Visão Geral. |
+| `report` | Consulta principal de métricas + consulta de parcela de impressão + consulta de moeda/fuso. | 3 no caminho completo | Relatório agregado por conta/período na tela Snapshots da Operação. |
+| `daily_report` | Métricas por campanha/data + parcelas de impressão por data + moeda/fuso. | 3 no caminho completo; 2 na captura D0 automática com contexto assinado válido. | Prévia, comparação, captura manual e captura D0 automática. |
 | `sao_paulo_day_report` | Moeda/fuso + métricas segmentadas por hora para formar o dia civil de São Paulo. | 2 | Prévia/fechamento de ontem e D−1 automática. Filtro `ENABLED` muda a consulta, não acrescenta outra. |
 | `search_term_campaigns` | Uma lista de campanhas Search. | 1 | Montagem sob demanda do seletor de campanha em termos de pesquisa. |
-| `search_terms` | Uma consulta de `search_term_view`, com intervalo e filtro de campanha opcional. | 1 | Consulta explícita de termos de pesquisa. |
+| `search_terms` | Uma consulta de `search_term_view`, com intervalo e filtro de campanha opcional. | 1 | Consulta explícita de termos de pesquisa; com o PHP somente leitura instrumentado, a resposta confirma a quantidade real de chamadas enviadas à Google Ads API. O atalho **Termos · ontem + hoje** no histórico também faz uma chamada para a conta/campanha selecionada. Só há uma consulta de contas antes disso se o usuário precisar atualizar um diretório local sem o vínculo exato. |
+| `geographic_report` | Uma consulta `user_location_view` por conta; se vierem países, uma segunda consulta `geo_target_constant` resolve nomes/códigos. | 1–2 por conta/dia | Rotina automática após 20h (São Paulo), somente no modo API com Atualização automática ativada e Hub aberto. Cada chamada consulta a janela de até 14 datas fechadas de uma vez; não dispara por snapshot ou por clique. Os relatórios ficam salvos localmente e outras telas podem reutilizá-los sem nova chamada. |
 
 `report` e `daily_report` sempre tentam as consultas complementares depois da consulta principal. Se o relatório principal falhar, o fluxo para após essa falha; se uma métrica complementar for recusada, a função pode conservar o relatório, mas a requisição recusada ainda pode contar. Um `SearchStream` não deve ser multiplicado pelo número de campanhas retornadas.
 
@@ -58,10 +59,12 @@ Todas essas operações usam o endpoint `google-ads-campaign-action.php`. Os con
 |---|---:|---:|---|
 | `capabilities` | 1 consulta da hierarquia se a escrita estiver habilitada e a MCC for permitida; caso contrário, 0. | 0 | Usada para exibir/validar ações de campanha e como preflight da pausa automática. |
 | `pause_campaign` / `enable_campaign` | 2 consultas para confirmar vínculo da conta e reler a campanha. Se a mudança for aceita, acrescenta 1 consulta de verificação. | 0 se já estiver no estado de destino; 1 operação mutate se realmente mudar. | Botões da coluna Ação e pausa automática. O servidor revalida o status para evitar mudança baseada em leitura velha. |
-| `preview_search_campaign` | 4: vínculo na MCC, moeda, resolução de países e nome duplicado. | Envia a lista de `mutateOperations` com `validateOnly`; não altera a conta. Conte o custo de forma conservadora pelo número de itens enviados, não como zero. | Prévia explicitamente acionada na criação assistida. |
+| `prepare_search_campaign_preview_contexts` | Consultas compartilhadas por conta/geo e conversão/MCC. Com a lista de nomes, acrescenta `ceil(n/40)` `SearchStream`s por conta, onde `n` é a quantidade de nomes distintos daquela conta. | 0 | Prepara contextos assinados e, no PHP atualizado, agrupa a leitura de nomes usada pela prévia. O serviço legado rejeita o campo opcional antes de consultar o Google e o Hub volta ao modo individual. |
+| `preview_search_campaign` | 0 leituras extras quando recebe os contextos assinados de conta/geo e nome; sem o token agrupado, faz 1 busca de nome. Sem contexto compartilhado, o caminho antigo pode fazer até 4 leituras (vínculo, moeda, países e nome). Campanha existente acrescenta 1 consulta de grupo de anúncios. | Para nome livre, envia os itens `mutateOperations` com `validateOnly`; não altera a conta. Conte cada item enviado como operação, não como zero. Campanha existente não recebe `validateOnly`. | Prévia explicitamente acionada na criação assistida; a consulta de nome do lote ocorre na preparação compartilhada. |
 | `create_search_campaign` | As mesmas 4 consultas, mais 1 releitura para verificar a campanha criada. | 1 operação por item enviado: `7 + países + palavras-chave negativas + palavras-chave positivas`. | Criação só depois de confirmação; a campanha nasce pausada. |
 | `apply_audience_targeting` / `apply_configured_audience_targeting` | 4 consultas-base: vínculo, grupo/campanha alvo, catálogo de interesses e catálogo de listas; adiciona consulta(s) condicional(is) para detectar itens existentes e verificar resultado. | Uma operação por critério novo; pode haver uma operação adicional de configuração de targeting. Sem operação pendente, não há mutate. | Ações explícitas da tela de criação assistida. |
 | `apply_audience_exclusions` | 3 consultas-base: vínculo, campanha alvo e catálogo; mais consulta(s) para critérios já presentes/verificação quando houver interesses resolvidos. | Uma operação por exclusão nova ou reativada. Sem alteração pendente, não há mutate. | Ação explícita da tela de criação assistida. |
+| `apply_existing_campaign_eu_political_advertising_declaration_batch` | Por conta: 1 consulta de hierarquia + 1 consulta agrupada das campanhas. Se houver divergências, acrescenta 1 consulta agrupada para verificar. | Uma operação `CampaignService.MutateCampaigns` por campanha divergente. Nenhuma mutação para campanhas já declaradas como não políticas. | Ação explícita do lote salvo; uma solicitação privada por conta, com progresso/checkpoints e cota agregada salvos no lote. |
 | `creation_capabilities` | 1 consulta de hierarquia se criação estiver habilitada e MCC permitida; caso contrário, 0. | 0 | Ramo existente no PHP; não foi encontrado chamador no código atual do Hub. |
 | `campaign_templates` | 2 no caminho sem campanha candidata; pode chegar a 6 conforme candidatos sobrevivem à leitura de grupos, anúncios, critérios e palavras-chave. | 0 | Ramo existente no PHP; não foi encontrado chamador no código atual do Hub. |
 
@@ -69,12 +72,23 @@ Uma pausa automática real, conforme o código da Visão Geral, usa por conta e 
 
 O mutate de criação envia `7 + países + palavras negativas + palavras positivas` itens porque orçamento, campanha, grupo, anúncio, asset de promoção e vínculo do asset são operações individuais, além dos critérios de localização e palavras-chave. `validateOnly` evita aplicar a mudança, mas continua sendo uma chamada de validação à API; não contabilize a prévia como gratuita ao estimar carga. A referência oficial explica `validate_only` e a contagem por item: [validação mutate](https://developers.google.com/google-ads/api/docs/concepts/api-structure), [rate sheet](https://developers.google.com/google-ads/api/docs/api-policy/rate-sheet).
 
+### Prévia de campanha em lote
+
+Com o serviço privado atualizado, a consulta de nome usa uma busca por conta para cada bloco de até 40 nomes distintos. Para uma conta com `n` nomes, isso troca `n` pesquisas individuais por `ceil(n/40)`; a economia é `n - ceil(n/40)` operações SearchStream. Exemplo: 20 nomes distribuídos por cinco contas (quatro por conta) passam de 20 para 5 buscas, economia estimada de 15 operações. `validateOnly` permanece por campanha livre, e a criação confirmada faz uma leitura de nome nova para evitar duplicidade. O Hub exibe quantas buscas agrupadas foram executadas. Esse cálculo é derivado do código, não é uma leitura de uso real do projeto.
+
+## Contexto de metadados assinado nas capturas D0
+
+O diretório local já contém moeda e fuso obtidos na descoberta de contas. Na captura automática D0, o Hub envia um contexto opaco assinado pelo serviço privado; o servidor o aceita somente para a mesma MCC/conta, com assinatura válida, validade de 24 horas e data igual ao dia atual no fuso assinado. O serviço emite/renova o token após uma consulta ao Google Ads quando ele está ausente ou expirado. O Hub o guarda no registro local da conta sem alterar os timestamps do diretório.
+
+Com token válido, `daily_report` e `campaign_config` deixam de fazer cada um sua busca redundante de moeda/fuso: economia de até 2 operações por conta/ciclo. Com D0 a cada 2 horas, a estimativa é cerca de 22 operações economizadas por conta em uma janela de 24 horas: 11 ciclos reutilizam o token, e o ciclo seguinte consulta e renova os metadados. Se o serviço privado antigo recusar o payload opcional, o cliente repete uma vez no formato antigo, sem aplicar mutação. Capturas D−1, prévias e consultas manuais não usam esse contexto. A emissão, o consumo e a expiração não fazem chamadas adicionais além das leituras que já existiam. Isso é uma estimativa derivada do código, não uma medição de uso real.
+
 ## Captura agendada: principal consumo recorrente
 
 O agendador `src/google-ads/google-ads-auto-update.mjs` roda enquanto o Hub estiver aberto, usa no máximo 2 contas em paralelo e consulta o diretório em cache:
 
-- D0: por conta, `daily_report` (3 consultas no caminho completo) + `campaign_config` (2–3) = **5–6 operações por conta e ciclo**.
+- D0: por conta, `daily_report` (2 consultas com contexto assinado válido; 3 na primeira leitura ou se o token vencer) + `campaign_config` (1–2 com contexto válido; 2–3 sem contexto) = **3–4 operações por conta e ciclo** com cache aquecido, ou 5–6 na renovação/fallback.
 - D−1: por conta, `sao_paulo_day_report` (2) + `campaign_config` (2–3) = **4–5 operações por conta e fechamento**.
+- Inclusão/alteração operacional no diretório: se a rodada normal ainda não venceu, o catch-up consulta somente as contas novas/alteradas; uma conta nova custa aproximadamente 5–6 operações D0 e, se o fechamento D−1 do mesmo dia já ocorreu, 4–5 operações D−1. O próximo horário D0 configurado é preservado. Se a rodada normal já venceu ou a cobertura restante está velha, é feito um único ciclo completo, sem uma chamada extra apenas para a mudança do diretório.
 - O intervalo D0 pode ser 30, 40, 50 minutos ou 1, 2, 4, 6, 12 ou 24 horas; o padrão continua sendo 1 hora. D−1 roda após 06:00 em São Paulo e, quando falha, tenta novamente de hora em hora até completar. Ao retornar após dias com o Hub fechado, recupera datas pendentes em ordem, uma por lote, com cinco minutos entre lotes concluídos, dentro da janela local de 14 dias (13 datas fechadas, pois hoje não é D−1).
 - Cada dia D−1 recuperado repete as mesmas 4–5 operações por conta. Um backlog de `B` datas acrescenta `A × B × (4–5)` operações ao período de recuperação, além de D0 e de retries por falhas; essa carga ocorre no projeto quando a consulta chega ao Google Ads.
 
@@ -98,8 +112,11 @@ Faixas calculadas pela fórmula acima; o agendador agenda a próxima captura dep
 
 - O cliente comum tem timeout de 45 s, mapeia 429 para `google_ads_quota_exceeded` e não faz retry automático.
 - O agendador D−1 tenta novamente na hora seguinte se o fechamento falhar. Repetições manuais também geram novas operações quando a solicitação chega ao Google Ads.
-- Não foi encontrado contador persistente de operações nem latência por operação no proxy. O código local permite estimar, mas não responder quanto o projeto consumiu de fato.
-- Para um diagnóstico real, compare as métricas/quota da Google Ads API no Google Cloud com o intervalo móvel de 24 h e registre os horários de captura. Se implementar telemetria, conte a operação específica e o resultado HTTP de forma agregada; não armazene tokens, GAQL completo, ID/nome de cliente ou payload.
+- Os cartões de falha automáticos preservam apenas metadados sanitizados do erro (códigos, status e IDs de diagnóstico), quando recebidos; isso não é um contador.
+- `src/google-ads/google-ads-http-client.mjs` registra POSTs do Hub e contadores v2 dos PHPs em `hub:google-ads:quota-telemetry:v2`. O histórico v1 fica intacto na chave antiga e não é mesclado, porque os números anteriores eram chamadas HTTP, não unidades de cota.
+- `google-ads-readonly-service.php` e `google-ads-campaign-action-service.php` contam chamadas Google Ads, respostas e operações estimadas. Search/SearchStream vale uma operação; cada item em `operations`/`mutateOperations` vale uma operação. Respostas HTTP do Google, inclusive erros, entram como estimativa; falha de transporte sem resposta fica indeterminada; OAuth é excluído. A validação temporária direta também é contada.
+- A tela separa POSTs do Hub, chamadas HTTP Ads e operações de cota estimadas. Endpoints sem cabeçalho v2 usam o catálogo de estimativas ou exibem custo variável indeterminado. Os contadores locais não provam consumo do projeto e não substituem a métrica do Google Cloud.
+- A referência Explorer (2.880), Basic (15.000) ou Standard (sem limite diário) é apenas comparação local. Nunca armazene tokens, GAQL completo, IDs/nome de cliente/campanha, payload ou resposta bruta na telemetria.
 
 ## Prioridades para reduzir carga sem perder dados
 
@@ -116,6 +133,6 @@ Faixas calculadas pela fórmula acima; o agendador agenda a próxima captura dep
 - Atualização agendada e uso do diretório: `src/google-ads/google-ads-auto-update.mjs`, `src/google-ads/google-ads-accounts-cache.mjs`.
 - Chamadores de tela: `src/google-ads/google-ads-view.mjs`, `src/google-ads/google-ads-search-terms-view.mjs`, `src/google-ads/google-ads-search-terms-controller.mjs`, `src/tracking/tracking-gurumedia-view.mjs`, `src/google-ads/google-ads-campaign-creation-view.mjs`.
 - Pausa e preflight na Visão Geral: `src/overview/view.js`, `src/index.template.html`.
-- Serviço privado de leitura no checkout irmão: `voc-meu-analista-de-dados-e/tracking-mvp/tools/google-ads-readonly-service.php` (sob a pasta comum `Documents/Codex/2026-08-23`).
-- Serviço privado de ação/criação no checkout irmão: `voc-meu-analista-de-dados-e/tracking-mvp/tools/google-ads-campaign-action-service.php` (sob a pasta comum `Documents/Codex/2026-08-23`).
+- Serviço privado de leitura no projeto integrado: `tracking-mvp/tools/google-ads-readonly-service.php` (relativo à raiz do Hub).
+- Serviço privado de ação/criação no projeto integrado: `tracking-mvp/tools/google-ads-campaign-action-service.php` (relativo à raiz do Hub).
 

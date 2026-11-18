@@ -1,7 +1,7 @@
 import {mountTrendsSaveAction,trendPageState} from '../trends-save-action.mjs?v=4';
 import * as Domain from './manual-domain.mjs?v=2';
-import * as Trends from '../trends-domain.mjs';
-import * as TrendsUI from '../trends-ui.mjs';
+import * as Trends from '../trends-domain.mjs?v=5';
+import * as TrendsUI from '../trends-ui.mjs?v=2';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -62,7 +62,7 @@ export function mountManualView({root,actions,preferences}) {
     if(activeTab==='glimpse')return; // Shared iframe helper owns its pending state.
     button.disabled=busy||button.dataset.trendsSaving==='true'||activeTab!=='trends';button.title=activeTab==='trends'?'Salvar a avaliação de Google Trends':activeTab==='images'?'Cada classificação e candidata é salva imediatamente.':'Histórico somente de leitura.';
   }
-  function historyHtml(entries,label,{includeNotes=false}={}){return entries.slice().reverse().map(entry=>`<div class="history-row"><time>${escape(formatLastCollection(entry.capturedAt||entry.changedAt))}</time><b>${escape(label(entry))}</b><span>${escape([entry.productName,entry.searchTerm,entry.countries?.join(', '),entry.country,entry.negativeKeywordCandidates?.length?'Negativas: '+entry.negativeKeywordCandidates.join(', '):'',includeNotes&&entry.notes?`Observação: ${entry.notes}`:''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Nenhum registro.</p>';}
+  function historyHtml(entries,label,{includeNotes=false}={}){return entries.slice().reverse().map(entry=>`<div class="history-row"><time>${escape(formatLastCollection(entry.capturedAt||entry.changedAt))}</time><b>${escape(label(entry))}</b><span>${escape([entry.productName,entry.searchTerm,entry.countries?.map(Trends.locationLabel).join(', '),entry.country ? Trends.locationLabel(entry.country) : '',entry.negativeKeywordCandidates?.length?'Negativas: '+entry.negativeKeywordCandidates.join(', '):'',includeNotes&&entry.notes?`Observação: ${entry.notes}`:''].filter(Boolean).join(' · '))}</span></div>`).join('')||'<p class="sub">Nenhum registro.</p>';}
   function history(){const row=snapshot();if(!row)return;$('#trendsHistory').innerHTML=historyHtml(row.trends.assessments,entry=>Trends.resultLabel(entry.status));$('#imagesHistory').innerHTML=historyHtml(row.images.assessments,entry=>Images.resultLabel(entry.status));$('#allHistory').innerHTML='<h3>Cadastro</h3>'+historyHtml(row.product.history,entry=>entry.values.name)+'<h3>Decisões</h3>'+historyHtml(row.decision.history,entry=>entry.status,{includeNotes:true})+'<h3>Trends</h3>'+$('#trendsHistory').innerHTML+'<h3>Imagens</h3>'+$('#imagesHistory').innerHTML;}
   function renderCandidates(){const row=snapshot();if(!row)return;const id=activeId;
     Candidates.renderKeywordCandidates($('#trendCandidates'),{candidates:row.trends.keywordCandidates,variant:'positive',saved:true,showRemoveForSaved:true,onSearch:term=>actions.openTrends(term),onRemove:term=>run(()=>actions.changeTrendCandidates(id,values=>values.filter(value=>value!==term)),{after:()=>{if(activeId===id)renderCandidates();}})});
@@ -70,7 +70,7 @@ export function mountManualView({root,actions,preferences}) {
   function renderTrendDraft(){
     const p=current();if(!p)return;
     $('#trendsTerm').value=draft.term;
-    $('#trendCountries').innerHTML=p.countries.map(code=>`<button type="button" class="trends-country-action ${draft.countries.includes(code)?'selected':''}" data-country="${code}" aria-pressed="${draft.countries.includes(code)}">${code}</button>`).join('')||'<p class="sub">Nenhum país cadastrado.</p>';
+    $('#trendCountries').innerHTML=p.countries.map(code=>`<button type="button" class="trends-country-action ${draft.countries.includes(code)?'selected':''}" data-country="${code}" aria-pressed="${draft.countries.includes(code)}">${escape(Trends.locationLabel(code))}</button>`).join('')||'<p class="sub">Nenhum país cadastrado.</p>';
     TrendsUI.renderProductAgeButtons($('#productAgeActions'),draft.productAge,value=>{draft.productAge=value;renderTrendDraft();});
     TrendsUI.renderResultButtons($('#trendResults'),draft.status,value=>{draft.status=value;renderTrendDraft();return trendsSave.select(value);});renderCandidates();
   }

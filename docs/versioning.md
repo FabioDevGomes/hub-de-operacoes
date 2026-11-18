@@ -51,7 +51,7 @@ não autorizam abrir/gravar bancos ou criar testes fictícios de comportamento.
    ```powershell
    node scripts/set-version.mjs patch "Corrige a apresentação dos indicadores"
    node build.mjs
-   node --test --test-skip-pattern='privacy-boundary' --test-concurrency=4
+   node --test --test-concurrency=4
    ```
 
    O comando também aceita uma versão explícita maior, como `1.1.0`. Exige uma
@@ -86,7 +86,7 @@ Nenhuma tag, Release ou publicação remota é criada pelo sistema.
 
 - `scripts/system-version.mjs`: SemVer, coerência documental e decoração das páginas no build.
 - `scripts/set-version.mjs`: atualização explícita da entrega, sem operações Git.
-- `src/system-version.js` / `.css`: título, selo e aviso de atualização compartilhados; “Atualizar somente esta tela” recarrega apenas a aba atual, enquanto “Atualizar todas as telas” propaga a confirmação por `BroadcastChannel` e `localStorage` para recarregar abas abertas e abas suspensas ao voltarem ao foco.
+- `src/system-version.js` / `.css`: título, selo e aviso de atualização compartilhados; aceitar qualquer uma das opções de atualização fecha o aviso em todas as abas para aquela versão, usando `BroadcastChannel` e `localStorage`. “Atualizar somente esta tela” recarrega apenas a aba atual; “Atualizar todas as telas” propaga também a confirmação para recarregar abas elegíveis, inclusive abas suspensas quando voltarem ao foco. Fechar pelo × continua sendo uma ação local da aba.
 - `build.mjs`: validação antecipada e publicação em todas as páginas completas.
 - `tests/system-version.test.mjs`: versões inválidas/repetidas, divergências,
   incremento, documentação, publicação, navegação sem duplicar prefixo e iframe.

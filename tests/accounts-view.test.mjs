@@ -90,10 +90,11 @@ test('matrix shows MCC above each account inside one header cell and escapes the
   assert.doesNotMatch(html,/<img/);
 });
 
-test('matrix places the captured account name under the ID, escapes it and omits unavailable names',()=>{
+test('matrix shows MCC and account IDs without displaying account names',()=>{
   const {root}=setup([sample('ativa',{account:'111-222-3333',accountName:'3333 - Loja <Azul> .example.shop'})],{'444-555-6666':'active'});
   const header=root.elements.accountMatrixHead.innerHTML;
-  assert.match(header,/Conta 111-222-3333<\/span><span class="account-matrix-name">Loja &lt;Azul&gt;<\/span>/);
+  assert.match(header,/Conta 111-222-3333<\/span><\/th>/);
+  assert.doesNotMatch(header,/account-matrix-name|Loja|<Azul>/);
   assert.doesNotMatch(header,/example.shop/);
   assert.match(header,/Conta 444-555-6666<\/span><\/th>/);
 });

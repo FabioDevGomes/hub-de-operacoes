@@ -11,7 +11,7 @@ function fixture(offerId=null, preferences) {
     return {dataset,ownerDocument:document,children:[],value:'',innerHTML:'',textContent:'',listeners:{},style:{},hidden:false,disabled:false,
       classList:{add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value),toggle(value,on){if(on??!classes.has(value))classes.add(value);else classes.delete(value);}},
       append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},
-      setAttribute(name,value){attributes.set(name,String(value));},getAttribute(name){return attributes.get(name);},addEventListener(type,handler){this.listeners[type]=handler;},querySelector(){return element();},querySelectorAll(){return [];},
+      setAttribute(name,value){attributes.set(name,String(value));},getAttribute(name){return attributes.get(name);},addEventListener(type,handler){this.listeners[type]=handler;},focus(){},querySelector(){return element();},querySelectorAll(){return [];},
     };
   }
   const nodes=new Map(),node=selector=>{if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);};
@@ -164,21 +164,36 @@ test('ClickBank Trends history shows one option when distinct searches share the
   assert.equal(f.calls.length,0,'deduplicar opções não inicia outra pesquisa');
 });
 
-test('ClickBank Trends history selector is positioned beside the candidate input and tracks both search actions',async()=>{
+test('ClickBank Trends history selector remains with candidate entry and tracks both search actions',async()=>{
   const [page,controller,view]=await Promise.all([
     readFile(new URL('../src/curadoria/clickbank-top-offers/index.html',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-page.mjs',import.meta.url),'utf8'),
     readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-view.mjs',import.meta.url),'utf8'),
   ]);
   const candidate=page.indexOf('id="trendCandidate"'),history=page.indexOf('id="trendSearchHistory"');
-  assert.ok(candidate>=0&&history>candidate,'o histórico fica à direita do campo de candidata na mesma faixa');
+  assert.ok(candidate>=0&&history>candidate,'o histórico continua associado à área de candidatas');
   assert.match(controller,/async function openTrends\(term\)[\s\S]*?window\.open\(Trends\.exploreUrl\(searchedTerm\)[\s\S]*?Storage\.setTrendSearchTimestamp\(baseRecord\(item\),searchedAt,searchedTerm\)/,'a busca registra o histórico somente depois de abrir a aba do Google Trends');
   assert.match(view,/onSearch:term=>actions\.openTrends\(term\)/,'os botões de candidatas usam o mesmo registro da pesquisa principal');
 });
 
+test('ClickBank adds multiline positive candidates while preserving failed input',async()=>{
+  const f=fixture();f.open('trends');
+  f.actions.addTrendCandidates=async(key,candidates)=>{f.calls.push(['addTrendCandidates',key,candidates]);return {ok:true,addedCount:candidates.length};};
+  const input=f.node('#trendCandidate');input.value='  venoplus 8  \n\n venoplus supplement\n';
+  await f.node('#addTrendCandidates').onclick();
+  assert.deepEqual(f.calls.at(-1),['addTrendCandidates','offer',['venoplus 8','venoplus supplement']]);
+  assert.equal(input.value,'','a colagem é limpa após a inclusão');
+
+  f.actions.addTrendCandidates=async()=>({ok:false,addedCount:0});
+  input.value='texto que precisa de correção';
+  await f.node('#addTrendCandidates').onclick();
+  assert.equal(input.value,'texto que precisa de correção','falha de validação preserva o texto para correção');
+  assert.equal(f.node('#addTrendCandidates').disabled,false,'o botão é reabilitado depois da falha');
+});
+
 test('Brand bidding stays pending and is committed only by Save with the current Trends draft',async()=>{
   const f=fixture();f.open('trends');
-  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="" aria-pressed="true">Não definido/);
+  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="no_brand_bidding" aria-pressed="true">No brand bidding/);
   f.node('#trendsTerm').value='Edited pending term';
   f.actions.saveTrend=async(key,status,draft)=>{
     f.calls.push(['saveTrend',key,status,draft]);
@@ -203,7 +218,7 @@ test('failed manual Save retains the pending brand selection and permits retry',
   await f.node('#saveSheetButton').listeners.click();
   assert.match(f.node('#trendMessage').textContent,/Não foi possível salvar/);
   assert.equal(f.state.offerMetadata[0].brandBidding,undefined);
-  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="" aria-pressed="true"/);
+  assert.match(f.node('#brandBiddingActions').innerHTML,/data-brand-bidding="no_brand_bidding" aria-pressed="true"/);
   assert.ok(f.brandButtons.every(button=>!button.disabled));
   assert.equal(f.sheet.classList.contains('hidden'),false);
 });
@@ -503,10 +518,10 @@ test('CB mostra erros na ficha e mantém X/busca coletiva das negativas salvas',
   assert.equal(f.node('#sheetMessage').textContent,'Selecione um resultado visual.');
   assert.equal(f.node('#sheetMessage').classList.contains('error'),true);
   const [items,searchAll]=f.lists[0].children;
-  assert.equal(items.children[0].children[1].textContent,'×');
+  assert.equal(items.children[0].children[2].textContent,'×','a ação de remoção fica depois do texto e do lápis de edição');
   searchAll.onclick({preventDefault(){},stopPropagation(){}});
   assert.deepEqual(f.calls.at(-1),['exclude','Produto','DE',['outra marca']]);
-  items.children[0].children[1].onclick({preventDefault(){},stopPropagation(){}});
+  items.children[0].children[2].onclick({preventDefault(){},stopPropagation(){}});
   assert.deepEqual(f.calls.at(-1),['saveImage','offer','DE','mixed',[],{candidateOnly:true}]);
 });
 

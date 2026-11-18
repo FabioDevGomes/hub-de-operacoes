@@ -5,6 +5,9 @@ export const TRACKING_SALES_MAX_SYNC_PAGES = 250;
 export const TRACKING_SALES_MAX_SYNC_RECORDS = TRACKING_SALES_PAGE_SIZE * TRACKING_SALES_MAX_SYNC_PAGES;
 
 const ID_PATTERN = /^(?:0|[1-9]\d{0,19})$/;
+const CAMPAIGN_ID_PATTERN = /^[1-9]\d{0,19}$/;
+const CAMPAIGN_CANDIDATE_STATUSES = ['not_evaluated', 'click_not_found', 'campaign_id_missing', 'campaign_id_invalid', 'campaign_ambiguous', 'source_conflict', 'candidate'];
+const CLICK_LINK_DIAGNOSTIC_STATUSES = ['not_available', 'extclid_missing', 'extclid_unusable', 'exact_click_not_found', 'click_missing_track_metadata', 'click_matches_multiple_tracks', 'track_matched'];
 const PAGE_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const GENERATED_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
@@ -53,36 +56,116 @@ function normalizeTrackPair(host, productKey, label) {
 }
 
 export function normalizeTrackingSale(value, label = 'Venda') {
-  onlyKeys(value, ['transaction_id', 'transaction_time_utc', 'attribution_status', 'presell_host', 'product_key'], label);
+  onlyKeys(value, ['transaction_id', 'transaction_time_utc', 'received_at_utc', 'commission_total', 'commission_currency', 'attribution_status', 'presell_host', 'product_key', 'click_link_diagnostic', 'click_campaign_candidate'], label);
   const transactionId = normalizeId(value.transaction_id, `${label} · ID da transação`);
   if (transactionId === '0') throw new Error(`${label} · ID da transação deve ser positivo.`);
   const transactionTimeUtc = normalizeUtcTimestamp(value.transaction_time_utc, 'transaction_time_utc');
+  const receivedAtUtc = value.received_at_utc === undefined ? null : normalizeUtcTimestamp(value.received_at_utc, 'received_at_utc');
+  const commissionTotal = value.commission_total === undefined ? null : value.commission_total;
+  const commissionCurrency = value.commission_currency === undefined ? null : value.commission_currency;
+  if (!(commissionTotal === null || (typeof commissionTotal === 'string' && /^\d{1,10}(?:\.\d{1,4})?$/.test(commissionTotal)))
+      || !(commissionCurrency === null || (typeof commissionCurrency === 'string' && /^[A-Z]{3}$/.test(commissionCurrency)))) {
+    throw new Error(`${label} · comissão ou moeda inválida na sincronização de vendas.`);
+  }
   if (!['matched', 'unmatched', 'ambiguous'].includes(value.attribution_status)) {
     throw new Error(`${label} · estado da associação inválido.`);
+  }
+  const rawClickLinkDiagnostic = value.click_link_diagnostic;
+  let clickLinkDiagnosticStatus = 'not_available';
+  if (rawClickLinkDiagnostic !== undefined) {
+    onlyKeys(rawClickLinkDiagnostic, ['status'], `${label} · diagnóstico do clique`);
+    if (!CLICK_LINK_DIAGNOSTIC_STATUSES.includes(rawClickLinkDiagnostic.status) || rawClickLinkDiagnostic.status === 'not_available') {
+      throw new Error(`${label} · diagnóstico do clique inválido.`);
+    }
+    clickLinkDiagnosticStatus = rawClickLinkDiagnostic.status;
+  }
+  const rawCandidate = value.click_campaign_candidate;
+  let clickCampaignCandidate;
+  if (rawCandidate === undefined) {
+    clickCampaignCandidate = Object.freeze({ status: 'not_evaluated', source: null, campaignId: null });
+  } else {
+    onlyKeys(rawCandidate, ['status', 'source', 'campaign_id'], `${label} · candidato de campanha`);
+    if (!CAMPAIGN_CANDIDATE_STATUSES.includes(rawCandidate.status)) {
+      throw new Error(`${label} · estado do candidato de campanha inválido.`);
+    }
+    if (rawCandidate.status === 'candidate') {
+      if (rawCandidate.source !== 'utm_campaign_campaignid' || typeof rawCandidate.campaign_id !== 'string' || !CAMPAIGN_ID_PATTERN.test(rawCandidate.campaign_id)) {
+        throw new Error(`${label} · candidato de campanha inválido.`);
+      }
+      clickCampaignCandidate = Object.freeze({ status: 'candidate', source: rawCandidate.source, campaignId: rawCandidate.campaign_id });
+    } else {
+      if (rawCandidate.source !== null || rawCandidate.campaign_id !== null) {
+        throw new Error(`${label} · candidato sem associação não pode conter fonte ou ID.`);
+      }
+      clickCampaignCandidate = Object.freeze({ status: rawCandidate.status, source: null, campaignId: null });
+    }
   }
   if (value.attribution_status === 'matched') {
     const track = normalizeTrackPair(value.presell_host, value.product_key, label);
     return Object.freeze({
       transactionId,
       transactionTimeUtc,
+      receivedAtUtc,
+      commissionTotal,
+      commissionCurrency,
       attributionStatus: 'matched',
       presellHost: track.presellHost,
       productKey: track.productKey,
+      clickLinkDiagnosticStatus,
+      clickCampaignCandidate,
     });
   }
   if (value.presell_host !== null || value.product_key !== null) throw new Error(`${label} não pode atribuir uma Track quando a associação não é única.`);
   return Object.freeze({
     transactionId,
     transactionTimeUtc,
+    receivedAtUtc,
+    commissionTotal,
+    commissionCurrency,
     attributionStatus: value.attribution_status,
     presellHost: null,
     productKey: null,
+    clickLinkDiagnosticStatus,
+    clickCampaignCandidate,
   });
+}
+
+/** Resolves a candidate only when a trusted Hub or complete API snapshot confirms its local identity. */
+export function resolveTrackingSaleCampaign(sale, campaignRows = []) {
+  const candidate = sale?.clickCampaignCandidate;
+  if (!candidate || candidate.status !== 'candidate' || !CAMPAIGN_ID_PATTERN.test(String(candidate.campaignId || ''))) {
+    return Object.freeze({ status: candidate?.status || 'not_evaluated', managerCustomerId: null, customerId: null, campaignId: null });
+  }
+  if (!Array.isArray(campaignRows)) return Object.freeze({ status: 'candidate_unmapped', managerCustomerId: null, customerId: null, campaignId: candidate.campaignId });
+  const matches = campaignRows.filter(row => String(row?.google_ads_campaign_id ?? '').trim() === candidate.campaignId);
+  if (!matches.length) return Object.freeze({ status: 'candidate_unmapped', managerCustomerId: null, customerId: null, campaignId: candidate.campaignId });
+  const identities = new Map();
+  let incomplete = false;
+  let unverified = false;
+  for (const row of matches) {
+    const managerCustomerId = String(row?.mcc_id ?? '').replace(/\D/g, '');
+    const customerId = String(row?.conta_id ?? '').replace(/\D/g, '');
+    const campaignId = String(row?.google_ads_campaign_id ?? '').trim();
+    if ((managerCustomerId && !/^\d{10}$/.test(managerCustomerId)) || !/^\d{10}$/.test(customerId) || campaignId !== candidate.campaignId) {
+      incomplete = true;
+      continue;
+    }
+    const key = JSON.stringify([managerCustomerId, customerId, campaignId]);
+    const identity = identities.get(key) || { managerCustomerId, customerId, campaignId, trusted: true };
+    if (!['hub_created', 'google_ads_api_snapshot'].includes(row?.google_ads_campaign_origem)) identity.trusted = false;
+    identities.set(key, identity);
+  }
+  if (identities.size > 1) return Object.freeze({ status: 'campaign_ambiguous', managerCustomerId: null, customerId: null, campaignId: candidate.campaignId });
+  if (incomplete || !identities.size) return Object.freeze({ status: 'campaign_identity_incomplete', managerCustomerId: null, customerId: null, campaignId: candidate.campaignId });
+  const identity = identities.values().next().value;
+  if (!identity.trusted) unverified = true;
+  if (unverified) return Object.freeze({ status: 'campaign_source_unverified', managerCustomerId: null, customerId: null, campaignId: candidate.campaignId });
+  return Object.freeze({ status: 'matched', managerCustomerId: identity.managerCustomerId, customerId: identity.customerId, campaignId: identity.campaignId });
 }
 
 export function normalizeTrackingSalesPage(value, expected = {}) {
   onlyKeys(value, ['ok', 'schema_version', 'snapshot_max_id', 'after_id', 'next_after_id', 'has_more', 'generated_at_utc', 'sales'], 'A resposta do servidor');
-  if (value.ok !== true || value.schema_version !== 1 || typeof value.has_more !== 'boolean' || !Array.isArray(value.sales)) {
+  if (value.ok !== true || ![1, 2, 3, 4].includes(value.schema_version) || typeof value.has_more !== 'boolean' || !Array.isArray(value.sales)) {
     throw new Error('Resposta incompatível da API de vendas por Track.');
   }
   if (value.sales.length > TRACKING_SALES_PAGE_SIZE || (value.has_more && value.sales.length !== TRACKING_SALES_PAGE_SIZE)) {
@@ -98,6 +181,13 @@ export function normalizeTrackingSalesPage(value, expected = {}) {
   }
   if (compareId(afterId, snapshotMaxId) > 0) throw new Error('O cursor de vendas ultrapassa o snapshot do servidor.');
 
+  if (value.schema_version === 3 && value.sales.some(sale => !Object.prototype.hasOwnProperty.call(sale || {}, 'click_campaign_candidate'))) {
+    throw new Error('A resposta schema 3 não informou o candidato de campanha em todas as vendas.');
+  }
+  if (value.schema_version === 4 && value.sales.some(sale => !Object.prototype.hasOwnProperty.call(sale || {}, 'click_link_diagnostic')
+      || !Object.prototype.hasOwnProperty.call(sale || {}, 'click_campaign_candidate'))) {
+    throw new Error('A resposta schema 4 não informou os diagnósticos de clique e campanha em todas as vendas.');
+  }
   const sales = value.sales.map((sale, index) => normalizeTrackingSale(sale, `Venda ${index + 1}`));
   const ids = new Set();
   let previousId = afterId;

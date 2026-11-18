@@ -5,7 +5,8 @@ const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8')+
 assert.equal((html.match(/id="downloadCatalog"/g)||[]).length,0,'exportação independente do catálogo não deve mais ser apresentada');
 assert.ok(html.includes('Baixar backup completo JSON'),'o botão único de backup completo está ausente');
 assert.ok(html.includes('payload.catalogo_produtos=ProductCatalog.normalize(state.productCatalog)'),'backup completo não inclui os ajustes do catálogo');
-assert.ok(html.includes('tested-products/view.js?v=10')&&html.includes('tested-products/domain.js?v=9'),'módulos de Produtos Testados não invalidam o cache das correções');
+assert.ok(html.includes('tested-products/view.js?v=17')&&html.includes('tested-products/domain.js?v=15'),'módulos de Produtos Testados não invalidam o cache das correções');
+assert.ok(html.includes("p.firstSaleClicksStatus==='no-linked-sale'")&&html.includes("p.firstSaleClicksStatus==='clicks-unavailable'")&&html.includes("p.firstSaleClicksPartial?'Menor valor observado entre campanhas"),'tooltip diferencia ausência de venda vinculada, de cliques e mínimo parcial');
 assert.ok(html.includes('tested-products/tested-products.css?v=6')&&html.includes('.catalog-edit,.catalog-remove{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:500}')&&html.includes('.catalog-table tbody td{padding-block:5px}'),'ações devem usar peso normal e as linhas devem ficar cerca de 20% mais compactas');
 assert.ok(html.includes('id="testedEditDialog"')&&html.includes('id="testedEditForm"')&&html.includes('Restaurar todos os calculados'),'formulário do sistema e restauração de valores ausentes');
 assert.ok(html.includes('ProductCatalog.setTestedAdjustments')&&html.includes('await persistProductCatalog(next)'),'edição manual não está restrita ao catálogo');
@@ -49,7 +50,7 @@ assert.ok(html.includes("key==='profit'?product.totalProfit"),'ordenação numé
 assert.ok(html.includes("classList.toggle('hidden-column',hiddenTestedColumns.has(cell.dataset.testedCol))"),'visibilidade das colunas não é reaplicada');
 assert.ok(html.includes('numericFamilies')&&html.includes('variants.add(family.variant)'),'famílias de variantes de campanha não são identificadas pelo número da iteração');
 assert.ok(html.includes('(?:\\s*[ºª°])?(?:\\s*\\[[^\\]]+\\])?'),'variações ordinais com sufixo entre colchetes não são reconhecidas em Produtos Testados');
-assert.ok(html.includes("?.size||0)>1?baseName:originalName"),'produto isolado com número final pode ser alterado indevidamente');
+assert.ok(html.includes('filter(([,variants])=>variants.size>1)')&&html.includes('groupedBases.has(baseName.toLocaleLowerCase(\'pt-BR\'))?baseName:originalName'),'produto isolado com número final pode ser alterado indevidamente');
 assert.ok(html.includes('data-tested-sort="product"')&&html.includes('data-tested-sort="campaigns"'),'cabeçalhos ordenáveis ausentes');
 assert.ok(html.includes("testedSortKey='status',testedSortDir='desc'"),'ordenação padrão por situação ativa primeiro ausente');
 assert.ok(html.includes("key==='status'?(product.active?1:0)"),'ordenação de situação não prioriza produtos ativos');

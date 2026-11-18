@@ -5,6 +5,10 @@ const accountIdentity = value => {
   const text = String(value ?? '').trim();
   return /^(?:\d{10}|\d{3}-\d{3}-\d{4}|\d{4})$/.test(text) ? text.replace(/\D/g, '') : null;
 };
+const googleAdsCustomerId = value => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return /^[1-9]\d{9}$/.test(digits) ? digits : null;
+};
 
 function trackIdentity(track) {
   const label = String(track.productLabel || '').trim();
@@ -55,17 +59,22 @@ function resolveTrackRows(rows, track) {
 
 export function resolveTrackMcc(rows, track) {
   const match = resolveTrackRows(Array.isArray(rows) ? rows : [], track || {});
-  if (!match) return {status:'unidentified',label:'Não identificada',mccId:null,mccName:'',account:null};
+  if (!match) return {status:'unidentified',label:'Não identificada',mccId:null,mccName:'',account:null,customerId:null,customerIdAmbiguous:false,managerCustomerId:null};
+  const customerIds = new Set(match.matchedRows
+    .map(row => googleAdsCustomerId(row.accountId ?? row.customerId ?? row.customer_id))
+    .filter(Boolean));
+  const customerId = customerIds.size === 1 ? [...customerIds][0] : null;
   const managers = new Map();
   for (const row of match.matchedRows) {
     const id = String(row.mccId ?? '').trim();
     const name = String(row.mccName ?? '').replace(/\s+/g, ' ').trim();
-    if (!id && !name) return {status:'unidentified',label:'Não identificada',mccId:null,mccName:'',account:match.account};
-    const key = id ? `id:${id}` : `name:${name.toLocaleLowerCase('pt-BR')}`;
+    if (!id && !name) return {status:'unidentified',label:'Não identificada',mccId:null,mccName:'',account:match.account,customerId,customerIdAmbiguous:customerIds.size > 1,managerCustomerId:null};
+    const normalizedId = googleAdsCustomerId(id);
+    const key = id ? `id:${normalizedId || id}` : `name:${name.toLocaleLowerCase('pt-BR')}`;
     const existing = managers.get(key);
     managers.set(key, {id, name:name || existing?.name || ''});
   }
-  if (managers.size !== 1) return {status:'ambiguous',label:'MCC ambígua',mccId:null,mccName:'',account:match.account};
+  if (managers.size !== 1) return {status:'ambiguous',label:'MCC ambígua',mccId:null,mccName:'',account:match.account,customerId,customerIdAmbiguous:customerIds.size > 1,managerCustomerId:null};
   const [manager] = managers.values();
   return {
     status:'identified',
@@ -73,6 +82,9 @@ export function resolveTrackMcc(rows, track) {
     mccId:manager.id || null,
     mccName:manager.name,
     account:match.account,
+    customerId,
+    customerIdAmbiguous:customerIds.size > 1,
+    managerCustomerId:googleAdsCustomerId(manager.id),
   };
 }
 
@@ -94,4 +106,29 @@ export function attachAccountPresellUrls(rows, tracks = []) {
     const presellUrls = [...new Set(matches.filter(match => match.row === row).map(match => match.url))].sort();
     return {...row,presellUrls,presellUrl:presellUrls.join(' · ') || null};
   });
+}
+
+export function selectCampaignPresellUrls(urls, finalUrl = '') {
+  const candidates = [...new Set((Array.isArray(urls) ? urls : []).flatMap(value => {
+    try {
+      const url = new URL(String(value));
+      return url.protocol === 'https:' && !url.username && !url.password && !url.port
+        && url.pathname === '/' && !url.search && !url.hash ? [url.href] : [];
+    } catch { return []; }
+  }))];
+  if (!candidates.length) return [];
+
+  const target = String(finalUrl ?? '').trim();
+  if (target) {
+    let finalHost = '';
+    try {
+      const url = new URL(target);
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return [];
+      finalHost = url.hostname.toLowerCase();
+    } catch { return []; }
+    const matches = candidates.filter(value => new URL(value).hostname.toLowerCase() === finalHost);
+    return matches.length === 1 ? matches : [];
+  }
+
+  return candidates.length === 1 ? candidates : [];
 }

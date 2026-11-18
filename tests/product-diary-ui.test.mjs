@@ -8,8 +8,8 @@ const dateFunction = source.match(/^\s*function productDiaryRowDate\(row\)\{[^\r
 const salesFunction = source.match(/^\s*function productDiaryHasSales\(row,provisionalSaleDates\)\{[^\r\n]+\}/m)?.[0];
 const countFunction = source.match(/^\s*function productDiaryManualSaleCount\(row,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];
 const rowsFunction = source.match(/^\s*function productDiaryRowsWithManualSales\(rows,manualSalesByDate\)\{[^\r\n]+\}/m)?.[0];
-const cutoffFunction = source.match(/^\s*function productDiaryRowsThroughDate\(rows,cutoff\)\{[^\r\n]+\}/m)?.[0];
-const cellFunction = source.match(/^\s*function formatProductDiaryCell\(col,row,manualSalesByDate(?:,pauseConfirmedAt)?\)\{[^\r\n]+\}/m)?.[0];
+const cutoffFunction = source.match(/^\s*function productDiaryRowsThroughDate\(rows,cutoff(?:,resumeDate=null)?\)\{[^\r\n]+\}/m)?.[0];
+const cellFunction = source.match(/^\s*function formatProductDiaryCell\(col,row,manualSalesByDate(?:,pauseConfirmedAt,automaticPauseEvents=\[\])?\)\{[^\r\n]+\}/m)?.[0];
 assert.ok(dateFunction && salesFunction && countFunction && rowsFunction && cutoffFunction && cellFunction, 'helpers de data/venda do Diário de campanha ausentes');
 
 const { productDiaryRowDate, productDiaryHasSales, productDiaryManualSaleCount, productDiaryRowsWithManualSales, productDiaryRowsThroughDate, formatProductDiaryCell } = new Function('excelDate','formatProductCell', `${dateFunction}\n${salesFunction}\n${countFunction}\n${rowsFunction}\n${cutoffFunction}\n${cellFunction}\nreturn {productDiaryRowDate,productDiaryHasSales,productDiaryManualSaleCount,productDiaryRowsWithManualSales,productDiaryRowsThroughDate,formatProductDiaryCell};`)(serial => new Date(Math.round((Number(serial) - 25569) * 86400000)), (_col,cell) => cell?.value == null ? '—' : String(cell.value));
@@ -29,6 +29,7 @@ assert.equal(productDiaryManualSaleCount(diaryRows[1], manualSalesByDate), 1, 'v
 assert.equal(formatProductDiaryCell('F',{date:'2026-09-24',cells:{F:{value:0}}},manualSalesByDate), '<span>0</span><small class="product-manual-sale-note">+1 manual · provisória</small>', 'venda manual aparece separada sem somar conversões à métrica MCC');
 assert.equal(formatProductDiaryCell('Q',{date:'2026-09-24',cells:{Q:{value:'Pausada'}}},new Map(),'2026-09-24'), '<span>Pausada</span><small class="product-pause-note">Campanha pausada na data 24/09/2026</small>', 'a confirmação fica visível em Observações na data correspondente');
 assert.deepEqual(productDiaryRowsThroughDate([{date:'2026-09-24'},{date:'2026-09-25'}],'2026-09-24').map(productDiaryRowDate),['2026-09-24'],'o corte do Diário inclui o dia da confirmação');
+assert.deepEqual(productDiaryRowsThroughDate([{date:'2026-09-24'},{date:'2026-09-25'},{date:'2026-09-26'},{date:'2026-09-27'}],'2026-09-24','2026-09-26').map(productDiaryRowDate),['2026-09-24','2026-09-26','2026-09-27'],'reativação abre o diário na sua data sem preencher os dias pausados');
 assert.equal(productDiaryManualSaleCount(diaryRows[0], manualSalesByDate), 0, 'venda manual não deve aparecer em outra data');
 assert.equal(productDiaryRowsWithManualSales(diaryRows, manualSalesByDate).length, 2, 'a mesma data manual não deve duplicar linha já existente');
 
@@ -38,8 +39,8 @@ assert.match(diaryStyles, /#productView \.product-table td\.num\{text-align:cent
 assert.ok(source.includes("col==='Q'?'hub-edit-host product-observation-cell':'num'"), 'centralização alcança as 16 colunas de dados, deixando Observações no componente próprio');
 assert.match(diaryStyles, /\.product-table th\{[^}]*text-align:center/, 'cabeçalhos das colunas de dados permanecem centralizados');
 assert.match(diaryStyles, /\.product-table th:last-child\{[^}]*text-align:left/, 'Observações conserva cabeçalho à esquerda');
-assert.match(panelSource, /product-diary\/product-diary\.css\?v=13/, 'a nova versão do CSS deve invalidar o cache dos diários');
-assert.match(panelSource, /product-diary\/view\.js\?v=10/, 'o renderizador compartilhado atualizado deve invalidar o cache');
+assert.match(panelSource, /product-diary\/product-diary\.css\?v=24/, 'o CSS atual dos diários continua versionado');
+assert.match(panelSource, /product-diary\/view\.js\?v=26/, 'o renderizador compartilhado atualizado invalida o cache dos diários');
 assert.ok(diaryStyles.includes('#productView .product-table td.product-zero-value{color:color-mix(in srgb,var(--hub-primary-text) 50%,var(--hub-table-row-bg))}'), 'zeros observados usam 50% da cor padrão misturada ao fundo base, sem alterar a opacidade de notas');
 assert.match(diaryStyles, /body\.product-diary-mode\{overflow-y:auto\}/, 'a página deve rolar para alcançar o quadro de ROI abaixo do Diário');
 assert.match(diaryStyles, /body\.product-diary-mode \.main\{[^}]*min-height:100dvh;overflow:visible/, 'no desktop, o conteúdo do Diário pode crescer além do viewport');

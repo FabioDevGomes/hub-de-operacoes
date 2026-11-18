@@ -1,0 +1,24 @@
+# SHA-256 of the PHP files in current/ and the two backup snapshots.
+# Generated 2026-10-15. PHP CLI lint/tests remain pending locally.
+C36F0C58BDA4F9ED8D3BDE3BF7FED5C458B16E9416B010FCAAF77D78277F77B5  current/hostinger-private-tools/export-google-ads.php
+1669C7C256BF5E47A3AE1C1AFC008E0ECD3C194A2EAC937C6F617B3CAFAA056C  current/hostinger-private-tools/google-ads-api-lib.php
+361CA82B3F2FDA319F3F38FFF967B92BD59118FB880F678B93C266E52D861314  current/hostinger-private-tools/google-ads-export-lib.php
+CFBD21991CA26D76B36A832F52500E2DDCC82AE14F8D26CABC2764504B213E9E  current/hostinger-private-tools/google-ads-export-service.php
+6BBD46D348F51E3ED23E780F74FA7A1303BEB347853A124E3B4AA4BF3A464885  current/hostinger-public-track/google-ads-csv.php
+2C512E3D60C0BD7CDA20EC26161E6A099E40C0FF8ECA227EA6EAA7976C583FC1  current/hostinger-public-track/google-ads-report.php
+
+## Current snapshot: 2026-10-15-current-currency-map-fix
+C36F0C58BDA4F9ED8D3BDE3BF7FED5C458B16E9416B010FCAAF77D78277F77B5  backups/2026-10-15-current-currency-map-fix/hostinger-private-tools/export-google-ads.php
+1669C7C256BF5E47A3AE1C1AFC008E0ECD3C194A2EAC937C6F617B3CAFAA056C  backups/2026-10-15-current-currency-map-fix/hostinger-private-tools/google-ads-api-lib.php
+361CA82B3F2FDA319F3F38FFF967B92BD59118FB880F678B93C266E52D861314  backups/2026-10-15-current-currency-map-fix/hostinger-private-tools/google-ads-export-lib.php
+CFBD21991CA26D76B36A832F52500E2DDCC82AE14F8D26CABC2764504B213E9E  backups/2026-10-15-current-currency-map-fix/hostinger-private-tools/google-ads-export-service.php
+6BBD46D348F51E3ED23E780F74FA7A1303BEB347853A124E3B4AA4BF3A464885  backups/2026-10-15-current-currency-map-fix/hostinger-public-track/google-ads-csv.php
+2C512E3D60C0BD7CDA20EC26161E6A099E40C0FF8ECA227EA6EAA7976C583FC1  backups/2026-10-15-current-currency-map-fix/hostinger-public-track/google-ads-report.php
+
+## Previous complete package: 2026-10-15-phase2-pre-currency-map-fix
+C36F0C58BDA4F9ED8D3BDE3BF7FED5C458B16E9416B010FCAAF77D78277F77B5  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-private-tools/export-google-ads.php
+97511F04C0C8356D3934DF440C733794082B2A9DE13526D61D1A8E83835097D5  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-private-tools/google-ads-api-lib.php
+361CA82B3F2FDA319F3F38FFF967B92BD59118FB880F678B93C266E52D861314  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-private-tools/google-ads-export-lib.php
+CFBD21991CA26D76B36A832F52500E2DDCC82AE14F8D26CABC2764504B213E9E  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-private-tools/google-ads-export-service.php
+6BBD46D348F51E3ED23E780F74FA7A1303BEB347853A124E3B4AA4BF3A464885  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-public-track/google-ads-csv.php
+2C512E3D60C0BD7CDA20EC26161E6A099E40C0FF8ECA227EA6EAA7976C583FC1  backups/2026-10-15-phase2-pre-currency-map-fix/hostinger-public-track/google-ads-report.php

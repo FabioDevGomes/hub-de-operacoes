@@ -1,4 +1,4 @@
-import { normalizeTrackingClicksReport } from './tracking-clicks-domain.mjs?v=6';
+import { normalizeTrackingClicksReport } from './tracking-clicks-domain.mjs?v=7';
 
 export const TRACKING_CLICKS_DB_NAME = 'hub-tracking-clicks';
 export const TRACKING_CLICKS_DB_VERSION = 1;
@@ -20,6 +20,7 @@ function normalizedReport(report) {
       product_key: row?.productKey ?? null,
       product_label: row?.productLabel ?? null,
       presell_host: row?.presellHost ?? null,
+      traffic_source: row?.trafficSource ?? null,
       page_views: row?.pageViews,
       outbound_clicks: row?.outboundClicks,
     })) : report?.rows,

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrega de campanha · Hub de Operações</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="stylesheet" href="/sidebar-component.css?v=26">
+  <link rel="stylesheet" href="/input-standard.css?v=1">
+  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="/hub-scrollbars.css?v=1">
+</head>
+<body>
+  <div class="delivery-shell hub-sidebar-layout">
+    <aside class="delivery-sidebar hub-sidebar-aside">
+      <div class="brand"><div class="brand-mark"><img src="/brand-logo.png?v=1.133.1" alt=""></div><div><strong>Hub de Operações</strong><small>Campanhas e curadoria</small></div></div>
+      <nav class="hub-menu" data-hub-sidebar data-hub-sidebar-active="campaign-delivery" aria-label="Menu principal"></nav>
+      <div data-hub-sidebar-products></div>
+      <div class="delivery-local-note hub-sidebar-foot">● Dados locais<br>Este fluxo fica salvo neste navegador.</div>
+    </aside>
+    <main class="delivery-main">
+      <header class="delivery-header">
+        <div><p class="eyebrow">FLUXO LOCAL</p><h1>Entrega de campanha</h1><p class="intro">Acompanhe os dados da oferta entre Curadoria, Asset Studio, Ficha e Pre-Sell e criação da campanha.</p></div>
+        <a class="button" data-curadoria-back-link href="/curadoria/">Voltar à Curadoria</a>
+      </header>
+      <section class="delivery-context card" aria-labelledby="deliveryOfferTitle">
+        <div class="context-title-row"><div><p class="eyebrow">OFERTA SELECIONADA</p><h2 id="deliveryOfferTitle">Carregando entrega…</h2></div><label class="delivery-picker-label">Entregas salvas neste navegador<select id="deliveryPicker" class="control"></select></label></div>
+        <p id="deliveryMeta" class="muted"></p>
+        <p id="deliveryCommission" class="delivery-commission" role="status" aria-live="polite"></p>
+        <div id="deliveryData" class="delivery-data-grid"></div>
+      </section>
+      <section class="delivery-steps" aria-label="Etapas">
+        <article class="card step-card" data-stage="curadoria"><div class="step-number">1</div><div class="step-body"><p class="eyebrow">OFERTA</p><h2>Curadoria</h2><p>A oferta, os GEOs selecionados, a comissão e as palavras-chave ficam associados à entrega. Abra a mesma oferta para revisar ou editar os dados salvos.</p><p class="step-status" data-stage-status="curadoria"></p></div><a class="button primary" data-stage-link="curadoria">Editar oferta na Curadoria</a></article>
+        <article class="card step-card" data-stage="assets"><div class="step-number">2</div><div class="step-body"><p class="eyebrow">ASSETS</p><h2>Asset Studio</h2><p>O nome do produto será sugerido. O Studio continua usando as permissões e a pasta local já configuradas; a geração de assets é manual.</p><label class="asset-studio-route-option"><input id="deliveryExistingLocalPage" type="checkbox"><span>Usar página local existente</span></label><p class="step-status" data-stage-status="assets"></p></div><a class="button primary" data-stage-link="assets">Abrir Asset Studio</a></article>
+        <article class="card step-card" data-stage="presell"><div class="step-number">3</div><div class="step-body"><p class="eyebrow">PÁGINA</p><h2>Ficha e Pre-Sell</h2><p>Produto e link de afiliado serão preenchidos apenas se os campos estiverem vazios. A publicação e a confirmação da URL continuam no fluxo da Ficha.</p><p class="step-status" data-stage-status="presell"></p></div><a class="button primary" data-stage-link="presell">Abrir Ficha e Pre-Sell</a></article>
+        <article class="card step-card" data-stage="campaign"><div class="step-number">4</div><div class="step-body"><p class="eyebrow">CAMPANHA</p><h2>Criar campanha</h2><p>A oferta vinculada será selecionada para importar palavras-chave. A URL final oficial será recebida da Pre-Sell publicada. A checagem automática de funcionamento da URL fica para uma melhoria futura.</p><p class="step-status" data-stage-status="campaign"></p></div><a class="button primary" data-stage-link="campaign">Abrir criação de campanha</a></article>
+      </section>
+      <p id="deliveryMessage" class="delivery-message" role="status" aria-live="polite"></p>
+    </main>
+  </div>
+  <script type="module" src="app.mjs?v=11"></script>
+  <script src="/sidebar-component.js?v=20261101-quick-access-pins"></script>
+</body>
+</html>

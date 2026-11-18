@@ -6,7 +6,7 @@ O cálculo está centralizado em `src/curadoria/automatic-signal-domain.mjs` (re
 
 | Pilar | Mapeamento da regra 1.0.0 |
 | --- | --- |
-| Google Trends | `up`/Em alta e `stable`/Estável = favorável; `down`/Em queda e `low_volume`/Volume baixo = cautela; `no_data`/Sem dados e `inconclusive`/Inconclusivo = insuficiente. |
+| Google Trends | `up`/Em alta e `stable`/Estável = favorável; `down`/Em queda e `point_peak`/Pico pontual e `low_volume`/Algum volume = cautela; `no_data`/Sem dados e `inconclusive`/Inconclusivo = insuficiente. |
 | Google Imagens | `dominant`/Dominante = favorável; `mixed`/Mista e `scarce`/Escassa = cautela; `absent`/Ausente = desfavorável; `ambiguous`/Ambígua e `inconclusive`/Inconclusiva = insuficiente. Se o dado salvo tiver `refinementOf`, esse contexto é preservado. |
 | Glimpse | `strong`/Forte = favorável; `medium`/Médio = cautela; `limited`/Dados limitados = insuficiente. O volume mensal existente é exibido no tooltip. “Sem análise” não participa da cobertura. |
 

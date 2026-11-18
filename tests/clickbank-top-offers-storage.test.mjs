@@ -24,7 +24,7 @@ assert.throws(()=>Storage.appendTrendSearch({},'2026-01-03T11:00:00.000Z','  '),
 assert.throws(()=>Storage.appendTrendSearch({},'not-a-date','termo válido'),/inválida/,'datas inválidas não entram no histórico');
 const source = await readFile(new URL('../src/curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs', import.meta.url), 'utf8');
 assert.match(source, /DECISION_VALUES = new Set\(\[[^\]]*'Precisa de aprovação'/, 'a store e a validação de backups aceitam a decisão exclusiva desta tela');
-assert.match(source, /PAGE_CLASSIFICATIONS = new Set\(\['review','cookies'\]\)/, 'a store valida os dois rótulos de página');
+assert.match(source, /PAGE_CLASSIFICATIONS = new Set\(\['review','cookies','vsl'\]\)/, 'a store valida os dois rótulos de página');
 assert.ok(source.includes('validPageClassification(record.pageClassification)')&&source.includes('validPageClassification(item.pageClassification)'), 'a classificação atual e o histórico são validados sem schema novo');
 assert.match(source, /createObjectStore\(STORES\.captures,\s*\{keyPath:\s*'captureId'\}\)/);
 assert.match(source, /for \(const name of \[STORES\.offerMetadata, STORES\.trends, STORES\.images\]\)/, 'a migração adiciona stores de análise sem recriar capturas');

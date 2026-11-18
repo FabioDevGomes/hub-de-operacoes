@@ -1,0 +1,39 @@
+.gurumedia-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.gurumedia-summary-row .summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.gurumedia-dashboard-link {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--blue);
+  font-size: .76rem;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.gurumedia-dashboard-link:hover {
+  color: #a5d3ff;
+}
+
+.gurumedia-dashboard-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (max-width: 980px) {
+  .gurumedia-summary-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}

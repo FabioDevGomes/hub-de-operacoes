@@ -122,6 +122,8 @@ export function normalizeGoogleAdsReport(payload) {
       searchImpressionShare: count(item?.search_impression_share),
       searchTopImpressionShare: count(item?.search_top_impression_share),
       searchAbsoluteTopImpressionShare: count(item?.search_absolute_top_impression_share),
+      topImpressionPercentage: count(item?.top_impression_percentage),
+      absoluteTopImpressionPercentage: count(item?.absolute_top_impression_percentage),
     }];
   });
   const summary = rows.reduce((total, row) => {
@@ -144,6 +146,7 @@ export function normalizeGoogleAdsReport(payload) {
     currencyCode: validCurrency(payload.currency_code),
     generatedAtUtc: text(payload.generated_at_utc, 40),
     shareMetricsAvailable: payload.share_metrics_available === true,
+    positionMetricsAvailable: payload.position_metrics_available === true,
     rows,
     summary,
   };
@@ -188,6 +191,8 @@ export function normalizeGoogleAdsDailyReport(payload) {
       searchImpressionShare: count(item?.search_impression_share),
       searchTopImpressionShare: count(item?.search_top_impression_share),
       searchAbsoluteTopImpressionShare: count(item?.search_absolute_top_impression_share),
+      topImpressionPercentage: count(item?.top_impression_percentage),
+      absoluteTopImpressionPercentage: count(item?.absolute_top_impression_percentage),
     }];
   });
   const summary = rows.reduce((total, row) => {
@@ -225,6 +230,7 @@ export function normalizeGoogleAdsDailyReport(payload) {
     currencyCode: validCurrency(payload.currency_code),
     generatedAtUtc: text(payload.generated_at_utc, 40),
     shareMetricsAvailable: payload.share_metrics_available === true,
+    positionMetricsAvailable: payload.position_metrics_available === true,
     queryComplete: payload.query_complete === true,
     rows,
     summary,

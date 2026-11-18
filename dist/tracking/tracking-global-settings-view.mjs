@@ -7,7 +7,7 @@ import {
   trackingDomainAdminConfigPhp,
   TRACKING_DOMAIN_ADMIN_CONFIG_FILE,
 } from './tracking-domain-admin.mjs?v=11';
-import { addTrackingDomain, fetchTrackingDomains } from './tracking-service.mjs?v=19';
+import { addTrackingDomain, fetchTrackingDomains, fetchGuruMediaGoogleAdsStatus, setGuruMediaGoogleAdsEnabled, syncGuruMediaGoogleAdsRoutes } from './tracking-service.mjs?v=24';
 import {
   clearTrackingDomainAdminToken,
   clearTrackingHubToken,
@@ -24,6 +24,17 @@ import {
   TRACKING_EMAIL_CONFIG_FILE,
 } from './tracking-email-config.mjs?v=2';
 import { clearLegacyObservability, inspectLegacyObservability } from '../storage/legacy-observability-cleanup.mjs?v=1';
+import { fetchGoogleAdsConversionActions } from '../google-ads/google-ads-service.mjs?v=16';
+import { GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT, refreshGoogleAdsAccountsDirectory } from '../google-ads/google-ads-accounts-directory-service.mjs?v=3';
+import { loadGoogleAdsAccountsCache } from '../google-ads/google-ads-accounts-cache.mjs?v=4';
+import { refreshHostingerSitesDirectory } from '../hostinger/hostinger-sites-directory-service.mjs?v=1';
+import { isGoogleAdsPurchaseUploadAction } from '../google-ads/google-ads-conversion-actions-domain.mjs?v=1';
+import { resolveTrackMcc } from '../accounts/accounts-presell-domain.mjs?v=4';
+import {
+  readGuruMediaConversionActionSettings,
+  removeGuruMediaConversionActionSetting,
+  saveGuruMediaConversionActionSetting,
+} from './tracking-gurumedia-conversion-actions-storage.mjs?v=1';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -68,7 +79,7 @@ function initialDomainRows() {
   };
 }
 
-export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.clipboard, onBaseUpdated = async () => {}, invalidateBaseCache = () => {} }) {
+export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.clipboard, onBaseUpdated = async () => {}, invalidateBaseCache = () => {}, getAccountRows = () => [], fetchConversionActions = fetchGoogleAdsConversionActions, readActionSettings = readGuruMediaConversionActionSettings, saveActionSetting = saveGuruMediaConversionActionSetting, removeActionSetting = removeGuruMediaConversionActionSetting, nowFn = () => new Date() }) {
   if (!root) throw new Error('A área de Tracking solicitada não foi encontrada.');
   const panelScope = scope === 'tracker' || scope === 'settings' ? scope : 'all';
   const existing = mountedRoots.get(root);
@@ -78,9 +89,17 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
   }
   const savedHubToken = readTrackingHubToken();
   const savedAdminToken = readTrackingDomainAdminToken();
+  const cachedGoogleAdsDirectory = loadGoogleAdsAccountsCache();
   const cachedDomains = initialDomainRows();
+  const conversionActionSettingsState = readActionSettings();
   const state = {
     hubToken: savedHubToken.token,
+    googleAdsDirectory: cachedGoogleAdsDirectory?.accounts || null,
+    googleAdsDirectoryUpdatedAtUtc: cachedGoogleAdsDirectory?.refreshedAtUtc || cachedGoogleAdsDirectory?.savedAtUtc || '',
+    googleAdsDirectoryPersisted: Boolean(cachedGoogleAdsDirectory),
+    googleAdsDirectoryPending: false,
+    googleAdsDirectoryMessage: cachedGoogleAdsDirectory ? '' : 'A lista ainda não foi consultada neste perfil.',
+    googleAdsDirectoryError: false,
     rememberHubToken: true,
     hubTokenStatus: !savedHubToken.available ? 'unavailable' : savedHubToken.invalid ? 'invalid' : savedHubToken.token ? 'saved' : 'empty',
     adminToken: savedAdminToken.token,
@@ -108,6 +127,18 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
     emailConfig: emptyEmailConfig(),
     emailMessage: 'Preencha o destinatário e os dados SMTP para gerar a configuração privada compartilhada.',
     emailError: false,
+    conversionActionSettings: conversionActionSettingsState.settings || [],
+    conversionActionsByMcc: {},
+    conversionActionSelections: {},
+    conversionActionBusy: {},
+    conversionActionMessages: {},
+    conversionActionErrors: {},
+    guruMediaAdsStatus: null,
+    guruMediaAdsMessage: 'Consulte o estado no servidor para ver as rotas configuradas e o envio automático.',
+    guruMediaAdsError: false,
+    guruMediaAdsPending: false,
+    conversionActionSettingsInvalid: conversionActionSettingsState.invalid === true,
+    conversionActionStorageAvailable: conversionActionSettingsState.available !== false,
     legacyCleanup: {
       pending: false,
       preview: null,
@@ -137,6 +168,345 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
     return 'Informe o token administrativo separado do token de leitura do Hub.';
   }
 
+  function safeAccountRows() {
+    try {
+      const rows = getAccountRows?.();
+      return Array.isArray(rows) ? rows : [];
+    } catch { return []; }
+  }
+
+  function googleAdsDirectoryDateLabel(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'horário indisponível' : date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  }
+
+  function renderGoogleAdsAccountsDirectory() {
+    const directory = state.googleAdsDirectory;
+    const buttonDisabled = state.googleAdsDirectoryPending || state.hubTokenStatus !== 'saved';
+    const managerCount = directory?.managers?.filter(manager => manager.customerId != null).length || 0;
+    const accountCount = directory?.accounts?.length || 0;
+    const cacheStatus = directory
+      ? `${state.googleAdsDirectoryPersisted ? `Atualizada em ${googleAdsDirectoryDateLabel(state.googleAdsDirectoryUpdatedAtUtc)}` : 'Lista carregada somente nesta sessão; não foi possível persistir o cache local.'} · ${managerCount} MCC(s) · ${accountCount} conta(s) cliente${directory.warningCount ? ` · ${directory.warningCount} aviso(s) na consulta` : ''}`
+      : 'Nenhuma MCC ou conta em cache local.';
+    const groups = directory ? directory.managers.map(manager => ({
+      manager,
+      accounts: directory.accounts.filter(account => (account.managerCustomerId ?? 'direct') === (manager.customerId ?? 'direct')),
+    })) : [];
+    const directAccounts = directory?.accounts?.filter(account => account.managerCustomerId == null) || [];
+    if (!groups.some(group => group.manager.customerId == null) && directAccounts.length) {
+      groups.push({ manager: { customerId: null, name: 'Contas com acesso direto' }, accounts: directAccounts });
+    }
+    const rows = groups.length ? groups.map(({ manager, accounts }) => `
+      <details class="google-ads-directory-group">
+        <summary><strong>${escapeHtml(manager.name)}</strong><span>${manager.customerId ? escapeHtml(manager.customerId) : 'Acesso direto'}</span><b>${accounts.length} conta(s)</b><span class="google-ads-directory-disclosure" aria-hidden="true"></span></summary>
+        ${accounts.length ? `<div class="google-ads-table-wrap"><table class="google-ads-table google-ads-directory-table"><thead><tr><th>Conta Google Ads</th><th>ID da conta</th><th>Moeda</th><th>Fuso</th><th>Acesso</th></tr></thead><tbody>${accounts.map(account => `<tr><td>${escapeHtml(account.name)}</td><td>${escapeHtml(account.customerId)}</td><td>${escapeHtml(account.currencyCode)}</td><td>${escapeHtml(account.timeZone || '—')}</td><td>${escapeHtml(account.status || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="google-ads-directory-empty">Nenhuma conta cliente listada nesta MCC.</div>'}
+      </details>`).join('') : '<div class="google-ads-directory-empty">Nenhuma MCC ou conta em cache local.</div>';
+    const message = state.googleAdsDirectoryMessage || cacheStatus;
+    return `<section class="tracking-panel google-ads-directory" aria-labelledby="globalGoogleAdsDirectoryTitle">
+      <div class="google-ads-directory-heading"><div><h3 id="globalGoogleAdsDirectoryTitle">MCCs e contas conectadas</h3><p class="tracking-connection-note${state.googleAdsDirectoryError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(message)}</p></div><button data-global-action="refresh-google-ads-directory" class="btn" type="button" title="Atualiza MCCs e contas Google Ads e a lista de sites Hostinger."${buttonDisabled ? ' disabled' : ''}>${state.googleAdsDirectoryPending ? 'Atualizando integrações…' : 'Atualizar MCCs, contas e sites'}</button></div>
+      <div class="google-ads-directory-list">${rows}</div>
+    </section>`;
+  }
+
+  function conversionMccRows() {
+    const byId = new Map();
+    for (const row of safeAccountRows()) {
+      const mccCustomerId = String(row?.mccId ?? '').replace(/\D/g, '');
+      if (!/^\d{10}$/.test(mccCustomerId)) continue;
+      const name = String(row?.mccName ?? '').replace(/\s+/g, ' ').trim() || `MCC ${mccCustomerId}`;
+      if (!byId.has(mccCustomerId)) byId.set(mccCustomerId, { mccCustomerId, name });
+    }
+    return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name) || left.mccCustomerId.localeCompare(right.mccCustomerId));
+  }
+
+  function guruMediaGoogleAdsRoutes() {
+    const candidates = new Map();
+    let omitted = 0;
+    const accounts = safeAccountRows();
+    for (const track of state.domainRows.filter(row => row.platform === 'gurumedia')) {
+      const host = typeof track.hostname === 'string' ? track.hostname : '';
+      const productKey = typeof track.productKey === 'string' ? track.productKey : '';
+      if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(host)
+          || !/^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/.test(productKey)) {
+        omitted++;
+        continue;
+      }
+      const mcc = resolveTrackMcc(accounts, track);
+      const mccId = mcc.managerCustomerId;
+      const setting = mccId ? savedActionForMcc(mccId) : null;
+      if (mcc.status !== 'identified' || !mccId || !mcc.customerId || mcc.customerIdAmbiguous
+          || !setting || !isGoogleAdsPurchaseUploadAction(setting)
+          || !new RegExp(`^customers/${mccId}/conversionActions/[1-9][0-9]{0,19}$`).test(setting.resourceName)) {
+        omitted++;
+        continue;
+      }
+      const key = `${host}\u0000${productKey}`;
+      const matches = candidates.get(key) || [];
+      matches.push({
+        presell_host: host,
+        product_key: productKey,
+        customer_id: mcc.customerId,
+        mcc_customer_id: mccId,
+        conversion_action_resource_name: setting.resourceName,
+      });
+      candidates.set(key, matches);
+    }
+    const routes = [];
+    for (const matches of candidates.values()) {
+      if (matches.length === 1) routes.push(matches[0]);
+      else omitted += matches.length;
+    }
+    return { routes, omitted };
+  }
+
+  function guruMediaGoogleAdsStatusText() {
+    if (state.guruMediaAdsPending) return 'Consultando ou salvando a configuração no servidor…';
+    if (!state.guruMediaAdsStatus) return state.guruMediaAdsMessage;
+    const status = state.guruMediaAdsStatus;
+    const counts = status.outbox_counts || {};
+    const pending = Number(counts.pending || 0) + Number(counts.processing || 0);
+    const accepted = Number(counts.accepted || 0);
+    const processed = Number(counts.processed || 0);
+    const failures = Number(counts.rejected || 0) + Number(counts.partial_success || 0)
+      + Number(counts.blocked || 0) + Number(counts.unknown || 0);
+    return `Servidor: ${Number(status.route_count || 0)} rota(s) · envio automático ${status.live_enabled ? 'ATIVADO' : 'desativado'} · ${pending} pendente(s) · ${accepted} aguardando processamento do Google · ${processed} processada(s) · ${failures} com erro.`;
+  }
+
+  async function loadGuruMediaGoogleAdsStatus() {
+    if (!TOKEN_PATTERN.test(state.hubToken) || !TOKEN_PATTERN.test(state.adminToken)) {
+      state.guruMediaAdsMessage = 'Informe os tokens do Hub e administrativo para consultar o servidor.';
+      state.guruMediaAdsError = true;
+      render();
+      return;
+    }
+    state.guruMediaAdsPending = true;
+    state.guruMediaAdsError = false;
+    render();
+    try {
+      const result = await fetchGuruMediaGoogleAdsStatus(state.hubToken, state.adminToken);
+      state.guruMediaAdsStatus = result;
+      state.guruMediaAdsMessage = guruMediaGoogleAdsStatusText();
+      state.guruMediaAdsError = false;
+    } catch (error) {
+      state.guruMediaAdsMessage = error instanceof Error ? error.message : 'Não foi possível consultar a configuração de conversões GuruMedia.';
+      state.guruMediaAdsError = true;
+    } finally {
+      state.guruMediaAdsPending = false;
+      render();
+    }
+  }
+
+  async function syncGuruMediaGoogleAdsConfig() {
+    if (!TOKEN_PATTERN.test(state.hubToken) || !TOKEN_PATTERN.test(state.adminToken)) {
+      state.guruMediaAdsMessage = 'Informe os tokens do Hub e administrativo antes de sincronizar as rotas.';
+      state.guruMediaAdsError = true;
+      render();
+      return;
+    }
+    state.guruMediaAdsPending = true;
+    state.guruMediaAdsError = false;
+    state.guruMediaAdsMessage = 'Atualizando Tracks no servidor e associando cada rota à MCC e ação salvas…';
+    render();
+    try {
+      state.domainRows = await fetchTrackingDomains(state.adminToken);
+      state.domainsLoaded = true;
+      const cache = saveTrackingDomainList(state.domainRows);
+      state.domainCacheAvailable = cache.saved;
+      state.domainCacheUpdatedAtUtc = cache.updatedAtUtc || '';
+      const { routes, omitted } = guruMediaGoogleAdsRoutes();
+      if (!routes.length) throw new Error('Nenhuma rota GuruMedia tem associação única no manifesto e ação Purchase / Upload Clicks salva.');
+      const result = await syncGuruMediaGoogleAdsRoutes(state.hubToken, state.adminToken, routes);
+      state.guruMediaAdsStatus = { live_enabled: result.live_enabled, route_count: result.route_count, outbox_counts: {} };
+      state.guruMediaAdsMessage = `Sincronizadas ${Number(result.route_count)} rota(s). ${omitted} Track(s) foram omitidas por ausência de associação única ou ação elegível. O envio automático ficou desativado para revisão.`;
+      state.guruMediaAdsError = false;
+    } catch (error) {
+      state.guruMediaAdsMessage = error instanceof Error ? error.message : 'Não foi possível sincronizar as rotas GuruMedia.';
+      state.guruMediaAdsError = true;
+    } finally {
+      state.guruMediaAdsPending = false;
+      render();
+    }
+  }
+
+  async function toggleGuruMediaGoogleAdsSending() {
+    if (!state.guruMediaAdsStatus) {
+      await loadGuruMediaGoogleAdsStatus();
+      return;
+    }
+    const enable = !state.guruMediaAdsStatus.live_enabled;
+    if (enable && !globalThis.confirm?.('Ativar o envio automático? Apenas novas vendas recebidas depois da ativação serão enfileiradas. Conversões reais serão enviadas ao Google Ads pelo serviço do servidor.\n\nConfirme antes que a Flow ou outro sistema não esteja enviando essas mesmas vendas para as mesmas ações, para evitar duplicidade.')) return;
+    if (!TOKEN_PATTERN.test(state.hubToken) || !TOKEN_PATTERN.test(state.adminToken)) {
+      state.guruMediaAdsMessage = 'Informe os tokens do Hub e administrativo antes de alterar o envio automático.';
+      state.guruMediaAdsError = true;
+      render();
+      return;
+    }
+    state.guruMediaAdsPending = true;
+    state.guruMediaAdsError = false;
+    render();
+    try {
+      const result = await setGuruMediaGoogleAdsEnabled(state.hubToken, state.adminToken, enable);
+      state.guruMediaAdsStatus = result;
+      state.guruMediaAdsMessage = guruMediaGoogleAdsStatusText();
+      state.guruMediaAdsError = false;
+    } catch (error) {
+      state.guruMediaAdsMessage = error instanceof Error ? error.message : 'Não foi possível alterar o envio automático.';
+      state.guruMediaAdsError = true;
+    } finally {
+      state.guruMediaAdsPending = false;
+      render();
+    }
+  }
+
+  function savedActionForMcc(mccCustomerId) {
+    return state.conversionActionSettings.find(item => item.mccCustomerId === mccCustomerId) || null;
+  }
+
+  function formatConversionActionTimestamp(value) {
+    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return '—';
+    return `${new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))} UTC`;
+  }
+
+  function renderConversionActionSettings() {
+    const mccRows = conversionMccRows();
+    const body = mccRows.map(mcc => {
+      const saved = savedActionForMcc(mcc.mccCustomerId);
+      const actions = state.conversionActionsByMcc[mcc.mccCustomerId] || null;
+      const selection = Object.hasOwn(state.conversionActionSelections, mcc.mccCustomerId)
+        ? state.conversionActionSelections[mcc.mccCustomerId]
+        : saved?.resourceName || '';
+      const inventoryLoaded = Array.isArray(actions);
+      const currentActionExists = inventoryLoaded && actions.some(action => action.resourceName === saved?.resourceName);
+      const selectedAction = actions?.find(action => action.resourceName === selection) || null;
+      const busy = state.conversionActionBusy[mcc.mccCustomerId] === true;
+      const options = actions === null
+        ? saved
+          ? `<option value="${escapeHtml(saved.resourceName)}" selected>${escapeHtml(saved.name)} · salva localmente · consulta pendente</option>`
+          : '<option value="">Carregue as ações desta MCC</option>'
+        : `<option value="">Selecione uma ação</option>${saved && !currentActionExists && selection === saved.resourceName ? `<option value="${escapeHtml(saved.resourceName)}" selected disabled>${escapeHtml(saved.name)} · não consta na consulta atual</option>` : ''}${actions.map(action => {
+          const eligible = isGoogleAdsPurchaseUploadAction(action);
+          const selected = action.resourceName === selection ? ' selected' : '';
+          return `<option value="${escapeHtml(action.resourceName)}"${selected}${eligible ? '' : ' disabled'}>${escapeHtml(action.name)} · ${escapeHtml(action.status)} · ${escapeHtml(action.type)} · ${escapeHtml(action.category)}${eligible ? '' : ' · incompatível'}</option>`;
+        }).join('')}`;
+      const detail = state.conversionActionMessages[mcc.mccCustomerId]
+        || (saved ? `Salva neste navegador em ${formatConversionActionTimestamp(saved.savedAtUtc)}.` : 'Nenhuma ação associada a esta MCC.');
+      const error = state.conversionActionErrors[mcc.mccCustomerId];
+      const selectId = `globalGuruMediaConversionAction-${mcc.mccCustomerId}`;
+      return `<tr>
+        <td>${escapeHtml(mcc.name)}</td>
+        <td><code>${escapeHtml(mcc.mccCustomerId)}</code></td>
+        <td><label class="tracking-token-field tracking-conversion-action-field" for="${selectId}"><span>Ação de compra · importação de cliques</span><select id="${selectId}" data-conversion-action-mcc="${mcc.mccCustomerId}"${actions === null || busy ? ' disabled' : ''}>${options}</select>${saved && inventoryLoaded && !currentActionExists ? '<small class="tracking-conversion-action-warning">A ação salva não apareceu na consulta atual desta MCC. Confira se ela ainda existe e está ativa antes de substituí-la.</small>' : ''}</label></td>
+        <td class="tracking-conversion-resource"><code>${escapeHtml(selectedAction?.resourceName || saved?.resourceName || '—')}</code></td>
+        <td>${escapeHtml(selectedAction?.status || saved?.status || '—')}</td>
+        <td><div class="tracking-conversion-action-buttons"><button type="button" class="btn" data-global-action="load-conversion-actions" data-conversion-mcc="${mcc.mccCustomerId}"${busy ? ' disabled' : ''}>${busy ? 'Consultando…' : actions === null ? 'Carregar ações' : 'Atualizar ações'}</button><button type="button" class="btn primary" data-global-action="save-conversion-action" data-conversion-mcc="${mcc.mccCustomerId}"${!isGoogleAdsPurchaseUploadAction(selectedAction) || busy ? ' disabled' : ''}>Salvar</button>${saved ? `<button type="button" class="btn" data-global-action="remove-conversion-action" data-conversion-mcc="${mcc.mccCustomerId}"${busy ? ' disabled' : ''}>Remover</button>` : ''}</div><small class="tracking-conversion-action-message${error ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(error || detail)}</small></td>
+      </tr>`;
+    }).join('');
+    const storageMessage = state.conversionActionSettingsInvalid
+      ? '<p class="tracking-connection-note is-error">A configuração local salva não pôde ser lida. Ela foi preservada; não grave uma nova escolha até conferir o armazenamento do navegador.</p>'
+      : !state.conversionActionStorageAvailable
+        ? '<p class="tracking-connection-note is-error">O navegador não permite gravar a associação local nesta origem.</p>'
+        : '';
+    const adsEnabled = state.guruMediaAdsStatus?.live_enabled === true;
+    return `<section class="tracking-panel tracking-clicks-panel tracking-conversion-actions" aria-label="Ações de conversão Google Ads por MCC">
+      <div class="tracking-table-heading"><div><h2>Ação de conversão Google Ads por MCC</h2><p>A seleção continua salva neste navegador. Sincronize as Tracks GuruMedia com o servidor para preparar o destino de cada venda.</p></div></div>
+      ${storageMessage}
+      ${mccRows.length ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-conversion-action-table"><thead><tr><th>MCC do manifesto</th><th>ID da MCC</th><th>Ação selecionada</th><th>Resource name</th><th>Status</th><th>Ações</th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="tracking-empty"><p>Não há MCCs com ID completo no manifesto carregado. Carregue a base MCC antes de configurar uma ação.</p></div>'}
+      <p class="tracking-connection-note">A consulta lista ações existentes. Só ficam selecionáveis as ações ativas do tipo <code>UPLOAD_CLICKS</code> e categoria <code>PURCHASE</code>. A seleção não cria nem altera ações no Google Ads.</p>
+      <div class="tracking-domain-actions tracking-gurumedia-ads-actions">
+        <button type="button" class="btn" data-global-action="sync-gurumedia-google-ads-routes"${state.guruMediaAdsPending ? ' disabled' : ''}>${state.guruMediaAdsPending ? 'Aguarde…' : 'Sincronizar rotas com servidor'}</button>
+        <button type="button" class="btn" data-global-action="refresh-gurumedia-google-ads-status"${state.guruMediaAdsPending ? ' disabled' : ''}>Atualizar estado</button>
+        <button type="button" class="btn ${adsEnabled ? '' : 'primary'}" data-global-action="toggle-gurumedia-google-ads-sending"${state.guruMediaAdsPending || !state.guruMediaAdsStatus ? ' disabled' : ''}>${adsEnabled ? 'Pausar envio automático' : 'Ativar envio automático'}</button>
+      </div>
+      <p class="tracking-domain-message${state.guruMediaAdsError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(guruMediaGoogleAdsStatusText())}</p>
+      <p class="tracking-connection-note">Sincronizar rotas nunca envia conversões e desativa o envio automático para revisão. Ao ativá-lo, somente vendas novas recebidas depois da ativação entram na fila; vendas existentes não são enviadas em lote. Cada venda individual pode ser validada com <code>validateOnly</code> e enviada separadamente pela tela Tracking GuruMedia. Antes de enviar ou ativar, confirme que a Flow ou outro sistema não envia a mesma venda para a mesma ação.</p>
+    </section>`;
+  }
+
+  async function loadConversionActions(mccCustomerId) {
+    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(id)) return;
+    if (!state.hubToken) {
+      state.conversionActionErrors[id] = 'Configure o token do Hub em Configurações globais antes de consultar as ações.';
+      render();
+      return;
+    }
+    state.conversionActionBusy = { ...state.conversionActionBusy, [id]: true };
+    state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
+    state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Consultando ações de conversão na MCC…' };
+    render();
+    try {
+      const result = await fetchConversionActions({ managerCustomerId: id, customerId: id }, { token: state.hubToken });
+      state.conversionActionsByMcc = { ...state.conversionActionsByMcc, [id]: result.actions };
+      state.conversionActionMessages = { ...state.conversionActionMessages, [id]: `${new Intl.NumberFormat('pt-BR').format(result.actions.length)} ação(ões) consultada(s) · ${formatConversionActionTimestamp(result.generatedAtUtc)}.` };
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
+    } catch (error) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: error instanceof Error ? error.message : 'Não foi possível consultar as ações desta MCC.' };
+    } finally {
+      state.conversionActionBusy = { ...state.conversionActionBusy, [id]: false };
+      render();
+    }
+  }
+
+  function saveConversionAction(mccCustomerId) {
+    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(id)) return;
+    if (state.conversionActionSettingsInvalid || !state.conversionActionStorageAvailable) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O armazenamento local está indisponível ou inválido; nenhuma associação foi alterada.' };
+      render();
+      return;
+    }
+    const resourceName = state.conversionActionSelections[id]
+      ?? root.querySelector(`[data-conversion-action-mcc="${id}"]`)?.value
+      ?? '';
+    const selected = (state.conversionActionsByMcc[id] || []).find(action => action.resourceName === resourceName);
+    if (!isGoogleAdsPurchaseUploadAction(selected)) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'Escolha uma ação ativa de compra do tipo importação de cliques.' };
+      render();
+      return;
+    }
+    try {
+      const result = saveActionSetting({ mccCustomerId: id, managerCustomerId: id, customerId: id, ...selected }, { now: nowFn });
+      if (!result?.saved) {
+        const message = result?.limitExceeded
+          ? 'O armazenamento local atingiu o limite; nenhuma associação foi alterada.'
+          : 'O navegador não conseguiu salvar a associação local.';
+        state.conversionActionErrors = { ...state.conversionActionErrors, [id]: message };
+      } else {
+        state.conversionActionSettings = result.settings;
+        state.conversionActionSelections = { ...state.conversionActionSelections, [id]: selected.resourceName };
+        state.conversionActionSettingsInvalid = false;
+        state.conversionActionStorageAvailable = true;
+        state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Associação salva neste navegador. O envio ao Google Ads continua desativado.' };
+        state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
+      }
+    } catch (error) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: error instanceof Error ? error.message : 'Não foi possível salvar a associação.' };
+    }
+    render();
+  }
+
+  function removeConversionAction(mccCustomerId) {
+    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(id)) return;
+    if (state.conversionActionSettingsInvalid || !state.conversionActionStorageAvailable) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O armazenamento local está indisponível ou inválido; nenhuma associação foi removida.' };
+      render();
+      return;
+    }
+    const result = removeActionSetting(id);
+    if (!result?.removed) {
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O navegador não conseguiu remover a associação local.' };
+    } else {
+      state.conversionActionSettings = result.settings;
+      const selections = { ...state.conversionActionSelections };
+      delete selections[id];
+      state.conversionActionSelections = selections;
+      state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Associação local removida. Nenhuma configuração do Google Ads foi alterada.' };
+      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
+    }
+    render();
+  }
+
   function syncHubToken() {
     if (!state.rememberHubToken) {
       const result = clearTrackingHubToken();
@@ -155,6 +525,8 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
     }
     const forget = root.querySelector('[data-global-action="clear-hub-token"]');
     if (forget) forget.disabled = !state.hubToken && state.hubTokenStatus !== 'invalid';
+    const refreshDirectory = root.querySelector('[data-global-action="refresh-google-ads-directory"]');
+    if (refreshDirectory) refreshDirectory.disabled = state.googleAdsDirectoryPending || state.hubTokenStatus !== 'saved';
   }
 
   function syncAdminToken() {
@@ -270,7 +642,7 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
         <p class="tracking-connection-note">Este é o token de acesso às APIs do Hub. Ele não é o segredo do postback GuruMedia; esse segredo permanece no arquivo privado <code>tracking-config.php</code> e na configuração do postback da plataforma.</p>
       </section>`;
     root.innerHTML = `<div class="tracking-session tracking-global-settings-session">
-      <section class="tracking-panel tracking-intro"><div class="tracking-intro-head"><div class="tracking-intro-copy"><h2>${panelScope === 'tracker' ? 'Tracker Global' : panelScope === 'settings' ? 'Configurações globais do Hub' : 'Configurações globais do Tracking'}</h2><p>${panelScope === 'tracker' ? 'Cadastre e gerencie os domínios e Tracks permitidos pelas integrações de Tracking.' : panelScope === 'settings' ? 'Acesso compartilhado e notificações por e-mail para as integrações do Hub.' : 'Acesso compartilhado, cadastro de Tracks e notificações por e-mail para ClickBank, GuruMedia e as demais integrações do Hub.'}</p></div></div></section>
+      <section class="tracking-panel tracking-intro"><div class="tracking-intro-head"><div class="tracking-intro-copy"><h2>${panelScope === 'tracker' ? 'Tracker Global' : panelScope === 'settings' ? 'Configurações globais do Hub' : 'Configurações globais do Tracking'}</h2><p>${panelScope === 'tracker' ? 'Cadastre e gerencie os domínios e Tracks permitidos pelas integrações de Tracking.' : panelScope === 'settings' ? 'Acesso compartilhado, MCCs e contas Google Ads, e notificações por e-mail para as integrações do Hub.' : 'Acesso compartilhado, cadastro de Tracks e notificações por e-mail para ClickBank, GuruMedia e as demais integrações do Hub.'}</p></div></div></section>
 
       ${panelScope === 'settings' ? '' : `
       <section class="tracking-panel tracking-domain-panel" aria-label="Cadastro global de Tracks">
@@ -300,6 +672,8 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
       `}
 
       ${panelScope === 'tracker' ? '' : `${hubTokenPanel}
+      ${panelScope === 'settings' ? renderGoogleAdsAccountsDirectory() : ''}
+      ${panelScope === 'settings' ? renderConversionActionSettings() : ''}
 
       <section class="tracking-panel tracking-email-panel" aria-label="Notificações globais por e-mail">
         <div class="tracking-table-heading"><div><h2>Notificações por e-mail</h2><p>Uma caixa e um destinatário para os avisos de venda de todas as plataformas configuradas.</p></div></div>
@@ -370,6 +744,59 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
     } finally {
       state.domainPending = false;
       state.domainAction = '';
+      render();
+    }
+  }
+
+  async function refreshGoogleAdsAccountDirectory() {
+    if (!readTrackingHubToken().token) {
+      state.googleAdsDirectoryMessage = 'Configure e lembre o token compartilhado em Configurações globais para atualizar as MCCs.';
+      state.googleAdsDirectoryError = true;
+      render();
+      return;
+    }
+    state.googleAdsDirectoryPending = true;
+    state.googleAdsDirectoryError = false;
+    state.googleAdsDirectoryMessage = 'Consultando as MCCs do Google Ads e atualizando os sites Hostinger…';
+    render();
+    try {
+      const [googleResult, hostingerResult] = await Promise.allSettled([
+        refreshGoogleAdsAccountsDirectory(),
+        refreshHostingerSitesDirectory(),
+      ]);
+      const messages = [];
+      let hasError = false;
+      if (googleResult.status === 'fulfilled') {
+        const refreshed = googleResult.value;
+        state.googleAdsDirectory = refreshed.accounts;
+        state.googleAdsDirectoryUpdatedAtUtc = refreshed.refreshedAtUtc || refreshed.savedAtUtc;
+        state.googleAdsDirectoryPersisted = refreshed.persisted;
+        if (refreshed.accounts.accounts.length) {
+          messages.push(`Google Ads: ${refreshed.accounts.accounts.length} conta(s) cliente atualizada(s)${refreshed.accounts.warningCount ? ` com ${refreshed.accounts.warningCount} aviso(s)` : ''}${refreshed.persisted ? ' e guardada(s) neste perfil' : '; não foi possível persistir o cache local'}.`);
+          if (refreshed.accounts.warningCount || !refreshed.persisted) hasError = true;
+        } else {
+          messages.push('Google Ads: nenhuma conta de anúncios foi encontrada nas MCCs acessíveis.');
+          hasError = true;
+        }
+      } else {
+        const cachedCount = state.googleAdsDirectory?.accounts?.length || 0;
+        messages.push(`Google Ads: a atualização falhou; mantive as ${cachedCount} conta(s) já guardadas. ${googleResult.reason?.message || ''}`.trim());
+        hasError = true;
+      }
+      if (hostingerResult.status === 'fulfilled') {
+        const refreshed = hostingerResult.value;
+        messages.push(`Hostinger: ${refreshed.sites.length} site(s), atualizado(s) ${refreshed.checkedAtUtc ? `às ${googleAdsDirectoryDateLabel(refreshed.checkedAtUtc)}` : 'agora'}; cache local renovado.`);
+      } else {
+        messages.push(`Hostinger: não foi possível atualizar os sites; o cache anterior foi mantido. ${hostingerResult.reason?.message || ''}`.trim());
+        hasError = true;
+      }
+      state.googleAdsDirectoryMessage = messages.join(' ');
+      state.googleAdsDirectoryError = hasError;
+    } catch (error) {
+      state.googleAdsDirectoryMessage = error instanceof Error ? error.message : 'Não foi possível atualizar as MCCs e contas Google Ads.';
+      state.googleAdsDirectoryError = true;
+    } finally {
+      state.googleAdsDirectoryPending = false;
       render();
     }
   }
@@ -487,7 +914,21 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
   }
 
   function handleAction(action, target) {
-    if (action === 'inspect-legacy-observability') {
+    if (action === 'refresh-google-ads-directory') {
+      void refreshGoogleAdsAccountDirectory();
+    } else if (action === 'sync-gurumedia-google-ads-routes') {
+      void syncGuruMediaGoogleAdsConfig();
+    } else if (action === 'refresh-gurumedia-google-ads-status') {
+      void loadGuruMediaGoogleAdsStatus();
+    } else if (action === 'toggle-gurumedia-google-ads-sending') {
+      void toggleGuruMediaGoogleAdsSending();
+    } else if (action === 'load-conversion-actions') {
+      void loadConversionActions(target?.dataset?.conversionMcc);
+    } else if (action === 'save-conversion-action') {
+      saveConversionAction(target?.dataset?.conversionMcc);
+    } else if (action === 'remove-conversion-action') {
+      removeConversionAction(target?.dataset?.conversionMcc);
+    } else if (action === 'inspect-legacy-observability') {
       void inspectLegacyCleanup();
     } else if (action === 'confirm-legacy-observability-cleanup') {
       void confirmLegacyCleanup();
@@ -644,7 +1085,12 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
   });
   root.addEventListener('change', event => {
     const id = event.target?.id;
-    if (id === 'globalRememberHubToken') {
+    if (event.target?.matches?.('[data-conversion-action-mcc]')) {
+      const mccId = event.target.dataset.conversionActionMcc;
+      state.conversionActionSelections = { ...state.conversionActionSelections, [mccId]: event.target.value };
+      state.conversionActionErrors = { ...state.conversionActionErrors, [mccId]: '' };
+      render();
+    } else if (id === 'globalRememberHubToken') {
       state.rememberHubToken = Boolean(event.target.checked);
       syncHubToken();
     } else if (id === 'globalRememberAdminToken') {
@@ -674,6 +1120,18 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
     const target = event.target?.closest?.('[data-global-action]');
     if (target) handleAction(target.dataset.globalAction, target);
   });
+  if (panelScope === 'settings') {
+    globalThis.window?.addEventListener?.(GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT, event => {
+      if (!root.isConnected || !event.detail?.accounts) return;
+      const directory = event.detail;
+      state.googleAdsDirectory = directory.accounts;
+      state.googleAdsDirectoryUpdatedAtUtc = directory.refreshedAtUtc || directory.savedAtUtc || '';
+      state.googleAdsDirectoryPersisted = directory.persisted !== false;
+      state.googleAdsDirectoryMessage = '';
+      state.googleAdsDirectoryError = false;
+      render();
+    });
+  }
   root.addEventListener('keydown', event => {
     const cleanupOpen = state.legacyCleanup.dialogOpen;
     if (!cleanupOpen && !state.selectedTagHost) return;
@@ -704,5 +1162,6 @@ export function mount({ root, scope = 'all', clipboard = globalThis.navigator?.c
   const controller = { render, refreshDomains };
   mountedRoots.set(root, controller);
   render();
+  if (panelScope === 'settings') void loadGuruMediaGoogleAdsStatus();
   return controller;
 }

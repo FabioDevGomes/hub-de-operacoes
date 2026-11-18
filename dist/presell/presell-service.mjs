@@ -34,6 +34,7 @@ export function parseFicha(text){
     ficha.tracking={enabled:false};
   }
   ficha.assetFolder=String(ficha.assetFolder||'assets');
+  ficha.skipFavicon=ficha.skipFavicon===true;
   return ficha;
 }
 

@@ -10,7 +10,6 @@ export function googleAdsAccountAssetsHref(customerId) {
     __u: '7535994467',
     uscid: accountId,
     __c: '8442924178',
-    authuser: '4',
   });
 
   return 'https://ads.google.com/aw/assetreport/associations?' + parameters.toString();

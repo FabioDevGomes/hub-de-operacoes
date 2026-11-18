@@ -2,11 +2,21 @@
 @import url("/control-surfaces.css?v=5");
 
 /* Tipos especiais, botões, selects e textareas preservam seu contrato próprio. */
-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not(.hub-input-white) {
   background: var(--hub-input-inset-bg) !important;
   border-color: transparent !important;
   border-radius: 8px !important;
   box-shadow: var(--hub-input-inset-shadow) !important;
+}
+
+/* Variante clara opt-in: mantém o input do sistema como padrão e substitui só a superfície escolhida. */
+body input.hub-input-white:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]) {
+  background: #fff !important;
+  color: #000 !important;
+  color-scheme: light !important;
+  border-color: #c8d2dc !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
 }
 
 /* A largura da borda existente é preservada para não encolher campos legados.

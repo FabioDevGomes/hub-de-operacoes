@@ -42,6 +42,8 @@ const context = {
 const sandbox = {
   derivedContext: () => context,
   state: { database: { campanhas: campaigns }, productCatalog: {} },
+  overviewFirstSaleClicksByCampaign: new Map(),
+  overviewSnapshot: () => ({ rows: [] }),
   operationalDatabase: () => sandbox.state.database,
   currentCampaignRows: () => [],
   activeCampaignRows: () => [],
@@ -97,6 +99,39 @@ assert.equal(testedProducts.find(product => product.label === 'Legacy No End Dat
   'calcula o lucro com os dois totais observados do resumo sem data final');
 assert.ok(testedProducts.some(product => product.label === 'Modelo 1° [MS]'),
   'não remove a numeração de um produto isolado sem outra variante que confirme a família');
+
+const firstSaleMinimumProducts=domainContext.window.TestedProductsDomain.buildProducts({
+  source:[
+    {id:'resq-02',nome_mcc:'ResQVac 02',nome_exibicao:'ResQVac 02'},
+    {id:'resq-03',nome_mcc:'ResQVac 03',nome_exibicao:'ResQVac 03'},
+    {id:'resq-06',nome_mcc:'ResQVac 06',nome_exibicao:'ResQVac 06'},
+    {id:'resq-05',nome_mcc:'ResQVac 05',nome_exibicao:'ResQVac 05'},
+  ],
+  firstSaleClicksByCampaign:new Map([['resq-02',14],['resq-03',9],['resq-06',11],['resq-05',null]]),
+  activeCampaigns:[],currentActiveCampaigns:[],dailyByCampaign:new Map(),salesAdjustments:new Map(),
+  catalog:{ocultos:[],aliases:{},datas_inicio:{}},referenceDate:'2026-11-16',
+  getProductName:campaign=>campaign.nome_exibicao,getCampaignIdentity:()=>({dateSort:null}),getCampaignSheet:name=>name,
+});
+const resqVac=firstSaleMinimumProducts.find(product=>product.label==='ResQVac');
+assert.equal(resqVac.firstSaleClicksCount,9,'exibe o menor número de cliques entre as campanhas com primeira venda vinculada, sem somar as campanhas');
+assert.equal(resqVac.firstSaleClicksPartial,true,'marca como parcial quando há campanha vendida sem cliques observados, pois ela pode ter um mínimo menor');
+assert.equal(resqVac.firstSaleClicksStatus,'partial');
+const firstSaleZeroProducts=domainContext.window.TestedProductsDomain.buildProducts({
+  source:[{id:'zero-sale',nome_mcc:'Zero Sale',nome_exibicao:'Zero Sale'}],
+  firstSaleClicksByCampaign:new Map([['zero-sale',0]]),activeCampaigns:[],currentActiveCampaigns:[],dailyByCampaign:new Map(),salesAdjustments:new Map(),
+  catalog:{ocultos:[],aliases:{},datas_inicio:{}},referenceDate:'2026-11-16',
+  getProductName:campaign=>campaign.nome_exibicao,getCampaignIdentity:()=>({dateSort:null}),getCampaignSheet:name=>name,
+});
+assert.equal(firstSaleZeroProducts[0].firstSaleClicksCount,0,'preserva zero como o menor valor observado válido');
+
+const guruMediaCampaign={id:'gurumedia-campaign',nome_mcc:'Power Heat Pro DE02 15',nome_exibicao:'Power Heat Pro DE02 15'};
+const guruMediaContext={database:{campanhas:[guruMediaCampaign]},dailyByCampaign:new Map([['gurumedia-campaign',[{data:'2026-11-15',celulas:{F:{value:0},O:{value:21.8},P:{value:0}}}]]]),latestSnapshots:{rows:[],dates:[]},salesAdjustments:new Map(),testedProducts:null};
+const guruMediaSandbox={...sandbox,state:{database:guruMediaContext.database,productCatalog:{}},derivedContext:()=>guruMediaContext,operationalDatabase:()=>guruMediaContext.database,currentCampaignRows:()=>[],activeCampaignRows:()=>[],overviewFirstSaleClicksByCampaign:new Map([['gurumedia-campaign',1]]),overviewSnapshot:()=>({rows:[{campaignId:'gurumedia-campaign',guruMediaSalesCount:1,guruMediaCommissionDeltaBrl:613.37}]})};
+const guruMediaProducts=vm.runInNewContext(`(${html.slice(start,end).trim()})`,guruMediaSandbox)();
+assert.equal(guruMediaProducts[0].salesCount,1,'inclui a venda GuruMedia atribuída à campanha na agregação de Produtos Testados');
+assert.equal(guruMediaProducts[0].totalBilled,613.37,'inclui o payout GuruMedia convertido pelo mesmo ajuste financeiro usado na Visão geral');
+assert.equal(guruMediaProducts[0].totalProfit,591.57,'recalcula lucro depois de projetar a venda GuruMedia sem alterar a linha diária');
+assert.equal(guruMediaProducts[0].firstSaleClicksCount,1,'mantém o índice de clique na primeira venda junto da projeção financeira');
 
 const snapshotProducts=domainContext.window.TestedProductsDomain.buildProducts({
   source:[{id:'current',nome_mcc:'Current Product',nome_exibicao:'Current Product'}],

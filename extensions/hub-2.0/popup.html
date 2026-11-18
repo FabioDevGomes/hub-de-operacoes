@@ -6,7 +6,7 @@
   <title>Hub 2.0</title>
   <style>
     :root { color-scheme: dark; font: 14px/1.45 system-ui, sans-serif; }
-    body { box-sizing: border-box; width: 460px; max-height: 680px; overflow: auto; margin: 0; padding: 18px; background: #091426; color: #e8f0ff; }
+    body { box-sizing: border-box; width: 460px; max-height: 680px; overflow: auto; margin: 0; padding: 18px 18px 36px; background: #091426; color: #e8f0ff; }
     h1 { margin: 0 0 6px; font-size: 17px; }
     h2 { margin: 0 0 5px; font-size: 14px; }
     p { margin: 0 0 14px; color: #a9bbd5; }
@@ -23,8 +23,8 @@
     .status.error li + li { margin-top: 6px; }
     section { padding-top: 16px; margin-top: 16px; border-top: 1px solid #29415c; }
     .note { font-size: 12px; }
-    .vsl-speeds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .vsl-speeds button { padding: 10px 0; }
+    .vsl-speeds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    .vsl-speeds button { padding: 10px 0; white-space: nowrap; }
     .clickbank-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .clickbank-actions button { min-height: 33px; }
     #clickbank-status:empty, #dtc-countries-status:empty { display: none; }
@@ -36,6 +36,7 @@
     .asset-capture-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
     .asset-capture-actions button { min-height:36px; font-size:12px; }
     #capture-asset-favicon { grid-column:1 / -1; }
+    #find-product-images, #authorize-product-images { grid-column:1 / -1; }
     #asset-capture-status:empty { display:none; }
   </style>
   <link rel="stylesheet" href="white-button.css">
@@ -43,16 +44,29 @@
 <body>
   <h1>Hub 2.0</h1>
   <p>Ferramentas locais para ClickBank, VSL e assets.</p>
+  <section aria-labelledby="asset-capture-title">
+    <h2 id="asset-capture-title">Captura de assets</h2>
+    <p class="note">Captura prints e favicon da aba ativa e envia ao Asset Studio local. Para imagens do produto, a galeria abre no Asset Studio; lá você escolhe até duas para usar como imagem 01 e 02. Para Mobile, ative antes o modo responsivo no F12.</p>
+    <div class="asset-capture-actions" role="group" aria-label="Captura de assets para o Asset Studio">
+      <button id="capture-asset-desktop" class="secondary" type="button">Capturar Desktop</button>
+      <button id="capture-asset-mobile" class="secondary" type="button">Capturar Mobile</button>
+      <button id="capture-asset-favicon" class="secondary" type="button">Importar favicon desta página</button>
+      <button id="find-product-images" class="secondary" type="button">Selecionar imagens do produto</button>
+      <button id="authorize-product-images" class="secondary" type="button" hidden>Autorizar acesso e abrir galeria</button>
+    </div>
+    <div id="asset-capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  </section>
   <section aria-labelledby="vsl-title">
     <h2 id="vsl-title">Velocidade da VSL</h2>
     <div class="vsl-speeds" role="group" aria-label="Velocidade da VSL">
       <button id="vsl-speed-1" type="button" class="secondary" aria-pressed="false">1×</button>
-      <button id="vsl-speed-10" type="button" class="secondary" aria-pressed="false">10×</button>
       <button id="vsl-speed-20" type="button" class="secondary" aria-pressed="false">20×</button>
       <button id="vsl-speed-30" type="button" class="secondary" aria-pressed="false">30×</button>
+      <button id="vsl-speed-40" type="button" class="secondary" aria-pressed="false">40×</button>
+      <button id="vsl-speed-50" type="button" class="secondary" aria-pressed="false">50×</button>
     </div>
     <div id="vsl-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
-    <p class="note" style="margin-bottom:0">Vídeo principal HTML5 ou VTurb. O áudio em 10× depende do navegador. Não baixa a VSL nem altera a base do Hub.</p>
+    <p class="note" style="margin-bottom:0">20×, 30×, 40× e 50× usam avanço aproximado por saltos, sem áudio. Use 1× para parar e restaurar o áudio. Não baixa a VSL nem altera a base do Hub.</p>
   </section>
   <section aria-labelledby="clickbank-title">
     <h2 id="clickbank-title">Produtos ClickBank</h2>
@@ -68,15 +82,14 @@
       <textarea id="clickbank-text" readonly spellcheck="false"></textarea>
     </div>
   </section>
-  <section aria-labelledby="asset-capture-title">
-    <h2 id="asset-capture-title">Captura de assets</h2>
-    <p class="note">Captura a área visível da aba atual e envia direto ao Asset Studio local. Para Mobile, ative antes o modo responsivo no F12.</p>
-    <div class="asset-capture-actions" role="group" aria-label="Captura de assets para o Asset Studio">
-      <button id="capture-asset-desktop" class="secondary" type="button">Capturar Desktop</button>
-      <button id="capture-asset-mobile" class="secondary" type="button">Capturar Mobile</button>
-      <button id="capture-asset-favicon" class="secondary" type="button">Importar favicon desta página</button>
-    </div>
-    <div id="asset-capture-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  <section aria-labelledby="google-ads-resources-title">
+    <h2 id="google-ads-resources-title">Acesso rápido ao Google Ads</h2>
+  <p class="note">Autoriza o Hub a abrir páginas salvas do Google Ads usando a sessão atual do Chrome. Não acessa nem preenche páginas de login.</p>
+    <button id="authorize-google-ads" class="secondary" type="button">Autorizar acesso ao Google Ads</button>
+    <div id="google-ads-permission-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  <p class="note" style="margin-top:14px">A leitura permite ao Hub localizar <strong>contas</strong> na árvore do Chrome. O Hub usa links de Campanhas salvos diretamente nessa pasta e, dentro de <strong>contas &gt; pag recursos</strong>, links de Recursos e Campanhas.</p>
+  <button id="authorize-google-ads-bookmarks" class="secondary" type="button">Autorizar leitura de favoritos</button>
+  <div id="google-ads-bookmarks-permission-status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
   </section>
   <script type="module" src="popup.js"></script>
 </body>

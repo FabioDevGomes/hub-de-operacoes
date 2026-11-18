@@ -1,8 +1,8 @@
 import {buildAccountDirectory, normalizeAccountDirectoryId, sortAccountDirectoryRows} from './accounts-list-domain.mjs?v=8';
 import {createAccountDirectoryDetailsStorage, createAccountDirectoryEmailStorage, createAccountDirectoryManualAccountsStorage, createAccountDirectoryPaymentProfileStorage, createAccountDirectoryStatusStorage} from './accounts-list-storage.mjs?v=5';
 import {validateAccountDirectoryRows} from './accounts-list-api-validation.mjs?v=1';
-import {GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT} from '../google-ads/google-ads-accounts-directory-service.mjs?v=1';
-import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=2';
+import {GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT} from '../google-ads/google-ads-accounts-directory-service.mjs?v=3';
+import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=4';
 
 export const ACCOUNT_DIRECTORY_COLUMN_WIDTHS_KEY = 'hub:account-directory:column-widths:v1';
 const accountColumns = ['account','email','paymentProfile','mcc','apiValidation','startDate','creationDate','impressions','clicks','campaignCount','conversions','status','edit'];
@@ -183,7 +183,7 @@ export function mount({root, getSnapshot, format, storage, onRefreshApiDirectory
       target.dataset.state = 'unverified';
       return;
     }
-    const parsedTime = Date.parse(apiDirectory.savedAtUtc || '');
+    const parsedTime = Date.parse(apiDirectory.refreshedAtUtc || apiDirectory.savedAtUtc || '');
     const timeLabel = Number.isFinite(parsedTime) ? apiSyncDateFormatter.format(new Date(parsedTime)) : 'horário indisponível';
     const parts = [`Última consulta: ${timeLabel}.`, `${summary.foundCount}/${summary.localCount} contas locais localizadas.`];
     if (summary.mccMismatchCount) parts.push(`${summary.mccMismatchCount} MCC divergente(s).`);
@@ -321,7 +321,7 @@ export function mount({root, getSnapshot, format, storage, onRefreshApiDirectory
     try {
       const result = await onRefreshApiDirectory();
       if (!result?.accounts || !Array.isArray(result.accounts.accounts)) throw new Error('O servidor retornou uma lista de contas inválida.');
-      apiDirectory = {accounts:result.accounts,savedAtUtc:result.savedAtUtc||'',persisted:result.persisted===true};
+      apiDirectory = {accounts:result.accounts,savedAtUtc:result.savedAtUtc||'',refreshedAtUtc:result.refreshedAtUtc||result.savedAtUtc||'',persisted:result.persisted===true};
       apiRefreshMessage = '';
       apiRefreshTone = '';
     } catch (error) {
@@ -339,7 +339,7 @@ export function mount({root, getSnapshot, format, storage, onRefreshApiDirectory
   function onApiDirectoryUpdated(event) {
     const detail = event?.detail;
     if (!detail?.accounts || !Array.isArray(detail.accounts.accounts)) return;
-    apiDirectory = {accounts:detail.accounts,savedAtUtc:detail.savedAtUtc||'',persisted:detail.persisted===true};
+    apiDirectory = {accounts:detail.accounts,savedAtUtc:detail.savedAtUtc||'',refreshedAtUtc:detail.refreshedAtUtc||detail.savedAtUtc||'',persisted:detail.persisted===true};
     apiRefreshMessage = '';
     apiRefreshTone = '';
     render();

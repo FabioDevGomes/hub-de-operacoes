@@ -2,6 +2,7 @@
   // UI navigation only: domain renderers and storage remain in their modules.
   function create({registry,document,history,location,eventTarget,state,entries,onFrame=()=>{},onError=()=>{},guardRoute=id=>id,onRouteBlocked=()=>{},extraSectionIds=[],extraNavIds=[],clearBodyClasses=[]}){
     let revision=0,bound=false,lastRoutedView=null;
+    const renderedViews=new Set(),scrollSnapshots=new Map();
     const views=registry.enabledViews();
     const sectionIds=new Set([...views.map(view=>view.sectionId),...Object.values(entries).map(entry=>entry.sectionId),...extraSectionIds].filter(Boolean));
     const navIds=new Set([...views.map(view=>view.navId),...extraNavIds].filter(Boolean));
@@ -33,16 +34,63 @@
       if(group)document.defaultView?.HubSidebar?.setOpenGroup(group);
     }
 
+    function scrollableElements(view){
+      const section=by(view.sectionId);
+      if(!section)return[];
+      const candidates=new Set();
+      for(let node=section;node&&node!==document.body;node=node.parentElement)candidates.add(node);
+      section.querySelectorAll('*').forEach(node=>candidates.add(node));
+      return [...candidates].filter(node=>node.scrollHeight>node.clientHeight||node.scrollWidth>node.clientWidth);
+    }
+
+    function saveScrollSnapshot(view){
+      const positions=scrollableElements(view).map(node=>({node,top:node.scrollTop,left:node.scrollLeft}));
+      const windowObject=document.defaultView;
+      scrollSnapshots.set(view.id,{positions,x:windowObject?.scrollX||0,y:windowObject?.scrollY||0});
+    }
+
+    function restoreScrollSnapshot(view,isCurrent){
+      const snapshot=scrollSnapshots.get(view.id);
+      if(!snapshot)return;
+      const restore=()=>{
+        if(!isCurrent())return;
+        for(const {node,top,left} of snapshot.positions)if(node.isConnected){node.scrollTop=top;node.scrollLeft=left}
+        document.defaultView?.scrollTo(snapshot.x,snapshot.y);
+      };
+      const requestFrame=document.defaultView?.requestAnimationFrame;
+      if(requestFrame)requestFrame.call(document.defaultView,restore);
+      else restore();
+    }
+
+    function navigationUrl(viewId,source){
+      const url=registry.urlFor(viewId,location.pathname);
+      if(source==='menu')return url;
+      const params=new URLSearchParams(location.search);
+      if(viewId==='copy'){
+        const deliveryId=params.get('campaign_delivery_id');
+        return deliveryId?url+(url.includes('?')?'&':'?')+'campaign_delivery_id='+encodeURIComponent(deliveryId):url;
+      }
+      if(viewId==='google-ads-create'&&params.get('view')==='google-ads-create'){
+        const kept=['campaign_delivery_id','presell_handoff','presell_handoff_job']
+          .map(name=>{const value=params.get(name);return value?encodeURIComponent(name)+'='+encodeURIComponent(value):''})
+          .filter(Boolean);
+        return kept.length?url+(url.includes('?')?'&':'?')+kept.join('&'):url;
+      }
+      return url;
+    }
     function open(id,{source='programmatic',updateUrl=true}={}){
       const requestedView=definition(id),guardedId=guardRoute(requestedView.id,{source,state})||requestedView.id;
       if(guardedId!==requestedView.id)onRouteBlocked(requestedView.id,{source,state});
       const view=definition(guardedId),entry=entries[view.id];
       if(!entry)throw new Error(`Tela sem adaptador de navegação: ${view.id}`);
+      const previousView=definition(state.activeView);
+      if(previousView.id!==view.id)saveScrollSnapshot(previousView);
+      const restoreOverviewWithoutRendering=view.id==='totals'&&previousView.id==='product'&&renderedViews.has('totals');
       const currentRevision=++revision;
       const isCurrent=()=>revision===currentRevision;
       if(source==='menu')entry.onMenu?.();
       applyFrame(view,entry);
-      if(updateUrl)history.replaceState(null,'',registry.urlFor(view.id,location.pathname));
+      if(updateUrl)history.replaceState(null,'',navigationUrl(view.id,source));
       onFrame(view);
       const finish=()=>{
         if(!isCurrent())return;
@@ -54,8 +102,14 @@
         const CustomEventConstructor=document.defaultView?.CustomEvent||globalThis.CustomEvent;
         if(shouldRecord&&CustomEventConstructor)document.dispatchEvent(new CustomEventConstructor('hub:screen-visited',{detail:{viewId:view.id,source}}));
       };
+      if(restoreOverviewWithoutRendering){
+        restoreScrollSnapshot(view,isCurrent);
+        finish();
+        return undefined;
+      }
       const result=entry.render?.({isCurrent});
-      if(result&&typeof result.then==='function')return result.then(value=>{finish();return value});
+      if(result&&typeof result.then==='function')return result.then(value=>{if(entry.render)renderedViews.add(view.id);finish();return value});
+      if(entry.render)renderedViews.add(view.id);
       finish();
       return result;
     }

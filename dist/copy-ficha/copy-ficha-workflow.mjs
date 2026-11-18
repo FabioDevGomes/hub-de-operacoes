@@ -1,5 +1,5 @@
-import {buildStructuredFicha} from './copy-ficha-structured.mjs?v=3';
-import {createPresellFromFicha} from '../presell/presell-service.mjs?v=7';
+import {buildStructuredFicha} from './copy-ficha-structured.mjs?v=4';
+import {createPresellFromFicha} from '../presell/presell-service.mjs?v=8';
 
 // One workflow boundary: validation must finish before confirmation or production.
 export async function createFromStructuredContent(source,data,{create=createPresellFromFicha}={}){

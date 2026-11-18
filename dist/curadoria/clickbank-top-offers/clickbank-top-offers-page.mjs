@@ -1,26 +1,31 @@
-import * as Domain from './clickbank-top-offers-domain.mjs?v=5';
-import * as Storage from './clickbank-top-offers-storage.mjs?v=13';
-import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=47';
+import * as Domain from './clickbank-top-offers-domain.mjs?v=6';
+import * as Storage from './clickbank-top-offers-storage.mjs?v=17';
+import {mountClickBankTopOffersView} from './clickbank-top-offers-view.mjs?v=69';
 import {mountExtensionCapture} from './extension-capture.mjs?v=7';
 import {mergeDtcCountries,removeManualCountry as removeManualCountryMetadata} from './dtc-country-capture.mjs?v=6';
 import {withSalesPageType} from './sales-page-type.mjs?v=3';
 import {brandBiddingLabel} from './brand-bidding.mjs?v=1';
-import * as Trends from '../trends-domain.mjs';
+import * as Trends from '../trends-domain.mjs?v=5';
 import {sameTrendAssessment} from '../trends-save-action.mjs?v=4';
 import * as Images from '../image-search-domain.mjs';
+import {clickBankImageCandidates,uniqueClickBankImageCandidates} from './clickbank-image-keyword-candidates.mjs?v=1';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';
-import * as TopOffersDecision from './clickbank-top-offers-decision.mjs?v=market-scope-1';
+import * as TopOffersDecision from './clickbank-top-offers-decision.mjs?v=decision-row-request-highlight-1';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=5';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
+import {createCampaignDelivery,getCampaignDeliveriesForOffer,updateCampaignDeliveryCountriesForOffer,updateCampaignDeliveryPositiveKeywordsForOffer,updateCampaignDeliveryNegativeKeywordsForOffer,updateCampaignDeliveryImageSearchTermForOffer,listCampaignDeliveries,CAMPAIGN_DELIVERY_STORAGE_KEY} from '../../campaign-delivery/delivery-store.mjs?v=18';
+import {listClickBankKeywordSources} from '../../google-ads/google-ads-clickbank-keyword-bridge.mjs?v=3';
+import {productNameFromOfferTitle} from './product-name.mjs?v=1';
+import {isClickBankCommissionUsd,parseClickBankCommissionUsd} from '../../campaign-delivery/commission-domain.mjs?v=1';
 
 const root = document.querySelector('#clickbankTopOffersRoot');
 let captures = [], offerMetadata = [], trends = [], images = [], decisions = [], glimpse = [], pending = null, saving = false;
 const listFocus=mountCurationListFocus('clickbank-top-offers',{blockingSelector:'#offerSheet:not(.hidden), #sharedDecisionDialog[open]',highlightOnCapture:false,restoreOnWindowReturn:false,suppressPulseOnPageHide:true});
 const view = mountClickBankTopOffersView({root, actions:{
   validateImport,confirmImport,exportBackup,restoreBackup,openTrends,saveTrend,saveDecision,
-  addTrendCandidate,editTrendCandidate,removeTrendCandidate,addManualCountry,removeManualCountry,saveSalesPageType,saveBrandBidding,saveAffiliateLink,saveImage,editImageCandidate,saveImageSearchTerm,
-  openImages,openImagesExcluding,openGlimpse,restoreListFocus:()=>listFocus.restore(),
+  addTrendCandidate,addTrendCandidates,editTrendCandidate,removeTrendCandidate,addManualCountry,removeManualCountry,saveSalesPageType,saveBrandBidding,saveAffiliateLink,saveCanonicalProductName,saveImage,editImageCandidate,removeImageCandidate,saveImageSearchTerm,
+  openImages,openImagesExcluding,openGlimpse,startCampaignDelivery,saveCommissionUsd,restoreListFocus:()=>listFocus.restore(),
 }});
 mountGlimpseHeaderAction({frame:root.querySelector('#glimpseFrame'),panel:root.querySelector('[data-panel="glimpse"]'),backButton:root.querySelector('#closeSheet'),actionButton:root.querySelector('#saveSheetButton'),finishLabel:'Salvar',showSavedFeedback:true,disableUntilSaveRetry:true});
 
@@ -46,7 +51,139 @@ function glimpseFor(item) {
 }
 function latestRecord(records,item) { return records.find(record => record.offerKey === item.offerKey); }
 function replaceRecord(records,record) { return [...records.filter(item => item.offerKey !== record.offerKey),record]; }
-function show() { view.render({captures,offerMetadata,trends,images,decisions,glimpse}); }
+function show() { view.render({captures,offerMetadata,trends,images,decisions,glimpse,deliveries:listCampaignDeliveries()}); }
+function selectedDeliveryCountries(item,trendRecord=trendsFor(item),metadata=metadataFor(item)) {
+  const selected=Array.isArray(trendRecord.pageDraft?.countries)
+    ? trendRecord.pageDraft.countries
+    : (Trends.latestAssessment(trendRecord.assessments)?.countries||[]);
+  const allowed=new Set(metadata.manualCountries||[]);
+  return [...new Set(selected.map(country=>String(country||'').trim().toUpperCase())
+    .filter(country=>/^[A-Z]{2}$/.test(country)&&allowed.has(country)))];
+}
+function syncDeliveryCountries(item,trendRecord=trendsFor(item),metadata=metadataFor(item)) {
+  const linked=getCampaignDeliveriesForOffer(item.offerKey);
+  if(!linked.length)return true;
+  if(!Array.isArray(trendRecord.pageDraft?.countries)&&!Trends.latestAssessment(trendRecord.assessments))return true;
+  try {
+    updateCampaignDeliveryCountriesForOffer(item.offerKey,selectedDeliveryCountries(item,trendRecord,metadata));
+    return true;
+  } catch(error) {
+    console.error('Os países foram salvos na Curadoria, mas não foram sincronizados com a entrega.',error);
+    view.showMessage('Países salvos na Curadoria, mas a entrega vinculada não foi atualizada. Tente salvar novamente.',{error:true});
+    return false;
+  }
+}
+function syncDeliveryPositiveKeywords(item,keywords) {
+  if(!getCampaignDeliveriesForOffer(item.offerKey).length)return true;
+  try {
+    updateCampaignDeliveryPositiveKeywordsForOffer(item.offerKey,keywords);
+    return true;
+  } catch(error) {
+    console.error('A candidata foi salva na Curadoria, mas não foi sincronizada com a entrega.',error);
+    view.showMessage('Palavra-chave salva na Curadoria, mas a entrega vinculada não foi atualizada. Reabra o fluxo para tentar novamente.',{error:true});
+    return false;
+  }
+}
+function syncDeliveryImageSearchTerm(item,term) {
+  if(!getCampaignDeliveriesForOffer(item.offerKey).length)return true;
+  try {
+    updateCampaignDeliveryImageSearchTermForOffer(item.offerKey,term);
+    return true;
+  } catch(error) {
+    console.error('O termo de Google Imagens foi salvo na Curadoria, mas não foi sincronizado com a entrega.',error);
+    view.showMessage('Termo de Google Imagens salvo na Curadoria, mas a entrega vinculada não foi atualizada. Tente salvar novamente.',{error:true});
+    return false;
+  }
+}
+async function syncDeliveryNegativeKeywords(item,keywordSource=null) {
+  if(!getCampaignDeliveriesForOffer(item.offerKey).length)return true;
+  try {
+    const source=keywordSource??(await listClickBankKeywordSources()).find(record=>record.offerKey===item.offerKey)
+      ??{negativeKeywords:[],negativeKeywordCountries:[]};
+    updateCampaignDeliveryNegativeKeywordsForOffer(item.offerKey,source.negativeKeywords||[],source.negativeKeywordCountries||[]);
+    return true;
+  } catch(error) {
+    console.error('As candidatas negativas foram salvas na Curadoria, mas não foram sincronizadas com a entrega.',error);
+    return false;
+  }
+}
+async function startCampaignDelivery(item) {
+  if (!item?.offerKey) return;
+  if(view.getActiveOfferKey?.()===item.offerKey) {
+    const termInput=root.querySelector('#imagesTerm');
+    if(termInput&&!await saveImageSearchTerm(item.offerKey,termInput.value))return false;
+  }
+  const existing = getCampaignDeliveriesForOffer(item.offerKey);
+  if (existing.length > 1) {
+    view.showMessage('Há mais de uma entrega vinculada a esta oferta. Nenhuma foi escolhida automaticamente; abra Entrega de campanha e confira os registros.', { error: true });
+    return false;
+  }
+  if (existing.length === 1) {
+    if(!syncDeliveryCountries(item,trendsFor(item),metadataFor(item)))return false;
+    if(!syncDeliveryImageSearchTerm(item,imagesFor(item).searchTerm||item.offerName))return false;
+    const savedTrend=latestRecord(trends,item);
+    if(savedTrend&&Array.isArray(savedTrend.keywordCandidates)
+        &&!syncDeliveryPositiveKeywords(item,savedTrend.keywordCandidates))return false;
+    if(!await syncDeliveryNegativeKeywords(item)) {
+      view.showMessage('Não foi possível atualizar as palavras-chave negativas da entrega. Tente reabrir o fluxo depois.',{error:true});
+      return false;
+    }
+    window.location.assign('/campaign-delivery/?delivery_id=' + encodeURIComponent(existing[0].id));
+    return true;
+  }
+  const metadata = metadataFor(item);
+  const trendRecord = trendsFor(item);
+  const latestAssessment = Trends.latestAssessment(trendRecord.assessments);
+  const selectedCountries = Array.isArray(trendRecord.pageDraft?.countries)
+    ? trendRecord.pageDraft.countries
+    : (latestAssessment?.countries || []);
+  const countries = [...new Set(selectedCountries.map(country => String(country || '').trim().toUpperCase()).filter(Boolean))];
+  if (!countries.length || countries.some(country => !/^[A-Z]{2}$/.test(country))) {
+    view.focusCampaignCountries?.(item.offerKey);
+    view.showMessage(
+      countries.length
+        ? 'Revise os códigos de país selecionados. Use códigos válidos de duas letras antes de iniciar a entrega.'
+        : 'Selecione e marque em verde pelo menos um país de destino antes de iniciar a entrega.',
+      { error: true }
+    );
+    return false;
+  }
+  const commissionUsd = Domain.commissionUsdForOffer(item, metadata);
+  if (commissionUsd == null || !isClickBankCommissionUsd(commissionUsd)) {
+    view.showMessage('A comissão ClickBank em USD é obrigatória antes de iniciar a entrega. Informe e salve o valor para esta oferta.', { error: true });
+    if (view.getActiveOfferKey() !== item.offerKey) view.openOffer(item.offerKey);
+    view.openCommissionDialog();
+    return false;
+  }
+  let source = null;
+  try { source = (await listClickBankKeywordSources()).find(record => record.offerKey === item.offerKey) || {keywords:[],negativeKeywords:[],negativeKeywordCountries:[]}; }
+  catch (error) {
+    console.error('Não foi possível ler as candidatas ClickBank para a entrega local.',error);
+    view.showMessage('Não foi possível ler as palavras-chave salvas na Curadoria. Nenhuma entrega foi criada; tente novamente.',{error:true});
+    return false;
+  }
+  const productName = String(metadata.canonicalProductName || '').trim() || productNameFromOfferTitle(item.offerName, item.seller) || item.offerName;
+  try {
+    const delivery = createCampaignDelivery({
+      offerKey: item.offerKey,
+      offerName: item.offerName,
+      seller: item.seller,
+      productName,
+      commissionAmountUsd: commissionUsd,
+      brandBidding: Object.hasOwn(metadata,'brandBidding') ? metadata.brandBidding : 'no_brand_bidding',
+      operationSnapshot: { type: 'campaign_delivery_started', sourceActivity: 'Curadoria ClickBank', destinationActivity: 'Criação de campanha' },
+      affiliateUrl: metadata.affiliateLink || '',
+      countries,
+      positiveKeywords: source?.keywords || trendRecord.keywordCandidates || [],
+      negativeKeywords: source?.negativeKeywords || [],
+      negativeKeywordCountries: source?.negativeKeywordCountries || [],
+      imageSearchTerm: imagesFor(item).searchTerm || item.offerName,
+    });
+    window.location.assign('/campaign-delivery/?delivery_id=' + encodeURIComponent(delivery.id));
+  } catch (error) {
+    view.showMessage(error?.message || 'Não foi possível iniciar a entrega local desta oferta.', { error: true });
+  }
+}
 async function refresh() {
   [captures,offerMetadata,trends,images,decisions] = await Promise.all([
     Storage.getAll(Storage.STORES.captures),Storage.getAll(Storage.STORES.offerMetadata),
@@ -65,7 +202,7 @@ async function refreshAfterGlimpseSave() {
 async function saveDecision(offerKey,status,notes='',pageClassification=null,marketScope=null) {
   const item=currentOffer(offerKey);if(!item)return;
   const previous=decisions.find(record=>record.offerKey===offerKey)||{offerKey,currentStatus:TopOffersDecision.DEFAULT_DECISION,notes:'',history:[]};
-  const normalized=TopOffersDecision.normalizeDecision(status),normalizedPageClassification=TopOffersDecision.normalizePageClassification(pageClassification),normalizedMarketScope=TopOffersDecision.normalizeMarketScope(marketScope),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').slice(0,5000);
+  const normalized=TopOffersDecision.normalizeDecision(status),requestedPageClassification=TopOffersDecision.normalizePageClassification(pageClassification),normalizedPageClassification=requestedPageClassification||(previous.pageClassification==='vsl'&&normalized!=='VSL'?'vsl':null),normalizedMarketScope=TopOffersDecision.normalizeMarketScope(marketScope),capturedAt=new Date().toISOString(),decisionNotes=String(notes??'').slice(0,5000);
   const stored={...previous,offerKey,currentStatus:normalized,pageClassification:normalizedPageClassification,marketScope:normalizedMarketScope,notes:decisionNotes,updatedAt:capturedAt,history:[...(previous.history||[]),{status:normalized,pageClassification:normalizedPageClassification,marketScope:normalizedMarketScope,capturedAt,notes:decisionNotes}]};
   try{await Storage.putDecision(stored);decisions=[...decisions.filter(record=>record.offerKey!==offerKey),stored];show();view.showMessage(`Decisão salva somente em Top Offers CB: ${normalized}.`)}
   catch(error){console.error('Não foi possível salvar a decisão Top Offers CB.',error);view.showMessage('Não foi possível salvar a decisão desta tela.',{error:true});throw error}
@@ -137,7 +274,9 @@ async function saveTrend(offerKey,status,draft={}) {
     const stored={...old,...baseRecord(item),pageDraft:{...trendDraft,status:''}};
     const saved=await Storage.saveTrendPage(stored,metadataPatch);
     if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
-    trends=replaceRecord(trends,saved.record);show();return true;
+    trends=replaceRecord(trends,saved.record);
+    syncDeliveryCountries(item,saved.record,saved.metadata||metadataFor(item));
+    show();return true;
   }
   const assessment = {
     assessmentId:crypto.randomUUID(),status,countries:[...new Set((draft.countries || []).filter(Boolean))].slice(0,5),
@@ -149,6 +288,7 @@ async function saveTrend(offerKey,status,draft={}) {
     const saved=await Storage.saveTrendPage(stored,metadataPatch);
     if(saved.metadata)offerMetadata=replaceRecord(offerMetadata,saved.metadata);
     trends=replaceRecord(trends,saved.record);
+    syncDeliveryCountries(item,saved.record,saved.metadata||metadataFor(item));
   }
   catch(error) {
     console.error('Não foi possível salvar a avaliação de Google Trends da ClickBank.',error);
@@ -163,8 +303,25 @@ async function addTrendCandidate(offerKey,value) {
   const old=trendsFor(item),candidates=[...(old.keywordCandidates||[])];
   if(candidates.some(entry=>Domain.normalize(entry)===Domain.normalize(term))){view.showMessage('Essa candidata já está na lista.');return false;}
   const stored={...old,...baseRecord(item),keywordCandidates:[...candidates,term]};
-  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);show();view.showMessage('Candidata à palavra-chave adicionada.');return true; }
+  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);const synced=syncDeliveryPositiveKeywords(item,saved.keywordCandidates);show();view.showMessage(synced?'Candidata à palavra-chave adicionada.':'Candidata salva na Curadoria, mas a entrega vinculada não foi atualizada. Reabra o fluxo para tentar novamente.',{error:!synced});return true; }
   catch { view.showMessage('Não foi possível salvar a candidata.',{error:true});return false; }
+}
+async function addTrendCandidates(offerKey,values) {
+  const item=currentOffer(offerKey),terms=Array.isArray(values)?values.map(value=>String(value??'').trim()).filter(Boolean):[];
+  if(!item||!terms.length)return {ok:false,addedCount:0};
+  const tooLongCount=terms.filter(term=>Array.from(term).length>80).length;
+  if(tooLongCount){view.showMessage(`${tooLongCount} candidata(s) excede(m) o limite de 80 caracteres da criação de campanha. Revise a colagem; nada foi salvo.`,{error:true});return {ok:false,addedCount:0,tooLongCount};}
+  const old=trendsFor(item),candidates=[...(old.keywordCandidates||[])],seen=new Set(candidates.map(Domain.normalize)),additions=[];
+  for(const term of terms){const normalized=Domain.normalize(term);if(seen.has(normalized))continue;seen.add(normalized);additions.push(term);}
+  const duplicateCount=terms.length-additions.length;
+  if(candidates.length+additions.length>100){view.showMessage('A lista aceita até 100 candidatas para transferência à campanha. Nada foi salvo.',{error:true});return {ok:false,addedCount:0,duplicateCount,limitExceeded:true};}
+  if(!additions.length){view.showMessage('Todas as candidatas já estavam na lista; nenhuma duplicata foi adicionada.');return {ok:true,addedCount:0,duplicateCount};}
+  const stored={...old,...baseRecord(item),keywordCandidates:[...candidates,...additions]};
+  try {
+    const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);const synced=syncDeliveryPositiveKeywords(item,saved.keywordCandidates);show();
+    const message=`${additions.length} ${additions.length===1?'candidata adicionada':'candidatas adicionadas'}${duplicateCount?`; ${duplicateCount} ${duplicateCount===1?'duplicata ignorada':'duplicatas ignoradas'}`:''}.`;
+    view.showMessage(synced?message:'Candidatas salvas na Curadoria, mas a entrega vinculada não foi atualizada. Reabra o fluxo para tentar novamente.',{error:!synced});return {ok:true,addedCount:additions.length,duplicateCount};
+  } catch {view.showMessage('Não foi possível salvar as candidatas.',{error:true});return {ok:false,addedCount:0,duplicateCount};}
 }
 async function editTrendCandidate(offerKey,index,value) {
   const item=currentOffer(offerKey),term=String(value??'').trim();if(!item)return false;
@@ -175,14 +332,14 @@ async function editTrendCandidate(offerKey,index,value) {
   if(keywordCandidates[index]===term)return true;
   keywordCandidates[index]=term;
   const stored={...old,...baseRecord(item),keywordCandidates};
-  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);show();view.showMessage('Candidata à palavra-chave atualizada.');return true; }
+  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);const synced=syncDeliveryPositiveKeywords(item,saved.keywordCandidates);show();view.showMessage(synced?'Candidata à palavra-chave atualizada.':'Candidata atualizada na Curadoria, mas a entrega vinculada não foi atualizada. Reabra o fluxo para tentar novamente.',{error:!synced});return true; }
   catch { view.showMessage('Não foi possível atualizar a candidata.',{error:true});return false; }
 }
 async function removeTrendCandidate(offerKey,index) {
   const item=currentOffer(offerKey);if(!item)return false;
   const old=trendsFor(item),keywordCandidates=[...(old.keywordCandidates||[])];keywordCandidates.splice(index,1);
   const stored={...old,...baseRecord(item),keywordCandidates};
-  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);show();view.showMessage('Candidata à palavra-chave removida.');return true; }
+  try { const saved=await Storage.putOfferRecord(Storage.STORES.trends,stored);trends=replaceRecord(trends,saved);const synced=syncDeliveryPositiveKeywords(item,saved.keywordCandidates);show();view.showMessage(synced?'Candidata à palavra-chave removida.':'Candidata removida na Curadoria, mas a entrega vinculada não foi atualizada. Reabra o fluxo para tentar novamente.',{error:!synced});return true; }
   catch { view.showMessage('Não foi possível remover a candidata.',{error:true});return false; }
 }
 async function addManualCountry(offerKey,value) {
@@ -191,7 +348,7 @@ async function addManualCountry(offerKey,value) {
   const old=metadataFor(item);
   if(old.manualCountries.includes(code)){view.showMessage(`${code} já foi adicionado.`);return false;}
   const stored={...old,...baseRecord(item),manualCountries:[...old.manualCountries,code]};
-  await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);offerMetadata=replaceRecord(offerMetadata,stored);show();view.showMessage(`${code} adicionado manualmente; não faz parte dos dados da ClickBank.`);return true;
+  await Storage.putOfferRecord(Storage.STORES.offerMetadata,stored);offerMetadata=replaceRecord(offerMetadata,stored);syncDeliveryCountries(item,undefined,stored);show();view.showMessage(`${code} adicionado manualmente; não faz parte dos dados da ClickBank.`);return true;
 }
 async function removeManualCountry(offerKey,value) {
   const item=currentOffer(offerKey);if(!item)return false;
@@ -199,7 +356,7 @@ async function removeManualCountry(offerKey,value) {
   if(!removal.ok){view.showMessage(removal.message,{error:true});return false;}
   try {
     await Storage.putOfferRecord(Storage.STORES.offerMetadata,removal.record);
-    offerMetadata=replaceRecord(offerMetadata,removal.record);show();
+    offerMetadata=replaceRecord(offerMetadata,removal.record);syncDeliveryCountries(item,undefined,removal.record);show();
     view.showMessage(`${String(value).trim().toUpperCase()} removido dos países manuais.`);
     return true;
   } catch(error) {
@@ -232,6 +389,20 @@ async function saveAffiliateLink(offerKey,value) {
   offerMetadata=replaceRecord(offerMetadata,stored);show();
   return true;
 }
+async function saveCommissionUsd(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)throw new Error('A oferta selecionada não está mais disponível.');
+  const commissionUsd=parseClickBankCommissionUsd(value);
+  if(commissionUsd==null)throw new Error('Informe uma comissão em USD válida, com até duas casas decimais.');
+  const stored=await Storage.saveCommissionUsd(baseRecord(item),commissionUsd);
+  offerMetadata=replaceRecord(offerMetadata,stored);show();
+  return stored;
+}
+async function saveCanonicalProductName(offerKey,value) {
+  const item=currentOffer(offerKey);if(!item)throw new Error('A oferta selecionada não está mais disponível.');
+  const stored=await Storage.saveCanonicalProductName(baseRecord(item),value);
+  offerMetadata=replaceRecord(offerMetadata,stored);
+  return stored;
+}
 async function saveDtcCountries(item,capture) {
   if(saving)return {ok:false,message:'O Hub está ocupado com outra gravação. Tente novamente.'};
   saving=true;
@@ -262,36 +433,90 @@ async function saveBrandBidding(offerKey,value) {
     return false;
   } finally {saving=false;}
 }
-async function saveImage(offerKey,country,status,candidates=[],{candidateOnly=false}={}) {
+async function saveImage(offerKey,country,status) {
   const item=currentOffer(offerKey);if(!item)return false;
-  const old=imagesFor(item),searchTerm=String(old.searchTerm||item.offerName).trim(),assessment={
-    assessmentId:crypto.randomUUID(),country,status,negativeKeywordCandidates:[...new Set(candidates.map(value=>String(value||'').trim()).filter(Boolean))],searchTerm,
+  const old=imagesFor(item),candidates=clickBankImageCandidates(old),visibleTerm=view.getActiveOfferKey?.()===item.offerKey?String(root.querySelector('#imagesTerm')?.value||'').trim():String(old.searchTerm||'').trim(),searchTerm=visibleTerm||String(old.searchTerm||item.offerName).trim(),assessment={
+    assessmentId:crypto.randomUUID(),country,status,negativeKeywordCandidates:candidates,searchTerm,
     date:Trends.localDateKey(),capturedAt:new Date().toISOString(),sampleSize:20,source:'google-images-manual',
   };
-  const stored={...old,...baseRecord(item),searchTerm,assessments:Images.appendAssessment(old.assessments,assessment)};
+  const stored={...old,...baseRecord(item),searchTerm,negativeKeywordCandidates:candidates,assessments:Images.appendAssessment(old.assessments,assessment)};
   await Storage.putOfferRecord(Storage.STORES.images,stored);images=replaceRecord(images,stored);show();
-  view.showMessage(candidateOnly?'Candidatas negativas salvas.':`Avaliação visual salva: ${Images.resultLabel(status)} · ${country}.`);
+  const imageTermSynced=syncDeliveryImageSearchTerm(item,searchTerm),negativeKeywordsSynced=await syncDeliveryNegativeKeywords(item),synced=imageTermSynced&&negativeKeywordsSynced;
+  const message=`Avaliação visual salva: ${Images.resultLabel(status)} · ${country}.`;
+  view.showMessage(synced?message:message+' A entrega vinculada não foi atualizada; reabra o fluxo para tentar novamente.',{error:!synced});
   return true;
 }
-async function editImageCandidate(offerKey,country,index,value) {
+function parseImageKeywordCandidateLines(value) {
+  return String(value??'').split(/\r?\n/u).map(term=>term.trim()).filter(Boolean);
+}
+async function addImageKeywordCandidates(input,button=null) {
+  const item=currentOffer(view.getActiveOfferKey());if(!item)return false;
+  const terms=parseImageKeywordCandidateLines(input.value);
+  if(!terms.length){view.showMessage('Cole uma candidata por linha antes de adicionar.');return false;}
+  if(terms.some(term=>Array.from(term).length>500)){view.showMessage('Cada candidata pode ter no máximo 500 caracteres.',{error:true});return false;}
+  const current=clickBankImageCandidates(imagesFor(item)),seen=new Set(current.map(value=>value.toLocaleLowerCase('pt-BR'))),additions=[];
+  let duplicates=0;
+  for(const term of terms){const key=term.toLocaleLowerCase('pt-BR');if(seen.has(key)){duplicates++;continue;}seen.add(key);additions.push(term);}
+  if(!additions.length){view.showMessage('Todas as candidatas coladas já estavam salvas.');return false;}
+  if(current.length+additions.length>100){view.showMessage('A lista de negativas aceita até 100 termos para manter compatibilidade com a criação de campanha.',{error:true});return false;}
+  input.disabled=true;if(button)button.disabled=true;
+  try{
+    const saved=await saveImageKeywordCandidates(item.offerKey,[...current,...additions],`${additions.length} candidata(s) negativa(s) adicionada(s)${duplicates?`; ${duplicates} repetida(s) ignorada(s)`:''}.`);
+    if(saved){input.value='';input.focus();}
+    input.disabled=false;if(button)button.disabled=false;
+    return saved;
+  }catch(error){
+    console.error('Não foi possível salvar as candidatas negativas.',error);
+    view.showMessage('Não foi possível salvar as candidatas. A colagem foi mantida; tente novamente.',{error:true});
+    input.disabled=false;if(button)button.disabled=false;
+    return false;
+  }
+}
+async function saveImageKeywordCandidates(offerKey,candidates,message='Candidatas negativas salvas.') {
+  const item=currentOffer(offerKey);if(!item)return false;
+  const old=imagesFor(item),stored={...old,...baseRecord(item),negativeKeywordCandidates:uniqueClickBankImageCandidates(candidates)};
+  await Storage.putOfferRecord(Storage.STORES.images,stored);images=replaceRecord(images,stored);show();
+  const synced=await syncDeliveryNegativeKeywords(item);
+  view.showMessage(synced?message:message+' A entrega vinculada não foi atualizada; reabra o fluxo para tentar novamente.',{error:!synced});
+  return true;
+}
+async function editImageCandidate(offerKey,index,value) {
   const item=currentOffer(offerKey),term=String(value??'').trim();if(!item)return false;
-  const latest=Images.latestByCountry(imagesFor(item).assessments).get(country),candidates=[...(latest?.negativeKeywordCandidates||latest?.relatedProducts||[])];
-  if(!latest?.status){view.showMessage('Selecione um resultado visual antes de editar candidatas.',{error:true});return false;}
+  const candidates=clickBankImageCandidates(imagesFor(item));
   if(!Number.isSafeInteger(index)||index<0||index>=candidates.length){view.showMessage('Esta candidata não está mais disponível para edição.',{error:true});return false;}
   if(!term){view.showMessage('Informe o texto da candidata.',{error:true});return false;}
-  if(candidates.some((entry,entryIndex)=>entryIndex!==index&&Domain.normalize(entry)===Domain.normalize(term))){view.showMessage('Já existe uma candidata igual na lista.',{error:true});return false;}
+  if(Array.from(term).length>500){view.showMessage('Cada candidata pode ter no máximo 500 caracteres.',{error:true});return false;}
+  if(candidates.some((entry,entryIndex)=>entryIndex!==index&&entry.toLocaleLowerCase('pt-BR')===term.toLocaleLowerCase('pt-BR'))){view.showMessage('Já existe uma candidata igual na lista.',{error:true});return false;}
   if(candidates[index]===term)return true;
   candidates[index]=term;
-  try { return await saveImage(offerKey,country,latest.status,candidates,{candidateOnly:true}); }
+  try { return await saveImageKeywordCandidates(offerKey,candidates,'Candidata negativa atualizada.'); }
   catch(error) { console.error('Não foi possível atualizar a candidata negativa.',error);view.showMessage('Não foi possível atualizar a candidata.',{error:true});return false; }
 }
+async function removeImageCandidate(offerKey,index) {
+  const item=currentOffer(offerKey);if(!item)return false;
+  const candidates=clickBankImageCandidates(imagesFor(item));
+  if(!Number.isSafeInteger(index)||index<0||index>=candidates.length){view.showMessage('Esta candidata não está mais disponível para remoção.',{error:true});return false;}
+  candidates.splice(index,1);
+  try { return await saveImageKeywordCandidates(offerKey,candidates,'Candidata negativa removida.'); }
+  catch(error) { console.error('Não foi possível remover a candidata negativa.',error);view.showMessage('Não foi possível remover a candidata.',{error:true});return false; }
+}
 async function saveImageSearchTerm(offerKey,term) {
-  const item=currentOffer(offerKey);if(!item)return;
-  const old=imagesFor(item),stored={...old,...baseRecord(item),searchTerm:String(term||'').trim()||item.offerName};
-  await Storage.putOfferRecord(Storage.STORES.images,stored);images=replaceRecord(images,stored);show();
+  const item=currentOffer(offerKey);if(!item)return false;
+  const old=imagesFor(item),searchTerm=String(term||'').trim().slice(0,250)||item.offerName,stored={...old,...baseRecord(item),searchTerm};
+  try {
+    if(String(old.searchTerm||'')!==searchTerm){await Storage.putOfferRecord(Storage.STORES.images,stored);images=replaceRecord(images,stored);show();}
+    if(!syncDeliveryImageSearchTerm(item,searchTerm))return false;
+    return true;
+  } catch(error) {
+    console.error('Não foi possível salvar o termo de Google Imagens.',error);
+    view.showMessage('Não foi possível salvar o termo de Google Imagens. O valor digitado foi preservado; tente novamente.',{error:true});
+    return false;
+  }
 }
 function openImages(term,country) {
-  const tab=window.open(Images.imageSearchUrl(term,country),'google-images-clickbank-top-offers');
+  const item=currentOffer(view.getActiveOfferKey?.()),candidates=item?clickBankImageCandidates(imagesFor(item)):[];
+  const url=candidates.length?Images.imageSearchUrlExcluding(term,country,candidates):Images.imageSearchUrl(term,country);
+  const tab=window.open(url,'google-images-clickbank-top-offers');
   if(tab)tab.focus();else view.showMessage('O navegador bloqueou a aba. Libere pop-ups para este endereço local.',{error:true});
 }
 function openImagesExcluding(term,country,candidates) {
@@ -305,14 +530,14 @@ function openGlimpse(item) {
 }
 root.addEventListener('keydown',event=>{
   const input=event.target.closest('[data-image-candidate-input]');
-  if(!input||event.key!=='Enter')return;
+  if(!input||event.key!=='Enter'||(!event.ctrlKey&&!event.metaKey))return;
   event.preventDefault();
-  const country=input.dataset.imageCandidateInput,item=currentOffer(view.getActiveOfferKey());if(!item)return;
-  const latest=Images.latestByCountry(imagesFor(item).assessments).get(country),current=latest?.negativeKeywordCandidates||[],term=input.value.trim();if(!term)return;
-  if(current.some(value=>Domain.normalize(value)===Domain.normalize(term))){view.showMessage('Essa candidata já está na lista.');input.value='';input.focus();return;}
-  if(!latest?.status){view.showMessage('Selecione um resultado visual antes de salvar candidatas.',{error:true});return;}
-  input.disabled=true;
-  void saveImage(item.offerKey,country,latest.status,[...current,term],{candidateOnly:true}).then(saved=>{const fresh=[...root.querySelectorAll('[data-image-candidate-input]')].find(candidate=>candidate.dataset.imageCandidateInput===country);if(saved&&fresh){fresh.value='';fresh.disabled=false;fresh.focus();}else if(fresh)fresh.disabled=false;}).catch(error=>{console.error(error);view.showMessage('Não foi possível salvar a candidata.',{error:true});const fresh=[...root.querySelectorAll('[data-image-candidate-input]')].find(candidate=>candidate.dataset.imageCandidateInput===country);if(fresh)fresh.disabled=false;});
+  void addImageKeywordCandidates(input);
+});
+root.addEventListener('click',event=>{
+  const button=event.target.closest('[data-image-candidate-add]');if(!button)return;
+  const input=root.querySelector('[data-image-candidate-input]');
+  if(input)void addImageKeywordCandidates(input,button);
 });
 window.addEventListener('message',event=>{
   const frame=root.querySelector('#glimpseFrame');
@@ -320,6 +545,9 @@ window.addEventListener('message',event=>{
   if(event.data?.type==='hub-glimpse-resize'){const height=Number(event.data.height);if(Number.isFinite(height))frame.style.height=`${Math.max(320,Math.ceil(height))}px`;return;}
   if(event.data?.type==='hub-glimpse-save-result'){if(event.data.saved===true)void refreshAfterGlimpseSave();return;}
   if(event.data?.type==='hub-glimpse-close')void refresh().then(()=>{view.returnFromGlimpse();view.showMessage('Análise Glimpse atualizada.');});
+});
+window.addEventListener('storage',event=>{
+  if(event.key===CAMPAIGN_DELIVERY_STORAGE_KEY)show();
 });
 
 async function exportBackup() {
@@ -337,7 +565,10 @@ async function restoreBackup(file) {
   } catch(error) { console.warn('Backup Top Offers CB rejeitado.',error);view.showMessage(error instanceof SyntaxError?'O arquivo selecionado não contém JSON válido.':(error?.message||'Não foi possível restaurar o backup.'),{error:true}); }
 }
 
-const initialLoad = refresh();
+const requestedOfferKey = new URLSearchParams(window.location.search).get('offerKey') || '';
+const initialLoad = refresh().then(()=>{
+  if(requestedOfferKey&&!view.openOffer(requestedOfferKey))view.showMessage('A oferta vinculada a esta entrega não está presente nas capturas locais da Curadoria. Os dados salvos foram preservados.',{error:true});
+});
 initialLoad.catch(error=>{console.error('Não foi possível abrir o banco local Top Offers CB.',error);view.showMessage('Não foi possível abrir o armazenamento local desta tela.',{error:true});});
 mountExtensionCapture({target:window,ready:initialLoad,getBusy:()=>saving,getDraft:()=>root.querySelector('#pasteArea').value,
   preparePreview:(raw,metadata)=>{view.prepareImport(raw);validateImport(raw,metadata);},

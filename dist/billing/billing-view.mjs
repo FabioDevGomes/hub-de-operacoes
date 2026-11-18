@@ -1,5 +1,6 @@
-import * as Domain from './billing-domain.mjs?v=12';
-import * as Storage from './billing-storage.mjs?v=15';
+import * as Domain from './billing-domain.mjs?v=15';
+import * as Storage from './billing-storage.mjs?v=21';
+import { isManualBillingConsolidationPending, markManualBillingConsolidationPending, requestManualBillingConsolidation, subscribeBillingSync } from './billing-sync.mjs?v=1';
 
 const mounted = new WeakSet();
 let chartRenderSequence = 0;
@@ -19,12 +20,15 @@ const parseAmount = value => {
   return number;
 };
 
-export async function mount({ root, toast = () => {}, onUpdateManualSale = null, onLinkManualSaleToMcc = null, onCancelSale = null, getManualMccMatchCandidates = () => [], onUpdateMccConversionValues = null, onManualSaleSaved = null, getManualSaleEditData = null, getCampaigns = () => [], inferPlatformFromCampaignName = null, exchangeRate = null, exchangeRateQuote = null }) {
+export async function mount({ root, toast = () => {}, onUpdateManualSale = null, onLinkManualSaleToMcc = null, onLinkGuruMediaSaleToMcc = null, onUnlinkGuruMediaSaleFromMcc = null, onCancelSale = null, getManualMccMatchCandidates = () => [], getGuruMediaMccMatchCandidates = () => [], onUpdateMccConversionValues = null, onManualSaleSaved = null, getManualSaleEditData = null, getCampaigns = () => [], inferPlatformFromCampaignName = null, exchangeRate = null, exchangeRateQuote = null }) {
   if (!root) return;
   root.__updateManualSale = onUpdateManualSale;
   root.__linkManualSaleToMcc = onLinkManualSaleToMcc;
+  root.__linkGuruMediaSaleToMcc = onLinkGuruMediaSaleToMcc;
+  root.__unlinkGuruMediaSaleFromMcc = onUnlinkGuruMediaSaleFromMcc;
   root.__cancelSale = onCancelSale;
   root.__getManualMccMatchCandidates = getManualMccMatchCandidates;
+  root.__getGuruMediaMccMatchCandidates = getGuruMediaMccMatchCandidates;
   root.__updateMccConversionValues = onUpdateMccConversionValues;
   root.__onManualSaleSaved = onManualSaleSaved;
   root.__getManualSaleEditData = getManualSaleEditData;
@@ -47,6 +51,7 @@ export async function mount({ root, toast = () => {}, onUpdateManualSale = null,
     mounted.add(root);
   }
   const status = root.querySelector('#billingLoadStatus');
+  updateOverviewConsolidationButton(root);
   status.textContent = 'Abrindo o histórico financeiro local…';
   try {
     const counts = await Storage.countBillingData();
@@ -66,6 +71,7 @@ function markup() {
       <div class="billing-presets" role="group" aria-label="Período"><button type="button" data-billing-period="today">Hoje</button><button type="button" data-billing-period="last7">Últimos 7 dias</button><button type="button" data-billing-period="current">Mês atual</button><button type="button" data-billing-period="previous">Mês anterior</button></div>
       <div class="billing-month-navigation hub-month-navigation" role="group" aria-label="Navegar entre meses registrados"><button class="btn hub-month-arrow" type="button" data-billing-month-nav="previous" aria-label="Mês anterior" title="Mês anterior" disabled><span aria-hidden="true">‹</span></button><span id="billingMonthLabel" class="hub-month-label" aria-live="polite"></span><button class="btn hub-month-arrow" type="button" data-billing-month-nav="next" aria-label="Próximo mês" title="Próximo mês" disabled><span aria-hidden="true">›</span></button></div>
       <div class="billing-custom-period"><label>De <input type="text" id="billingStart" inputmode="numeric" placeholder="dd/mm/aaaa" aria-label="Data inicial"></label><label>Até <input type="text" id="billingEnd" inputmode="numeric" placeholder="dd/mm/aaaa" aria-label="Data final"></label><button class="btn" type="button" id="billingApplyPeriod">Aplicar</button></div>
+      <button class="btn billing-consolidate-button hidden" type="button" id="billingOverviewConsolidate" title="Atualiza os dados derivados do Faturamento na Visão Geral">Consolidar na Visão Geral</button>
       <button class="btn primary" type="button" id="billingNewSale">Adicionar venda</button>
     </div>
     <div id="billingLoadStatus" class="billing-load-status" role="status" aria-live="polite"></div>
@@ -84,7 +90,7 @@ function markup() {
     <section class="card panel billing-monthly-chart-panel" aria-labelledby="billingMonthlyChartTitle"><div class="panel-head"><div><h2 id="billingMonthlyChartTitle">Faturamento mensal (R$)</h2><p id="billingMonthlyChartCaption">Últimos 12 meses · o gráfico não herda os filtros da tabela.</p></div><button class="btn billing-legacy-cleanup hidden" id="billingLegacyCleanupButton" type="button">Remover carga antiga e recalcular</button></div><div id="billingMonthlyChart" class="billing-month-chart-scroll"></div></section>
     <dialog id="billingLegacyCleanupDialog" class="billing-payment-dialog billing-legacy-cleanup-dialog" aria-labelledby="billingLegacyCleanupTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Revisar carga antiga</span><h2 id="billingLegacyCleanupTitle">Remover dados importados</h2><p>Esta carga veio de uma versão antiga do Hub e pode estar elevando o faturamento e o gráfico neste navegador.</p></div><button class="billing-payment-dialog-close" type="button" data-close-legacy-cleanup aria-label="Fechar">×</button></div><div class="billing-legacy-cleanup-counts"><div><span>Vendas antigas</span><strong id="billingLegacyCleanupSales">0</strong></div><div><span>Pagamentos e reembolsos vinculados</span><strong id="billingLegacyCleanupMovements">0</strong></div><div><span>Auditorias dessas vendas</span><strong id="billingLegacyCleanupAudit">0</strong></div></div><p class="billing-payment-dialog-note">Ao confirmar, serão removidos somente os registros dessa carga e seus movimentos e auditorias associados. Vendas de outras origens, campanhas e demais dados do Hub serão preservados. Depois, o faturamento e o gráfico serão recalculados. A remoção não pode ser desfeita.</p><div class="billing-legacy-cleanup-actions"><button class="btn" type="button" data-close-legacy-cleanup>Cancelar</button><button class="btn billing-legacy-cleanup-confirm" id="billingLegacyCleanupConfirm" type="button">Remover e recalcular</button></div></dialog>
     <dialog id="billingPaymentStatusDialog" class="billing-payment-dialog" aria-labelledby="billingPaymentStatusTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Status do pagamento</span><h2 id="billingPaymentStatusTitle"></h2><p id="billingPaymentStatusCurrent"></p></div><button class="billing-payment-dialog-close" type="button" data-close-payment-status aria-label="Fechar">×</button></div><div id="billingPaymentStatusOptions" class="billing-payment-dialog-options"></div><p class="billing-payment-dialog-note">“Pagamento recebido” atualiza o status, mas não cria um lançamento de caixa nem informa uma data. Para isso, registre um recebimento.</p></dialog>
-    <dialog id="billingManualMccMatchDialog" class="billing-payment-dialog billing-manual-mcc-match-dialog" aria-labelledby="billingManualMccMatchTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Revisão de vínculo MCC</span><h2 id="billingManualMccMatchTitle">Possível correspondência</h2><p>Revise a conta, a data e os valores antes de mover este lançamento para a campanha observada na MCC.</p></div><button class="billing-payment-dialog-close" type="button" data-close-manual-mcc-match aria-label="Fechar">×</button></div><div class="billing-manual-mcc-match-body"><div id="billingManualMccMatchSale" class="billing-manual-mcc-match-sale"></div><label class="billing-manual-mcc-match-select">Conversão correspondente<select id="billingManualMccMatchCandidate"><option value="">Selecione uma sugestão…</option></select></label><div id="billingManualMccMatchDetails" class="billing-manual-mcc-match-details" aria-live="polite">Selecione uma sugestão para revisar os detalhes.</div><p class="billing-payment-dialog-note">Ao vincular, o valor manual permanece e o agregado MCC correspondente é reduzido para evitar contagem duplicada. A conversão inteira exibida no D0 pode confirmar o vínculo; isso não significa que o pagamento foi recebido. Um D−1 posterior pode atualizar a confirmação.</p><div class="billing-manual-mcc-match-actions"><button class="btn" type="button" data-close-manual-mcc-match>Cancelar</button><button class="btn primary" id="billingManualMccMatchConfirm" type="button" disabled>Vincular à campanha</button></div></div></dialog>
+    <dialog id="billingManualMccMatchDialog" class="billing-payment-dialog billing-manual-mcc-match-dialog" aria-labelledby="billingManualMccMatchTitle"><div class="billing-payment-dialog-head"><div><span class="billing-payment-dialog-kicker">Revisão de vínculo MCC</span><h2 id="billingManualMccMatchTitle">Possível correspondência</h2><p>Revise conta, data, campanha e valores. Nenhuma sugestão é aplicada automaticamente.</p></div><button class="billing-payment-dialog-close" type="button" data-close-manual-mcc-match aria-label="Fechar">×</button></div><div class="billing-manual-mcc-match-body"><div id="billingManualMccMatchSale" class="billing-manual-mcc-match-sale"></div><label class="billing-manual-mcc-match-select">Conversão correspondente<select id="billingManualMccMatchCandidate"><option value="">Selecione uma sugestão…</option></select></label><div id="billingManualMccMatchDetails" class="billing-manual-mcc-match-details" aria-live="polite">Selecione uma sugestão para revisar os detalhes.</div><p id="billingManualMccMatchNote" class="billing-payment-dialog-note">A confirmação preserva a comissão individual e reduz a conversão coberta no agregado Google Ads. Valores MCC agregados não são divididos nem somados novamente; isso não confirma recebimento.</p><div class="billing-manual-mcc-match-actions"><button class="btn" type="button" data-close-manual-mcc-match>Cancelar</button><button class="btn primary" id="billingManualMccMatchConfirm" type="button" disabled>Confirmar vínculo</button></div></div></dialog>
     <div id="billingModal" class="billing-modal hidden" role="dialog" aria-modal="true" aria-labelledby="billingModalTitle"><form id="billingForm" class="billing-modal-card"><div class="panel-head"><h2 id="billingModalTitle">Nova venda</h2><button class="btn" type="button" data-close-modal>Fechar</button></div><p id="billingSourceCorrectionNotice" class="billing-notice hidden">Este lançamento está vinculado à venda provisória da base de campanhas. Data, produto, plataforma, campanha, país, hora e valor serão sincronizados com os cálculos. Data e campanha também definem a conciliação MCC e o diário associado. Recebimentos e reembolsos registrados permanecem preservados.</p><p id="billingMccCorrectionNotice" class="billing-notice hidden">Corrija o valor da conversão na moeda original e, se necessário, ajuste a plataforma. A quantidade e a confirmação continuam vinculadas à captura MCC; a plataforma manual será preservada em novas sincronizações e registrada no Histórico.</p><input type="hidden" name="sale_id"><div class="billing-form-grid">
       <label>Data da venda <input name="sale_date" type="text" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
       <label>Produto <input name="product" required></label><label id="billingPlatformField">Plataforma <input name="platform" required></label><label>Tipo de comissão <input name="commission_type" placeholder="Comissão"></label><label>Conta <input name="account"></label>
@@ -120,9 +126,19 @@ function bind(root, toast) {
     if (action) { await handleAction(action, root, toast); return; }
     if (event.target.closest('#billingLegacyCleanupButton')) { await openLegacyCleanupDialog(root, toast); return; }
     if (event.target.closest('#billingLegacyCleanupConfirm')) { await removeLegacyCleanup(root, toast); return; }
+    if (event.target.closest('#billingOverviewConsolidate')) {
+      requestManualBillingConsolidation();
+      updateOverviewConsolidationButton(root);
+      toast('Consolidação solicitada. A Visão Geral será atualizada se estiver aberta; ao entrar nela depois, os dados também serão relidos.');
+      return;
+    }
     const paymentChoice = event.target.closest('[data-payment-status-choice]');
     if (paymentChoice) { await savePaymentStatus(paymentChoice, root, toast); return; }
-    if (event.target.closest('#billingManualMccMatchConfirm')) { await confirmManualMccMatch(root, toast); return; }
+    if (event.target.closest('#billingManualMccMatchConfirm')) {
+      if (root.dataset.mccMatchMode === 'gurumedia') await confirmGuruMediaMccMatch(root, toast);
+      else await confirmManualMccMatch(root, toast);
+      return;
+    }
     const sort = event.target.closest('[data-billing-sort]');
     if (sort) {
       const key = sort.dataset.billingSort;
@@ -143,7 +159,10 @@ function bind(root, toast) {
     if (event.target.closest('[data-close-legacy-cleanup]')) root.querySelector('#billingLegacyCleanupDialog').close();
   });
   root.addEventListener('change', async event => {
-    if (event.target.matches('#billingManualMccMatchCandidate')) updateManualMccMatchDetails(root);
+    if (event.target.matches('#billingManualMccMatchCandidate')) {
+      if (root.dataset.mccMatchMode === 'gurumedia') updateGuruMediaMccMatchDetails(root);
+      else updateManualMccMatchDetails(root);
+    }
     else if (event.target.matches('#billingDimension')) await refresh(root);
     else if (event.target.matches('#billingPageSize')) { root.dataset.page = '1'; renderTable(root); }
     else if (event.target.matches('.billing-filters select')) { root.dataset.page = '1'; await refresh(root); }
@@ -164,6 +183,20 @@ function bind(root, toast) {
   root.querySelector('#billingPaymentStatusDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
   root.querySelector('#billingManualMccMatchDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
   root.querySelector('#billingLegacyCleanupDialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+  root.__billingSyncUnsubscribe = subscribeBillingSync(message => {
+    if (message.type === 'manual-pending-changed') updateOverviewConsolidationButton(root);
+    if (message.type === 'automatic-billing-updated' && root.isConnected) void refresh(root);
+  });
+}
+
+function updateOverviewConsolidationButton(root) {
+  const button = root.querySelector('#billingOverviewConsolidate');
+  if (button) button.classList.toggle('hidden', !isManualBillingConsolidationPending());
+}
+
+function markOverviewConsolidationPending(root) {
+  markManualBillingConsolidationPending();
+  updateOverviewConsolidationButton(root);
 }
 
 async function syncLegacyCleanupButton(root, toast = () => {}) {
@@ -207,6 +240,7 @@ async function removeLegacyCleanup(root, toast) {
   button.disabled = true;
   try {
     const removed = await Storage.removeLegacyBillingSeed();
+    if (removed.sales > 0) markOverviewConsolidationPending(root);
     root.querySelector('#billingLegacyCleanupDialog').close();
     await syncLegacyCleanupButton(root, toast);
     await refresh(root);
@@ -251,6 +285,8 @@ async function refresh(root) {
   ]);
   const campaigns = root.__getBillingCampaigns?.() || [];
   const allSales = Domain.resolveMccSalePlatforms(rawAllSales, campaigns, root.__inferBillingCampaignPlatform);
+  const manualMccMatchCandidates = root.__getManualMccMatchCandidates?.() || [];
+  const guruMediaMccMatchCandidates = root.__getGuruMediaMccMatchCandidates?.(allSales) || [];
   const salesMap = new Map();
   let rows;
   let movements;
@@ -271,8 +307,7 @@ async function refresh(root) {
   const visibleSaleIds = new Set(visibleRows.map(row => row.sale?.sale_id).filter(Boolean));
   const visibleSales = sales.filter(sale => visibleSaleIds.has(sale.sale_id) && (filters.recordState === 'all' || (filters.recordState === 'cancelled' ? sale.active === false : sale.active !== false)));
   const visibleMovements = mode === 'competence' ? movements.filter(move => visibleSaleIds.has(move.sale_id)) : visibleRows;
-  const manualMccMatchCandidates = root.__getManualMccMatchCandidates?.() || [];
-  root.__billing = { mode, range, rows: visibleRows, sales: visibleSales, movements: visibleMovements, salesMap, allMovements: movements, allSales, manualMccMatchCandidates };
+  root.__billing = { mode, range, rows: visibleRows, sales: visibleSales, movements: visibleMovements, salesMap, allMovements: movements, allSales, manualMccMatchCandidates, guruMediaMccMatchCandidates };
   populateFilters(root, sales);
   renderKpis(root);
   renderAggregate(root);
@@ -533,9 +568,17 @@ function saleRow(sale, movements, index, root) {
   const isMccAggregate = sale.source === 'mcc_conversion_aggregate';
   const sourceLinked = sale.source === 'hub_manual_capture' && sale.source_ref;
   const matchCount = sourceLinked ? (root.__billing?.manualMccMatchCandidates || []).filter(item => item.manual_billing_sale_id === sale.sale_id).length : 0;
+  const guruMatchCount = sale.source === 'gurumedia_postback' ? (root.__billing?.guruMediaMccMatchCandidates || []).filter(item => item.sale_id === sale.sale_id).length : 0;
   const matchAction = matchCount ? `<button class="btn billing-manual-mcc-match-action" data-billing-action="manual-mcc-match" data-sale-id="${esc(sale.sale_id)}">Vincular MCC (${matchCount})</button>` : '';
-  const actions = `<div class="billing-action-buttons"><button class="btn" data-billing-action="edit" data-sale-id="${esc(sale.sale_id)}">Editar</button>${matchAction}${sale.active === false ? '' : `<button class="btn" data-billing-action="receipt" data-sale-id="${esc(sale.sale_id)}">Recebimento</button><button class="btn" data-billing-action="refund" data-sale-id="${esc(sale.sale_id)}">Reembolso</button>`}<button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button>${isMccAggregate || sale.active === false ? '' : `<button class="btn billing-danger" data-billing-action="cancel" data-sale-id="${esc(sale.sale_id)}">Cancelar</button>`}</div>`;
-  const confirmation = sale.confirmation_status === 'confirmed'
+  const guruMediaMatchAction = sale.source === 'gurumedia_postback'
+    ? sale.mcc_match_aggregate_id
+      ? `<button class="btn billing-manual-mcc-match-action" data-billing-action="gurumedia-mcc-unlink" data-sale-id="${esc(sale.sale_id)}">Remover vínculo MCC</button>`
+      : guruMatchCount ? `<button class="btn billing-manual-mcc-match-action" data-billing-action="gurumedia-mcc-match" data-sale-id="${esc(sale.sale_id)}">Revisar MCC (${guruMatchCount})</button>` : ''
+    : '';
+  const actions = `<div class="billing-action-buttons"><button class="btn" data-billing-action="edit" data-sale-id="${esc(sale.sale_id)}">Editar</button>${matchAction}${guruMediaMatchAction}${sale.active === false ? '' : `<button class="btn" data-billing-action="receipt" data-sale-id="${esc(sale.sale_id)}">Recebimento</button><button class="btn" data-billing-action="refund" data-sale-id="${esc(sale.sale_id)}">Reembolso</button>`}<button class="btn" data-billing-action="audit" data-sale-id="${esc(sale.sale_id)}">Histórico</button>${isMccAggregate || sale.active === false ? '' : `<button class="btn billing-danger" data-billing-action="cancel" data-sale-id="${esc(sale.sale_id)}">Cancelar</button>`}</div>`;
+  const confirmation = sale.mcc_match_aggregate_id
+    ? `<span class="billing-confirmation billing-confirmation-covered" title="Vinculada ao agregado ${esc(sale.mcc_match_aggregate_id)}; o vínculo não confirma pagamento.">Vinculada · Google Ads</span>`
+    : sale.confirmation_status === 'confirmed'
     ? `<span class="billing-confirmation billing-confirmation-confirmed" title="Confirmada pela importação ${esc(sale.confirmation_source || 'MCC D−1')}">Confirmada · ${esc(sale.confirmation_source || 'MCC D−1')}</span>`
     : sale.confirmation_status === 'manual'
       ? '<span class="billing-confirmation billing-confirmation-manual">Lançamento manual</span>'
@@ -545,6 +588,8 @@ function saleRow(sale, movements, index, root) {
           ? `<span class="billing-confirmation billing-confirmation-unconfirmed">Não confirmada · ${esc(sale.confirmation_source || 'MCC D−1')}</span>`
           : sale.confirmation_status === 'represented_by_manual'
             ? '<span class="billing-confirmation billing-confirmation-covered">Coberta por lançamento manual</span>'
+            : sale.confirmation_status === 'represented_by_billing_sale'
+              ? '<span class="billing-confirmation billing-confirmation-covered">Coberta por venda individual</span>'
       : '—';
   const count = new Intl.NumberFormat('pt-BR', { maximumFractionDigits:2 }).format(Number(sale.conversion_count ?? 1));
   const paymentStatus = Domain.BILLING_STATUSES[sale.payment_status] || Domain.BILLING_STATUSES.unknown;
@@ -560,7 +605,8 @@ function saleRow(sale, movements, index, root) {
     ? `<span title="${esc(`Equivalente calculado de ${money(sale.value_usd, 'USD')}; não gravado no lançamento. ${sale.value_usd === 0 ? 'US$ 0,00 equivale a R$ 0,00 sem necessidade de cotação.' : chartRateNote(root)}`)}">${brlValue}*</span>`
     : brlValue;
   const paymentStatusButton = `<button class="billing-status billing-status-button billing-status-${esc(sale.payment_status)}" data-billing-action="payment-status" data-sale-id="${esc(sale.sale_id)}" type="button" title="Alterar status do pagamento" aria-label="Alterar status do pagamento de ${esc(sale.product)}. Atual: ${esc(paymentStatus)}">${esc(paymentStatus)}</button>`;
-  return `<tr class="${sale.active === false ? 'billing-cancelled' : ''}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(productLabel)}"><span>${esc(productLabel)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${usdCell}</td><td class="num">${brlCell}</td><td>${paymentStatusButton}</td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
+  const rowStateClass = sale.active === false ? sale.confirmation_status === 'represented_by_billing_sale' ? 'billing-covered' : 'billing-cancelled' : '';
+  return `<tr class="${rowStateClass}" data-billing-row="${esc(sale.sale_id)}"><td>${displayDate(sale.sale_date)}</td><td class="billing-product-cell" title="${esc(productLabel)}"><span>${esc(productLabel)}</span></td><td>${esc(sale.platform)}</td><td>${esc(sale.commission_type)}</td><td class="num">${count}</td><td>${esc(sale.account)}</td><td>${confirmation}</td><td class="num">${usdCell}</td><td class="num">${brlCell}</td><td>${paymentStatusButton}</td><td>${paymentDates.map(displayDate).join(', ') || '—'}</td><td>${refunds.length ? `${money(refundBrl.amount, 'BRL', refundBrl.complete)} · ${money(refundUsd.amount, 'USD', refundUsd.complete)}` : '—'}</td><td title="${esc(sale.notes)}">${esc(sale.notes || '—')}</td><td class="billing-actions-cell">${actions}<div class="billing-audit hidden" id="billingAudit-${esc(sale.sale_id)}"></div></td></tr>`;
 }
 
 function movementRow(movement) {
@@ -577,6 +623,17 @@ async function handleAction(button, root, toast) {
     const sale = Domain.resolveMccSalePlatforms([storedSale], root.__getBillingCampaigns?.() || [], root.__inferBillingCampaignPlatform)[0];
     if (!sale) throw new Error('A venda não foi encontrada.');
     if (action === 'manual-mcc-match') { openManualMccMatchDialog(root, sale, toast); return; }
+    if (action === 'gurumedia-mcc-match') { openGuruMediaMccMatchDialog(root, sale, toast); return; }
+    if (action === 'gurumedia-mcc-unlink') {
+      if (!confirm(`Remover o vínculo Google Ads desta venda GuruMedia? A venda e o agregado MCC serão mantidos; a conversão e o valor reportados serão restaurados no Faturamento.`)) return;
+      if (typeof root.__unlinkGuruMediaSaleFromMcc !== 'function') throw new Error('A ação de remover o vínculo não está disponível.');
+      await root.__unlinkGuruMediaSaleFromMcc({ saleId });
+      markOverviewConsolidationPending(root);
+      invalidateMonthNavigation(root);
+      await refresh(root);
+      toast('Vínculo removido; o agregado Google Ads voltou aos totais.');
+      return;
+    }
     if (action === 'payment-status') { openPaymentStatusDialog(root, sale); return; }
     if (action === 'edit') { openSaleModal(root, sale); return; }
     if (action === 'receipt' || action === 'refund') { openMovementModal(root, sale, action === 'refund' ? 'refund' : 'receipt'); return; }
@@ -587,6 +644,7 @@ async function handleAction(button, root, toast) {
       if (reason == null) return;
       if (root.__cancelSale) await root.__cancelSale({ saleId, reason });
       else await Storage.cancelSale(saleId, reason);
+      markOverviewConsolidationPending(root);
       invalidateMonthNavigation(root);
       toast('Venda cancelada sem apagar o histórico.');
       await refresh(root);
@@ -597,6 +655,7 @@ async function handleAction(button, root, toast) {
 function openManualMccMatchDialog(root, sale, toast) {
   const candidates = (root.__billing?.manualMccMatchCandidates || []).filter(item => item.manual_billing_sale_id === sale.sale_id);
   if (!candidates.length) { toast('Nenhuma sugestão compatível está disponível. Atualize o Faturamento e tente novamente.', true); return; }
+  root.dataset.mccMatchMode = 'manual';
   root.__manualMccMatchCandidates = candidates;
   root.dataset.manualMccMatchSaleId = String(sale.source_ref || '');
   root.querySelector('#billingManualMccMatchSale').textContent = `${sale.product || 'Produto não identificado'} · ${displayDate(sale.sale_date)} · conta ${sale.account || 'não identificada'} · valor manual ${money(sale.value_brl, 'BRL')}`;
@@ -608,6 +667,31 @@ function openManualMccMatchDialog(root, sale, toast) {
   select.value = '';
   root.querySelector('#billingManualMccMatchDetails').textContent = 'Selecione uma sugestão para revisar os detalhes.';
   root.querySelector('#billingManualMccMatchConfirm').disabled = true;
+  root.querySelector('#billingManualMccMatchConfirm').textContent = 'Vincular à campanha';
+  root.querySelector('#billingManualMccMatchNote').textContent = 'Ao vincular, o valor manual permanece e o agregado MCC correspondente é reduzido para evitar contagem duplicada. A conversão inteira exibida no D0 pode confirmar o vínculo; isso não significa que o pagamento foi recebido. Um D−1 posterior pode atualizar a confirmação.';
+  root.querySelector('#billingManualMccMatchDialog').showModal();
+  select.focus();
+}
+
+function openGuruMediaMccMatchDialog(root, sale, toast) {
+  const candidates = (root.__billing?.guruMediaMccMatchCandidates || []).filter(item => item.sale_id === sale.sale_id);
+  if (!candidates.length) { toast('Nenhuma sugestão compatível está disponível. Atualize o Faturamento e tente novamente.', true); return; }
+  root.dataset.mccMatchMode = 'gurumedia';
+  root.dataset.guruMccSaleId = sale.sale_id;
+  root.__guruMediaMccMatchCandidates = candidates;
+  root.querySelector('#billingManualMccMatchTitle').textContent = 'Revisar vínculo da venda GuruMedia';
+  root.querySelector('#billingManualMccMatchSale').textContent = `${sale.product || 'Produto não identificado'} · venda ${displayDate(sale.sale_date)} · comissão ${sale.value_usd != null ? money(sale.value_usd, 'USD') : money(sale.value_brl, 'BRL')}`;
+  const select = root.querySelector('#billingManualMccMatchCandidate');
+  select.innerHTML = '<option value="">Selecione uma sugestão…</option>' + candidates.map((candidate, index) => {
+    const period = candidate.source_period === 'd0' ? 'Google Ads D0 · parcial' : candidate.source_period === 'd1' ? 'Google Ads D−1' : 'MCC';
+    return `<option value="${index}">${esc(candidate.campaign_name)} · conta ${esc(candidate.account || 'não identificada')} · ${displayDate(candidate.date)} · ${candidate.conversion_count_before} conversão(ões) · ${period}</option>`;
+  }).join('');
+  select.value = '';
+  root.querySelector('#billingManualMccMatchDetails').textContent = 'Selecione uma sugestão para revisar os detalhes.';
+  root.querySelector('#billingManualMccMatchNote').textContent = 'Este vínculo é confirmado manualmente e fica registrado para sobreviver a novas importações. A comissão GuruMedia permanece como venda financeira; o valor agregado Google Ads não é contado novamente nem repartido entre conversões residuais. O vínculo não confirma pagamento.';
+  const confirm = root.querySelector('#billingManualMccMatchConfirm');
+  confirm.textContent = 'Confirmar vínculo';
+  confirm.disabled = true;
   root.querySelector('#billingManualMccMatchDialog').showModal();
   select.focus();
 }
@@ -627,6 +711,32 @@ function updateManualMccMatchDetails(root) {
   confirm.disabled = false;
 }
 
+function updateGuruMediaMccMatchDetails(root) {
+  const select = root.querySelector('#billingManualMccMatchCandidate');
+  const candidate = root.__guruMediaMccMatchCandidates?.[Number(select.value)];
+  const details = root.querySelector('#billingManualMccMatchDetails');
+  const confirm = root.querySelector('#billingManualMccMatchConfirm');
+  if (!candidate || select.value === '') {
+    details.textContent = 'Selecione uma sugestão para revisar os detalhes.';
+    confirm.disabled = true;
+    return;
+  }
+  const period = candidate.source_period === 'd0' ? 'Google Ads D0 · captura parcial' : candidate.source_period === 'd1' ? 'Google Ads D−1 · fechamento' : 'Agregado MCC';
+  const saleValue = candidate.sale_value_usd != null ? money(candidate.sale_value_usd, 'USD') : money(candidate.sale_value_brl, 'BRL');
+  const mccValue = candidate.mcc_value_usd != null ? money(candidate.mcc_value_usd, 'USD')
+    : candidate.mcc_value_brl != null ? money(candidate.mcc_value_brl, 'BRL') : 'valor agregado indisponível';
+  const dateNote = candidate.date_basis === 'account_time_zone'
+    ? `Data comparada no fuso da conta (${candidate.time_zone}).`
+    : `O fuso da conta não foi encontrado; a sugestão compara a data brasileira da venda com o agregado, no intervalo de ±1 dia (${candidate.event_date} → ${displayDate(candidate.date)}).`;
+  const amountNote = candidate.amount_comparable
+    ? `O valor unitário coincide dentro da tolerância configurada (${money(candidate.amount_difference, candidate.amount_currency)} de diferença).`
+    : candidate.conversion_count_before > 1
+      ? 'O agregado contém várias conversões; o valor total não identifica o valor desta conversão individual.'
+      : 'Não foi possível comparar valores individuais com segurança.';
+  details.innerHTML = `<div><span>Campanha Google Ads</span><strong>${esc(candidate.campaign_name)}</strong></div><div><span>Conta e data do agregado</span><strong>${esc(candidate.account || 'não identificada')} · ${displayDate(candidate.date)}</strong></div><div><span>Comissão GuruMedia</span><strong>${esc(saleValue)}</strong></div><div><span>Valor reportado no agregado</span><strong>${esc(mccValue)}</strong></div><div><span>Conversões residuais</span><strong>${esc(candidate.conversion_count_before)} · ${esc(period)}</strong></div><div><span>Critérios da sugestão</span><strong>${esc(dateNote)} ${esc(amountNote)}</strong></div>`;
+  confirm.disabled = false;
+}
+
 async function confirmManualMccMatch(root, toast) {
   const select = root.querySelector('#billingManualMccMatchCandidate');
   const candidate = root.__manualMccMatchCandidates?.[Number(select.value)];
@@ -635,6 +745,7 @@ async function confirmManualMccMatch(root, toast) {
   button.disabled = true;
   try {
     const sale = await root.__linkManualSaleToMcc({ sourceSaleId:root.dataset.manualMccMatchSaleId, campaignId:candidate.mcc_campaign_id });
+    markOverviewConsolidationPending(root);
     root.querySelector('#billingManualMccMatchDialog').close();
     invalidateMonthNavigation(root);
     await refresh(root);
@@ -644,6 +755,26 @@ async function confirmManualMccMatch(root, toast) {
       : source === 'mcc_d1'
         ? 'Venda vinculada e confirmada pela MCC D−1. O status de pagamento foi preservado.'
         : 'Venda vinculada à campanha da MCC; a confirmação será atualizada pela próxima importação.');
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function confirmGuruMediaMccMatch(root, toast) {
+  const select = root.querySelector('#billingManualMccMatchCandidate');
+  const candidate = root.__guruMediaMccMatchCandidates?.[Number(select.value)];
+  const button = root.querySelector('#billingManualMccMatchConfirm');
+  if (!candidate || select.value === '' || typeof root.__linkGuruMediaSaleToMcc !== 'function') return;
+  button.disabled = true;
+  try {
+    await root.__linkGuruMediaSaleToMcc({ saleId:root.dataset.guruMccSaleId, aggregateSaleId:candidate.aggregate_sale_id });
+    markOverviewConsolidationPending(root);
+    root.querySelector('#billingManualMccMatchDialog').close();
+    invalidateMonthNavigation(root);
+    await refresh(root);
+    toast('Venda GuruMedia vinculada. A comissão permanece no Faturamento e o agregado Google Ads não contará esse valor de novo. O pagamento continua pendente.');
   } catch (error) {
     toast(error.message, true);
   } finally {
@@ -820,6 +951,7 @@ async function saveSaleForm(event, root, toast) {
       if (Object.keys(values).length && typeof update === 'function') {
         await update({saleId:form.elements.sale_id.value, campaignId:form.dataset.mccCampaignId, date:form.dataset.mccSourceDate, period:form.dataset.mccSourcePeriod, originalCurrency:form.dataset.mccCorrectionCurrency, values, ...(platformChanged ? {platform} : {})});
       } else await Storage.updateMccConversionValues(form.elements.sale_id.value, values, platformChanged ? {platform} : {});
+      if (Object.keys(values).length) markOverviewConsolidationPending(root);
       closeSaleModal(root);
       if (Object.keys(values).length) invalidateMonthNavigation(root);
       toast(Object.keys(values).length
@@ -836,6 +968,7 @@ async function saveSaleForm(event, root, toast) {
       if (valueBrl == null || valueBrl <= 0) throw new Error('Informe um valor em reais maior que zero.');
       if (typeof root.__updateManualSale !== 'function') throw new Error('A atualização do lançamento original não está disponível nesta tela.');
       await root.__updateManualSale({ sourceSaleId:sourceSaleRef, data:saleDate, hora:form.elements.source_sale_time.value, campanha_id:form.elements.source_campaign_id.value, pais_codigo:form.elements.source_country_code.value, produto:form.elements.product.value, plataforma:form.elements.platform.value, valor_brl:valueBrl });
+      markOverviewConsolidationPending(root);
       closeSaleModal(root);
       invalidateMonthNavigation(root);
       toast('Lançamento atualizado na base e no Faturamento; os cálculos vinculados foram sincronizados. Recebimentos e reembolsos foram preservados.');
@@ -862,11 +995,14 @@ async function saveSaleForm(event, root, toast) {
     const existingId = form.elements.sale_id.value;
     let sale;
     let action = 'sale_created';
+    let overviewRelevantChange = false;
     if (existingId) {
       const previous = (await Storage.salesByIds([existingId]))[0];
       action = previous?.payment_status !== input.payment_status ? 'payment_status_changed' : (previous?.value_brl !== input.value_brl || previous?.value_usd !== input.value_usd) ? 'financial_value_corrected' : 'sale_updated';
+      overviewRelevantChange = Boolean(previous?.campaign_id) && ['sale_date', 'product', 'account', 'value_brl', 'value_usd', 'active'].some(field => !Object.is(previous?.[field] ?? null, input[field] ?? null));
       sale = await Storage.updateSale(existingId, input, action);
     } else sale = await Storage.createSale({ ...input, source:'manual', confirmation_status:'manual' });
+    if (!existingId) overviewRelevantChange = Boolean(sale?.campaign_id);
     if (sale.payment_status === 'paid' && paymentDate) {
       const knownMovements = await Storage.movementsForSales([sale.sale_id]);
       const duplicate = knownMovements.some(move => move.type === 'receipt' && move.effective_date === paymentDate && move.value_brl === sale.value_brl && move.value_usd === sale.value_usd);
@@ -874,6 +1010,7 @@ async function saveSaleForm(event, root, toast) {
     }
     let accountTraceError = null;
     try { await root.__onManualSaleSaved?.(sale); } catch (error) { accountTraceError = error; }
+    if (overviewRelevantChange) markOverviewConsolidationPending(root);
     closeSaleModal(root);
     invalidateMonthNavigation(root);
     toast(accountTraceError

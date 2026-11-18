@@ -71,12 +71,45 @@ const laterPausedCollection = db.importManifest(confirmedInD1.base, manifest('20
 assert.equal(laterPausedCollection.base.campanhas[0].pausa_confirmada_em, '2026-09-29', 'repetir status pausado não desloca a data inicial da confirmação');
 assert.deepEqual(laterPausedCollection.base.diario.map(item=>item.data), ['2026-09-29'], 'dados posteriores não são acrescentados após pausa confirmada');
 
+const automaticStart=db.importManifest(db.create(),manifest('2026-09-29',[
+  {nome_campanha_exato:'Pausa automática',metricas_D_zero:period('2026-09-29','Ativada')},
+]),rowFactory).base,automaticCampaignId=automaticStart.campanhas[0].id;
+const automaticPause=db.confirmAutomaticPause(automaticStart,{campaignId:automaticCampaignId,occurredAtUtc:'2026-09-30T15:00:00.000Z'});
+automaticPause.observacoes_diario=[{campanha_id:automaticCampaignId,data:'2026-09-30',texto:'',eventos:[{tipo:'google_ads_auto_pause',ocorrido_em_utc:'2026-09-30T15:00:00.000Z'}]}];
+// Simulate a later row written by an older import. It must stay stored, but no
+// subsequent import should extend or replace the diary beyond the pause.
+automaticPause.diario.push({campanha_id:automaticCampaignId,data:'2026-10-01',celulas:{B:{value:88},Q:{value:'histórico antigo'}},fontes:['manifesto']});
+const pauseDayManifest=manifest('2026-10-01',[{
+  nome_campanha_exato:'Pausa automática',metricas_D_menos_1:period('2026-09-30','Pausada'),metricas_D_zero:period('2026-10-01','Pausada'),
+}]);pauseDayManifest.separacao_temporal.D_menos_1={datas_detectadas:['2026-09-30']};
+const repeatedPauseManifest=manifest('2026-10-02',[{
+  nome_campanha_exato:'Pausa automática',metricas_D_menos_1:period('2026-10-01','Pausada'),metricas_D_zero:period('2026-10-02','Pausada'),
+}]);repeatedPauseManifest.separacao_temporal.D_menos_1={datas_detectadas:['2026-10-01']};
+const firstPausedImport=db.importManifest(automaticPause,pauseDayManifest,rowFactory).base;
+assert.equal(db.campaignDiaryStatusWindow(firstPausedImport,automaticCampaignId,{manifest:firstPausedImport.manifesto_atual}).pauseConfirmedAt,'2026-09-30','status pausado repetido não desloca o dia da pausa automática confirmada');
+const secondPausedImport=db.importManifest(firstPausedImport,repeatedPauseManifest,rowFactory).base;
+assert.deepEqual(secondPausedImport.diario.filter(row=>row.campanha_id===automaticCampaignId).map(row=>row.data).sort(),['2026-09-29','2026-09-30','2026-10-01'],'pausa automática não acrescenta novas datas e preserva linhas antigas');
+assert.equal(secondPausedImport.diario.find(row=>row.campanha_id===automaticCampaignId&&row.data==='2026-10-01').celulas.B.value,88,'linhas preexistentes não são apagadas nem sobrescritas');
+assert.equal(db.campaignDiaryDateAllowed(secondPausedImport,automaticCampaignId,'2026-10-02'),false,'data durante pausa fica fora do diário');
+const reactivationManifest=manifest('2026-10-03',[{
+  nome_campanha_exato:'Pausa automática',metricas_D_menos_1:period('2026-10-02','Pausada'),metricas_D_zero:period('2026-10-03','Ativada'),
+}]);reactivationManifest.separacao_temporal.D_menos_1={datas_detectadas:['2026-10-02']};
+const afterReactivation=db.importManifest(secondPausedImport,reactivationManifest,rowFactory).base;
+assert.deepEqual(afterReactivation.diario.filter(row=>row.campanha_id===automaticCampaignId).map(row=>row.data).sort(),['2026-09-29','2026-09-30','2026-10-01','2026-10-03'],'reativação retoma o diário na data confirmada sem preencher o intervalo pausado');
+assert.equal(afterReactivation.campanhas.find(item=>item.id===automaticCampaignId).reativada_em,'2026-10-03');
+assert.equal(db.campaignDiaryDateAllowed(afterReactivation,automaticCampaignId,'2026-10-02'),false,'a lacuna da pausa continua fechada depois da retomada');
+assert.equal(db.campaignDiaryDateAllowed(afterReactivation,automaticCampaignId,'2026-10-03'),true,'o diário aceita dados desde a data de reativação');
+
 const template = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');
 vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
-const viewState={ database:result.base, manifest:all, productCatalog:null };
-const viewContext = vm.createContext({ CampaignDatabase:db, OverviewDomain:context.window.OverviewDomain, state:viewState, operationalDatabase:manifest=>db.operationalProjection(viewState.database,manifest||viewState.manifest) });
+const viewState={ database:result.base, manifest:all, productCatalog:null,googleAdsSourceMode:'mcc',rate:5.1 };
+const overviewDomain={...context.window.OverviewDomain,authoritativeMccSnapshots:()=>({rows:[],dates:[]})};
+const viewContext = vm.createContext({ CampaignDatabase:db, OverviewDomain:overviewDomain, state:viewState, valueOf:value=>value?.valor??null,apiOperationalCampaignStatus:()=>null,operationalDatabase:manifest=>db.operationalProjection(viewState.database,manifest||viewState.manifest) });
 const viewHelpers = ['currentCampaignRows','derivedContext','campaignRows','activeCampaignRows'].map(name => template.match(new RegExp(`function ${name}\\([^\\n]+`))[0]).join('\n');
-vm.runInContext(`let derivedCache=null;\n${viewHelpers}`, viewContext);
+const derivedStart=template.indexOf('function derivedContext(){'),derivedEnd=template.indexOf('\r\n}\r\n    function databaseCampaign',derivedStart),derivedFunction=template.slice(derivedStart,derivedEnd+3);
+assert.ok(derivedStart>=0&&derivedEnd>derivedStart,'helper completo de contexto derivado do manifesto');
+const completeViewHelpers=viewHelpers.replace('function derivedContext(){',derivedFunction);
+vm.runInContext('let derivedCache=null;\n'+completeViewHelpers, viewContext);
 const visibleRows = viewContext.derivedContext().campaigns;
 assert.equal(visibleRows.filter(item => item._status === 'ativa').length, 1, 'a Visão Geral não pode marcar todas as linhas do manifesto como ativas');
 assert.equal(visibleRows.find(item => item.nome_campanha_exato === 'Oferta pausa').metricas_D_menos_1.conversoes.valor, 1, 'a linha pausada conserva as métricas oficiais');

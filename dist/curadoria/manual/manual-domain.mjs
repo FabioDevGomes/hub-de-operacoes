@@ -1,6 +1,6 @@
-import {computeAutomaticSignal, signalSortValue} from '../automatic-signal-domain.mjs';
+import {computeAutomaticSignal, signalSortValue} from '../automatic-signal-domain.mjs?v=3';
 import {normalizeDecision, DEFAULT_DECISION} from '../decision-ui.mjs';
-import {latestAssessment} from '../trends-domain.mjs';
+import {latestAssessment} from '../trends-domain.mjs?v=5';
 import {progress} from '../image-search-domain.mjs';
 
 export const BACKUP_FORMAT = 'curadoria-manual-backup-v1';

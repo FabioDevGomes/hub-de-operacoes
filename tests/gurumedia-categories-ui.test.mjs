@@ -60,6 +60,9 @@ test('o filtro real cruza categoria com busca, movimento, presença e payout, se
 test('publicação e ligações preservam rota, banco, análises e atualização das colunas ao filtrar',async()=>{
   const dist=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),sidebar=await readFile(new URL('../src/sidebar-component.js',import.meta.url),'utf8');
   for(const source of [html,dist]){assert.ok(source.includes('<h1>Plataforma Guru Media</h1>'));assert.ok(source.includes('id="categoryFilter"'));assert.ok(source.includes("'#categoryFilter,#badgeFilter"));assert.ok(source.includes("input.onchange=()=>render()"));assert.ok(source.includes('gurumedia-filters.css?v=1'));assert.ok(source.includes('gurumedia-collections-domain.mjs?v=1'));assert.ok(source.includes('data-hub-sidebar-active="ecommerce"'));assert.ok(source.includes("for(const id of['categoryFilter','search'"));}
+  for(const source of [html,dist])assert.ok(source.includes('gurumedia-dashboard-link.mjs?v=1'),'atalho para o dashboard GuruMedia está ausente');
+  const dashboard=await readFile(new URL('../src/curadoria/top-performance/gurumedia-dashboard-link.mjs',import.meta.url),'utf8');
+  assert.ok(dashboard.includes("link.href = 'https://stats.gurumedia.com/'")&&dashboard.includes("link.textContent = 'Abrir dashboard Guru Media'")&&dashboard.includes("link.target = '_blank'")&&dashboard.includes("link.rel = 'noopener noreferrer'"),'o link deve abrir o dashboard GuruMedia em nova aba isolada');
   assert.ok(sidebar.includes("label: 'Plataforma Guru Media'"));assert.ok(sidebar.includes('/curadoria/top-performance/'));
   const css=await readFile(new URL('../src/curadoria/top-performance/gurumedia-filters.css',import.meta.url),'utf8');
   assert.match(css,/\.filter-grid\.hub-curation-table-filters\s*\{/,'o CSS incremental deve prevalecer sobre a grade legada definida depois do head');

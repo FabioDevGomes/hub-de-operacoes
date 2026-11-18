@@ -1,4 +1,4 @@
-export const VSL_RATES = Object.freeze([1, 10, 20, 30]);
+export const VSL_RATES = Object.freeze([1, 20, 30, 40, 50]);
 
 export function isVslRate(value) {
   return typeof value === 'number' && VSL_RATES.includes(value);

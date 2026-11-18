@@ -1,8 +1,10 @@
-import {createAccountState, buildAccountReport, accountDomainUrl, accountMccFilterOptions, filterAccountRowsByMcc} from './accounts-domain.mjs?v=13';
-import {attachAccountPresellUrls} from './accounts-presell-domain.mjs?v=3';
+import {createAccountState, buildAccountReport, accountDomainUrl, accountMccFilterOptions, filterAccountRowsByMcc, filterAccountDirectoryByMcc, projectAccountDirectory} from './accounts-domain.mjs?v=14';
+import {attachAccountPresellUrls} from './accounts-presell-domain.mjs?v=4';
 import {createAccountVisibilityStorage} from './accounts-visibility-storage.mjs?v=1';
 import {ACCOUNT_MAP_DUPLICATION_TARGET_UPDATED_EVENT,createAccountDuplicationTargetStorage} from './accounts-target-storage.mjs?v=3';
-import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=2';
+import {ACCOUNT_MAP_DUPLICATION_SELECTION_KEY,createAccountDuplicationSelectionStorage} from './accounts-duplication-selection-storage.mjs?v=1';
+import {GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY, loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=4';
+import {GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT} from '../google-ads/google-ads-accounts-directory-service.mjs?v=3';
 import {readTrackingDomainList} from '../tracking/tracking-domain-list-storage.mjs?v=3';
 
 // UI only. The Hub supplies read-only campaign projections and shared formatters.
@@ -31,7 +33,7 @@ const targetCellKey = (productKey,accountId) => JSON.stringify([String(productKe
 const customerDigits = value => String(value ?? '').replace(/\D/g,'');
 const googleAccountKey = account => `${account?.managerCustomerId ?? 'direct'}:${account?.customerId ?? ''}`;
 
-export function mount({root, getSnapshot, format, getTrackingDomains = () => readTrackingDomainList().rows}) {
+export function mount({root, getSnapshot, format, getTrackingDomains = () => readTrackingDomainList().rows, onCampaignStatusChange = () => {}}) {
   const state = {...createAccountState(), visibility:'visible', mcc:'all'};
   let includePausedAccounts = true;
   const by = id => root.querySelector('#' + id);
@@ -40,13 +42,17 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
   try { preferences = root.ownerDocument.defaultView.localStorage; } catch {}
   const visibilityStorage = createAccountVisibilityStorage(preferences);
   const targetStorage = createAccountDuplicationTargetStorage(preferences);
+  const duplicationSelectionStorage = createAccountDuplicationSelectionStorage(preferences);
   let hiddenProductKeys = visibilityStorage.read();
   let activeTarget = targetStorage.read();
+  let pendingDuplicationSelection = duplicationSelectionStorage.read();
   let currentCampaignCounts = new Map();
   let currentCampaignRowsByTarget = new Map();
   let selectedTarget = null;
   let targetTrigger = null;
   let visibilityFeedback = '';
+  let duplicationPersistenceFeedback = '';
+  let duplicationRestoreFeedback = '';
   let duplicationSource = null;
   let duplicationTargets = new Map();
   let duplicationController = null;
@@ -95,6 +101,77 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
     // membership. The campaign projection's mccId can be absent or stale.
     const matches = (directory?.accounts || []).filter(account => String(account.customerId) === customerId);
     return matches.length === 1 && matches[0].status === 'ENABLED' ? matches[0] : null;
+  }
+
+  function persistDuplicationSelection() {
+    const value = {
+      schemaVersion:1,
+      source:duplicationSource ? {
+        productKey:duplicationSource.productKey,
+        productName:duplicationSource.productName,
+        selectedAccountId:duplicationSource.selectedAccountId,
+        customerId:duplicationSource.customerId,
+        campaignName:duplicationSource.campaignName,
+        campaignId:duplicationSource.campaignId,
+      } : null,
+      destinations:[...duplicationTargets.values()].map(item => ({
+        productKey:item.productKey,
+        productName:item.productName,
+        selectedAccountId:item.selectedAccountId,
+        customerId:item.customerId,
+      })),
+    };
+    if (!value.source && !value.destinations.length) {
+      pendingDuplicationSelection = null;
+      duplicationPersistenceFeedback = duplicationSelectionStorage.clear()
+        ? '' : 'Não foi possível apagar a seleção salva neste navegador.';
+      return;
+    }
+    pendingDuplicationSelection = value;
+    duplicationPersistenceFeedback = duplicationSelectionStorage.write(value)
+      ? '' : 'Não foi possível salvar a seleção neste navegador; ela pode se perder ao recarregar.';
+  }
+
+  function restoreDuplicationSelection() {
+    const saved = pendingDuplicationSelection;
+    if (!saved) return;
+    let unresolved = false;
+    if (saved.source && !duplicationSource) {
+      const source = saved.source;
+      const account = cachedGoogleAccount(source.selectedAccountId);
+      const candidates = currentCampaignRowsByTarget.get(targetCellKey(source.productKey,source.selectedAccountId)) || [];
+      const matches = candidates.filter(row => row.campaign === source.campaignName
+        && (!source.campaignId || row.googleAdsCampaignId === source.campaignId));
+      if (account && matches.length === 1) {
+        const row = matches[0];
+        duplicationSource = {
+          ...source,
+          accountName:account.name,
+          account,
+          campaignName:row.campaign,
+          campaignId:String(row.googleAdsCampaignId || source.campaignId || ''),
+          managerCustomerId:account.managerCustomerId,
+          customerId:account.customerId,
+        };
+      } else unresolved = true;
+    }
+    const sourceKey = duplicationSource ? googleAccountKey(duplicationSource.account) : '';
+    for (const destination of saved.destinations) {
+      const account = cachedGoogleAccount(destination.selectedAccountId);
+      if (!account) { unresolved = true; continue; }
+      const key = googleAccountKey(account);
+      if (key === sourceKey) continue;
+      if (!duplicationTargets.has(key)) duplicationTargets.set(key,{
+        ...destination,
+        name:account.name,
+        account,
+        managerCustomerId:account.managerCustomerId,
+        customerId:account.customerId,
+      });
+    }
+    duplicationRestoreFeedback = unresolved
+      ? 'Parte da seleção salva não está disponível no diretório atual de campanhas/contas.'
+      : '';
   }
 
   function renderDuplicationSelection() {
@@ -157,10 +234,11 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
       account,
       campaignName:row.campaign,
       campaignId:String(row.googleAdsCampaignId || ''),
-      mccId:account.managerCustomerId,
+      managerCustomerId:account.managerCustomerId,
       customerId:account.customerId,
     };
     duplicationTargets.delete(key);
+    persistDuplicationSelection();
     renderDuplicationSelection();
     render();
     updateDuplicationCellActions();
@@ -182,6 +260,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
       managerCustomerId:account.managerCustomerId,
       customerId:account.customerId,
     });
+    persistDuplicationSelection();
     renderDuplicationSelection();
     render();
     updateDuplicationCellActions();
@@ -195,7 +274,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
     openButton.disabled = true;
     if (!duplicationController) panel.innerHTML = '<p class="account-duplication-loading" role="status">Preparando a duplicação com as contas selecionadas…</p>';
     try {
-      const module = await import('../google-ads/google-ads-campaign-duplication-view.mjs?v=2');
+      const module = await import('../google-ads/google-ads-campaign-duplication-view.mjs?v=6');
       const controller = module.mountGoogleAdsCampaignDuplication({root:panel});
       const source = duplicationSource;
       const targets = [...duplicationTargets.values()];
@@ -214,11 +293,11 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
   }
 
   function renderMatrix(report, products = report.products, accountStatuses = {}) {
-    const {accounts,selected,accountMccLabels,accountNames} = report;
+    const {accounts,selected,accountMccLabels} = report;
     const historicalCounts = new Map(report.bars.map(item => [item.key,item.totalAccountsTested]));
     by('accountMatrixHead').innerHTML = '<tr><th>Produto</th><th class="account-matrix-first-record-column" title="Primeiro registro do produto no sistema, considerando todas as contas">1º registro</th>' +
       accounts.map(account => account==='Sem conta' ? `<th>${esc(account)}</th>` :
-        `<th class="account-matrix-account-column"><span class="account-matrix-mcc">${esc(accountMccLabels.get(account)||'MCC não identificada')}</span><span class="account-matrix-account${accountStatuses[account]==='suspended'?' account-matrix-account--suspended':''}" aria-label="Conta ${esc(account)}${accountStatuses[account]==='suspended'?', suspensa':''}">${esc(account)}</span>${accountNames.get(account)?`<span class="account-matrix-name">${esc(accountNames.get(account))}</span>`:''}</th>`).join('') +
+        `<th class="account-matrix-account-column"><span class="account-matrix-mcc">${esc(accountMccLabels.get(account)||'MCC não identificada')}</span><span class="account-matrix-account${accountStatuses[account]==='suspended'?' account-matrix-account--suspended':''}" aria-label="Conta ${esc(account)}${accountStatuses[account]==='suspended'?', suspensa':''}">${esc(account)}</span></th>`).join('') +
       '<th>Total</th><th>Ativas</th><th>Pausadas</th></tr>';
     by('accountMatrixBody').innerHTML = products.length ? products.map(group => {
       const active = group.rows.filter(row => row.status === 'ativa').length;
@@ -331,7 +410,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
       state.status === 'ativa' ? 'Nenhuma campanha ativa para este produto.' :
       state.status === 'pausada' ? 'Nenhuma campanha pausada para este produto.' : 'Nenhuma campanha para este produto.';
     by('accountDetailBody').innerHTML = detail.length ? detail.map(row =>
-      `<tr><td>${esc(row.account)}</td><td>${domainCell(row.domain)}</td><td>${presellCell(row)}</td><td class="name" title="${esc(row.campaign)}">${esc(row.identity.name)}</td><td class="num" data-campaign-date title="Data identificada no prefixo do nome da campanha">${esc(row.identity.dateLabel)}</td>${zeroDaysCell(row)}<td><strong class="status-text ${row.status==='ativa'?'active':'paused'}">${row.status==='ativa'?'Ativa':'Pausada'}</strong></td><td class="num">${format.money(row.totals?.investment??null)}</td><td class="num">${format.num(row.totals?.impressions??null)}</td><td class="num">${format.num(row.totals?.clicks??null)}</td><td class="num">${format.num(row.totals?.conversions??null)}</td><td class="num">${row.roi==null?'—':format.pct(row.roi)}</td></tr>`
+      `<tr><td>${esc(row.account)}</td><td>${domainCell(row.domain)}</td><td>${presellCell(row)}</td><td class="name" title="${esc(row.campaign)}">${esc(row.campaign)}</td><td class="num" data-campaign-date title="Data identificada no prefixo do nome da campanha">${esc(row.identity.dateLabel)}</td>${zeroDaysCell(row)}<td><strong class="status-text ${row.status==='ativa'?'active':'paused'}">${row.status==='ativa'?'Ativa':'Pausada'}</strong></td><td class="num">${format.money(row.totals?.investment??null)}</td><td class="num">${format.num(row.totals?.impressions??null)}</td><td class="num">${format.num(row.totals?.clicks??null)}</td><td class="num">${format.num(row.totals?.conversions??null)}</td><td class="num">${row.roi==null?'—':format.pct(row.roi)}</td></tr>`
     ).join('') : `<tr><td colspan="12" class="empty">${emptyMessage}</td></tr>`;
     renderSortHeaders();
   }
@@ -383,7 +462,9 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
 
   function render() {
     const snapshot = getSnapshot();
-    const allRows = attachAccountPresellUrls(snapshot.rows, getTrackingDomains());
+    const directoryAccounts = loadGoogleAdsAccountsCache({storage:preferences})?.accounts.accounts || [];
+    const projected = projectAccountDirectory(attachAccountPresellUrls(snapshot.rows, getTrackingDomains()), directoryAccounts);
+    const allRows = projected.rows;
     const campaignsByTarget = new Map();
     for (const row of allRows) {
       const productKey = String(row.productKey ?? '').trim();
@@ -402,6 +483,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
     }
     currentCampaignRowsByTarget = new Map([...campaignsByTarget].map(([key,campaigns])=>[key,[...campaigns.values()]]));
     currentCampaignCounts = new Map([...campaignsByTarget].map(([key,campaigns])=>[key,campaigns.size]));
+    restoreDuplicationSelection();
     if (activeTarget) {
       const currentCount = currentCampaignCounts.get(targetCellKey(activeTarget.productKey,activeTarget.accountId)) || 0;
       if (!Number.isSafeInteger(activeTarget.campaignCountAtMark)) {
@@ -414,18 +496,22 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
         }
       }
     }
-    const mccOptions = accountMccFilterOptions(allRows);
+    const mccOptions = accountMccFilterOptions(allRows, projected.accounts);
     if (state.mcc !== 'all' && !mccOptions.some(option => option.value === state.mcc)) state.mcc = 'all';
     selectMccOptions(mccOptions,state.mcc);
     const rows = filterAccountRowsByMcc(allRows,state.mcc);
-    const visibleAccounts = new Set(rows.map(row => row.account).filter(account => account && account !== 'Sem conta'));
+    const visibleDirectoryAccounts = filterAccountDirectoryByMcc(projected.accounts,state.mcc);
+    const visibleAccounts = new Set([
+      ...rows.map(row => row.account),
+      ...visibleDirectoryAccounts.map(account => account.account),
+    ].filter(account => account && account !== 'Sem conta'));
     const accountStatuses = state.mcc === 'all' ? snapshot.accountStatuses :
       Object.fromEntries(Object.entries(snapshot.accountStatuses || {}).filter(([account]) => visibleAccounts.has(account)));
-    let report = buildAccountReport(rows, state, accountStatuses);
+    let report = buildAccountReport(rows, state, accountStatuses, visibleDirectoryAccounts);
     let matrixProducts = report.products.filter(item => productMatchesVisibility(item.key));
     if (matrixProducts.length && !matrixProducts.some(item => item.key === report.selected)) {
       state.selected = matrixProducts[0].key;
-      report = buildAccountReport(rows, state, accountStatuses);
+      report = buildAccountReport(rows, state, accountStatuses, visibleDirectoryAccounts);
       matrixProducts = report.products.filter(item => productMatchesVisibility(item.key));
     } else if (!matrixProducts.length) {
       state.selected = null;
@@ -438,7 +524,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
     let detailReport = report;
     if (state.status === 'ativa' && includePausedAccounts) {
       const activeProductKeys = new Set(report.products.map(item => item.key));
-      const expandedReport = buildAccountReport(rows, {...state, status:'all'}, accountStatuses);
+      const expandedReport = buildAccountReport(rows, {...state, status:'all'}, accountStatuses, visibleDirectoryAccounts);
       const pausedAccounts = new Set(expandedReport.products
         .filter(item => activeProductKeys.has(item.key))
         .flatMap(item => item.rows.filter(row => row.status === 'pausada').map(row => row.account)));
@@ -458,7 +544,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
     by('accountPausedAccountsControl').hidden = state.status !== 'ativa';
     by('accountIncludePausedAccounts').checked = includePausedAccounts;
     by('accountReportVisibility').value = state.visibility;
-    by('accountVisibilityFeedback').textContent = visibilityFeedback;
+    by('accountVisibilityFeedback').textContent = [visibilityFeedback,duplicationPersistenceFeedback,duplicationRestoreFeedback].filter(Boolean).join(' ');
     by('accountReportPeriod').textContent = snapshot.period;
     renderKpis(report.kpis);
     renderMatrix(matrixReport,matrixProducts,accountStatuses);
@@ -539,6 +625,7 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
   function clearDuplicationSelection() {
     duplicationSource = null;
     duplicationTargets.clear();
+    persistDuplicationSelection();
     renderDuplicationSelection();
     render();
   }
@@ -619,5 +706,29 @@ export function mount({root, getSnapshot, format, getTrackingDomains = () => rea
   targetDialog.addEventListener('cancel', event => { event.preventDefault(); closeTargetDialog(); });
   by('accountMapDuplicationDialog').addEventListener('cancel', event => { event.preventDefault(); by('accountMapDuplicationDialog').close(); });
 
-  return {render,activate(){Object.assign(state,createAccountState(),{visibility:'visible',mcc:'all'});includePausedAccounts=true;visibilityFeedback='';render()}};
+  const view = root.ownerDocument?.defaultView;
+  const onCampaignStatusUpdated = () => { onCampaignStatusChange(); render(); };
+  const onDirectoryUpdated = () => render();
+  const onStorage = event => {
+    if (event.key?.startsWith('hub:google-ads:campaign-action-status-override:v1:') || event.key === 'hub:google-ads:auto-pause-applied:v1') { onCampaignStatusChange(); render(); return; }
+    if (event.key === GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY) { render(); return; }
+    if (event.key === ACCOUNT_MAP_DUPLICATION_SELECTION_KEY) {
+      pendingDuplicationSelection = duplicationSelectionStorage.read();
+      duplicationSource = null;
+      duplicationTargets.clear();
+      duplicationPersistenceFeedback = '';
+      duplicationRestoreFeedback = '';
+      render();
+    }
+  };
+  root.ownerDocument?.addEventListener('google-ads-capture-history-updated', onCampaignStatusUpdated);
+  root.ownerDocument?.addEventListener('hub:google-ads-campaign-status-updated', onCampaignStatusUpdated);
+  view?.addEventListener(GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT, onDirectoryUpdated);
+  view?.addEventListener('storage', onStorage);
+
+  return {
+    render,
+    activate(){Object.assign(state,createAccountState(),{visibility:'visible',mcc:'all'});includePausedAccounts=true;visibilityFeedback='';render()},
+    destroy(){root.ownerDocument?.removeEventListener('google-ads-capture-history-updated',onCampaignStatusUpdated);root.ownerDocument?.removeEventListener('hub:google-ads-campaign-status-updated',onCampaignStatusUpdated);view?.removeEventListener(GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT,onDirectoryUpdated);view?.removeEventListener('storage',onStorage)},
+  };
 }

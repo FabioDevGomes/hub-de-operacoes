@@ -1,4 +1,5 @@
 .sites-runtime/
+Iniciar Hub.lnk
 data-local/*
 !data-local/.gitkeep
 src/billing/seed-*.json

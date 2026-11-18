@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "packageName": "google-ads-campaign-actions",
+  "releasePrefix": "GA-ACTIONS",
+  "requiredOperationsManifest": "google-ads-campaign-actions-required-operations.json",
+  "description": "Ações consolidadas de campanhas Google Ads — endpoint privado",
+  "files": [
+    {
+      "source": "tools/google-ads-campaign-action-service.php",
+      "destinationKey": "hostinger-private-tools",
+      "destinationServerPath": "/home/u572283517/domains/travenzo.shop/domains/travenzo.shop/private-tools",
+      "fileName": "google-ads-campaign-action-service.php",
+      "addReleaseComment": true,
+      "releaseMarkerName": "HUB-ADS-ACTIONS-RELEASE"
+    }
+  ],
+  "existingServerDependencies": [
+    "google-ads-readonly-service.php",
+    "google-ads-campaign-pause-email-service.php",
+    "google-ads-campaign-duplication-service.php"
+  ],
+  "configurationNotes": [
+    "Preserve the existing private tracking-config.php and Google Ads write authorization settings.",
+    "The positive-keyword feature requires tracking_google_ads_campaign_batch_positive_keywords_enabled=true.",
+    "This package does not include credentials, tracking-config.php, SQL, or the public wrapper."
+  ]
+}

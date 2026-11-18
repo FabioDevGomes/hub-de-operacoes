@@ -1,0 +1,22 @@
+/* Padrão único de rolagem do Hub API. Altera só a apresentação das barras. */
+:root,
+* {
+  scrollbar-color: #52657d #101e31 !important;
+  scrollbar-width: thin !important;
+}
+
+*::-webkit-scrollbar {
+  width: 9px !important;
+  height: 9px !important;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: #101e31 !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid #101e31 !important;
+  border-radius: 999px !important;
+  background: #52657d !important;
+}

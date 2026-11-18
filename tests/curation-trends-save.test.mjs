@@ -12,6 +12,14 @@ const origins={
   radar:{path:'index.html',fn:'saveTrendsResult',action:'radarTrendsSave',indent:'    ',key:'id',sheet:'#productSheet',panel:'#trendsSheetPanel',button:'#radarSaveTrends',term:'#trendsSearchTerm',message:'#trendsMessage'},
 };
 
+test('Trend equality honors the configured location limit for Guru Media',()=>{
+  const previous={status:'stable',searchTerm:'Synthetic product',countries:['US','CA','UK','IE','AU','NZ','FR','WORLD']};
+  const draft={status:'stable',term:'Synthetic product',countries:['US','CA','UK','IE','AU','NZ','FR','WORLD']};
+  assert.equal(sameTrendAssessment(previous,draft,8),true);
+  assert.equal(sameTrendAssessment(previous,{...draft,countries:['US','CA','UK','IE','AU','NZ','FR']},8),false,'o oitavo local também participa da comparação');
+  assert.equal(sameTrendAssessment(previous,{...draft,countries:['US','CA','UK','IE','AU','NZ','FR']},5),true,'os outros consumidores preservam o limite padrão de cinco');
+});
+
 async function fixture(origin){
   const cfg=origins[origin],source=await readFile(new URL('../src/curadoria/'+cfg.path,import.meta.url),'utf8');
   const nodes=new Map(),node=selector=>{
@@ -112,6 +120,7 @@ test('legacy modules compile and their builds publish shared Save helpers',async
     const script=source.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];assert.ok(script);
     new vm.Script(script.replace(/import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?/g,''));
     const published=await readFile(new URL('../dist/curadoria/'+cfg.path,import.meta.url),'utf8');
-    assert.ok(published.includes('trends-save-action.mjs?v=4'));assert.ok(published.includes(cfg.button.slice(1)));
+    const helperVersion=source.match(/trends-save-action\.mjs\?v=(\d+)/)?.[1];assert.ok(helperVersion);
+    assert.ok(published.includes(`trends-save-action.mjs?v=${helperVersion}`));assert.ok(published.includes(cfg.button.slice(1)));
   }
 });

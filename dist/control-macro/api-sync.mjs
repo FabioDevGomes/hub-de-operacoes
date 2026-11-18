@@ -1,5 +1,5 @@
-import { fetchGoogleAdsAccounts, fetchGoogleAdsDailyReport } from '../google-ads/google-ads-service.mjs?v=13';
-import { normalizeGoogleAdsAccounts, normalizeGoogleAdsDailyReport } from '../google-ads/google-ads-domain.mjs?v=6';
+import { fetchGoogleAdsAccounts, fetchGoogleAdsDailyReport } from '../google-ads/google-ads-service.mjs?v=16';
+import { normalizeGoogleAdsAccounts, normalizeGoogleAdsDailyReport } from '../google-ads/google-ads-domain.mjs?v=7';
 
 const MAX_ACCOUNT_CONCURRENCY = 3;
 

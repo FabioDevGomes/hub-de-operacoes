@@ -1,5 +1,6 @@
 import { normalizeGoogleAdsConversionActions } from './google-ads-conversion-actions-domain.mjs?v=1';
-import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=2';
+import { normalizeGoogleAdsGeographicReport } from './google-ads-geographic-domain.mjs?v=1';
+import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=6';
 
 export const GOOGLE_ADS_READONLY_ENDPOINT = 'https://track.travenzo.shop/google-ads-readonly.php';
 
@@ -27,10 +28,16 @@ const errorMessages = Object.freeze({
   search_terms_date_range_too_large: 'A consulta de termos de pesquisa permite no máximo 31 dias.',
   search_terms_limit_exceeded: 'A consulta retornou mais de 1.000 linhas nesta conta. Reduza o período e tente novamente.',
   search_terms_campaign_filter_unavailable: 'O serviço PHP privado precisa ser atualizado para filtrar a consulta de termos pela campanha selecionada.',
+  geographic_report_unavailable: 'O serviço PHP privado precisa ser atualizado para consultar localizações por país.',
+  geographic_report_limit_exceeded: 'O relatório geográfico excedeu o limite de linhas. Nenhum resultado foi salvo.',
+  geographic_date_range_too_large: 'O relatório geográfico permite no máximo 14 dias por consulta.',
+  geographic_country_lookup_incomplete: 'O serviço não conseguiu identificar todos os países retornados. Nenhum resultado foi salvo.',
   search_term_campaigns_unavailable: 'O serviço PHP privado precisa ser atualizado para listar campanhas Search nesta tela.',
   search_term_campaigns_limit_exceeded: 'A conta excede o limite de 1.000 campanhas Search para montar o seletor.',
   final_url_hosts_unavailable: 'O serviço PHP privado ainda não consulta destinos finais dos anúncios. Publique a versão atualizada do serviço Google Ads.',
   final_url_hosts_limit_exceeded: 'A conta excede 5.000 anúncios ativos com destino final. O cache anterior foi preservado.',
+  tracking_coverage_unavailable: 'O serviço PHP privado precisa ser atualizado para consultar a cobertura de rastreamento por campanha.',
+  tracking_coverage_limit_exceeded: 'A conta excedeu o limite seguro de rotas para a auditoria de rastreamento. Nenhum resultado parcial foi tratado como cobertura completa.',
   google_ads_report_incomplete: 'O Google Ads devolveu uma resposta incompleta. Nenhum resultado incompleto foi considerado.',
   configuration_limit_exceeded: 'A configuração excedeu o limite de 1.000 campanhas ou estratégias. Nenhuma captura foi aplicada.',
   google_ads_auth_failed: 'A conta de serviço não conseguiu autenticar na Google Ads API. Confira a chave privada no servidor.',
@@ -44,6 +51,28 @@ const errorMessages = Object.freeze({
 
 function request(operation, parameters, options) {
   return requestGoogleAdsEndpoint(GOOGLE_ADS_READONLY_ENDPOINT, operation, parameters, { ...options, errorMessages });
+}
+
+const ACCOUNT_METADATA_CONTEXT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ACCOUNT_METADATA_CONTEXT_TOKEN = /^[A-Za-z0-9_-]{1,1800}\.[A-Za-z0-9_-]{43}$/;
+
+function accountMetadataContextFields(date, token) {
+  if (typeof date !== 'string' || !ACCOUNT_METADATA_CONTEXT_DATE.test(date)) return {};
+  const fields = { account_metadata_context_date: date };
+  if (typeof token === 'string' && token.length <= 2048 && ACCOUNT_METADATA_CONTEXT_TOKEN.test(token)) {
+    fields.account_metadata_context_token = token;
+  }
+  return fields;
+}
+
+async function requestWithAccountMetadataContextFallback(operation, parameters, contextFields, options) {
+  if (!Object.keys(contextFields).length) return request(operation, parameters, options);
+  try {
+    return await request(operation, { ...parameters, ...contextFields }, options);
+  } catch (error) {
+    if (error?.code !== 'invalid_payload') throw error;
+    return request(operation, parameters, options);
+  }
 }
 
 export function fetchGoogleAdsAccounts(options) {
@@ -70,10 +99,29 @@ export async function fetchGoogleAdsConversionActions({ managerCustomerId, custo
   }
 }
 
-export async function fetchGoogleAdsConfiguration({ managerCustomerId, customerId }, options) {
-  try { return await request('campaign_config', { manager_customer_id: managerCustomerId || null, customer_id: customerId }, options); }
+export async function fetchGoogleAdsConfiguration({ managerCustomerId, customerId, accountMetadataContextToken = null, accountMetadataContextDate = null }, options) {
+  const parameters = { manager_customer_id: managerCustomerId || null, customer_id: customerId };
+  const contextFields = accountMetadataContextFields(accountMetadataContextDate, accountMetadataContextToken);
+  try { return await requestWithAccountMetadataContextFallback('campaign_config', parameters, contextFields, options); }
   catch (error) {
     if (error.code === 'invalid_payload') throw new Error('Publique o serviço PHP privado atualizado para consultar status, orçamento e estratégia.');
+    throw error;
+  }
+}
+
+export async function fetchGoogleAdsCampaignTrackingCoverage({ managerCustomerId, customerId }, options) {
+  const manager = managerCustomerId == null || managerCustomerId === '' ? null : String(managerCustomerId).replace(/\D/g, '');
+  const customer = String(customerId ?? '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(customer) || (manager != null && !/^\d{10}$/.test(manager))) {
+    throw new Error('Selecione uma conta Google Ads válida antes de consultar a cobertura do rastreamento.');
+  }
+  try {
+    return await request('campaign_tracking_coverage', {
+      manager_customer_id: manager,
+      customer_id: customer,
+    }, options);
+  } catch (error) {
+    if (error?.code === 'invalid_payload') throw new Error(errorMessages.tracking_coverage_unavailable);
     throw error;
   }
 }
@@ -101,16 +149,22 @@ export function fetchGoogleAdsReport({ managerCustomerId, customerId, dateFrom, 
   }, options);
 }
 
-export function fetchGoogleAdsDailyReport({ managerCustomerId, customerId, dateFrom, dateTo }, options) {
-  return request('daily_report', {
+export function fetchGoogleAdsDailyReport({ managerCustomerId, customerId, dateFrom, dateTo, accountMetadataContextToken = null, accountMetadataContextDate = null }, options) {
+  const parameters = {
     manager_customer_id: managerCustomerId || null,
     customer_id: customerId,
     date_from: dateFrom,
     date_to: dateTo,
-  }, options);
+  };
+  return requestWithAccountMetadataContextFallback(
+    'daily_report',
+    parameters,
+    accountMetadataContextFields(accountMetadataContextDate, accountMetadataContextToken),
+    options
+  );
 }
 
-export async function fetchGoogleAdsSearchTerms({ managerCustomerId, customerId, dateFrom, dateTo, campaignId = null }, options) {
+export async function fetchGoogleAdsSearchTerms({ managerCustomerId, customerId, dateFrom, dateTo, campaignId = null, includePurchaseMetrics = false }, options) {
   try {
     const parameters = {
       manager_customer_id: managerCustomerId || null,
@@ -123,6 +177,7 @@ export async function fetchGoogleAdsSearchTerms({ managerCustomerId, customerId,
       if (!/^[1-9]\d{0,19}$/.test(normalizedCampaignId)) throw new Error('O ID da campanha selecionada é inválido.');
       parameters.campaign_id = normalizedCampaignId;
     }
+    if (includePurchaseMetrics === true) parameters.include_purchase_metrics = true;
     return await request('search_terms', parameters, options);
   } catch (error) {
     if (error?.code === 'invalid_payload' && campaignId != null && campaignId !== '') {
@@ -157,6 +212,26 @@ export async function fetchGoogleAdsSaoPauloDayReport({ managerCustomerId, custo
     return await request('sao_paulo_day_report', parameters, options);
   } catch (error) {
     if (error?.code === 'invalid_payload') throw new Error(errorMessages[campaignStatusFilter === 'ENABLED' ? 'sao_paulo_active_day_report_unavailable' : 'sao_paulo_day_report_unavailable']);
+    throw error;
+  }
+}
+
+export async function fetchGoogleAdsGeographicReport({ managerCustomerId, customerId, dateFrom, dateTo }, options) {
+  const manager = managerCustomerId == null || managerCustomerId === '' ? null : String(managerCustomerId).replace(/\D/g, '');
+  const customer = String(customerId ?? '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(customer) || (manager != null && !/^\d{10}$/.test(manager))) {
+    throw new Error('Selecione uma conta Google Ads válida antes de consultar localizações.');
+  }
+  try {
+    const payload = await request('geographic_report', {
+      manager_customer_id: manager,
+      customer_id: customer,
+      date_from: dateFrom,
+      date_to: dateTo,
+    }, options);
+    return normalizeGoogleAdsGeographicReport(payload, { managerCustomerId: manager, customerId: customer, dateFrom, dateTo });
+  } catch (error) {
+    if (error?.code === 'invalid_payload') throw new Error(errorMessages.geographic_report_unavailable);
     throw error;
   }
 }

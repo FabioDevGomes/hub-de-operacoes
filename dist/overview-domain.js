@@ -1,4 +1,5 @@
 (function(root){
+  const campaignNameCollator=new Intl.Collator('pt-BR',{numeric:true,sensitivity:'base'}),searchTextCache=new WeakMap();
   function numeric(value){if(value==null||value==='')return null;const number=Number(value);return Number.isFinite(number)?number:null}
   function money(value){return Math.round(value*100+Math.sign(value)*1e-8)/100}
   function manifestPeriodDates(base,manifest){
@@ -87,6 +88,20 @@
       return{id:String(manager.id).trim(),name:String(manager?.nome||'').trim()||`MCC ${id}`,timestamp,source:imported?'import':captured?'capture':null};
     }).filter(Boolean).sort((a,b)=>managerId(a.id).localeCompare(managerId(b.id),'pt-BR',{numeric:true}));
   }
+  function latestApiMccUpdates(managers=[],dailyCaptures=[]){
+    const managerId=value=>{const digits=String(value??'').replace(/\D/g,'');return /^\d{10}$/.test(digits)?digits:null},latest=new Map();
+    for(const capture of Array.isArray(dailyCaptures)?dailyCaptures:[]){
+      if(Number(capture?.captureSchemaVersion)<3||capture?.queryComplete!==true||!['rows_returned','completed_no_rows'].includes(capture?.coverageStatus))continue;
+      const id=managerId(capture?.managerCustomerId),customer=managerId(capture?.customerId),timestamp=typeof capture?.capturedAtUtc==='string'&&Number.isFinite(Date.parse(capture.capturedAtUtc))?capture.capturedAtUtc:null;
+      if(!id||!customer||!timestamp)continue;
+      const previous=latest.get(id);if(!previous||Date.parse(timestamp)>Date.parse(previous.timestamp))latest.set(id,{timestamp,name:String(capture?.managerName||'').trim()});
+    }
+    return(Array.isArray(managers)?managers:[]).map(manager=>{
+      const id=managerId(manager?.id);if(!id)return null;
+      const capture=latest.get(id);
+      return{id:String(manager.id).trim(),name:String(manager?.nome||capture?.name||'').trim()||`MCC ${id}`,timestamp:capture?.timestamp||null,source:capture?'api':null};
+    }).filter(Boolean).sort((a,b)=>managerId(a.id).localeCompare(managerId(b.id),'pt-BR',{numeric:true}));
+  }
   function sumObservedMetric(rows,field){const entries=Array.isArray(rows)?rows:[];let total=0,observedCount=0;for(const row of entries){const value=numeric(row?.[field]);if(value==null)continue;total+=value;observedCount++}return{value:observedCount?total:null,observedCount,totalCount:entries.length}}
   // Sum the table's existing projections, not cards, commission or hidden campaigns.
   function overviewTableTotals(rows){
@@ -144,11 +159,11 @@
     for(const field of ['investment','impressions','clicks','conversions','commission'])if(result[field]==null&&recorded?.[field]!=null)result[field]=recorded[field];
     return result;
   }
-  function operationalDayTotals(stored,date,dailyByCampaign){
+  function operationalDayTotals(stored,date,dailyByCampaign,isPreviousDay=false){
     const row=stored&&date?dailyByCampaign?.get(stored.id)?.find(item=>item.data===date&&item.fontes?.includes('google_ads_api')):null;
     if(!row)return{investment:null,impressions:null,clicks:null,conversions:null,commission:null,date,fromOperationalCapture:false};
     const read=column=>numeric(row.celulas?.[column]?.value);
-    return{investment:read('O'),impressions:read('B'),clicks:read('C'),conversions:read('F'),commission:read('P'),date,fromOperationalCapture:true};
+    return{investment:read('O'),impressions:read('B'),clicks:read('C'),conversions:read('F'),commission:read('P'),date,fromOperationalCapture:true,...(isPreviousDay?{provisional:row.google_ads_api_sao_paulo_day!==true}:{})};
   }
   // Shared by the live table and the summary computed only during an MCC application.
   function campaignD0Totals(c,{dates,stored,dailyByCampaign,snapshotsByCampaignName,exchangeRate=5.1,useOperationalDate=false}){
@@ -162,7 +177,7 @@
     return snapshot?{investment:snapshot.investment,impressions:snapshot.impressions,clicks:snapshot.clicks,conversions:snapshot.conversions,commission:snapshot.commission,date:snapshot.date}:resolveD0Totals(direct,dailyRow,date);
   }
   function campaignD1Totals(c,history,{dates,snapshotsByCampaignName,latestSnapshots,exchangeRate=5.1,useOperationalDate=false,stored,dailyByCampaign}){
-    if(useOperationalDate)return operationalDayTotals(stored,dates.d1,dailyByCampaign);
+    if(useOperationalDate)return operationalDayTotals(stored,dates.d1,dailyByCampaign,true);
     const valueOf=obj=>obj?.valor??null,name=String(c.nome_campanha_exato||'').toLocaleLowerCase('pt-BR'),snapshot=snapshotsByCampaignName.get(name)?.find(row=>row.period==='d1'&&(!row.scopeDates||row.date===dates.d1));
     if(snapshot)return{investment:snapshot.investment,impressions:snapshot.impressions,clicks:snapshot.clicks,conversions:snapshot.conversions,commission:snapshot.commission,date:snapshot.date};
     const m=c.metricas_D_menos_1||{},periodRate=numeric(m.exchange_rate_usd_brl)??exchangeRate,date=Array.isArray(c.datas_coleta)?dates.d1:valueOf(m.data)||dates.d1,factor=String(valueOf(m.moeda)||'').toUpperCase()==='USD'&&periodRate>0?periodRate:1,rawInvestment=valueOf(m.custo_total),rawCommission=valueOf(m.valor_conversao)??valueOf(m.comissao_recebida),direct={investment:rawInvestment==null?null:Number(rawInvestment)*factor,impressions:valueOf(m.impressoes),clicks:valueOf(m.cliques_google),conversions:valueOf(m.conversoes),commission:rawCommission==null?null:Number(rawCommission)*factor,date},recorded=date?history?.byDate?.[date]:null;
@@ -178,11 +193,31 @@
   }
   function totalsColumns(mode,totalLabel='total'){
     const billedLabel=totalLabel==='D zero'?'D0':totalLabel==='D−1'?'D−1':'total';
-    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['billedRevenue',`Faturado ${billedLabel} (R$)`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['conv',`Conversões ${totalLabel}`],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['actions','Ação']];
+    return[['date','Data'],['campaign','Campanha'],['zeroDays','Dias sem impressões'],['current',`Investimento ${totalLabel}`],['billedRevenue',`Faturado ${billedLabel} (R$)`],['imp',`Impressões ${totalLabel}`],['clicks',`Cliques ${totalLabel}`],['firstClickImpressions','Impr. no 1º clique'],['conv',`Conversões ${totalLabel}`],['firstSaleClicks','Cliques na 1ª venda'],['roi','ROI atual'],['saleRoiFirst','ROI 1ª venda'],['saleRoiSecond','ROI 2ª venda'],['profit',`Lucro ${totalLabel} (R$)`],['account','Conta'],['mcc','MCC'],['limit','Limite de teste'],['remaining','Valor restante'],['status','Situação'],['diagnosis','Diagnóstico'],['actions','Ação']];
   }
-  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,billedRevenue:128,imp:96,clicks:76,conv:96,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,actions:122});
+  const columnWidths=Object.freeze({date:52,campaign:330,zeroDays:96,current:108,billedRevenue:128,imp:96,clicks:76,firstClickImpressions:118,conv:96,firstSaleClicks:126,roi:72,saleRoiFirst:96,saleRoiSecond:96,profit:110,account:100,mcc:124,limit:140,remaining:102,status:82,diagnosis:184,actions:122});
   function visibleColumns(columns,selected){
     return Array.isArray(selected)?columns.filter(([key])=>key==='campaign'||selected.includes(key)):columns;
+  }
+  function campaignDiagnosis({totals,budget,manualSales=0}={}){
+    const impressions=numeric(totals?.impressions),clicks=numeric(totals?.clicks),conversions=numeric(totals?.conversions),investment=numeric(totals?.investment),sales=Math.max(0,numeric(manualSales)||0,conversions||0),base='Classificação informativa sobre os dados consolidados disponíveis no Hub. Conversões do Google Ads podem representar ações diferentes de venda; vendas manuais ainda podem estar provisórias. Esta leitura não confirma atribuição de venda pela GuruMedia à campanha.';
+    const result=(key,label,tone,detail)=>({key,label,tone,title:`${detail} ${base}`});
+    if(sales>0){
+      if(budget?.remaining!=null&&budget.remaining<0)return result('conversion-over-limit','Conversão · acima do limite','warn',`Há ${conversions>0?`${conversions} conversão(ões) registrada(s)`:''}${manualSales>0?`${conversions>0?' e ':''}${manualSales} venda(s) manual(is) no Hub`:''}; o gasto consolidado excede em ${money(Math.abs(budget.remaining))} o limite de teste calculado atualmente.`);
+      return result('conversion-recorded','Conversão registrada','positive',`${conversions>0?`${conversions} conversão(ões) constam no consolidado`:''}${manualSales>0?`${conversions>0?' e ':''}${manualSales} venda(s) manual(is) no Hub`:''}.`);
+    }
+    if(impressions!=null&&clicks!=null&&impressions<clicks)return result('inconsistent-metrics','Leitura inconsistente','warn',`O consolidado mostra ${impressions} impressão(ões) e ${clicks} clique(s); confira as capturas e os períodos usados.`);
+    if(clicks>0){
+      if(budget?.salesCount===0&&budget.remaining!=null&&budget.remaining<=0)return result('test-limit-reached','Limite de teste atingido','danger',`Há ${clicks} clique(s), nenhuma conversão registrada e o gasto atingiu ou ultrapassou o limite de teste calculado.`);
+      return result('clicks-no-conversion','Cliques · sem conversão registrada','info',`Há ${clicks} clique(s) consolidados, mas nenhuma conversão registrada no Hub.`);
+    }
+    if(impressions>0){
+      if(clicks===0)return result('impressions-no-clicks','Impressões · sem cliques','warn',`Há ${impressions} impressão(ões) consolidadas e nenhum clique registrado.`);
+      return result('partial-click-data','Impressões · cliques sem leitura','muted',`Há ${impressions} impressão(ões), mas a leitura de cliques não está disponível no consolidado.`);
+    }
+    if(impressions===0&&clicks===0)return result('no-impressions','Sem impressões observadas','muted','A base consolidada registra zero impressões e zero cliques.');
+    if(investment!=null||impressions!=null||clicks!=null||conversions!=null)return result('partial-data','Dados parciais','muted','Há métricas consolidadas, mas elas não permitem classificar entrega ou conversão com segurança.');
+    return result('insufficient-data','Sem dados suficientes','muted','Ainda não há métricas consolidadas suficientes para classificar a campanha.');
   }
   function parseMinimumRoi(value){
     const text=String(value??'').trim();
@@ -257,16 +292,35 @@
     return{limit,remaining:spent==null?null:money(limit-spent),minimumRoi,salesCount:saleCount,revenue:totalRevenue};
   }
   function sortRows(input,state,sortCell){const rows=[...(input||[])];
-      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name.toLocaleLowerCase('pt-BR'),zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,billedRevenue:r=>r.billedRevenue?.amount??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,conv:r=>r.totals?.conversions??null,roi:r=>r.roi,saleRoiFirst:r=>r.saleHistory?.[0]?.snapshot?.roi_percent??null,saleRoiSecond:r=>r.saleHistory?.[1]?.snapshot?.roi_percent??null,profit:r=>r.profit,account:r=>r.account,mcc:r=>r.mcc,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining)};
-       rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?av.localeCompare(bv,'pt-BR',{numeric:true,sensitivity:'base'}):av-bv;return state.sortDir==='asc'?result:-result});
+      const values={date:r=>r.identity.dateSort,campaign:r=>r.identity.name,zeroDays:r=>r.zeroDays,status:r=>r.c._status==='pausada'?'pausada':r.numberReuse?'renumerar':r.rejected?'reprovada':r.c._movement==='reativada'?'reativada':'ativa',current:r=>r.totals?.investment??null,billedRevenue:r=>r.billedRevenue?.amount??null,imp:r=>r.totals?.impressions??null,clicks:r=>r.totals?.clicks??null,firstClickImpressions:r=>r.firstClickImpressionObservation?.impressions??null,conv:r=>r.totals?.conversions??null,firstSaleClicks:r=>r.firstSaleClicks??null,roi:r=>r.roi,saleRoiFirst:r=>r.saleHistory?.[0]?.snapshot?.roi_percent??null,saleRoiSecond:r=>r.saleHistory?.[1]?.snapshot?.roi_percent??null,profit:r=>r.profit,account:r=>r.account,mcc:r=>r.mcc,limit:r=>sortCell(r.testLimit),remaining:r=>sortCell(r.testRemaining),diagnosis:r=>r.diagnosis?.label??''};
+        rows.sort((a,b)=>{const av=values[state.sortKey](a),bv=values[state.sortKey](b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return-1;const result=typeof av==='string'?campaignNameCollator.compare(av,bv):av-bv;return state.sortDir==='asc'?result:-result});
     return rows;
+  }
+  function firstClickImpressionObservations(snapshots=[]){
+    const trustedZeroEvidence=new Set(['complete_sao_paulo_day_query_and_current_enabled_inventory','complete_recent_query_and_prior_campaign_mapping','complete_daily_query_and_current_inventory']),ordered=(Array.isArray(snapshots)?snapshots:[]).map((snapshot,index)=>({snapshot,index,capturedAt:Date.parse(snapshot?.completedAtUtc||'')})).filter(item=>item.snapshot?.periodType==='D0'&&Number.isFinite(item.capturedAt)&&Array.isArray(item.snapshot.accounts)).sort((a,b)=>a.capturedAt-b.capturedAt||a.index-b.index),previousByCampaignDate=new Map(),firstByCampaign=new Map(),positiveSeen=new Set();
+    for(const{snapshot,capturedAt}of ordered){
+      const capturedAtUtc=new Date(capturedAt).toISOString();
+      for(const account of snapshot.accounts){
+        const date=String(account?.date||''),customer=String(account?.customerId||'').replace(/\D/g,''),manager=String(account?.managerCustomerId||'').replace(/\D/g,''),timeZone=String(account?.timeZone||'');
+        if(account?.queryComplete!==true||account?.scope!=='ALL'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)||!/^[0-9]{10}$/.test(customer)||manager&&!/^[0-9]{10}$/.test(manager))continue;
+        for(const campaign of Array.isArray(account?.campaigns)?account.campaigns:[]){
+          const campaignId=String(campaign?.campaignInternalId||''),impressions=numeric(campaign?.impressions),clicks=numeric(campaign?.clicks);
+          if(!campaignId||campaign?.mappingStatus!=='mapped'||campaign?.metricsAvailable!==true||impressions==null||impressions<0||clicks==null||clicks<0)continue;
+          if(campaign.inferredZero===true&&!trustedZeroEvidence.has(String(campaign.zeroEvidence||'')))continue;
+          const identity=[manager||'direct',customer,campaignId,date,timeZone].join('|'),previous=previousByCampaignDate.get(identity);
+          if(clicks>0){if(previous?.clicks===0&&!positiveSeen.has(campaignId)&&!firstByCampaign.has(campaignId))firstByCampaign.set(campaignId,{impressions,capturedAtUtc,date,baselineCapturedAtUtc:previous.capturedAtUtc});positiveSeen.add(campaignId)}
+          previousByCampaignDate.set(identity,{clicks,capturedAtUtc});
+        }
+      }
+    }
+    return firstByCampaign;
   }
   function activeMetricProductCounts(rows=[],field='impressions',minimumValue=1){
     const counts=new Map();
     const threshold=Number.isFinite(Number(minimumValue))?Math.max(0,Number(minimumValue)):1;
     for(const row of Array.isArray(rows)?rows:[]){
-      const key=String(row?.productKey??'').trim(),value=numeric(row?.totals?.[field]);
-      if(!key||row?.c?._status!=='ativa'||value==null||value<threshold||value<=0)continue;
+      const key=String(row?.productKey??'').trim(),status=row?.filterStatus||row?.c?._status,value=numeric(row?.totals?.[field]);
+      if(!key||status!=='ativa'||value==null||value<threshold||value<=0)continue;
       counts.set(key,(counts.get(key)||0)+1);
     }
     return counts;
@@ -275,8 +329,8 @@
   function activeClickProductGroups(rows=[],minimumClicks=1){
     const groups=new Map(),threshold=Number.isFinite(Number(minimumClicks))?Math.max(1,Number(minimumClicks)):1;
     for(const row of Array.isArray(rows)?rows:[]){
-      const key=String(row?.productKey??'').trim(),value=numeric(row?.consolidatedTotals?.clicks??row?.totals?.clicks);
-      if(!key||row?.c?._status!=='ativa'||value==null||value<threshold)continue;
+      const key=String(row?.productKey??'').trim(),status=row?.filterStatus||row?.c?._status,value=numeric(row?.consolidatedTotals?.clicks??row?.totals?.clicks);
+      if(!key||status!=='ativa'||row?.c?.apiSnapshotOnly===true||value==null||value<threshold)continue;
       const group=groups.get(key)||[];group.push(row);groups.set(key,group);
     }
     return groups;
@@ -287,17 +341,17 @@
   }
   const activeClickProductCounts=(rows,minimumClicks=1)=>new Map([...activeClickProductGroups(rows,minimumClicks)].map(([key,group])=>[key,group.length]));
   const activeD0ImpressionProductCounts=activeImpressionProductCounts;
-  function rowVisible(row,filter,referenceDate){const paused=row.c._status==='pausada',historical=row.c._status==='historico',pausedAt=row.pausedAt||'',cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&(paused||historical)||filter==='history'&&!paused&&!historical||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
+  function rowVisible(row,filter,referenceDate,{retentionHours=0,now=Date.now()}={}){const status=row?.filterStatus||row?.c?._status||'',paused=status==='pausada',historical=status==='historico',pausedAt=row?.pausedAt||'',automaticPauseAt=Date.parse(row?.autoPauseConfirmedAtUtc||''),elapsedHours=(typeof now==='number'?now:Date.parse(now||''))-automaticPauseAt,validRetentionHours=Number(retentionHours),temporarilyVisible=paused&&Number.isFinite(automaticPauseAt)&&Number.isFinite(elapsedHours)&&Number.isFinite(validRetentionHours)&&validRetentionHours>0&&elapsedHours>=0&&elapsedHours/3600000<validRetentionHours,cutoff=new Date(`${referenceDate}T00:00:00Z`);cutoff.setUTCDate(cutoff.getUTCDate()-6);const recentPaused=paused&&pausedAt>=cutoff.toISOString().slice(0,10);return !(filter==='active'&&(historical||paused&&!temporarilyVisible)||filter==='history'&&!paused&&!historical||filter==='paused'&&!paused||filter==='paused7'&&!recentPaused)}
   // Navigation-only entries preserve the old History access without inventing MCC metrics.
   function historyNavigationRows(entries=[],operationalRows=[]){return entries.filter(entry=>entry.source==='legacy'||!operationalRows.some(row=>entry.id?row.campaignId===entry.id:row.c?.nome_campanha_exato===entry.name)).map(entry=>({c:{nome_campanha_exato:entry.exactName||entry.name,_status:'historico'},identity:{name:entry.label||entry.name,dateLabel:'—',dateSort:null},campaignId:entry.id||null,diaryName:entry.name,diarySource:entry.source||'workbook',totals:null,d0Totals:{},zeroDays:null,roi:null,profit:null,historyEntry:true}))}
-  function searchRows(rows,query){const term=String(query??'').trim().toLocaleLowerCase('pt-BR');return (rows||[]).filter(row=>!term||`${row.c?.nome_campanha_exato||''} ${row.identity?.name||''}`.toLocaleLowerCase('pt-BR').includes(term))}
+  function searchRows(rows,query){const term=String(query??'').trim().toLocaleLowerCase('pt-BR');return (rows||[]).filter(row=>{if(!term)return true;let text=searchTextCache.get(row);if(text===undefined){text=`${row.c?.nome_campanha_exato||''} ${row.identity?.name||''}`.toLocaleLowerCase('pt-BR');searchTextCache.set(row,text)}return text.includes(term)})}
   // Start dates from the existing campaign identity, never dates inferred from delivery metrics.
-  function activeCampaignStartDates(rows=[]){
-    return [...new Set(rows.filter(row=>row.c?._status==='ativa').map(row=>row.identity?.dateSort)
+  function activeCampaignStartDates(rows=[],{filter='active',referenceDate='',retentionHours=0,now=Date.now()}={}){
+    return [...new Set(rows.filter(row=>filter==='active'&&referenceDate===''?row.c?._status==='ativa':rowVisible(row,filter,referenceDate,{retentionHours,now})).map(row=>row.identity?.dateSort)
       .filter(date=>typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&manifestDate(date)===date))].sort();
   }
-  function campaignDateNavigation(rows,selectedDate='',direction=0){
-    const dates=activeCampaignStartDates(rows);
+  function campaignDateNavigation(rows,selectedDate='',direction=0,options={}){
+    const dates=activeCampaignStartDates(rows,options);
     let date=dates.includes(selectedDate)?selectedDate:'';
     const index=dates.indexOf(date);
     // From All, backward starts at newest and forward starts at oldest.
@@ -307,12 +361,54 @@
     return {dates,date,canPrevious:dates.length>0&&(current<0||current>0),canNext:dates.length>0&&(current<0||current<dates.length-1)};
   }
   function campaignRowsOnStartDate(rows,date){return (rows||[]).filter(row=>!date||row.identity?.dateSort===date)}
+  function storedCampaignForSource(storedCampaigns=[],source,sourceMode='manifest'){
+    const rows=Array.isArray(storedCampaigns)?storedCampaigns:[],name=String(source?.nome_campanha_exato||source?.nome_mcc||'').trim(),key=name.toLocaleLowerCase('pt-BR');if(!key)return null;
+    if(sourceMode!=='api'){let match=null;for(const item of rows)if(String(item?.nome_mcc||'').trim().toLocaleLowerCase('pt-BR')===key)match=item;return match}
+    const digits=value=>{const candidate=value&&typeof value==='object'?value.valor:value,normalized=String(candidate??'').replace(/\D/g,'');return /^\d{10}$/.test(normalized)?normalized:''},account=digits(source?.metricas_D_zero?.conta_id)||digits(source?.metricas_D_menos_1?.conta_id)||digits(source?._account)||digits(source?.conta_id),manager=digits(source?.mcc_id),matches=rows.filter(item=>String(item?.nome_mcc||'').trim().toLocaleLowerCase('pt-BR')===key&&(!account||digits(item?.conta_id)===account)&&(!manager||!item?.mcc_id||digits(item?.mcc_id)===manager));return matches.length===1?matches[0]:null;
+  }
+  function storedCampaignLookup(storedCampaigns=[],sourceMode='manifest'){
+    const rows=Array.isArray(storedCampaigns)?storedCampaigns:[],byName=new Map();
+    for(const item of rows){const key=String(item?.nome_mcc||'').trim().toLocaleLowerCase('pt-BR');if(!key)continue;const matches=byName.get(key)||[];matches.push(item);byName.set(key,matches)}
+    const digits=value=>{const candidate=value&&typeof value==='object'?value.valor:value,normalized=String(candidate??'').replace(/\D/g,'');return /^\d{10}$/.test(normalized)?normalized:''};
+    return source=>{
+      const name=String(source?.nome_campanha_exato||source?.nome_mcc||'').trim(),key=name.toLocaleLowerCase('pt-BR');if(!key)return null;
+      const matches=byName.get(key)||[];if(sourceMode!=='api')return matches.length?matches[matches.length-1]:null;
+      const account=digits(source?.metricas_D_zero?.conta_id)||digits(source?.metricas_D_menos_1?.conta_id)||digits(source?._account)||digits(source?.conta_id),manager=digits(source?.mcc_id),filtered=matches.filter(item=>(!account||digits(item?.conta_id)===account)&&(!manager||!item?.mcc_id||digits(item?.mcc_id)===manager));
+      return filtered.length===1?filtered[0]:null;
+    };
+  }
+  function latestCompleteApiCampaignStatuses(base){
+    const snapshots=(Array.isArray(base?.google_ads_api_capture_snapshots)?base.google_ads_api_capture_snapshots:[])
+      .filter(snapshot=>String(snapshot?.scope||'ALL').toUpperCase()==='ALL'
+        &&Array.isArray(snapshot?.accounts)&&snapshot.accounts.length>0
+        &&snapshot.accounts.every(account=>account?.queryComplete===true))
+      .sort((left,right)=>String(right?.completedAtUtc||'').localeCompare(String(left?.completedAtUtc||'')));
+    const snapshot=snapshots[0]||null,statuses=new Map(),names=new Map();
+    for(const account of snapshot?.accounts||[])for(const campaign of account?.campaigns||[]){
+      const id=String(campaign?.campaignInternalId||''),status=String(campaign?.campaignStatus||'').trim().toUpperCase();
+      if(!['ENABLED','PAUSED','REMOVED'].includes(status))continue;
+      if(id)statuses.set(id,status);
+      const name=String(campaign?.campaignName||'').normalize('NFKC').replace(/\s+/gu,' ').trim().toLocaleLowerCase('pt-BR');
+      if(name){const matches=names.get(name)||new Set();matches.add(status);names.set(name,matches)}
+    }
+    const statusesByName=new Map([...names].filter(([,matches])=>matches.size===1).map(([name,matches])=>[name,[...matches][0]]));
+    return{snapshot,statuses,statusesByName};
+  }
+  function apiSnapshotOnlyCampaignRows(storedCampaigns=[],knownRows=[]){
+    const digits=value=>{const candidate=value&&typeof value==='object'?value.valor:value,normalized=String(candidate??'').replace(/\D/g,'');return /^\d{10}$/.test(normalized)?normalized:''},nameKey=row=>String(row?.nome_campanha_exato||row?.nome_mcc||'').normalize('NFKC').replace(/\s+/gu,' ').trim().toLocaleLowerCase('pt-BR'),accountId=row=>digits(row?._account||row?.conta_id||row?.metricas_D_zero?.conta_id||row?.metricas_D_menos_1?.conta_id),managerId=row=>digits(row?.mcc_id),sameCampaign=(left,right)=>{const leftName=nameKey(left),rightName=nameKey(right);if(!leftName||leftName!==rightName)return false;const leftAccount=accountId(left),rightAccount=accountId(right),leftManager=managerId(left),rightManager=managerId(right);if(leftAccount&&rightAccount)return leftAccount===rightAccount&&(!leftManager||!rightManager||leftManager===rightManager);return !leftAccount&&!rightAccount},seen=[...(Array.isArray(knownRows)?knownRows:[])],result=[];
+    for(const stored of Array.isArray(storedCampaigns)?storedCampaigns:[]){
+      const name=String(stored?.nome_mcc||'').trim(),account=accountId(stored),manager=managerId(stored),status=String(stored?.status||'').trim().toLowerCase();
+      if(stored?.apiSnapshotOnly!==true||!name||!stored?.id||!account||!['ativa','pausada'].includes(status)||seen.some(row=>sameCampaign(row,stored)))continue;
+      const row={nome_campanha_exato:name,nome_exibicao:String(stored.nome_exibicao||name).trim(),conta_id:account,mcc_id:manager||null,google_ads_campaign_id:String(stored.google_ads_campaign_id||''),metricas_D_zero:{presente:false},metricas_D_menos_1:{presente:false},custo_D_zero:{presente:false},google_ads_current_configuration:{campaignStatus:status==='ativa'?'ENABLED':'PAUSED'},_status:status,_account:account,_storedCampaignId:String(stored.id),_diarySource:'api',apiSnapshotOnly:true};
+      if(stored.google_ads_campaign_origem)row.google_ads_campaign_origem=String(stored.google_ads_campaign_origem);
+      result.push(row);seen.push(row);
+    }
+    return result;
+  }
   function pausedCampaignNamesOnDate(campaigns,date,{sourceMode='manifest',apiCaptures=[],apiChangeHistory=[]}={}){
     const target=String(date??'');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(target))return[];
-    const rows=Array.isArray(campaigns)?campaigns:[],campaignName=campaign=>String(campaign?.nome_mcc||campaign?.nome_exibicao||'').trim(),
-      legacy=()=>rows.filter(campaign=>campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target).map(campaign=>campaignName(campaign)).filter(Boolean);
-    if(sourceMode!=='api')return legacy().sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
+    const rows=Array.isArray(campaigns)?campaigns:[],campaignName=campaign=>String(campaign?.nome_mcc||campaign?.nome_exibicao||'').trim();
     const digits=value=>String(value??'').replace(/\D/g,''),accountKey=(manager,customer,campaign)=>`${digits(manager)||'direct'}|${digits(customer)}|${String(campaign??'')}`,
       validTimestamp=value=>{const time=Date.parse(value||'');return Number.isFinite(time)?time:null;},
       campaignById=new Map(rows.filter(campaign=>campaign?.id!=null).map(campaign=>[String(campaign.id),campaign])),latestByCampaign=new Map(),latestByIdentity=new Map();
@@ -330,6 +426,8 @@
     }
     const selected=new Map();
     rows.forEach((campaign,index)=>{
+      if(campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target){const name=campaignName(campaign);if(name)selected.set(campaign?.id==null?`legacy:${index}`:String(campaign.id),name)}
+      if(sourceMode!=='api')return;
       const latest=campaign?.id==null?null:latestByCampaign.get(String(campaign.id)),stillPaused=!latest||!['ENABLED','PAUSED','REMOVED'].includes(latest.status)||latest.status==='PAUSED';
       if(stillPaused&&campaign?.status==='pausada'&&String(campaign?.pausada_em??'').slice(0,10)===target){const name=campaignName(campaign);if(name)selected.set(campaign?.id==null?`legacy:${index}`:String(campaign.id),name)}
     });
@@ -339,12 +437,20 @@
       for(const change of Array.isArray(entry?.changes)?entry.changes:[]){
         const statusChanged=(Array.isArray(change?.fields)?change.fields:[]).some(field=>field?.key==='campaignStatus'&&String(field.before||'').toUpperCase()==='ENABLED'&&String(field.after||'').toUpperCase()==='PAUSED');
         if(!statusChanged)continue;
-        const latest=latestByIdentity.get(accountKey(change.managerCustomerId,change.customerId,change.campaignId)),campaign=latest?.campaign;
+        const identity=accountKey(change.managerCustomerId,change.customerId,change.campaignId),latest=latestByIdentity.get(identity);
+        if(entry.status==='completed'&&((entry.eventType==='automatic_pause'&&entry.executionMode==='automatic')||(entry.eventType==='manual_pause'&&entry.executionMode==='manual'))){
+          const internalId=String(change.campaignInternalId||''),campaign=campaignById.get(internalId),customer=digits(change.customerId),manager=digits(change.managerCustomerId),campaignId=String(change.campaignId||'');
+          if(!campaign||!/^\d{10}$/.test(customer)||digits(campaign.conta_id)!==customer||manager&&digits(campaign.mcc_id)&&digits(campaign.mcc_id)!==manager||!/^[1-9]\d{0,19}$/.test(campaignId)||(campaign.google_ads_campaign_id&&String(campaign.google_ads_campaign_id)!==campaignId))continue;
+          const name=campaignName(campaign);if(name)selected.set(internalId,name);
+          continue;
+        }
+        if(sourceMode!=='api')continue;
+        const campaign=latest?.campaign;
         if(!latest||latest.status!=='PAUSED'||latest.capturedAt<completedAt||String(change.campaignInternalId||'')!==String(campaign?.id||''))continue;
         const name=campaignName(campaign);if(name)selected.set(String(campaign.id),name);
       }
     }
     return[...selected.values()].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true,sensitivity:'base'}));
   }
-  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,manifestPeriodDates,manifestMccCoverage,mccCollectionCoverage,manifestCaptureInfo,latestMccImportUpdates,mccNameForCampaign,sortRows,activeMetricProductCounts,activeImpressionProductCounts,activeClickProductCounts,activeClickProductGroups,qualifyingActiveClickProductGroups,activeD0ImpressionProductCounts,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
+  root.OverviewDomain=Object.freeze({campaignD0Totals,campaignD1Totals,activeCampaignStartDates,campaignDateNavigation,campaignRowsOnStartDate,storedCampaignForSource,storedCampaignLookup,latestCompleteApiCampaignStatuses,apiSnapshotOnlyCampaignRows,manifestPeriodDates,manifestMccCoverage,mccCollectionCoverage,manifestCaptureInfo,latestMccImportUpdates,latestApiMccUpdates,mccNameForCampaign,sortRows,firstClickImpressionObservations,activeMetricProductCounts,activeImpressionProductCounts,activeClickProductCounts,activeClickProductGroups,qualifyingActiveClickProductGroups,activeD0ImpressionProductCounts,searchRows,rowVisible,historyNavigationRows,pausedCampaignNamesOnDate,deriveTestBudget,campaignDiagnosis,parseMinimumRoi,parseTestLimit,testLimitForRoi,roiForTestLimit,parseCommissionTestPercent,testLimitForCommission,percentForCommissionLimit,parseRemainingAlert,remainingAlertThreshold,remainingWarningThreshold,remainingAlertTone,sumObservedMetric,overviewTableTotals,sumObservedProfit,resolveD0Totals,resolveD1Totals,profitForTotals,previousIsoDate,authoritativeMccSnapshots,replaceAuthoritativeDates,totalsColumns,columnWidths,visibleColumns,defaultTestLimitSettings,testLimitSettings});
 })(typeof window==='object'?window:globalThis);

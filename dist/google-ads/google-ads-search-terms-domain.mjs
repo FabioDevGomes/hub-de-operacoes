@@ -25,23 +25,32 @@ function nonNegativeNumber(value, { integer = false } = {}) {
   return number;
 }
 
+function finiteDecimal(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !/^-?\d+(?:\.\d+)?$/.test(value)) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
 export function normalizeGoogleAdsSearchTerms(payload, expected = {}) {
+  const includePurchaseMetrics = expected.includePurchaseMetrics === true;
   const managerCustomerId = expected.managerCustomerId || null;
   const expectedCampaignId = expected.campaignId == null || expected.campaignId === '' ? null : String(expected.campaignId);
   const actualCampaignId = payload?.campaign_id_filter === '' ? null : (payload?.campaign_id_filter ?? null);
   const scopeMismatches = [];
   if (!payload || payload.ok !== true) scopeMismatches.push('confirmação de sucesso');
-  if (payload?.schema_version !== 1) scopeMismatches.push('versão do formato');
+  if (payload?.schema_version !== (includePurchaseMetrics ? 2 : 1)) scopeMismatches.push('versão do formato');
   if (payload?.query_complete !== true) scopeMismatches.push('consulta completa');
   if (payload?.campaign_scope !== 'SEARCH') scopeMismatches.push('escopo de campanhas Search');
   if (payload?.customer_id !== expected.customerId) scopeMismatches.push('conta selecionada');
   if ((payload?.manager_customer_id ?? null) !== managerCustomerId) scopeMismatches.push('MCC selecionada');
   if (payload?.date_from !== expected.dateFrom || payload?.date_to !== expected.dateTo) scopeMismatches.push('período selecionado');
   if (actualCampaignId !== expectedCampaignId) scopeMismatches.push('filtro de campanha');
+  if (includePurchaseMetrics && payload?.purchase_metrics_complete !== true) scopeMismatches.push('métricas de compra completas');
   if (!Array.isArray(payload?.rows)) scopeMismatches.push('lista de linhas');
   if (scopeMismatches.length) {
     throw new Error(`A resposta não corresponde ao escopo selecionado (${scopeMismatches.join(', ')}). Nenhum dado foi gravado.`);
@@ -59,6 +68,8 @@ export function normalizeGoogleAdsSearchTerms(payload, expected = {}) {
     const clicks = nonNegativeNumber(row?.clicks, { integer: true });
     const costMicros = nonNegativeNumber(row?.cost_micros);
     const conversions = nonNegativeNumber(row?.conversions);
+    const purchaseConversions = includePurchaseMetrics ? nonNegativeNumber(row?.purchase_conversions) : null;
+    const purchaseValue = includePurchaseMetrics ? finiteDecimal(row?.purchase_value) : null;
     const normalized = {
       date,
       campaignId: text(row?.campaign_id),
@@ -73,12 +84,14 @@ export function normalizeGoogleAdsSearchTerms(payload, expected = {}) {
       clicks,
       costMicros,
       conversions,
+      ...(includePurchaseMetrics ? { purchaseConversions, purchaseValue } : {}),
     };
     if (parseDate(date) == null || date < expected.dateFrom || date > expected.dateTo
       || !normalized.campaignId || !normalized.campaignName || !normalized.adGroupId || !normalized.adGroupName
       || (expectedCampaignId && normalized.campaignId !== expectedCampaignId)
       || !normalized.searchTerm || !normalized.keywordText || impressions == null || impressions < 1
-      || clicks == null || costMicros == null || conversions == null) {
+      || clicks == null || costMicros == null || conversions == null
+      || (includePurchaseMetrics && (purchaseConversions == null || purchaseValue == null))) {
       throw new Error('A resposta da consulta contém linha incompleta ou sem palavra-chave associada. Nenhum dado foi gravado.');
     }
     return normalized;
@@ -93,6 +106,7 @@ export function normalizeGoogleAdsSearchTerms(payload, expected = {}) {
     dateFrom: payload.date_from,
     dateTo: payload.date_to,
     campaignIdFilter: expectedCampaignId,
+    purchaseMetricsComplete: includePurchaseMetrics,
     rowCount,
     rowsWithoutKeyword,
     rows,

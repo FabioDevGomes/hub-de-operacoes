@@ -65,6 +65,7 @@ export function buildStructuredFicha(text,data={}){
   if(trim(data.product)&&trim(data.product)!==content.product)warnings.push(`O produto da ficha é “${content.product}”, conforme [PRODUTO]; o produto da copy não foi alterado.`);
   const ficha={
     destination:trim(data.destination),assetFolder:trim(data.assetFolder)||'assets',
+    skipFavicon:data.skipFavicon===true,
     htmlLanguage:trim(data.htmlLanguage),countryCode:trim(data.countryCode),
     pageTitle:trim(data.pageTitle)||content.offerMainTitle,affiliateUrl:trim(data.affiliateUrl),
     cookieTitle:t.cookieTitle,cookieText:t.cookieText,acceptLabel:t.accept,declineLabel:t.decline,closeAriaLabel:t.close,

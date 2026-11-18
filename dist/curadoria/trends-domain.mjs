@@ -14,12 +14,13 @@ const RESULT_LABELS = Object.freeze({
   [RESULT_TYPES.STABLE]: 'Estável',
   [RESULT_TYPES.DOWN]: 'Em queda',
   [RESULT_TYPES.POINT_PEAK]: 'Pico pontual',
-  [RESULT_TYPES.LOW_VOLUME]: 'Volume baixo',
+  [RESULT_TYPES.LOW_VOLUME]: 'Algum volume',
   [RESULT_TYPES.NO_DATA]: 'Sem dados',
   [RESULT_TYPES.INCONCLUSIVE]: 'Inconclusivo',
 });
 
 const fold = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const regionNames = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['pt-BR'], { type: 'region' }) : null;
 const decodeEntities = value => String(value || '')
   .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
   .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(Number(decimal)))
@@ -144,6 +145,19 @@ export function collectionsForDate(collections, date) {
 
 export function resultLabel(status) {
   return RESULT_LABELS[status] || 'Não pesquisado';
+}
+
+export function locationLabel(code) {
+  const normalized = String(code || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized === 'WORLD') return 'Mundo';
+  if (!/^[A-Z]{2}$/.test(normalized) || !regionNames) return normalized;
+  try {
+    const name = regionNames.of(normalized);
+    return name && name.toUpperCase() !== normalized ? `${normalized}. ${name}` : normalized;
+  } catch {
+    return normalized;
+  }
 }
 
 export function upsertAssessment(assessments, assessment) {

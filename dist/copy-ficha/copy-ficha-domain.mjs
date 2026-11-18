@@ -1,3 +1,5 @@
+import {countryPresentationDefaults} from './copy-ficha-country-defaults.mjs?v=1';
+
 const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
 const missingConfirmation=value=>!clean(value)||clean(value).toUpperCase()==='CONFIRMAR';
 const number=value=>{
@@ -62,7 +64,6 @@ export function generationBlockerPackageIndexes(data={}){
 
 const LANGUAGE_SIGNALS={pt:/\b(frete|garantia|compre|economize|pacote|pagamento|finalizar pedido|endereço|estado|cidade)\b/gi,it:/\b(spedizione|garanzia|acquista|risparmia|pacchetto|pagamento|indirizzo|ordine)\b/gi,es:/\b(envío|garantía|compra|ahorra|paquete|pago|dirección|pedido)\b/gi,fr:/\b(livraison|garantie|achetez|économisez|offre|paiement|adresse|commande)\b/gi,de:/\b(versand|garantie|kaufen|sparen|angebot|zahlung|adresse|bestellung)\b/gi,sv:/\b(frakt|garanti|köp|spara|erbjudande|betalning|adress|beställning)\b/gi,en:/\b(shipping|guarantee|buy|save|bundle|package|select quantity|payment|place order|secure checkout|order summary|shipping information|first name|last name|street address|zip code|credit card|complete secure purchase)\b/gi};
 const DEFAULT_COUNTRY={pt:'BR',it:'IT',es:'ES',fr:'FR',de:'DE',sv:'SE',en:'US'};
-const DEFAULT_LOCALE={BR:'pt-BR',IT:'it-IT',ES:'es-ES',FR:'fr-FR',DE:'de-DE',SE:'sv-SE',US:'en-US',AU:'en-AU',CA:'en-CA',GB:'en-GB'};
 const PRODUCT_STOP=/^(save|free|shipping|guarantee|order|buy|checkout|package|packages|bundle|bundles|best|value|basic|starter|premium|offer|official|today|total|regular|price|discount|cookies?|privacy|accept|decline|frete|garantia|compre|oferta|spedizione|garanzia|acquista|offerta|envío|garantía|compra|livraison|achetez|versand|kaufen|frakt|köp)$/i;
 const PRODUCT_NOISE_WORDS=new Set('a an and applied american apt apartment asked assured address all been bonus buy card city complete contact country credit customer days deals delaware delivery discount edit enter expiration fast first free from full grab guaranteed house image information large last limited medium order payment phone promo proudly quantity receipt reliable reships return safe salem secure selling small state street summary support today total try united vip worry zipcode zip code quality square feet verifizierte bewertung kunden'.split(/\s+/));
 const FOOTER_MARKER=/^(?:proudly american\b|quality assured products\b|our \d{1,3}[- ]day[^\n]*pledge\b|fast and reliable shipping\b|superior customer service\b|©\s*20\d{2}\b|terms\s*(?:&|and)\s*conditions\b|privacy policy\b|contact us\b|alle rechte vorbehalten\b)/i;
@@ -106,7 +107,7 @@ function inferLocale(text,url,currency){
   }
   const currencyCountry={AUD:'AU',CAD:'CA',GBP:'GB',BRL:'BR',SEK:'SE'}[currency]||'';
   if(!country)country=currencyCountry||(explicitLanguage?DEFAULT_COUNTRY[explicitLanguage]:'');
-  const htmlLanguage=country?`${explicitLanguage||DEFAULT_LOCALE[country]?.split('-')[0]||'en'}-${country}`:'';
+  const htmlLanguage=country?`${explicitLanguage||countryPresentationDefaults(country)?.htmlLanguage?.split('-')[0]||'en'}-${country}`:'';
   return {countryCode:country,htmlLanguage};
 }
 

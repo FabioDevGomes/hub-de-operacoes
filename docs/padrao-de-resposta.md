@@ -18,10 +18,12 @@ Para uma pergunta simples ou uma resposta sem alterações, mantenha o texto cur
 - Se precisar de uma informação do usuário, peça o artefato específico que revela a causa, como a mensagem completa do erro; continue as verificações independentes enquanto isso.
 - Não sugira repetir uma ação que possa sobrescrever ou publicar antes de explicar o estado conhecido e a forma segura de confirmar o resultado.
 
-## Deploy manual
+## Deploy manual na Hostinger
 
-Quando uma tarefa envolver publicar arquivos na Hostinger, consulte o padrão canônico `voc-meu-analista-de-dados-e/tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md`, no checkout local irmão do projeto `painel-operacao`. Siga também o README específico do pacote. Agrupe os arquivos por diretório de destino, mostre os caminhos e a ordem exatos, separe SQL/configuração, e informe se cada etapa está apenas local, enviada ou validada. Um build do Hub não significa que houve publicação na Hostinger.
+O formato de apresentação de arquivos e o procedimento canônico `tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` aplicam-se exclusivamente à publicação manual de arquivos no servidor da Hostinger. Consulte também o README específico do pacote. Agrupe os arquivos por diretório de destino, mostre os caminhos e a ordem exatos, separe SQL/configuração e informe se cada etapa está apenas local, enviada ou validada. Um build do Hub não significa que houve publicação na Hostinger.
+
+Quando a alteração for apenas um build local do Hub, uma atualização da distribuição local ou qualquer trabalho sem envio de arquivos ao servidor da Hostinger, não apresente a lista de arquivos no formato de deploy. Informe somente: **“Não há deploy para o servidor.”** Um deploy em outro servidor exige procedimento próprio; não reutilize automaticamente o padrão da Hostinger.
 
 ## Instrução para outro chat
 
-Ao continuar trabalho neste repositório, leia `AGENTS.md` e este documento. Para tarefas de deploy, leia também `voc-meu-analista-de-dados-e/tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` e o README do pacote em questão.
+Ao continuar trabalho neste repositório, leia `AGENTS.md` e este documento. Para tarefas de publicação manual na Hostinger, leia também `tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` e o README do pacote em questão.

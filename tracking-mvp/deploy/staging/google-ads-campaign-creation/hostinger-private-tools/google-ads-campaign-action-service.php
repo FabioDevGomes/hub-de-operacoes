@@ -1,0 +1,1375 @@
+<?php
+declare(strict_types=1);
+
+// Separate write surface. Shared authentication, credentials, OAuth and
+// Google Ads HTTP helpers remain defined by the read-only service.
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'google-ads-readonly-service.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'google-ads-campaign-pause-email-service.php';
+
+function hub_google_ads_campaign_actions_enabled(array $config): bool
+{
+    return ($config['tracking_google_ads_campaign_writes_enabled'] ?? false) === true
+        && count(hub_google_ads_campaign_write_manager_customer_ids($config)) > 0;
+}
+
+/** Only explicitly listed manager accounts can authorize their linked advertiser accounts. */
+function hub_google_ads_campaign_write_manager_customer_ids(array $config): array
+{
+    $configured = $config['tracking_google_ads_campaign_write_manager_customer_ids'] ?? [];
+    if (!is_array($configured)) return [];
+    $managerIds = [];
+    foreach ($configured as $value) {
+        $managerId = hub_google_ads_valid_customer_id($value);
+        if ($managerId !== null) $managerIds[$managerId] = $managerId;
+    }
+    return array_values($managerIds);
+}
+
+function hub_google_ads_campaign_manager_is_allowed(array $config, string $managerId): bool
+{
+    return in_array($managerId, hub_google_ads_campaign_write_manager_customer_ids($config), true);
+}
+
+/** Check current manager hierarchy, so new active advertiser accounts are included automatically. */
+function hub_google_ads_campaign_customer_is_active_child(string $accessToken, string $managerId, string $customerId): bool
+{
+    if ($managerId === $customerId) return false;
+    $query = 'SELECT customer_client.id, customer_client.level, customer_client.manager, customer_client.status '
+        . 'FROM customer_client WHERE customer_client.id = ' . $customerId
+        . ' AND customer_client.level > 0 AND customer_client.manager = FALSE'
+        . " AND customer_client.status = 'ENABLED' LIMIT 2";
+    $rows = hub_google_ads_search($managerId, $query, $accessToken, $managerId);
+    if (count($rows) > 1) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    if (!$rows) return false;
+    $client = $rows[0]['customerClient'] ?? null;
+    if (!is_array($client)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    $returnedId = hub_google_ads_valid_customer_id((string)($client['id'] ?? ''));
+    $level = $client['level'] ?? null;
+    if ($returnedId !== $customerId || !is_numeric($level) || (int)$level < 1
+        || ($client['manager'] ?? null) !== false || ($client['status'] ?? null) !== 'ENABLED') {
+        throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    }
+    return true;
+}
+
+function hub_google_ads_campaign_action_validate_status_change(array $payload): array
+{
+    $transitions = [
+        'pause_campaign' => ['ENABLED', 'PAUSED'],
+        'enable_campaign' => ['PAUSED', 'ENABLED'],
+    ];
+    $operation = $payload['operation'] ?? null;
+    $transition = is_string($operation) ? ($transitions[$operation] ?? null) : null;
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    $hasNotificationContext = array_key_exists('notification_context', $payload);
+    $notificationContext = $hasNotificationContext ? $payload['notification_context'] : null;
+    $allowedKeys = ['campaign_id', 'confirm', 'customer_id', 'expected_status', 'manager_customer_id', 'operation'];
+    if (array_key_exists('notification_context', $payload)) {
+        $allowedKeys[] = 'notification_context';
+        sort($allowedKeys, SORT_STRING);
+    }
+    if ($keys !== $allowedKeys
+        || ($payload['confirm'] ?? null) !== true
+        || $transition === null
+        || ($payload['expected_status'] ?? null) !== $transition[0]
+        || ($hasNotificationContext
+            && ($notificationContext !== 'automatic_negative_remaining' || $operation !== 'pause_campaign'))) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+
+    $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+    $campaignId = $payload['campaign_id'];
+    if ($managerId === null || $customerId === null
+        || !is_string($campaignId)
+        || preg_match('/^[1-9][0-9]{0,19}$/D', $campaignId) !== 1) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+
+    return [$managerId, $customerId, $campaignId, $operation, $transition[0], $transition[1], $notificationContext];
+}
+
+/** Read the current campaign state using a server-built, ID-validated GAQL query. */
+function hub_google_ads_campaign_action_read(string $accessToken, ?string $managerId, string $customerId, string $campaignId): array
+{
+    $query = 'SELECT campaign.id, campaign.name, campaign.status FROM campaign WHERE campaign.id = '
+        . $campaignId . ' LIMIT 2';
+    $rows = hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    if (!$rows) throw new HubGoogleAdsApiException('campaign_not_found', 404);
+    if (count($rows) !== 1 || !is_array($rows[0]['campaign'] ?? null)) {
+        throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    }
+
+    $campaign = $rows[0]['campaign'];
+    if ((string)($campaign['id'] ?? '') !== $campaignId || !is_string($campaign['status'] ?? null)) {
+        throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    }
+    return [
+        'id' => $campaignId,
+        'name' => is_string($campaign['name'] ?? null) ? $campaign['name'] : '',
+        'status' => $campaign['status'],
+    ];
+}
+
+/** Only explicit ENABLED ↔ PAUSED status changes are available. */
+function hub_google_ads_change_campaign_status(
+    array $config,
+    string $managerId,
+    string $customerId,
+    string $campaignId,
+    string $operation,
+    string $expectedStatus,
+    string $targetStatus
+): array
+{
+    $transitions = [
+        'pause_campaign' => ['ENABLED', 'PAUSED'],
+        'enable_campaign' => ['PAUSED', 'ENABLED'],
+    ];
+    if (($transitions[$operation] ?? null) !== [$expectedStatus, $targetStatus]) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    if (!hub_google_ads_campaign_actions_enabled($config)) {
+        throw new HubGoogleAdsApiException('campaign_writes_disabled', 403);
+    }
+    if (!hub_google_ads_campaign_manager_is_allowed($config, $managerId)) {
+        throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    }
+
+    $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+    if (!hub_google_ads_campaign_customer_is_active_child($accessToken, $managerId, $customerId)) {
+        throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    }
+    $campaign = hub_google_ads_campaign_action_read($accessToken, $managerId, $customerId, $campaignId);
+    if ($campaign['status'] === $targetStatus) {
+        return [
+            'ok' => true,
+            'schema_version' => 1,
+            'operation' => $operation,
+            'changed' => false,
+            'verified' => true,
+            'campaign_id' => $campaignId,
+            'campaign_name' => $campaign['name'],
+            'status' => $targetStatus,
+            'verified_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+    }
+    if ($campaign['status'] !== $expectedStatus) {
+        throw new HubGoogleAdsApiException('campaign_status_changed', 409);
+    }
+
+    $resourceName = 'customers/' . $customerId . '/campaigns/' . $campaignId;
+    $mutation = hub_google_ads_api_request(
+        'POST',
+        'customers/' . $customerId . '/campaigns:mutate',
+        $accessToken,
+        json_encode([
+            'operations' => [[
+                'update' => ['resourceName' => $resourceName, 'status' => $targetStatus],
+                'updateMask' => 'status',
+            ]],
+        ], JSON_UNESCAPED_SLASHES),
+        $managerId
+    );
+    if (count($mutation['results'] ?? []) !== 1) {
+        throw new HubGoogleAdsApiException('campaign_status_unverified', 502);
+    }
+
+    try {
+        $verifiedCampaign = hub_google_ads_campaign_action_read($accessToken, $managerId, $customerId, $campaignId);
+    } catch (Throwable $error) {
+        throw new HubGoogleAdsApiException('campaign_status_unverified', 502);
+    }
+    if ($verifiedCampaign['status'] !== $targetStatus) {
+        throw new HubGoogleAdsApiException('campaign_status_unverified', 502);
+    }
+
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'operation' => $operation,
+        'changed' => true,
+        'verified' => true,
+        'campaign_id' => $campaignId,
+        'campaign_name' => $verifiedCampaign['name'],
+        'status' => $targetStatus,
+        'verified_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+    ];
+}
+
+/** Campaign creation is separately gated so existing pause/enable access stays unchanged. */
+function hub_google_ads_campaign_creation_enabled(array $config): bool
+{
+    return ($config['tracking_google_ads_campaign_creation_enabled'] ?? false) === true
+        && count(hub_google_ads_campaign_write_manager_customer_ids($config)) > 0;
+}
+
+function hub_google_ads_campaign_creation_authorize(array $config, string $accessToken, string $managerId, string $customerId): void
+{
+    if (!hub_google_ads_campaign_creation_enabled($config)) {
+        throw new HubGoogleAdsApiException('campaign_creation_disabled', 403);
+    }
+    if (!hub_google_ads_campaign_manager_is_allowed($config, $managerId)
+        || !hub_google_ads_campaign_customer_is_active_child($accessToken, $managerId, $customerId)) {
+        throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    }
+}
+
+function hub_google_ads_campaign_creation_text_length(string $value): int
+{
+    if (preg_match_all('/./us', $value, $matches) === false) return PHP_INT_MAX;
+    return count($matches[0]);
+}
+
+function hub_google_ads_campaign_creation_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function hub_google_ads_campaign_creation_substr(string $value, int $start, int $length): string
+{
+    return function_exists('mb_substr') ? mb_substr($value, $start, $length, 'UTF-8') : substr($value, $start, $length);
+}
+
+function hub_google_ads_campaign_creation_decimal_micros(mixed $value): ?string
+{
+    if (!is_string($value) || preg_match('/^(?:0|[1-9][0-9]{0,9})(?:\.([0-9]{1,6}))?$/D', $value, $matches) !== 1) return null;
+    $parts = explode('.', $value, 2);
+    $micros = $parts[0] . str_pad($parts[1] ?? '', 6, '0');
+    $micros = ltrim($micros, '0');
+    if ($micros === '') $micros = '0';
+    if (strlen($micros) > 16 || (strlen($micros) === 16 && strcmp($micros, '9999999999999999') > 0)) return null;
+    return $micros;
+}
+
+function hub_google_ads_campaign_creation_gaql_string(string $value): string
+{
+    return "'" . str_replace(['\\', "'"], ['\\\\', "\\'"], $value) . "'";
+}
+
+function hub_google_ads_campaign_creation_customer_currency(string $accessToken, string $managerId, string $customerId): string
+{
+    $rows = hub_google_ads_search($customerId, 'SELECT customer.currency_code FROM customer LIMIT 1', $accessToken, $managerId);
+    $currency = (string)($rows[0]['customer']['currencyCode'] ?? '');
+    if (count($rows) !== 1 || preg_match('/^[A-Z]{3}$/D', $currency) !== 1) {
+        throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    }
+    return $currency;
+}
+
+/** Resolve a small explicit list of ISO-3166 alpha-2 countries to active Google geo targets. */
+function hub_google_ads_campaign_creation_resolve_countries(string $accessToken, string $managerId, string $customerId, array $countryCodes): array
+{
+    $quoted = array_map(static fn(string $code): string => hub_google_ads_campaign_creation_gaql_string($code), $countryCodes);
+    $rows = hub_google_ads_search($customerId,
+        'SELECT geo_target_constant.canonical_name, geo_target_constant.country_code, geo_target_constant.id, geo_target_constant.name, geo_target_constant.status, geo_target_constant.target_type FROM geo_target_constant WHERE geo_target_constant.country_code IN (' . implode(', ', $quoted) . ") AND geo_target_constant.target_type = 'Country' AND geo_target_constant.status = 'ENABLED' LIMIT 51",
+        $accessToken, $managerId);
+    if (count($rows) > 50) throw new HubGoogleAdsApiException('campaign_country_limit_exceeded', 422);
+    $resolved = [];
+    foreach ($rows as $row) {
+        $geo = $row['geoTargetConstant'] ?? null;
+        if (!is_array($geo)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $code = (string)($geo['countryCode'] ?? '');
+        $id = (string)($geo['id'] ?? '');
+        if (!in_array($code, $countryCodes, true) || preg_match('/^[1-9][0-9]{0,19}$/D', $id) !== 1
+            || ($geo['status'] ?? null) !== 'ENABLED' || ($geo['targetType'] ?? null) !== 'Country'
+            || isset($resolved[$code])) {
+            throw new HubGoogleAdsApiException('campaign_country_not_targetable', 422);
+        }
+        $resolved[$code] = [
+            'country_code' => $code,
+            'name' => (string)($geo['canonicalName'] ?? $geo['name'] ?? $code),
+            'resource_name' => 'geoTargetConstants/' . $id,
+        ];
+    }
+    if (count($resolved) !== count($countryCodes)) throw new HubGoogleAdsApiException('campaign_country_not_targetable', 422);
+    return array_values(array_map(static fn(string $code): array => $resolved[$code], $countryCodes));
+}
+
+/**
+ * Return only simple Search campaigns that can be copied without silently
+ * dropping targeting: one enabled standard ad group, daily unshared budget,
+ * manual CPC, enabled positive keywords, and supported campaign criteria.
+ */
+function hub_google_ads_campaign_creation_templates(string $accessToken, string $managerId, string $customerId): array
+{
+    $campaignRows = hub_google_ads_search($customerId,
+        "SELECT customer.currency_code, campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.manual_cpc.enhanced_cpc_enabled, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.contains_eu_political_advertising, campaign.tracking_url_template, campaign.final_url_suffix, campaign.url_custom_parameters, campaign_budget.amount_micros, campaign_budget.period, campaign_budget.explicitly_shared FROM campaign WHERE campaign.status != 'REMOVED' AND campaign.advertising_channel_type = 'SEARCH' LIMIT 101",
+        $accessToken, $managerId);
+    if (count($campaignRows) > 100) throw new HubGoogleAdsApiException('campaign_template_limit_exceeded', 422);
+
+    $currency = '';
+    $candidates = [];
+    foreach ($campaignRows as $row) {
+        $campaign = $row['campaign'] ?? [];
+        $budget = $row['campaignBudget'] ?? [];
+        if (!is_array($campaign) || !is_array($budget)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $currency = (string)($row['customer']['currencyCode'] ?? $currency);
+        $euPolitical = $campaign['containsEuPoliticalAdvertising'] ?? null;
+        $id = (string)($campaign['id'] ?? '');
+        $amount = (string)($budget['amountMicros'] ?? '');
+        if (preg_match('/^[1-9][0-9]{0,19}$/D', $id) !== 1) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        if (($campaign['advertisingChannelType'] ?? null) !== 'SEARCH'
+            || ($campaign['biddingStrategyType'] ?? null) !== 'MANUAL_CPC'
+            || ($budget['period'] ?? null) !== 'DAILY'
+            || ($budget['explicitlyShared'] ?? null) !== false
+            || preg_match('/^[1-9][0-9]{0,19}$/D', $amount) !== 1
+            || ($campaign['networkSettings']['targetGoogleSearch'] ?? null) !== true
+            || !in_array($euPolitical, ['DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING', 'CONTAINS_EU_POLITICAL_ADVERTISING'], true)) continue;
+        $candidates[$id] = [
+            'campaign_id' => $id,
+            'campaign_name' => (string)($campaign['name'] ?? ''),
+            'campaign_status' => (string)($campaign['status'] ?? ''),
+            'daily_budget_micros' => $amount,
+            'currency_code' => $currency,
+            'enhanced_cpc_enabled' => (bool)($campaign['manualCpc']['enhancedCpcEnabled'] ?? false),
+            'network_settings' => [
+                'target_google_search' => true,
+                'target_search_network' => (bool)($campaign['networkSettings']['targetSearchNetwork'] ?? false),
+                'target_content_network' => (bool)($campaign['networkSettings']['targetContentNetwork'] ?? false),
+                'target_partner_search_network' => (bool)($campaign['networkSettings']['targetPartnerSearchNetwork'] ?? false),
+            ],
+            'contains_eu_political_advertising' => $euPolitical,
+            'tracking_settings' => [
+                'tracking_url_template' => $campaign['trackingUrlTemplate'] ?? null,
+                'final_url_suffix' => $campaign['finalUrlSuffix'] ?? null,
+                'url_custom_parameters' => $campaign['urlCustomParameters'] ?? [],
+            ],
+        ];
+    }
+    if (!$candidates) return ['currency_code' => $currency, 'templates' => []];
+    if (preg_match('/^[A-Z]{3}$/D', $currency) !== 1) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+
+    $idsSql = implode(', ', array_keys($candidates));
+    $adGroupRows = hub_google_ads_search($customerId,
+        "SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros, ad_group.tracking_url_template, ad_group.final_url_suffix, ad_group.url_custom_parameters FROM ad_group WHERE campaign.id IN ($idsSql) AND ad_group.status != 'REMOVED' LIMIT 501",
+        $accessToken, $managerId);
+    if (count($adGroupRows) > 500) throw new HubGoogleAdsApiException('campaign_template_limit_exceeded', 422);
+    $groups = [];
+    foreach ($adGroupRows as $row) {
+        $campaignId = (string)($row['campaign']['id'] ?? '');
+        if (!isset($candidates[$campaignId]) || !is_array($row['adGroup'] ?? null)) continue;
+        $groups[$campaignId][] = $row['adGroup'];
+    }
+    foreach ($candidates as $id => &$candidate) {
+        $candidate['source_ad_group'] = null;
+        $rows = $groups[$id] ?? [];
+        if (count($rows) !== 1) { unset($candidates[$id]); continue; }
+        $group = $rows[0];
+        $groupId = (string)($group['id'] ?? '');
+        $bid = (string)($group['cpcBidMicros'] ?? '');
+        if (preg_match('/^[1-9][0-9]{0,19}$/D', $groupId) !== 1
+            || ($group['status'] ?? null) !== 'ENABLED'
+            || ($group['type'] ?? null) !== 'SEARCH_STANDARD'
+            || preg_match('/^[1-9][0-9]{0,19}$/D', $bid) !== 1) {
+            unset($candidates[$id]); continue;
+        }
+        $candidate['source_ad_group'] = [
+            'id' => $groupId,
+            'name' => (string)($group['name'] ?? ''),
+            'cpc_bid_micros' => $bid,
+            'tracking_settings' => [
+                'tracking_url_template' => $group['trackingUrlTemplate'] ?? null,
+                'final_url_suffix' => $group['finalUrlSuffix'] ?? null,
+                'url_custom_parameters' => $group['urlCustomParameters'] ?? [],
+            ],
+        ];
+    }
+    unset($candidate);
+    if (!$candidates) return ['currency_code' => $currency, 'templates' => []];
+
+    $idsSql = implode(', ', array_keys($candidates));
+    $adRows = hub_google_ads_search($customerId,
+        "SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.ad.type, ad_group_ad.ad.tracking_url_template, ad_group_ad.ad.final_url_suffix, ad_group_ad.ad.url_custom_parameters FROM ad_group_ad WHERE campaign.id IN ($idsSql) AND ad_group_ad.status != 'REMOVED' LIMIT 501",
+        $accessToken, $managerId);
+    if (count($adRows) > 500) throw new HubGoogleAdsApiException('campaign_template_limit_exceeded', 422);
+    $ads = [];
+    foreach ($adRows as $row) {
+        $campaignId = (string)($row['campaign']['id'] ?? '');
+        if (!isset($candidates[$campaignId]) || !is_array($row['adGroupAd'] ?? null)) continue;
+        if ((string)($row['adGroup']['id'] ?? '') !== (string)$candidates[$campaignId]['source_ad_group']['id']) continue;
+        $ads[$campaignId][] = $row['adGroupAd'];
+    }
+    foreach ($candidates as $id => &$candidate) {
+        $rows = $ads[$id] ?? [];
+        if (count($rows) !== 1 || ($rows[0]['status'] ?? null) !== 'ENABLED'
+            || ($rows[0]['ad']['type'] ?? null) !== 'RESPONSIVE_SEARCH_AD'
+            || preg_match('/^[1-9][0-9]{0,19}$/D', (string)($rows[0]['ad']['id'] ?? '')) !== 1) {
+            unset($candidates[$id]); continue;
+        }
+        $candidate['source_ad'] = [
+            'id' => (string)$rows[0]['ad']['id'],
+            'tracking_settings' => [
+                'tracking_url_template' => $rows[0]['ad']['trackingUrlTemplate'] ?? null,
+                'final_url_suffix' => $rows[0]['ad']['finalUrlSuffix'] ?? null,
+                'url_custom_parameters' => $rows[0]['ad']['urlCustomParameters'] ?? [],
+            ],
+        ];
+    }
+    unset($candidate);
+    if (!$candidates) return ['currency_code' => $currency, 'templates' => []];
+
+    $idsSql = implode(', ', array_keys($candidates));
+    $criterionRows = hub_google_ads_search($customerId,
+        "SELECT campaign.id, campaign_criterion.type, campaign_criterion.status, campaign_criterion.negative, campaign_criterion.location.geo_target_constant, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.id IN ($idsSql) AND campaign_criterion.status != 'REMOVED' LIMIT 1001",
+        $accessToken, $managerId);
+    if (count($criterionRows) > 1000) throw new HubGoogleAdsApiException('campaign_template_limit_exceeded', 422);
+    $campaignCriteria = [];
+    foreach ($criterionRows as $row) {
+        $campaignId = (string)($row['campaign']['id'] ?? '');
+        if (!isset($candidates[$campaignId])) continue;
+        $criterion = $row['campaignCriterion'] ?? [];
+        if (!is_array($criterion) || ($criterion['status'] ?? null) !== 'ENABLED') {
+            $candidates[$campaignId]['unsupported_targeting'] = true; continue;
+        }
+        $type = $criterion['type'] ?? null;
+        $negative = ($criterion['negative'] ?? false) === true;
+        if ($type === 'LOCATION') {
+            $geo = (string)($criterion['location']['geoTargetConstant'] ?? '');
+            if (preg_match('#^geoTargetConstants/[1-9][0-9]{0,19}$#D', $geo) !== 1) {
+                $candidates[$campaignId]['unsupported_targeting'] = true; continue;
+            }
+            $campaignCriteria[$campaignId][] = ['type' => 'LOCATION', 'negative' => $negative, 'geo_target_constant' => $geo];
+        } elseif ($type === 'KEYWORD') {
+            $text = $criterion['keyword']['text'] ?? null;
+            $matchType = $criterion['keyword']['matchType'] ?? null;
+            if (!is_string($text) || $text === '' || !in_array($matchType, ['EXACT', 'PHRASE', 'BROAD'], true) || !$negative) {
+                $candidates[$campaignId]['unsupported_targeting'] = true; continue;
+            }
+            $campaignCriteria[$campaignId][] = ['type' => 'KEYWORD', 'negative' => true, 'text' => $text, 'match_type' => $matchType];
+        } else {
+            $candidates[$campaignId]['unsupported_targeting'] = true;
+        }
+    }
+
+    $idsSql = implode(', ', array_keys($candidates));
+    $keywordRows = hub_google_ads_search($customerId,
+        "SELECT campaign.id, ad_group.id, ad_group_criterion.type, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type FROM ad_group_criterion WHERE campaign.id IN ($idsSql) AND ad_group_criterion.status != 'REMOVED' LIMIT 2001",
+        $accessToken, $managerId);
+    if (count($keywordRows) > 2000) throw new HubGoogleAdsApiException('campaign_template_limit_exceeded', 422);
+    $keywords = [];
+    foreach ($keywordRows as $row) {
+        $campaignId = (string)($row['campaign']['id'] ?? '');
+        if (!isset($candidates[$campaignId])) continue;
+        $criterion = $row['adGroupCriterion'] ?? [];
+        $groupId = (string)($row['adGroup']['id'] ?? '');
+        if (!is_array($criterion) || $groupId !== (string)$candidates[$campaignId]['source_ad_group']['id']) continue;
+        if (($criterion['type'] ?? null) !== 'KEYWORD'
+            || ($criterion['status'] ?? null) !== 'ENABLED'
+            || ($criterion['negative'] ?? false) !== false
+            || !is_string($criterion['keyword']['text'] ?? null)
+            || trim($criterion['keyword']['text']) === ''
+            || !in_array($criterion['keyword']['matchType'] ?? null, ['EXACT', 'PHRASE', 'BROAD'], true)) {
+            $candidates[$campaignId]['unsupported_keywords'] = true; continue;
+        }
+        $keywords[$campaignId][] = [
+            'text' => (string)$criterion['keyword']['text'],
+            'match_type' => (string)$criterion['keyword']['matchType'],
+        ];
+    }
+
+    $templates = [];
+    foreach ($candidates as $id => $candidate) {
+        $criteria = $campaignCriteria[$id] ?? [];
+        $positiveLocations = array_filter($criteria, static fn(array $item): bool => $item['type'] === 'LOCATION' && $item['negative'] === false);
+        $templateKeywords = $keywords[$id] ?? [];
+        if (!empty($candidate['unsupported_targeting']) || !empty($candidate['unsupported_keywords'])
+            || !$positiveLocations || !$templateKeywords || count($templateKeywords) > 500 || count($criteria) > 500) continue;
+        $candidate['campaign_criteria'] = $criteria;
+        $candidate['keywords'] = $templateKeywords;
+        unset($candidate['unsupported_targeting'], $candidate['unsupported_keywords']);
+        $templates[] = $candidate;
+    }
+    usort($templates, static fn(array $a, array $b): int => strcasecmp($a['campaign_name'], $b['campaign_name']));
+    return ['currency_code' => $currency, 'templates' => $templates];
+}
+
+function hub_google_ads_campaign_creation_validate_payload(array $payload, bool $confirmRequired): array
+{
+    $expected = ['bidding_settings', 'bidding_strategy', 'campaign_name', 'contains_eu_political_advertising', 'customer_id', 'daily_budget', 'descriptions', 'final_url', 'final_url_suffix', 'geo_target_country_codes', 'headlines', 'keyword_match_type', 'keywords', 'manager_customer_id', 'max_cpc_bid', 'network_settings', 'negative_keyword_match_type', 'negative_keywords', 'operation', 'promotion', 'tracking_url_template'];
+    if ($confirmRequired) $expected[] = 'confirm';
+    $keys = array_keys($payload); sort($keys, SORT_STRING); sort($expected, SORT_STRING);
+    if ($keys !== $expected || ($confirmRequired && ($payload['confirm'] ?? null) !== true)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+    $name = $payload['campaign_name'];
+    $url = $payload['final_url'];
+    if ($managerId === null || $customerId === null
+        || !is_string($name) || trim($name) !== $name || $name === '' || hub_google_ads_campaign_creation_text_length($name) > 128
+        || preg_match('/[\x00-\x1F\x7F]/', $name) === 1
+        || !is_string($url) || strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false
+        || strtolower((string)parse_url($url, PHP_URL_SCHEME)) !== 'https'
+        || !is_string(parse_url($url, PHP_URL_HOST))) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $dailyBudgetMicros = hub_google_ads_campaign_creation_decimal_micros($payload['daily_budget']);
+    $biddingStrategy = $payload['bidding_strategy'] ?? null;
+    $allowedBiddingStrategies = ['TARGET_CPA', 'MAXIMIZE_CONVERSIONS', 'TARGET_ROAS', 'MAXIMIZE_CONVERSION_VALUE', 'MAXIMIZE_CLICKS', 'TARGET_IMPRESSION_SHARE', 'MANUAL_CPC'];
+    $bidding = $payload['bidding_settings'] ?? null;
+    $expectedBiddingKeys = ['impression_share_location', 'impression_share_percent', 'target_cpa', 'target_cpa_currency', 'target_roas_percent'];
+    if (!is_array($bidding)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    $biddingKeys = array_keys($bidding); sort($biddingKeys, SORT_STRING); sort($expectedBiddingKeys, SORT_STRING);
+    if ($biddingKeys !== $expectedBiddingKeys
+        || !in_array($biddingStrategy, $allowedBiddingStrategies, true)
+        || !is_string($payload['max_cpc_bid'] ?? null)
+        || !is_string($bidding['target_cpa'] ?? null)
+        || !is_string($bidding['target_cpa_currency'] ?? null)
+        || !is_string($bidding['target_roas_percent'] ?? null)
+        || !is_string($bidding['impression_share_location'] ?? null)
+        || !is_string($bidding['impression_share_percent'] ?? null)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $maxCpcValue = $payload['max_cpc_bid'];
+    $maxCpcBidMicros = $maxCpcValue === '' ? null : hub_google_ads_campaign_creation_decimal_micros($maxCpcValue);
+    $targetCpaValue = $bidding['target_cpa'];
+    $targetCpaCurrency = strtoupper($bidding['target_cpa_currency']);
+    $targetCpaMicros = $targetCpaValue === '' ? null : hub_google_ads_campaign_creation_decimal_micros($targetCpaValue);
+    $targetRoasPercentValue = $bidding['target_roas_percent'];
+    $targetRoas = $targetRoasPercentValue === '' ? null : (float)$targetRoasPercentValue / 100;
+    $impressionLocation = $bidding['impression_share_location'];
+    $impressionPercentValue = $bidding['impression_share_percent'];
+    $usesCpa = in_array($biddingStrategy, ['TARGET_CPA', 'MAXIMIZE_CONVERSIONS'], true);
+    $needsCpa = $biddingStrategy === 'TARGET_CPA';
+    $usesRoas = in_array($biddingStrategy, ['TARGET_ROAS', 'MAXIMIZE_CONVERSION_VALUE'], true);
+    $needsRoas = $biddingStrategy === 'TARGET_ROAS';
+    $usesMaxCpc = in_array($biddingStrategy, ['MANUAL_CPC', 'MAXIMIZE_CLICKS', 'TARGET_IMPRESSION_SHARE'], true);
+    $needsMaxCpc = in_array($biddingStrategy, ['MANUAL_CPC', 'TARGET_IMPRESSION_SHARE'], true);
+    $usesImpressionShare = $biddingStrategy === 'TARGET_IMPRESSION_SHARE';
+    $validMaxCpc = $maxCpcValue === ''
+        ? !$needsMaxCpc
+        : ($usesMaxCpc && $maxCpcBidMicros !== null && $maxCpcBidMicros !== '0');
+    $validTargetCpa = $targetCpaValue === ''
+        ? !$needsCpa
+        : ($usesCpa && $targetCpaMicros !== null && $targetCpaMicros !== '0');
+    $validTargetRoas = $targetRoasPercentValue === ''
+        ? !$needsRoas
+        : ($usesRoas && preg_match('/^(?:0|[1-9]\d{0,5})(?:\.\d{1,2})?$/D', $targetRoasPercentValue) === 1 && $targetRoas > 0);
+    $validImpressionShare = $usesImpressionShare
+        ? (in_array($impressionLocation, ['ANYWHERE_ON_PAGE', 'TOP_OF_PAGE', 'ABSOLUTE_TOP_OF_PAGE'], true)
+            && preg_match('/^(?:[1-9]|[1-9]\d|100)$/D', $impressionPercentValue) === 1)
+        : ($impressionLocation === '' && $impressionPercentValue === '');
+    if ($dailyBudgetMicros === null || $dailyBudgetMicros === '0'
+        || !$validMaxCpc || !$validTargetCpa || !$validTargetRoas || !$validImpressionShare
+        || (!$usesCpa && ($targetCpaValue !== '' || $targetCpaCurrency !== ''))
+        || ($usesCpa && $targetCpaCurrency !== '' && preg_match('/^[A-Z]{3}$/D', $targetCpaCurrency) !== 1)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $countryCodes = $payload['geo_target_country_codes'];
+    if (!is_array($countryCodes) || !array_is_list($countryCodes) || count($countryCodes) < 1 || count($countryCodes) > 20) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $countrySeen = [];
+    foreach ($countryCodes as $code) {
+        if (!is_string($code) || preg_match('/^[A-Z]{2}$/D', $code) !== 1 || isset($countrySeen[$code])) {
+            throw new HubGoogleAdsApiException('invalid_payload', 400);
+        }
+        $countrySeen[$code] = true;
+    }
+    $networkSettings = $payload['network_settings'] ?? null;
+    if (!is_array($networkSettings)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    $networkKeys = array_keys($networkSettings); sort($networkKeys, SORT_STRING);
+    if ($networkKeys !== ['target_content_network', 'target_search_network']
+        || !is_bool($networkSettings['target_search_network'] ?? null)
+        || !is_bool($networkSettings['target_content_network'] ?? null)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $politicalDeclaration = $payload['contains_eu_political_advertising'] ?? null;
+    if (!in_array($politicalDeclaration, ['DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING', 'CONTAINS_EU_POLITICAL_ADVERTISING'], true)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $trackingTemplate = $payload['tracking_url_template'] ?? null;
+    $urlSuffix = $payload['final_url_suffix'] ?? null;
+    if (!is_string($trackingTemplate) || strlen($trackingTemplate) > 2048 || preg_match('/[\x00-\x1F\x7F]/', $trackingTemplate) === 1
+        || ($trackingTemplate !== '' && (strtolower((string)parse_url($trackingTemplate, PHP_URL_SCHEME)) !== 'https'
+            || !is_string(parse_url($trackingTemplate, PHP_URL_HOST))))
+        || !is_string($urlSuffix) || strlen($urlSuffix) > 1024 || preg_match('/[\x00-\x1F\x7F]/', $urlSuffix) === 1
+        || str_starts_with($urlSuffix, '?')) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $keywordMatchType = $payload['keyword_match_type'] ?? null;
+    $negativeKeywordMatchType = $payload['negative_keyword_match_type'] ?? null;
+    if (!in_array($keywordMatchType, ['EXACT', 'PHRASE', 'BROAD'], true)
+        || !in_array($negativeKeywordMatchType, ['EXACT', 'PHRASE', 'BROAD'], true)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $normalizeKeywords = static function (mixed $items, bool $required): array {
+        if (!is_array($items) || !array_is_list($items) || count($items) > 100 || ($required && count($items) < 1)) {
+            throw new HubGoogleAdsApiException('invalid_payload', 400);
+        }
+        $seen = [];
+        foreach ($items as $item) {
+            if (!is_string($item) || trim($item) !== $item || $item === '' || hub_google_ads_campaign_creation_text_length($item) > 80
+                || preg_match('/[\x00-\x1F\x7F]/', $item) === 1) {
+                throw new HubGoogleAdsApiException('invalid_payload', 400);
+            }
+            $key = hub_google_ads_campaign_creation_lower($item);
+            if (isset($seen[$key])) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            $seen[$key] = true;
+        }
+        return $items;
+    };
+    $keywords = $normalizeKeywords($payload['keywords'] ?? null, true);
+    $negativeKeywords = $normalizeKeywords($payload['negative_keywords'] ?? null, false);
+    foreach ([['headlines', 10, 30], ['descriptions', 3, 90]] as [$field, $count, $maxLength]) {
+        $items = $payload[$field] ?? null;
+        if (!is_array($items) || !array_is_list($items) || count($items) !== $count) throw new HubGoogleAdsApiException('invalid_payload', 400);
+        $seen = [];
+        foreach ($items as $item) {
+            if (!is_string($item) || trim($item) !== $item || $item === '' || preg_match('/[\x00-\x1F\x7F]/', $item) === 1
+                || hub_google_ads_campaign_creation_text_length($item) > $maxLength) {
+                throw new HubGoogleAdsApiException('invalid_payload', 400);
+            }
+            $normalized = hub_google_ads_campaign_creation_lower($item);
+            if (isset($seen[$normalized])) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            $seen[$normalized] = true;
+        }
+    }
+    $promotion = $payload['promotion'] ?? null;
+    if (!is_array($promotion)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    $promoKeys = array_keys($promotion); sort($promoKeys, SORT_STRING);
+    $expectedPromo = ['discount_type', 'discount_value', 'end_date', 'language_code', 'occasion', 'start_date', 'target', 'trigger_type', 'trigger_value']; sort($expectedPromo, SORT_STRING);
+    $promotionOccasions = [
+        'BACK_TO_SCHOOL', 'BLACK_FRIDAY', 'BOXING_DAY', 'CARNIVAL', 'CHINESE_NEW_YEAR', 'CHRISTMAS',
+        'CYBER_MONDAY', 'DIWALI', 'EASTER', 'EID_AL_ADHA', 'EID_AL_FITR', 'END_OF_SEASON', 'EPIPHANY',
+        'FALL_SALE', 'FATHERS_DAY', 'HALLOWEEN', 'HANUKKAH', 'HOLI', 'INDEPENDENCE_DAY', 'LABOR_DAY',
+        'MOTHERS_DAY', 'NATIONAL_DAY', 'NAVRATRI', 'NEW_YEARS', 'PARENTS_DAY', 'PASSOVER', 'RAMADAN',
+        'ROSH_HASHANAH', 'SINGLES_DAY', 'SONGKRAN', 'SPRING_SALE', 'ST_NICHOLAS_DAY', 'SUMMER_SALE',
+        'VALENTINES_DAY', 'WINTER_SALE', 'WOMENS_DAY', 'YEAR_END_GIFT',
+    ];
+    $occasion = $promotion['occasion'] ?? null;
+    if ($promoKeys !== $expectedPromo
+        || !is_string($promotion['target'] ?? null) || trim($promotion['target']) !== ($promotion['target'] ?? null)
+        || $promotion['target'] === '' || hub_google_ads_campaign_creation_text_length($promotion['target']) > 20
+        || ($occasion !== null && !in_array($occasion, $promotionOccasions, true))
+        || !in_array($promotion['discount_type'] ?? null, ['percent_off', 'amount_off'], true)
+        || !is_string($promotion['discount_value'] ?? null)
+        || !in_array($promotion['trigger_type'] ?? null, ['none', 'promotion_code', 'orders_over_amount'], true)
+        || !is_string($promotion['trigger_value'] ?? null)
+        || ($promotion['trigger_type'] === 'none' && $promotion['trigger_value'] !== '')
+        || !is_string($promotion['language_code'] ?? null)
+        || preg_match('/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/D', $promotion['language_code']) !== 1) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $startDate = $promotion['start_date']; $endDate = $promotion['end_date'];
+    if (($startDate === null) !== ($endDate === null)
+        || ($startDate !== null && (!is_string($startDate) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $startDate) !== 1
+            || !is_string($endDate) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $endDate) !== 1
+            || !checkdate((int)substr($startDate, 5, 2), (int)substr($startDate, 8, 2), (int)substr($startDate, 0, 4))
+            || !checkdate((int)substr($endDate, 5, 2), (int)substr($endDate, 8, 2), (int)substr($endDate, 0, 4))
+            || $endDate < $startDate))) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    if ($promotion['discount_type'] === 'percent_off') {
+        if (preg_match('/^(?:[1-9]|[1-9][0-9]|100)$/D', $promotion['discount_value']) !== 1) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    } elseif (hub_google_ads_campaign_creation_decimal_micros($promotion['discount_value']) === null
+        || hub_google_ads_campaign_creation_decimal_micros($promotion['discount_value']) === '0') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    if ($promotion['trigger_type'] === 'promotion_code') {
+        if (preg_match('/^[A-Za-z0-9-]{1,20}$/D', $promotion['trigger_value']) !== 1) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    } elseif ($promotion['trigger_type'] === 'orders_over_amount' && (hub_google_ads_campaign_creation_decimal_micros($promotion['trigger_value']) === null
+        || hub_google_ads_campaign_creation_decimal_micros($promotion['trigger_value']) === '0')) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    return [
+        $managerId, $customerId, $name, $url, $payload['headlines'], $payload['descriptions'], $promotion,
+        [
+            'daily_budget_micros' => $dailyBudgetMicros,
+            'max_cpc_bid_micros' => $maxCpcBidMicros,
+            'bidding_strategy' => $biddingStrategy,
+            'target_cpa_micros' => $targetCpaMicros,
+            'target_cpa_currency' => $targetCpaCurrency,
+            'target_roas' => $targetRoas,
+            'impression_share_location' => $usesImpressionShare ? $impressionLocation : null,
+            'impression_share_percent' => $usesImpressionShare ? (int)$impressionPercentValue : null,
+            'country_codes' => $countryCodes,
+            'keywords' => $keywords,
+            'keyword_match_type' => $keywordMatchType,
+            'negative_keywords' => $negativeKeywords,
+            'negative_keyword_match_type' => $negativeKeywordMatchType,
+            'network_settings' => [
+                'target_google_search' => true,
+                'target_search_network' => $networkSettings['target_search_network'],
+                'target_partner_search_network' => false,
+                'target_content_network' => $networkSettings['target_content_network'],
+            ],
+            'contains_eu_political_advertising' => $politicalDeclaration,
+            'tracking_settings' => [
+                'tracking_url_template' => $trackingTemplate,
+                'final_url_suffix' => $urlSuffix,
+            ],
+        ],
+    ];
+}
+
+/** Validate a single, explicit request to add audience IDs to a paused Hub-created Search campaign. */
+function hub_google_ads_campaign_audience_targeting_validate_payload(array $payload): array
+{
+    $expected = ['ad_group_id', 'audience_ids', 'campaign_id', 'confirm', 'customer_id', 'manager_customer_id', 'operation'];
+    $keys = array_keys($payload); sort($keys, SORT_STRING); sort($expected, SORT_STRING);
+    $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id'] ?? null);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+    $campaignId = $payload['campaign_id'] ?? null;
+    $adGroupId = $payload['ad_group_id'] ?? null;
+    $audienceIds = $payload['audience_ids'] ?? null;
+    if ($keys !== $expected || ($payload['operation'] ?? null) !== 'apply_audience_targeting'
+        || ($payload['confirm'] ?? null) !== true
+        || $managerId === null || $customerId === null
+        || !is_string($campaignId) || preg_match('/^[1-9][0-9]{0,19}$/D', $campaignId) !== 1
+        || !is_string($adGroupId) || preg_match('/^[1-9][0-9]{0,19}$/D', $adGroupId) !== 1
+        || !is_array($audienceIds) || !array_is_list($audienceIds)
+        || count($audienceIds) < 1 || count($audienceIds) > 1000) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $seen = [];
+    foreach ($audienceIds as $audienceId) {
+        if (!is_string($audienceId) || preg_match('/^[1-9][0-9]{0,19}$/D', $audienceId) !== 1 || isset($seen[$audienceId])) {
+            throw new HubGoogleAdsApiException('invalid_payload', 400);
+        }
+        $seen[$audienceId] = true;
+    }
+    return [$managerId, $customerId, $campaignId, $adGroupId, $audienceIds];
+}
+
+/** Add the imported IDs as positive user-interest/user-list criteria in Targeting mode. */
+function hub_google_ads_campaign_audience_targeting_apply(
+    array $config,
+    string $managerId,
+    string $customerId,
+    string $campaignId,
+    string $adGroupId,
+    array $audienceIds
+): array {
+    $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+    hub_google_ads_campaign_creation_authorize($config, $accessToken, $managerId, $customerId);
+    $targetQuery = 'SELECT campaign.id, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.status, ad_group.targeting_setting.target_restrictions'
+        . ' FROM ad_group WHERE ad_group.id = ' . $adGroupId . ' LIMIT 2';
+    $targetRows = hub_google_ads_search($customerId, $targetQuery, $accessToken, $managerId);
+    if (count($targetRows) !== 1 || !is_array($targetRows[0]['campaign'] ?? null) || !is_array($targetRows[0]['adGroup'] ?? null)) {
+        throw new HubGoogleAdsApiException('audience_targeting_target_unavailable', 404);
+    }
+    $campaign = $targetRows[0]['campaign'];
+    $adGroup = $targetRows[0]['adGroup'];
+    if ((string)($campaign['id'] ?? '') !== $campaignId || (string)($adGroup['id'] ?? '') !== $adGroupId) {
+        throw new HubGoogleAdsApiException('audience_targeting_target_mismatch', 409);
+    }
+    if (($campaign['status'] ?? null) !== 'PAUSED'
+        || ($campaign['advertisingChannelType'] ?? null) !== 'SEARCH'
+        || ($adGroup['status'] ?? null) !== 'ENABLED') {
+        throw new HubGoogleAdsApiException('audience_targeting_campaign_must_be_paused', 409);
+    }
+
+    $idsSql = implode(', ', $audienceIds);
+    $catalog = [];
+    $interestRows = hub_google_ads_search($customerId,
+        'SELECT user_interest.user_interest_id, user_interest.resource_name FROM user_interest WHERE user_interest.user_interest_id IN (' . $idsSql . ') LIMIT 1001',
+        $accessToken, $managerId);
+    foreach ($interestRows as $row) {
+        $interest = $row['userInterest'] ?? null;
+        if (!is_array($interest)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $id = (string)($interest['userInterestId'] ?? '');
+        $resourceName = $interest['resourceName'] ?? null;
+        if (!is_string($resourceName) || preg_match('#^customers/' . preg_quote($customerId, '#') . '/userInterests/([1-9][0-9]{0,19})$#D', $resourceName, $matches) !== 1
+            || $id !== $matches[1] || !in_array($id, $audienceIds, true)) {
+            throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        }
+        $catalog[$id][] = ['kind' => 'user_interest', 'resource_name' => $resourceName];
+    }
+    $listRows = hub_google_ads_search($customerId,
+        'SELECT user_list.id, user_list.resource_name FROM user_list WHERE user_list.id IN (' . $idsSql . ') LIMIT 1001',
+        $accessToken, $managerId);
+    foreach ($listRows as $row) {
+        $list = $row['userList'] ?? null;
+        if (!is_array($list)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $id = (string)($list['id'] ?? '');
+        $resourceName = $list['resourceName'] ?? null;
+        if (!is_string($resourceName) || preg_match('#^customers/' . preg_quote($customerId, '#') . '/userLists/([1-9][0-9]{0,19})$#D', $resourceName, $matches) !== 1
+            || $id !== $matches[1] || !in_array($id, $audienceIds, true)) {
+            throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        }
+        $catalog[$id][] = ['kind' => 'user_list', 'resource_name' => $resourceName];
+    }
+
+    $adGroupResource = 'customers/' . $customerId . '/adGroups/' . $adGroupId;
+    $candidateResources = ['USER_INTEREST' => [], 'USER_LIST' => []];
+    foreach ($catalog as $matches) {
+        foreach ($matches as $match) {
+            $type = $match['kind'] === 'user_interest' ? 'USER_INTEREST' : 'USER_LIST';
+            $candidateResources[$type][$match['resource_name']] = $match['resource_name'];
+        }
+    }
+    $candidateFilters = [];
+    if ($candidateResources['USER_INTEREST']) {
+        $values = array_map('hub_google_ads_campaign_creation_gaql_string', array_values($candidateResources['USER_INTEREST']));
+        $candidateFilters[] = "(ad_group_criterion.type = 'USER_INTEREST' AND ad_group_criterion.user_interest.user_interest_category IN (" . implode(', ', $values) . '))';
+    }
+    if ($candidateResources['USER_LIST']) {
+        $values = array_map('hub_google_ads_campaign_creation_gaql_string', array_values($candidateResources['USER_LIST']));
+        $candidateFilters[] = "(ad_group_criterion.type = 'USER_LIST' AND ad_group_criterion.user_list.user_list IN (" . implode(', ', $values) . '))';
+    }
+    $existingRows = $candidateFilters
+        ? hub_google_ads_search($customerId,
+            "SELECT ad_group_criterion.type, ad_group_criterion.user_interest.user_interest_category, ad_group_criterion.user_list.user_list FROM ad_group_criterion WHERE ad_group.id = " . $adGroupId . " AND ad_group_criterion.status != 'REMOVED' AND (" . implode(' OR ', $candidateFilters) . ') LIMIT 2001',
+            $accessToken, $managerId)
+        : [];
+    if (count($existingRows) > 2000) throw new HubGoogleAdsApiException('audience_targeting_unverified', 502);
+    $existing = [];
+    foreach ($existingRows as $row) {
+        $criterion = $row['adGroupCriterion'] ?? null;
+        if (!is_array($criterion)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $kind = $criterion['type'] ?? null;
+        $resourceName = $kind === 'USER_INTEREST'
+            ? ($criterion['userInterest']['userInterestCategory'] ?? null)
+            : ($kind === 'USER_LIST' ? ($criterion['userList']['userList'] ?? null) : null);
+        if (!is_string($resourceName)) continue;
+        if (preg_match('#^customers/' . preg_quote($customerId, '#') . '/userInterests/([1-9][0-9]{0,19})$#D', $resourceName, $matches) === 1) {
+            $existing['user_interest:' . $matches[1]] = true;
+        } elseif (preg_match('#^customers/' . preg_quote($customerId, '#') . '/userLists/([1-9][0-9]{0,19})$#D', $resourceName, $matches) === 1) {
+            $existing['user_list:' . $matches[1]] = true;
+        }
+    }
+
+    $operations = [];
+    $eligible = [];
+    $unrecognizedCount = 0;
+    $ambiguousCount = 0;
+    $alreadyPresentCount = 0;
+    foreach ($audienceIds as $id) {
+        $matches = $catalog[$id] ?? [];
+        if (!$matches) { $unrecognizedCount++; continue; }
+        if (count($matches) !== 1) { $ambiguousCount++; continue; }
+        $match = $matches[0];
+        $key = $match['kind'] . ':' . $id;
+        if (isset($existing[$key])) { $alreadyPresentCount++; continue; }
+        $eligible[$key] = $match;
+        if ($match['kind'] === 'user_interest') {
+            $operations[] = ['adGroupCriterionOperation' => ['create' => [
+                'adGroup' => $adGroupResource,
+                'status' => 'ENABLED',
+                'userInterest' => ['userInterestCategory' => $match['resource_name']],
+            ]]];
+        } else {
+            $operations[] = ['adGroupCriterionOperation' => ['create' => [
+                'adGroup' => $adGroupResource,
+                'status' => 'ENABLED',
+                'userList' => ['userList' => $match['resource_name']],
+            ]]];
+        }
+    }
+
+    $restrictions = $adGroup['targetingSetting']['targetRestrictions'] ?? [];
+    if (!is_array($restrictions)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    $audienceRestriction = null;
+    foreach ($restrictions as $restriction) {
+        if (!is_array($restriction)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        if (($restriction['targetingDimension'] ?? null) === 'AUDIENCE') $audienceRestriction = $restriction;
+    }
+    $targetingSettingNeedsUpdate = ($audienceRestriction['bidOnly'] ?? false) === true;
+    if ($targetingSettingNeedsUpdate) {
+        $nextRestrictions = array_values(array_filter($restrictions, static fn(array $item): bool => ($item['targetingDimension'] ?? null) !== 'AUDIENCE'));
+        $nextRestrictions[] = ['targetingDimension' => 'AUDIENCE', 'bidOnly' => false];
+        array_unshift($operations, ['adGroupOperation' => [
+            'update' => ['resourceName' => $adGroupResource, 'targetingSetting' => ['targetRestrictions' => $nextRestrictions]],
+            'updateMask' => 'targetingSetting.targetRestrictions',
+        ]]);
+    }
+
+    $acceptedCount = 0;
+    if ($operations) {
+        $response = hub_google_ads_api_request('POST', 'customers/' . $customerId . '/googleAds:mutate', $accessToken,
+            json_encode(['mutateOperations' => $operations, 'partialFailure' => true], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $managerId);
+        $results = $response['mutateOperationResponses'] ?? null;
+        if (!is_array($results) || count($results) !== count($operations)) throw new HubGoogleAdsApiException('audience_targeting_unverified', 502);
+        foreach ($results as $result) {
+            if (isset($result['adGroupCriterionResult']['resourceName'])) $acceptedCount++;
+        }
+    }
+
+    $verifiedCount = 0;
+    $targetingSettingVerified = false;
+    $verificationAvailable = true;
+    try {
+        $verificationRows = $candidateFilters
+            ? hub_google_ads_search($customerId,
+                "SELECT ad_group.targeting_setting.target_restrictions, ad_group_criterion.type, ad_group_criterion.user_interest.user_interest_category, ad_group_criterion.user_list.user_list FROM ad_group_criterion WHERE ad_group.id = " . $adGroupId . " AND ad_group_criterion.status != 'REMOVED' AND (" . implode(' OR ', $candidateFilters) . ') LIMIT 2001',
+                $accessToken, $managerId)
+            : [];
+        if (count($verificationRows) > 2000) throw new HubGoogleAdsApiException('audience_targeting_unverified', 502);
+        $verified = [];
+        foreach ($verificationRows as $row) {
+            $criterion = $row['adGroupCriterion'] ?? null;
+            $group = $row['adGroup'] ?? null;
+            if (!is_array($criterion) || !is_array($group)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+            foreach (($group['targetingSetting']['targetRestrictions'] ?? []) as $restriction) {
+                if (($restriction['targetingDimension'] ?? null) === 'AUDIENCE' && ($restriction['bidOnly'] ?? false) === false) {
+                    $targetingSettingVerified = true;
+                }
+            }
+            $kind = $criterion['type'] ?? null;
+            $resourceName = $kind === 'USER_INTEREST'
+                ? ($criterion['userInterest']['userInterestCategory'] ?? null)
+                : ($kind === 'USER_LIST' ? ($criterion['userList']['userList'] ?? null) : null);
+            if (is_string($resourceName)) $verified[$resourceName] = true;
+        }
+        if (!$verificationRows && $targetingSettingNeedsUpdate) {
+            $settingRows = hub_google_ads_search($customerId, $targetQuery, $accessToken, $managerId);
+            if (count($settingRows) !== 1 || !is_array($settingRows[0]['adGroup'] ?? null)) {
+                throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+            }
+            $postRestrictions = $settingRows[0]['adGroup']['targetingSetting']['targetRestrictions'] ?? [];
+            if (!is_array($postRestrictions)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+            $targetingSettingVerified = true;
+            foreach ($postRestrictions as $restriction) {
+                if (!is_array($restriction)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+                if (($restriction['targetingDimension'] ?? null) === 'AUDIENCE' && ($restriction['bidOnly'] ?? false) === true) {
+                    $targetingSettingVerified = false;
+                }
+            }
+        }
+        if (!$targetingSettingVerified && $audienceRestriction === null && !$targetingSettingNeedsUpdate) {
+            // Google Ads API defaults an omitted AUDIENCE restriction to Targeting (bid_only=false).
+            $targetingSettingVerified = true;
+        }
+        foreach ($eligible as $match) if (isset($verified[$match['resource_name']])) $verifiedCount++;
+        $targetingSettingVerified = $targetingSettingVerified || (!$eligible && !$targetingSettingNeedsUpdate);
+    } catch (Throwable $error) {
+        $verificationAvailable = false;
+    }
+    $failedCount = max(0, count($eligible) - $acceptedCount);
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'operation' => 'apply_audience_targeting',
+        'campaign_id' => $campaignId,
+        'ad_group_id' => $adGroupId,
+        'targeting_mode' => 'TARGETING',
+        'submitted_count' => count($audienceIds),
+        'eligible_count' => count($eligible),
+        'applied_count' => $acceptedCount,
+        'verified_count' => $verifiedCount,
+        'already_present_count' => $alreadyPresentCount,
+        'unrecognized_count' => $unrecognizedCount,
+        'ambiguous_count' => $ambiguousCount,
+        'failed_count' => $failedCount,
+        'targeting_setting_verified' => $targetingSettingVerified,
+        'verification_available' => $verificationAvailable,
+        'verified' => $verificationAvailable && $verifiedCount === count($eligible) && $targetingSettingVerified,
+        'verified_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+    ];
+}
+
+function hub_google_ads_campaign_creation_operations(string $customerId, array $settings, array $locations, string $campaignName, string $finalUrl, array $headlines, array $descriptions, array $promotion, string $currencyCode): array
+{
+    $campaignResource = 'customers/' . $customerId . '/campaigns/-2';
+    $adGroupResource = 'customers/' . $customerId . '/adGroups/-3';
+    $budgetResource = 'customers/' . $customerId . '/campaignBudgets/-1';
+    $assetResource = 'customers/' . $customerId . '/assets/-4';
+    $campaignCreate = [
+        'resourceName' => $campaignResource,
+        'name' => $campaignName,
+        'advertisingChannelType' => 'SEARCH',
+        'status' => 'PAUSED',
+        'campaignBudget' => $budgetResource,
+        'networkSettings' => $settings['network_settings'],
+        'containsEuPoliticalAdvertising' => $settings['contains_eu_political_advertising'],
+    ];
+    switch ($settings['bidding_strategy']) {
+        case 'TARGET_CPA':
+            // Standard Search campaigns use MaximizeConversions with a required target CPA.
+            $campaignCreate['maximizeConversions'] = ['targetCpaMicros' => (string)$settings['target_cpa_micros']];
+            break;
+        case 'MAXIMIZE_CONVERSIONS':
+            $campaignCreate['maximizeConversions'] = $settings['target_cpa_micros'] === null
+                ? new stdClass()
+                : ['targetCpaMicros' => (string)$settings['target_cpa_micros']];
+            break;
+        case 'TARGET_ROAS':
+            // Standard Search campaigns use MaximizeConversionValue with a required target ROAS.
+            $campaignCreate['maximizeConversionValue'] = ['targetRoas' => $settings['target_roas']];
+            break;
+        case 'MAXIMIZE_CONVERSION_VALUE':
+            $campaignCreate['maximizeConversionValue'] = $settings['target_roas'] === null
+                ? new stdClass()
+                : ['targetRoas' => $settings['target_roas']];
+            break;
+        case 'MAXIMIZE_CLICKS':
+            // The Google Ads API represents Maximize clicks with the TargetSpend scheme.
+            $campaignCreate['targetSpend'] = $settings['max_cpc_bid_micros'] === null
+                ? new stdClass()
+                : ['cpcBidCeilingMicros' => (string)$settings['max_cpc_bid_micros']];
+            break;
+        case 'TARGET_IMPRESSION_SHARE':
+            $campaignCreate['targetImpressionShare'] = [
+                'location' => $settings['impression_share_location'],
+                'locationFractionMicros' => (string)($settings['impression_share_percent'] * 10000),
+                'cpcBidCeilingMicros' => (string)$settings['max_cpc_bid_micros'],
+            ];
+            break;
+        case 'MANUAL_CPC':
+            $campaignCreate['manualCpc'] = ['enhancedCpcEnabled' => false];
+            break;
+    }
+    $operations = [[
+        'campaignBudgetOperation' => ['create' => [
+            'resourceName' => $budgetResource,
+            'name' => hub_google_ads_campaign_creation_substr($campaignName . ' - orçamento Hub', 0, 255),
+            'deliveryMethod' => 'STANDARD',
+            'amountMicros' => (string)$settings['daily_budget_micros'],
+            'explicitlyShared' => false,
+        ]],
+    ], [
+        'campaignOperation' => ['create' => $campaignCreate],
+    ]];
+    foreach ($settings['tracking_settings'] as $field => $value) {
+        if ($value === null || $value === '' || $value === []) continue;
+        $apiField = match ($field) {
+            'tracking_url_template' => 'trackingUrlTemplate',
+            'final_url_suffix' => 'finalUrlSuffix',
+            'url_custom_parameters' => 'urlCustomParameters',
+            default => null,
+        };
+        if ($apiField !== null) $operations[1]['campaignOperation']['create'][$apiField] = $value;
+    }
+    foreach ($locations as $location) {
+        $operations[] = ['campaignCriterionOperation' => ['create' => [
+            'campaign' => $campaignResource,
+            'negative' => false,
+            'location' => ['geoTargetConstant' => $location['resource_name']],
+        ]]];
+    }
+    foreach ($settings['negative_keywords'] as $keyword) {
+        $operations[] = ['campaignCriterionOperation' => ['create' => [
+            'campaign' => $campaignResource,
+            'negative' => true,
+            'keyword' => ['text' => $keyword, 'matchType' => $settings['negative_keyword_match_type']],
+        ]]];
+    }
+    $adGroupName = hub_google_ads_campaign_creation_substr($campaignName . ' - Grupo', 0, 255);
+    $adGroupCreate = [
+        'resourceName' => $adGroupResource,
+        'name' => $adGroupName,
+        'campaign' => $campaignResource,
+        'status' => 'ENABLED',
+        'type' => 'SEARCH_STANDARD',
+    ];
+    if ($settings['bidding_strategy'] === 'MANUAL_CPC') $adGroupCreate['cpcBidMicros'] = (string)$settings['max_cpc_bid_micros'];
+    $operations[] = ['adGroupOperation' => ['create' => $adGroupCreate]];
+    foreach ($settings['keywords'] as $keyword) {
+        $operations[] = ['adGroupCriterionOperation' => ['create' => [
+            'adGroup' => $adGroupResource,
+            'status' => 'ENABLED',
+            'keyword' => ['text' => $keyword, 'matchType' => $settings['keyword_match_type']],
+        ]]];
+    }
+    $operations[] = ['adGroupAdOperation' => ['create' => [
+        'adGroup' => $adGroupResource,
+        'status' => 'ENABLED',
+        'ad' => [
+            'finalUrls' => [$finalUrl],
+            'responsiveSearchAd' => [
+                'headlines' => array_map(static fn(string $text): array => ['text' => $text], $headlines),
+                'descriptions' => array_map(static fn(string $text): array => ['text' => $text], $descriptions),
+            ],
+        ],
+    ]]];
+    $promotionAsset = [
+        'resourceName' => $assetResource,
+        'name' => hub_google_ads_campaign_creation_substr($campaignName . ' - promoção Hub', 0, 255),
+        'finalUrls' => [$finalUrl],
+        'promotionAsset' => [
+            'promotionTarget' => $promotion['target'],
+            'languageCode' => $promotion['language_code'],
+        ],
+    ];
+    if ($promotion['occasion'] !== null) {
+        $promotionAsset['promotionAsset']['occasion'] = $promotion['occasion'];
+    }
+    if ($promotion['discount_type'] === 'percent_off') {
+        $promotionAsset['promotionAsset']['percentOff'] = (string)((int)$promotion['discount_value'] * 10000);
+    } else {
+        $promotionAsset['promotionAsset']['moneyAmountOff'] = [
+            'amountMicros' => hub_google_ads_campaign_creation_decimal_micros($promotion['discount_value']),
+            'currencyCode' => $currencyCode,
+        ];
+    }
+    if ($promotion['trigger_type'] === 'promotion_code') {
+        $promotionAsset['promotionAsset']['promotionCode'] = $promotion['trigger_value'];
+    } elseif ($promotion['trigger_type'] === 'orders_over_amount') {
+        $promotionAsset['promotionAsset']['ordersOverAmount'] = [
+            'amountMicros' => hub_google_ads_campaign_creation_decimal_micros($promotion['trigger_value']),
+            'currencyCode' => $currencyCode,
+        ];
+    }
+    if ($promotion['start_date'] !== null) {
+        $promotionAsset['promotionAsset']['startDate'] = $promotion['start_date'];
+        $promotionAsset['promotionAsset']['endDate'] = $promotion['end_date'];
+    }
+    $operations[] = ['assetOperation' => ['create' => $promotionAsset]];
+    $operations[] = ['campaignAssetOperation' => ['create' => [
+        'campaign' => $campaignResource,
+        'asset' => $assetResource,
+        'fieldType' => 'PROMOTION',
+        'status' => 'ENABLED',
+    ]]];
+    return $operations;
+}
+
+function hub_google_ads_campaign_creation_preview_or_create(array $config, array $payload, bool $create): array
+{
+    [$managerId, $customerId, $name, $url, $headlines, $descriptions, $promotion, $settings] =
+        hub_google_ads_campaign_creation_validate_payload($payload, $create);
+    if (!hub_google_ads_campaign_creation_enabled($config)) throw new HubGoogleAdsApiException('campaign_creation_disabled', 403);
+    if (!hub_google_ads_campaign_manager_is_allowed($config, $managerId)) throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+    hub_google_ads_campaign_creation_authorize($config, $accessToken, $managerId, $customerId);
+    $currencyCode = hub_google_ads_campaign_creation_customer_currency($accessToken, $managerId, $customerId);
+    if ($settings['target_cpa_micros'] !== null && $settings['target_cpa_currency'] !== ''
+        && $settings['target_cpa_currency'] !== $currencyCode) {
+        throw new HubGoogleAdsApiException('campaign_currency_mismatch', 422);
+    }
+    $locations = hub_google_ads_campaign_creation_resolve_countries($accessToken, $managerId, $customerId, $settings['country_codes']);
+    $duplicateQuery = 'SELECT campaign.id FROM campaign WHERE campaign.name = '
+        . hub_google_ads_campaign_creation_gaql_string($name) . " AND campaign.status != 'REMOVED' LIMIT 2";
+    $duplicates = hub_google_ads_search($customerId, $duplicateQuery, $accessToken, $managerId);
+    if (count($duplicates) > 1) throw new HubGoogleAdsApiException('campaign_name_conflict', 409);
+    if ($duplicates) throw new HubGoogleAdsApiException('campaign_name_already_exists', 409);
+    $operations = hub_google_ads_campaign_creation_operations($customerId, $settings, $locations, $name, $url, $headlines, $descriptions, $promotion, $currencyCode);
+    $request = ['mutateOperations' => $operations];
+    if (!$create) $request['validateOnly'] = true;
+    $response = hub_google_ads_api_request(
+        'POST',
+        'customers/' . $customerId . '/googleAds:mutate',
+        $accessToken,
+        json_encode($request, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        $managerId
+    );
+    if (!$create) {
+        return [
+            'ok' => true,
+            'schema_version' => 1,
+            'operation' => 'preview_search_campaign',
+            'validated_only' => true,
+            'campaign_status' => 'PAUSED',
+            'campaign_name' => $name,
+            'account_currency' => $currencyCode,
+            'daily_budget_micros' => $settings['daily_budget_micros'],
+            'bidding_strategy' => $settings['bidding_strategy'],
+            'target_cpa_micros' => $settings['target_cpa_micros'],
+            'target_roas' => $settings['target_roas'],
+            'max_cpc_bid_micros' => $settings['max_cpc_bid_micros'],
+            'impression_share_location' => $settings['impression_share_location'],
+            'impression_share_percent' => $settings['impression_share_percent'],
+            'target_countries' => array_map(static fn(array $location): array => ['country_code' => $location['country_code'], 'name' => $location['name']], $locations),
+            'keyword_count' => count($settings['keywords']),
+            'negative_keyword_count' => count($settings['negative_keywords']),
+            'network_settings' => $settings['network_settings'],
+            'contains_eu_political_advertising' => $settings['contains_eu_political_advertising'],
+            'tracking_settings_provided' => array_filter($settings['tracking_settings'], static fn(mixed $value): bool => $value !== null && $value !== '') !== [],
+            'headline_count' => count($headlines),
+            'description_count' => count($descriptions),
+            'promotion_target' => $promotion['target'],
+            'will_create_paused' => true,
+        ];
+    }
+    $results = $response['mutateOperationResponses'] ?? null;
+    if (!is_array($results) || count($results) !== count($operations)) throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+    $campaignResource = $results[1]['campaignResult']['resourceName'] ?? null;
+    if (!is_string($campaignResource)
+        || preg_match('#^customers/' . preg_quote($customerId, '#') . '/campaigns/([1-9][0-9]{0,19})$#D', $campaignResource, $matches) !== 1) {
+        throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+    }
+    $campaignId = $matches[1];
+    try { $verified = hub_google_ads_campaign_action_read($accessToken, $managerId, $customerId, $campaignId); }
+    catch (Throwable $error) { throw new HubGoogleAdsApiException('campaign_creation_unverified', 502); }
+    if ($verified['status'] !== 'PAUSED' || $verified['name'] !== $name) throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+    $createdResources = [];
+    foreach ($results as $result) {
+        if (!is_array($result)) throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+        foreach (['campaignBudgetResult', 'campaignResult', 'campaignCriterionResult', 'adGroupResult', 'adGroupCriterionResult', 'adGroupAdResult', 'assetResult', 'campaignAssetResult'] as $resultKey) {
+            if (!isset($result[$resultKey])) continue;
+            $resourceName = $result[$resultKey]['resourceName'] ?? null;
+            if (!is_string($resourceName) || !str_starts_with($resourceName, 'customers/' . $customerId . '/')) {
+                throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+            }
+            $createdResources[$resultKey] = $resourceName;
+        }
+    }
+    if (!isset($createdResources['campaignBudgetResult'], $createdResources['campaignResult'], $createdResources['adGroupResult'], $createdResources['adGroupAdResult'], $createdResources['assetResult'], $createdResources['campaignAssetResult'])) {
+        throw new HubGoogleAdsApiException('campaign_creation_unverified', 502);
+    }
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'operation' => 'create_search_campaign',
+        'created' => true,
+        'verified' => true,
+        'campaign_id' => $campaignId,
+        'campaign_resource_name' => $campaignResource,
+        'campaign_name' => $verified['name'],
+        'status' => $verified['status'],
+        'campaign_budget_resource_name' => $createdResources['campaignBudgetResult'],
+        'ad_group_resource_name' => $createdResources['adGroupResult'],
+        'ad_resource_name' => $createdResources['adGroupAdResult'],
+        'promotion_asset_resource_name' => $createdResources['assetResult'],
+        'campaign_asset_resource_name' => $createdResources['campaignAssetResult'],
+        'verified_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+    ];
+}
+
+function hub_google_ads_campaign_action_json(int $status, array $body): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function hub_google_ads_campaign_action_dispatch(): never
+{
+    header('Cache-Control: no-store, private');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    try {
+        $config = hub_google_ads_load_tracking_config();
+        $authorization = hub_google_ads_authorize($config);
+        if (is_string($authorization['origin'])) {
+            header('Access-Control-Allow-Origin: ' . $authorization['origin']);
+            header('Vary: Origin');
+            header('Access-Control-Allow-Methods: POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Authorization, Content-Type');
+            header('Access-Control-Max-Age: 300');
+        }
+        if ($authorization['status'] === 204) { http_response_code(204); exit; }
+        if ($authorization['status'] !== 200) {
+            hub_google_ads_campaign_action_json($authorization['status'], ['ok' => false, 'error' => $authorization['error']]);
+        }
+        if (($_SERVER['QUERY_STRING'] ?? '') !== '') {
+            hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+        }
+
+        $payload = hub_google_ads_parse_request();
+        $operation = $payload['operation'] ?? null;
+        if ($operation === 'capabilities') {
+            $keys = array_keys($payload);
+            sort($keys, SORT_STRING);
+            if ($keys !== ['customer_id', 'manager_customer_id', 'operation']) {
+                hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+            }
+            $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+            $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+            if ($managerId === null || $customerId === null) {
+                hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+            }
+            $enabled = false;
+            if (hub_google_ads_campaign_actions_enabled($config)
+                && hub_google_ads_campaign_manager_is_allowed($config, $managerId)) {
+                $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+                $enabled = hub_google_ads_campaign_customer_is_active_child($accessToken, $managerId, $customerId);
+            }
+            hub_google_ads_campaign_action_json(200, [
+                'ok' => true,
+                'schema_version' => 1,
+                'campaign_actions_enabled' => $enabled,
+                'allowed_operations' => $enabled ? ['pause_campaign', 'enable_campaign'] : [],
+            ]);
+        }
+        if ($operation === 'creation_capabilities') {
+            $keys = array_keys($payload); sort($keys, SORT_STRING);
+            if ($keys !== ['customer_id', 'manager_customer_id', 'operation']) {
+                hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+            }
+            $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+            $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+            if ($managerId === null || $customerId === null) {
+                hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+            }
+            $enabled = hub_google_ads_campaign_creation_enabled($config)
+                && hub_google_ads_campaign_manager_is_allowed($config, $managerId);
+            if ($enabled) {
+                $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+                $enabled = hub_google_ads_campaign_customer_is_active_child($accessToken, $managerId, $customerId);
+            }
+            hub_google_ads_campaign_action_json(200, [
+                'ok' => true,
+                'schema_version' => 1,
+                'campaign_creation_enabled' => $enabled,
+                'allowed_operations' => $enabled ? ['preview_search_campaign', 'create_search_campaign', 'apply_audience_targeting'] : [],
+            ]);
+        }
+        if ($operation === 'campaign_templates') {
+            $keys = array_keys($payload); sort($keys, SORT_STRING);
+            if ($keys !== ['customer_id', 'manager_customer_id', 'operation']) {
+                throw new HubGoogleAdsApiException('invalid_payload', 400);
+            }
+            $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+            $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+            if ($managerId === null || $customerId === null) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            if (!hub_google_ads_campaign_creation_enabled($config) || !hub_google_ads_campaign_manager_is_allowed($config, $managerId)) {
+                throw new HubGoogleAdsApiException('campaign_creation_disabled', 403);
+            }
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_campaign_creation_authorize($config, $accessToken, $managerId, $customerId);
+            $catalog = hub_google_ads_campaign_creation_templates($accessToken, $managerId, $customerId);
+            hub_google_ads_campaign_action_json(200, [
+                'ok' => true,
+                'schema_version' => 1,
+                'operation' => 'campaign_templates',
+                'customer_id' => $customerId,
+                'currency_code' => $catalog['currency_code'],
+                'template_count' => count($catalog['templates']),
+                'templates' => $catalog['templates'],
+            ]);
+        }
+        if ($operation === 'preview_search_campaign' || $operation === 'create_search_campaign') {
+            $result = hub_google_ads_campaign_creation_preview_or_create($config, $payload, $operation === 'create_search_campaign');
+            hub_google_ads_campaign_action_json(200, $result);
+        }
+        if ($operation === 'apply_audience_targeting') {
+            [$managerId, $customerId, $campaignId, $adGroupId, $audienceIds] = hub_google_ads_campaign_audience_targeting_validate_payload($payload);
+            $result = hub_google_ads_campaign_audience_targeting_apply($config, $managerId, $customerId, $campaignId, $adGroupId, $audienceIds);
+            hub_google_ads_campaign_action_json(200, $result);
+        }
+        if (!in_array($operation, ['pause_campaign', 'enable_campaign'], true)) {
+            hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+        }
+
+        [$managerId, $customerId, $campaignId, $operation, $expectedStatus, $targetStatus, $notificationContext] = hub_google_ads_campaign_action_validate_status_change($payload);
+        if (!hub_google_ads_campaign_actions_enabled($config)) {
+            throw new HubGoogleAdsApiException('campaign_writes_disabled', 403);
+        }
+        if (!hub_google_ads_campaign_manager_is_allowed($config, $managerId)) {
+            throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+        }
+        $result = hub_google_ads_change_campaign_status(
+            $config,
+            $managerId,
+            $customerId,
+            $campaignId,
+            $operation,
+            $expectedStatus,
+            $targetStatus
+        );
+        if ($notificationContext === 'automatic_negative_remaining' && $operation === 'pause_campaign') {
+            $result['email_notification_status'] = $result['changed'] === true && $result['status'] === 'PAUSED'
+                ? google_ads_campaign_pause_email_queue_verified_transition(
+                    $config,
+                    $managerId,
+                    $customerId,
+                    $campaignId,
+                    (string)($result['campaign_name'] ?? ''),
+                    (string)($result['verified_at_utc'] ?? '')
+                )
+                : 'not_queued_no_change';
+        }
+        hub_google_ads_campaign_action_json(200, $result);
+    } catch (HubGoogleAdsApiException $error) {
+        hub_google_ads_campaign_action_json($error->httpStatus, ['ok' => false, 'error' => $error->apiCode]);
+    } catch (Throwable $error) {
+        error_log('Google Ads campaign action request failed.');
+        hub_google_ads_campaign_action_json(500, ['ok' => false, 'error' => 'server_error']);
+    }
+}

@@ -1,8 +1,8 @@
 import * as Domain from './smartadv-offers-domain.mjs?v=6';
 import * as Storage from './smartadv-offers-storage.mjs?v=3';
 import {createInitialCapture} from './smartadv-offers-initial-capture.mjs?v=3';
-import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=19';
-import * as Trends from '../trends-domain.mjs';
+import {mountSmartAdvOffersView} from './smartadv-offers-view.mjs?v=20';
+import * as Trends from '../trends-domain.mjs?v=5';
 import * as Images from '../image-search-domain.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
 import * as GlimpseStorage from '../glimpse-storage.mjs';

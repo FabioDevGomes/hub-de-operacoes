@@ -1,5 +1,5 @@
 import {BACKUP_FORMAT,validateBackup,productFromForm,productValues} from './manual-domain.mjs?v=2';
-import {RESULT_OPTIONS} from '../trends-ui.mjs';
+import {RESULT_OPTIONS} from '../trends-ui.mjs?v=2';
 import {IMAGE_RESULT_OPTIONS} from '../image-search-ui.mjs';
 import {normalizeDecision} from '../decision-ui.mjs?v=curation-decision-notes-2';
 export const DB_NAME='radar-curadoria-manual';

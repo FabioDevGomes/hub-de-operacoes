@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hub v1.188.0 · Top Offers CB · Curadoria</title>
+  <title>Hub v1.378.9 · Top Offers CB · Curadoria</title>
   <link rel="icon" href="/favicon.png?v=1.133.1">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261027-keyword-candidate-edit-negative">
-  <link rel="stylesheet" href="./clickbank-top-offers.css?v=47">
+  <link rel="stylesheet" href="./clickbank-top-offers.css?v=69">
   <link rel="stylesheet" href="/table-edit-actions.css?v=3">
   <link rel="stylesheet" href="../glimpse/glimpse-embed-host.css?v=1">
   <link rel="stylesheet" href="../analysis-sheet-bar.css?v=3">
-  <link rel="stylesheet" href="/sidebar-component.css?v=23">
+  <link rel="stylesheet" href="/sidebar-component.css?v=26">
   <link rel="stylesheet" href="/table-columns.css?v=2">
-<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/table-headers.css?v=9"><link rel="stylesheet" href="/white-button.css?v=6"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2"><!-- hub-system-version:start -->
-<meta name="hub-system-version" content="1.188.0">
-<link rel="stylesheet" href="/system-version.css?v=1.188.0">
-<script defer src="/system-version.js?v=1.188.0"></script>
+<link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/table-headers.css?v=9"><link rel="stylesheet" href="/white-button.css?v=6"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2">  <link rel="stylesheet" href="/hub-scrollbars.css?v=1">
+<!-- hub-system-version:start -->
+<meta name="hub-system-version" content="1.378.9">
+<link rel="stylesheet" href="/system-version.css?v=1.378.9">
+<script defer src="/system-version.js?v=1.378.9"></script>
 <!-- hub-system-version:end -->
 </head>
 <body data-hub-green-actions="clickbank">
@@ -58,26 +59,34 @@
     <div class="sheet-inner">
       <div class="sheet-tab-bar">
         <div class="tabs" role="tablist" aria-label="Análises da oferta"><button class="btn active" data-tab="trends" type="button">Google Trends</button><button class="btn" data-tab="glimpse" type="button">Glimpse</button><button class="btn" data-tab="images" type="button">Google Imagens</button><button class="btn" data-tab="history" type="button">Histórico</button></div>
-        <div class="sheet-bar-actions"><button class="btn primary" id="saveSheetButton" type="button">Salvar</button><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></div>
+        <div class="sheet-bar-actions"><button class="btn" id="startCampaignDelivery" type="button">Iniciar entrega</button><button class="btn primary" id="saveSheetButton" type="button">Salvar</button><button class="btn" id="closeSheet" type="button">← Voltar à lista</button></div>
       </div>
       <header class="sheet-top"><div><div class="eyebrow">ClickBank · Oferta</div><h1 id="sheetTitle"></h1><div class="sub" id="sheetMeta"></div></div></header>
       <div class="sheet-message" id="sheetMessage" role="status" aria-live="polite"></div>
       <section data-panel="trends">
-        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><div class="candidate-entry"><input class="control" id="trendCandidate" placeholder="Digite uma candidata e pressione Enter" aria-label="Nova candidata à palavra-chave"><label class="clickbank-trends-search-history" for="trendSearchHistory"><span>Histórico de buscas</span><select class="control" id="trendSearchHistory" aria-label="Histórico de buscas no Google Trends"></select></label></div><div id="trendCandidates"></div><div id="affiliateLinkSection" class="affiliate-link-section"></div></article>
+        <article class="card trends-search-card"><div class="trends-search-row"><label><span class="field-label">Termo de pesquisa</span><input class="control" id="trendsTerm"></label><div class="trends-search-actions"><button class="btn" id="defineProductName" type="button">Definir nome do produto</button><button class="btn primary" id="openTrends" type="button">Pesquisar no Google Trends</button></div></div><p class="canonical-product-name-status" id="canonicalProductNameStatus" data-state="empty" role="status" aria-live="polite"></p><div class="trends-keyword-summary"><div class="trends-keyword-summary-head"><div><b>Candidatas a palavras-chave positivas</b><p>Colagem à esquerda; lista salva à direita. Cada termo mantém a busca individual no Google Trends.</p></div><label class="clickbank-trends-search-history" for="trendSearchHistory"><span>Histórico de buscas</span><select class="control" id="trendSearchHistory" aria-label="Histórico de buscas no Google Trends"></select></label></div><div class="trends-keyword-entry"><label class="trends-keyword-entry-label" for="trendCandidate">Novas candidatas · uma por linha</label><textarea class="control" id="trendCandidate" rows="5" maxlength="9000" placeholder="Cole uma candidata por linha" aria-label="Novas candidatas positivas, uma por linha"></textarea><div class="trends-keyword-entry-actions"><button class="btn primary" id="addTrendCandidates" type="button">Adicionar candidatas <span aria-hidden="true">→</span></button></div></div><section class="trends-keyword-output" role="region" aria-label="Candidatas positivas salvas"><div class="trends-keyword-output-head"><span>Lista de candidatas salvas</span><span id="trendCandidateCount" aria-live="polite">0 termos</span></div><div id="trendCandidates"></div></section></div><div id="affiliateLinkSection" class="affiliate-link-section"></div></article>
         <article class="card trends-country-card">
-          <div class="trends-country-heading"><h2>Países</h2><div class="clickbank-offer-link-row"><a class="btn hidden" id="openClickBankOffer" target="_blank" rel="noopener noreferrer">Abrir oferta</a><p class="sub hidden" id="clickBankOfferUnavailable">Link disponível após uma nova captura com o plugin atualizado.</p></div></div>
-          <div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button><div id="trendCountries" class="trends-country-actions"></div></div><span id="manualCountryMessage" role="status" aria-live="polite"></span></div>
+          <div class="trends-country-heading"><h2>Países de destino · obrigatório</h2><div class="clickbank-offer-link-row"><button class="btn commission-value-button" id="clickbankCommissionButton" type="button" aria-haspopup="dialog" aria-controls="clickbankCommissionDialog" data-state="missing">Definir comissão ClickBank · USD</button><a class="btn hidden" id="openClickBankOffer" target="_blank" rel="noopener noreferrer">Abrir oferta</a><p class="sub hidden" id="clickBankOfferUnavailable">Link disponível após uma nova captura com o plugin atualizado.</p></div></div>
+          <p class="commission-help">Obrigatória para iniciar a entrega; o valor salvo será recebido na tela de criação de campanha.</p>
+          <div class="manual-country-entry"><label for="manualCountry">Adicionar país pelo código (ex.: US)</label><div><input class="control" id="manualCountry" type="text" maxlength="2" autocomplete="off" autocapitalize="characters"><button class="btn primary" id="addManualCountry" type="button">Adicionar país</button><div id="trendCountries" class="trends-country-actions"></div></div><span id="manualCountryMessage" role="status" aria-live="polite"></span><div id="campaignCountryHandoff" class="campaign-country-handoff" data-state="empty" role="status" aria-live="polite"></div></div>
           <div class="trends-analysis-meta"><div class="trends-product-age"><span>Momento do produto</span><div id="productAgeActions"></div></div><div class="trends-product-age sales-page-type"><span>Tipo de página de venda</span><div id="salesPageTypeActions" role="group" aria-label="Classificação manual do tipo de página de venda"></div><small>Classificação manual desta oferta.</small></div><div class="trends-product-age brand-bidding"><span>Brand bidding</span><div id="brandBiddingActions" role="group" aria-label="Classificação manual de brand bidding"></div><small>Classificação manual; confirme as regras da oferta.</small></div></div>
         </article>
         <section class="card trends-result-card"><h2>Resultado da análise</h2><div id="trendResults" class="trends-result-actions"></div><div id="trendMessage" class="sub" aria-live="polite"></div></section>
         <article class="card sheet-history"><h2>Histórico de Trends</h2><div id="trendsHistory"></div></article>
       </section>
       <section class="hidden glimpse-embed-panel" data-panel="glimpse"><iframe id="glimpseFrame" class="glimpse-embedded-frame" title="Análise Glimpse" loading="lazy"></iframe></section>
-      <section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país, observe as primeiras 20 imagens e registre a dominância visual do produto.</p><label><span class="field-label">Termo de pesquisa</span><input class="control" id="imagesTerm"></label></article><section id="imageCountries" class="image-country-list"></section><div class="sheet-actions"><span id="imagesMessage" class="sheet-message"></span></div><section class="card sheet-history"><h2>Histórico visual</h2><div id="imagesHistory"></div></section></section>
+      <section class="hidden" data-panel="images"><article class="card image-validation-intro"><h2>Validação visual do produto</h2><p>Pesquise cada país, observe as primeiras 20 imagens e registre a dominância visual do produto.</p><label><span class="field-label">Termo de pesquisa · salvo automaticamente e enviado à Entrega</span><input class="control" id="imagesTerm" maxlength="250" autocomplete="off" aria-describedby="imagesTermStatus"></label><span id="imagesTermStatus" class="sub" role="status" aria-live="polite">O termo salvo será usado nas buscas e no fluxo de entrega.</span></article><article class="card image-candidate-global"><div class="image-candidate-summary"><div class="image-candidate-summary-head"><b>Candidatas a palavras-chave negativas da oferta</b><p>Esta lista única é enviada à Entrega e à criação da campanha. Ao pesquisar imagens manualmente em qualquer país, todos estes termos são excluídos; as buscas continuam sendo iniciadas uma por vez.</p></div><div class="image-candidate-entry"><label class="image-candidate-entry-label" for="imageCandidateInput">Novas candidatas · uma por linha</label><textarea class="control" id="imageCandidateInput" data-image-candidate-input rows="6" maxlength="9000" placeholder="Cole termos ou frases entre aspas" aria-label="Candidatas negativas da oferta, uma por linha"></textarea><div class="image-candidate-entry-actions"><button class="btn primary" id="addImageCandidates" type="button" data-image-candidate-add>Adicionar candidatas <span aria-hidden="true">→</span></button><span class="image-candidate-count" id="imageCandidateCount" aria-live="polite">0 termos salvos</span></div></div><div class="image-candidate-output" role="region" aria-label="Lista única de candidatas negativas"><div class="image-candidate-output-head"><span>Lista usada na integração e nas buscas manuais</span></div><div class="image-candidate-list" id="imageCandidateList"></div></div></div></article><section id="imageCountries" class="image-country-list"></section><div class="sheet-actions"><span id="imagesMessage" class="sheet-message"></span></div><section class="card sheet-history"><h2>Histórico visual</h2><div id="imagesHistory"></div></section></section>
       <section class="hidden" data-panel="history"><article class="card"><h2>Histórico de Trends</h2><div id="allTrendsHistory"></div></article><article class="card"><h2>Histórico visual</h2><div id="allImagesHistory"></div></article></section>
     </div>
   </section>
 
+  <dialog id="clickbankCommissionDialog" class="import-dialog commission-dialog" aria-labelledby="clickbankCommissionTitle" aria-describedby="clickbankCommissionDescription">
+    <header class="modalhead"><div><b id="clickbankCommissionTitle">Comissão ClickBank</b><div class="sub" id="clickbankCommissionDescription">Informe a comissão da oferta em dólares americanos. O valor será transferido para a Entrega e exibido na criação da campanha.</div></div><button class="btn" data-close-commission type="button">Fechar</button></header>
+    <form id="clickbankCommissionForm">
+      <div class="modalbody"><label class="field" for="clickbankCommissionInput">Comissão (USD)<input class="control" id="clickbankCommissionInput" name="commissionUsd" type="number" inputmode="decimal" min="0.01" max="99999999.99" step="0.01" required placeholder="Ex.: 42.75"></label><p class="commission-dialog-message" id="clickbankCommissionMessage" role="alert" aria-live="polite"></p></div>
+      <footer class="modalfoot"><button class="btn" data-cancel-commission type="button">Cancelar</button><button class="btn primary" id="saveClickbankCommission" type="submit">Salvar comissão</button></footer>
+    </form>
+  </dialog>
   <dialog id="trendCandidateEditDialog" class="import-dialog candidate-edit-dialog" aria-labelledby="trendCandidateEditTitle" aria-describedby="trendCandidateEditDescription">
     <header class="modalhead"><div><b id="trendCandidateEditTitle">Editar candidata à palavra-chave</b><div class="sub" id="trendCandidateEditDescription">Atualize o texto salvo para esta oferta.</div></div><button class="btn" data-close-candidate-edit type="button">Fechar</button></header>
     <div class="modalbody"><label class="field" for="trendCandidateEditInput">Texto da candidata<input class="control" id="trendCandidateEditInput" type="text" autocomplete="off"></label><p class="candidate-edit-message" id="trendCandidateEditMessage" role="alert" aria-live="polite"></p></div>
@@ -94,7 +103,7 @@
   </dialog>
     </main>
   </div>
-  <script src="/sidebar-component.js?v=20261029-frequent-screen-shortcuts-tab-activation"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=49"></script>
+  <script src="/sidebar-component.js?v=20261101-quick-access-pins"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=69"></script>
 <script type="module" src="/curadoria/sheet-escape.mjs?v=1"></script><script type="module" src="/curadoria/column-widths-page.mjs?v=1" data-curation-widths="clickbank"></script></body>
 </html>

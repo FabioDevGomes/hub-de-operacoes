@@ -1,10 +1,11 @@
-import { normalizeTrackingSale } from './tracking-sales-domain.mjs?v=1';
+import { normalizeTrackingSale } from './tracking-sales-domain.mjs?v=4';
 
 export const TRACKING_SALES_DB_NAME = 'hub-tracking-sales';
 export const TRACKING_SALES_DB_VERSION = 1;
 export const TRACKING_SALES_STORE = 'sale_records';
 export const TRACKING_SALES_META_STORE = 'sync_metadata';
 export const TRACKING_SALES_META_KEY = 'last_successful_sync';
+export const TRACKING_SALES_DETECTION_CURSOR_KEY = 'clickbank_sale_detection_cursor';
 
 function isUtcTimestamp(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
@@ -66,9 +67,19 @@ export async function readTrackingSalesSnapshot({ indexedDBImpl = globalThis.ind
           sales = sales.map((sale, index) => normalizeTrackingSale({
             transaction_id: sale.transactionId,
             transaction_time_utc: sale.transactionTimeUtc,
+            received_at_utc: sale.receivedAtUtc ?? null,
+            commission_total: sale.commissionTotal ?? null,
+            commission_currency: sale.commissionCurrency ?? null,
             attribution_status: sale.attributionStatus,
             presell_host: sale.presellHost,
             product_key: sale.productKey,
+            ...(sale.clickLinkDiagnosticStatus && sale.clickLinkDiagnosticStatus !== 'not_available'
+              ? { click_link_diagnostic: { status: sale.clickLinkDiagnosticStatus } } : {}),
+            ...(sale.clickCampaignCandidate ? { click_campaign_candidate: {
+              status: sale.clickCampaignCandidate.status,
+              source: sale.clickCampaignCandidate.source,
+              campaign_id: sale.clickCampaignCandidate.campaignId,
+            } } : {}),
           }, `Venda local ${index + 1}`));
           if (metadata !== null && (metadata.schemaVersion !== 1
               || !isUtcTimestamp(metadata.lastSyncedAtUtc)
@@ -106,9 +117,19 @@ export async function replaceTrackingSalesSnapshot(salesInput, metadataInput, {
       ? normalizeTrackingSale({
         transaction_id: sale.transactionId,
         transaction_time_utc: sale.transactionTimeUtc,
+        received_at_utc: sale.receivedAtUtc ?? null,
+        commission_total: sale.commissionTotal ?? null,
+        commission_currency: sale.commissionCurrency ?? null,
         attribution_status: sale.attributionStatus,
         presell_host: sale.presellHost,
         product_key: sale.productKey,
+        ...(sale.clickLinkDiagnosticStatus && sale.clickLinkDiagnosticStatus !== 'not_available'
+          ? { click_link_diagnostic: { status: sale.clickLinkDiagnosticStatus } } : {}),
+        ...(sale.clickCampaignCandidate ? { click_campaign_candidate: {
+          status: sale.clickCampaignCandidate.status,
+          source: sale.clickCampaignCandidate.source,
+          campaign_id: sale.clickCampaignCandidate.campaignId,
+        } } : {}),
       }, `Venda ${index + 1}`)
       : normalizeTrackingSale(sale, `Venda ${index + 1}`);
     if (seenIds.has(normalized.transactionId)) throw new Error('A sincronização contém uma venda duplicada.');
@@ -119,9 +140,14 @@ export async function replaceTrackingSalesSnapshot(salesInput, metadataInput, {
     return {
       transactionId: normalized.transactionId,
       transactionTimeUtc: normalized.transactionTimeUtc,
+      receivedAtUtc: normalized.receivedAtUtc,
+      commissionTotal: normalized.commissionTotal,
+      commissionCurrency: normalized.commissionCurrency,
       attributionStatus: normalized.attributionStatus,
       presellHost: normalized.presellHost,
       productKey: normalized.productKey,
+      clickLinkDiagnosticStatus: normalized.clickLinkDiagnosticStatus,
+      clickCampaignCandidate: normalized.clickCampaignCandidate,
     };
   });
   const syncedAt = typeof now === 'function' ? now() : now;
@@ -159,6 +185,52 @@ export async function replaceTrackingSalesSnapshot(salesInput, metadataInput, {
       };
       transaction.onerror = () => fail(transaction.error);
       transaction.onabort = () => fail(transaction.error || new Error('A gravação do cache local das vendas foi cancelada.'));
+    } catch (error) { fail(error); }
+  });
+}
+
+export async function readTrackingSalesDetectionCursor({ indexedDBImpl = globalThis.indexedDB } = {}) {
+  const db = await openDatabase(indexedDBImpl);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const close = () => { try { db.close(); } catch {} };
+    const fail = error => { if (settled) return; settled = true; close(); reject(error instanceof Error ? error : new Error('Não foi possível ler o cursor de detecção de vendas.')); };
+    try {
+      const transaction = db.transaction([TRACKING_SALES_META_STORE], 'readonly');
+      const request = transaction.objectStore(TRACKING_SALES_META_STORE).get(TRACKING_SALES_DETECTION_CURSOR_KEY);
+      request.onsuccess = () => {
+        const cursor = request.result?.transactionId;
+        if (cursor == null) return;
+        if (typeof cursor !== 'string' || !/^(?:0|[1-9]\d{0,19})$/.test(cursor) || compareIds(cursor, '18446744073709551615') > 0) { fail(new Error('O cursor de detecção de vendas salvo é inválido.')); return; }
+      };
+      request.onerror = () => fail(request.error);
+      transaction.oncomplete = () => { if (settled) return; settled = true; const value = request.result?.transactionId; close(); resolve(value == null ? null : value); };
+      transaction.onerror = () => fail(transaction.error);
+      transaction.onabort = () => fail(transaction.error || new Error('A leitura do cursor de vendas foi cancelada.'));
+    } catch (error) { fail(error); }
+  });
+}
+
+export async function writeTrackingSalesDetectionCursor(transactionId, { indexedDBImpl = globalThis.indexedDB } = {}) {
+  if (typeof transactionId !== 'string' || !/^(?:0|[1-9]\d{0,19})$/.test(transactionId) || compareIds(transactionId, '18446744073709551615') > 0) throw new Error('O cursor de detecção de vendas é inválido.');
+  const db = await openDatabase(indexedDBImpl);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const close = () => { try { db.close(); } catch {} };
+    const fail = error => { if (settled) return; settled = true; close(); reject(error instanceof Error ? error : new Error('Não foi possível salvar o cursor de detecção de vendas.')); };
+    try {
+      const transaction = db.transaction([TRACKING_SALES_META_STORE], 'readwrite');
+      const store = transaction.objectStore(TRACKING_SALES_META_STORE);
+      const request = store.get(TRACKING_SALES_DETECTION_CURSOR_KEY);
+      request.onsuccess = () => {
+        const current = request.result?.transactionId;
+        if (typeof current === 'string' && compareIds(current, transactionId) > 0) return;
+        store.put({ key: TRACKING_SALES_DETECTION_CURSOR_KEY, transactionId });
+      };
+      request.onerror = () => fail(request.error);
+      transaction.oncomplete = () => { if (settled) return; settled = true; close(); resolve(transactionId); };
+      transaction.onerror = () => fail(transaction.error);
+      transaction.onabort = () => fail(transaction.error || new Error('A gravação do cursor de vendas foi cancelada.'));
     } catch (error) { fail(error); }
   });
 }

@@ -5,6 +5,8 @@ const PAYOUT_LINE=/^\$\s*([\d.,]+)$/;
 const HUB_COUNTRY_LINE=/^([A-Z]{2})\1$/;
 const HUB_MORE_LINE=/^\+(\d+)\s+more$/i;
 const LANGUAGES=['French','German','Italian','Spanish','Portuguese','Swedish','Finnish','Dutch','Norwegian','Danish','English'];
+export const WORLD_LOCATION='WORLD';
+export function locationLabel(code){return String(code||'').toUpperCase()===WORLD_LOCATION?'Mundo':String(code||'')}
 
 export function normalize(value=''){return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
 export function decodeText(value=''){return String(value).replace(/&#x([0-9a-f]+);/gi,(_,hex)=>String.fromCodePoint(parseInt(hex,16))).replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n))).replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\\_/g,'_').trim()}

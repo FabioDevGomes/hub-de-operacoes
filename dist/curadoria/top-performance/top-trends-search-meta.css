@@ -36,6 +36,47 @@
   font-weight: 400;
 }
 
+#offerSheet .trends-analysis-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+#offerSheet .trends-analysis-meta .trends-product-age {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+
+#offerSheet .trends-analysis-meta > .trends-product-age:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+#offerSheet .trends-analysis-meta > .sales-page-type {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#offerSheet #topSalesPageTypeActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#offerSheet .sales-page-type > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
 @media (max-width: 640px) {
   #offerSheet .top-trends-search-footer {
     align-items: flex-start;
@@ -51,5 +92,15 @@
 
   #offerSheet .top-trends-search-history .control {
     max-width: 100%;
+  }
+
+  #offerSheet .trends-analysis-meta {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #offerSheet .trends-analysis-meta > .sales-page-type {
+    grid-column: 1;
+    grid-row: auto;
   }
 }

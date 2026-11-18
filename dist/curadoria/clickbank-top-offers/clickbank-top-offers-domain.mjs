@@ -1,3 +1,5 @@
+import {isClickBankCommissionUsd, parseClickBankCommissionUsd} from '../../campaign-delivery/commission-domain.mjs?v=1';
+
 const HEADER = ['rank', 'offer name', 'seller', 'avg', 'initial', 'future', 'epc', 'cvr', 'gravity'];
 const DASH = /^(?:-|–|—|−)$/;
 const LEGACY_SOURCE_FORMAT = 'clickbank-top-offers-v1';
@@ -260,4 +262,12 @@ export function movementLabel(item = {}) {
   if (item.movement === 'down') return `↓ ${Math.abs(item.rankDelta)}`;
   if (item.movement === 'same') return '= 0';
   return '—';
+}
+
+// Prefer a deliberately saved commission; otherwise use the captured Initial $ payout.
+export function commissionUsdForOffer(offer = {}, metadata = {}) {
+  const saved = parseClickBankCommissionUsd(metadata.commissionUsd);
+  if (saved !== null && isClickBankCommissionUsd(saved)) return saved;
+  const captured = parseClickBankCommissionUsd(offer.initial?.value);
+  return captured !== null && isClickBankCommissionUsd(captured) ? captured : null;
 }

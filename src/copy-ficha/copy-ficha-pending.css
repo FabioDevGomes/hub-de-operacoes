@@ -4,6 +4,11 @@
 .copy-ficha-warning-list{display:grid;gap:7px;margin:0;padding-left:2rem}
 .copy-ficha-warning-list li{padding:9px 11px;border:1px solid rgba(194,145,55,.48);border-radius:8px;background:rgba(18,22,29,.52);color:#ffe6b4;font-size:.79rem;line-height:1.4}
 .copy-ficha-warning-list li::marker{color:#ffd16f;font-weight:850}
+.copy-ficha-warning-listing:not(.is-blocked){border-color:transparent;background:transparent;color:var(--text)}
+.copy-ficha-warning-listing:not(.is-blocked) .copy-ficha-warning-heading strong{color:var(--text)}
+.copy-ficha-warning-listing:not(.is-blocked) .copy-ficha-warning-count{border:0;background:#102941;color:var(--muted)}
+.copy-ficha-warning-listing:not(.is-blocked) .copy-ficha-warning-list li{border:0;background:rgba(4,15,28,.35);color:#ffd16f}
+.copy-ficha-warning-listing:not(.is-blocked) .copy-ficha-warning-list li::marker{color:var(--muted)}
 .copy-ficha-warning-listing.is-blocked{border-color:#a87524;background:linear-gradient(145deg,#33250f,#261f17);color:#ffe2a0}
 .copy-ficha-warning-listing.is-blocked .copy-ficha-warning-heading strong{color:#ffe2a0}
 .copy-ficha-package.is-pending{border-color:#ff5867!important;box-shadow:0 0 0 2px rgba(255,88,103,.17)}

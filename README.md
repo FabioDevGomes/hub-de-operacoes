@@ -1,7 +1,7 @@
 # Base de Dados Local de Campanhas
 
 <!-- hub-version:start -->
-## Versão atual: v1.188.0
+## Versão atual: v1.378.9
 
 Fonte única: [VERSION](VERSION). Mudanças: [CHANGELOG](CHANGELOG.md).
 A mesma versão aparece junto ao título das telas e no título da aba do navegador.
@@ -13,6 +13,8 @@ Veja [o fluxo de versionamento](docs/versioning.md). O comando não faz stage, c
 
 Painel local, sem servidor externo, para consolidar o histórico do Excel com as atualizações diárias do manifesto MCC.
 
+O código e os pacotes de publicação do Tracking estão em [tracking-mvp/](tracking-mvp/README.md). O Hub continua rodando localmente; a publicação dos componentes do Tracking segue o procedimento específico de cada pacote.
+
 O Hub inteiro é servido por `scripts/serve-panel.ps1`, usando somente o Windows
 PowerShell. A execução não depende do Codex nem de um runtime Python. Todas as
 telas existentes em `dist/` usam o mesmo processo local. O motor de Pre-Sell fica
@@ -22,7 +24,7 @@ navegador é isolado por origem; trocar a porta faria a base existente parecer v
 
 ## Abrir o painel sem o Codex
 
-Dê um duplo clique em `iniciar-painel.cmd`. O iniciador liga o servidor somente no próprio computador e abre o endereço local no navegador. O Codex pode permanecer fechado.
+Dê um duplo clique em `Iniciar Hub.lnk` para abrir o painel com o ícone do sistema, ou em `iniciar-painel.cmd`. O atalho usa o mesmo iniciador, que liga o servidor somente neste computador e abre o endereço local no navegador. O Codex pode permanecer fechado. Se a pasta do projeto for movida, execute `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\create-panel-shortcut.ps1` para atualizar o caminho do atalho.
 
 ### ZIP executado fora de `C:\Users\<perfil>`
 
@@ -55,7 +57,7 @@ Consulte [o guia de manutenção](docs/maintenance.md) para localizar fontes, re
 
 Para consultar o padrão e o inventário de avisos de erro das telas, veja [Avisos de erro](docs/avisos-de-erros.md).
 
-O formato das respostas dos chats que trabalham neste repositório está em [Padrão de resposta ao usuário](docs/padrao-de-resposta.md). Para deploy manual do Tracking MVP, consulte o padrão canônico `voc-meu-analista-de-dados-e/tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md` no checkout local irmão e o README específico do pacote.
+O formato das respostas dos chats que trabalham neste repositório está em [Padrão de resposta ao usuário](docs/padrao-de-resposta.md). Para deploy manual do Tracking MVP, consulte [o padrão de deploy](tracking-mvp/deploy/PADRAO-DEPLOY-SERVIDOR.md) e o README específico do pacote.
 
 Para novas implementações, comece por [Regras para novas implementações](docs/maintenance.md#regras-para-novas-implementações) e [Roteiro de execução](docs/maintenance.md#roteiro-de-execução). O guia define os limites entre domínio, view, template, adaptador, storage e serviço, como integrar uma tela e o checklist de preservação/testes. [AGENTS.md](AGENTS.md) registra as instruções de entrada para agentes que mantêm este repositório.
 

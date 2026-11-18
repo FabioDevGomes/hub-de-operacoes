@@ -6,10 +6,10 @@ import {
   normalizeTrackingProductLabel,
   normalizeTrackingDomainSave,
 } from './tracking-domain-admin.mjs?v=11';
-import { normalizeTrackingClicksReport, validateTrackingClicksDateRange } from './tracking-clicks-domain.mjs?v=6';
-import { normalizeTrackingSalesPage } from './tracking-sales-domain.mjs?v=1';
-import { normalizeTrackingCheckoutsReport } from './tracking-checkouts-domain.mjs?v=1';
-import { normalizeGuruMediaSalesReport } from './tracking-gurumedia-domain.mjs?v=1';
+import { normalizeTrackingClicksReport, validateTrackingClicksDateRange } from './tracking-clicks-domain.mjs?v=7';
+import { normalizeTrackingSalesPage } from './tracking-sales-domain.mjs?v=2';
+import { normalizeTrackingCheckoutsReport } from './tracking-checkouts-domain.mjs?v=2';
+import { normalizeGuruMediaBillingSalesPage, normalizeGuruMediaCampaignAttribution, normalizeGuruMediaSalesReport } from './tracking-gurumedia-domain.mjs?v=6';
 
 export const TRACKING_API_ENDPOINTS = Object.freeze({
   report: 'https://track.travenzo.shop/google-ads-report.php',
@@ -51,6 +51,32 @@ const ERROR_MESSAGES = Object.freeze({
   report_limit_exceeded: 'Há muitas combinações de data, produto e domínio. Reduza o período e tente novamente.',
   gurumedia_api_unavailable: 'A consulta de vendas GuruMedia ainda não está instalada no servidor. Publique o pacote manual correspondente.',
   service_unavailable: 'O servidor não conseguiu concluir a consulta de vendas GuruMedia. Confira a instalação e tente novamente.',
+  invalid_report_type: 'O serviço privado GuruMedia ainda não oferece esta consulta. Atualize o pacote incremental correspondente.',
+  invalid_cursor: 'A paginação de vendas GuruMedia expirou. Atualize novamente para reiniciar a sincronização.',
+  invalid_track_accounts: 'O servidor rejeitou os IDs Google Ads enviados pelo manifesto. Confira se a conta filha e a MCC têm IDs numéricos completos de 10 dígitos.',
+  admin_not_authorized: 'O token administrativo do Tracking está ausente ou inválido.',
+  invalid_routes: 'Uma ou mais rotas GuruMedia não têm Track, MCC ou ação de conversão compatível.',
+  mcc_not_allowed: 'A MCC da rota não está na lista autorizada no tracking-config.php do servidor.',
+  duplicate_route: 'Há Tracks duplicadas na lista enviada ao servidor.',
+  track_not_registered: 'Uma rota enviada não corresponde a uma Track GuruMedia cadastrada no servidor.',
+  routes_not_configured: 'Sincronize pelo menos uma rota GuruMedia antes de ativar o envio automático.',
+  sale_not_found: 'A venda selecionada não existe mais no servidor.',
+  route_not_configured: 'A venda ainda não tem uma rota de MCC e ação de conversão sincronizada.',
+  conversion_time_missing: 'A venda não tem horário real; ela não pode ser enviada sem inventar uma data.',
+  click_identifier_missing: 'O clique associado não contém GCLID, GBRAID nem WBRAID.',
+  click_identifier_ambiguous: 'O clique tem mais de um identificador Google; o envio foi bloqueado por segurança.',
+  validation_required: 'Valide a venda com o Data Manager antes do envio real.',
+  validation_stale: 'A venda ou a ação de conversão mudou depois da validação. Valide novamente antes de enviar.',
+  click_missing: 'A venda não está ligada a um clique de saída único do Hub.',
+  click_ambiguous: 'A venda está ligada a mais de um clique de saída; o envio foi bloqueado.',
+  conversion_time_invalid: 'O horário real da venda não pôde ser interpretado com segurança.',
+  value_invalid: 'O valor ou a moeda da comissão não são válidos para envio.',
+  permission_denied: 'A Data Manager API recusou a permissão da conta de serviço para esta MCC ou ação.',
+  google_ads_access_denied: 'O Google Ads recusou a consulta ClickView. Confira o acesso da conta de serviço à MCC e à conta filha.',
+  google_ads_auth_failed: 'A conta de serviço não conseguiu autenticar no Google Ads para consultar ClickView.',
+  google_ads_quota_exceeded: 'A cota da Google Ads API foi excedida durante a consulta ClickView. Tente novamente depois ou reduza o período.',
+  google_ads_unavailable: 'A Google Ads API está temporariamente indisponível durante a consulta ClickView.',
+  google_ads_request_rejected: 'O Google Ads recusou a consulta ClickView. Confira a conta filha e o vínculo com a MCC.',
 });
 
 function readToken(token) {
@@ -62,12 +88,14 @@ function readToken(token) {
 async function withTrackingRequest(path, token, fetchImpl, expectCsv, normalizeReport = normalizeTrackingApiReport, request = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A conexão com o servidor não está disponível neste navegador.');
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), 15000);
+  const timeoutMs = Number.isSafeInteger(request.timeoutMs) && request.timeoutMs > 0 ? Math.min(request.timeoutMs, 120000) : 15000;
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers = {
-      Accept: expectCsv ? 'text/csv' : 'application/json',
+      Accept: request.accept || (expectCsv ? 'text/csv' : 'application/json'),
       Authorization: `Bearer ${readToken(token)}`,
     };
+    if (request.adminToken !== undefined) headers['X-Tracking-Admin'] = `Bearer ${readToken(request.adminToken)}`;
     if (request.body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetchImpl(path, {
       method: request.method || 'GET',
@@ -82,7 +110,10 @@ async function withTrackingRequest(path, token, fetchImpl, expectCsv, normalizeR
     if (!response?.ok) {
       let code = '';
       try { code = (await response.json())?.error || ''; } catch {}
-      throw new Error(ERROR_MESSAGES[code] || `O servidor respondeu com erro HTTP ${Number(response?.status) || 'desconhecido'}.`);
+      const error = new Error(ERROR_MESSAGES[code] || `O servidor respondeu com erro HTTP ${Number(response?.status) || 'desconhecido'}.`);
+      error.httpStatus = Number(response?.status) || 0;
+      error.serverCode = code;
+      throw error;
     }
     if (expectCsv) {
       const contentType = response.headers?.get?.('content-type') || '';
@@ -93,7 +124,7 @@ async function withTrackingRequest(path, token, fetchImpl, expectCsv, normalizeR
     try { payload = await response.json(); } catch { throw new Error('O servidor retornou um relatório ilegível.'); }
     return normalizeReport(payload);
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('A consulta ao servidor excedeu 15 segundos. Tente novamente.');
+    if (error?.name === 'AbortError') throw new Error(`A consulta ao servidor excedeu ${Math.ceil(timeoutMs / 1000)} segundos. Tente novamente.`);
     if (error instanceof TypeError) throw new Error('Não foi possível conectar. Confira internet, HTTPS e a configuração CORS do servidor.');
     throw error;
   } finally {
@@ -113,18 +144,32 @@ export function fetchClickBankInsV8Report(token, { fetchImpl = globalThis.fetch 
   return withTrackingRequest(TRACKING_API_ENDPOINTS.insV8Report, token, fetchImpl, false, normalizeClickBankInsV8Report);
 }
 
-export function fetchTrackingClicksReport(token, dateRange, { platform = 'clickbank', fetchImpl = globalThis.fetch } = {}) {
+export function fetchTrackingClicksReport(token, dateRange, { platform = 'clickbank', includeTrafficSource = false, fetchImpl = globalThis.fetch } = {}) {
   const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
   const normalizedPlatform = String(platform ?? '').trim().toLowerCase();
   if (!['clickbank', 'gurumedia'].includes(normalizedPlatform)) throw new Error('Selecione uma plataforma de Tracking válida.');
-  return withTrackingRequest(
-    TRACKING_API_ENDPOINTS.clicksReport,
-    token,
-    fetchImpl,
-    false,
-    payload => normalizeTrackingClicksReport(payload, range, normalizedPlatform),
-    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate, platform: normalizedPlatform } },
-  );
+  const fetchReport = includeTrafficSource => withTrackingRequest(
+      TRACKING_API_ENDPOINTS.clicksReport,
+      token,
+      fetchImpl,
+      false,
+      payload => normalizeTrackingClicksReport(payload, range, normalizedPlatform),
+      {
+        method: 'POST',
+        body: {
+          start_date: range.startDate,
+          end_date: range.endDate,
+          platform: normalizedPlatform,
+          ...(includeTrafficSource ? { include_traffic_source: true } : {}),
+        },
+      },
+    );
+  if (normalizedPlatform !== 'gurumedia' || includeTrafficSource !== true) return fetchReport(false);
+  return fetchReport(true).catch(error => {
+    // Older report services reject the optional field; retry with the compatible legacy payload.
+    if (error?.httpStatus !== 400 || error?.serverCode !== 'invalid_payload') throw error;
+    return fetchReport(false);
+  });
 }
 
 export function fetchTrackingSalesPage(token, { afterId, snapshotMaxId = null, fetchImpl = globalThis.fetch } = {}) {
@@ -154,6 +199,7 @@ export function fetchTrackingCheckoutsReport(token, { fetchImpl = globalThis.fet
     fetchImpl,
     false,
     normalizeTrackingCheckoutsReport,
+    { accept: 'application/vnd.hub.clickbank-checkouts-v2+json' },
   );
 }
 
@@ -166,6 +212,104 @@ export function fetchGuruMediaSalesReport(token, dateRange, { fetchImpl = global
     false,
     payload => normalizeGuruMediaSalesReport(payload, range),
     { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate } },
+  );
+}
+
+export function fetchGuruMediaCampaignAttribution(token, dateRange, trackAccounts, { fetchImpl = globalThis.fetch } = {}) {
+  const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  if (!Array.isArray(trackAccounts) || trackAccounts.length > 100) {
+    throw new Error('O número de Tracks selecionadas para ClickView excede o limite permitido.');
+  }
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.guruMediaSales,
+    token,
+    fetchImpl,
+    false,
+    payload => normalizeGuruMediaCampaignAttribution(payload, range),
+    {
+      method: 'POST',
+      timeoutMs: 120000,
+      body: {
+        start_date: range.startDate,
+        end_date: range.endDate,
+        report_type: 'campaign_attribution',
+        track_accounts: trackAccounts,
+      },
+    },
+  );
+}
+
+function normalizeGuruMediaAdsResponse(payload, expectedType) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || payload.ok !== true || payload.report_type !== expectedType) {
+    throw new Error('O servidor retornou uma resposta inválida para a integração GuruMedia → Google Ads.');
+  }
+  return payload;
+}
+
+function guruMediaAdsAdminRequest(token, adminToken, payload, expectedType, { fetchImpl = globalThis.fetch } = {}) {
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.guruMediaSales,
+    token,
+    fetchImpl,
+    false,
+    response => normalizeGuruMediaAdsResponse(response, expectedType),
+    { method: 'POST', body: payload, adminToken },
+  );
+}
+
+export function syncGuruMediaGoogleAdsRoutes(token, adminToken, routes, options) {
+  if (!Array.isArray(routes) || routes.length > 500) throw new Error('O número de rotas GuruMedia excede o limite permitido.');
+  return guruMediaAdsAdminRequest(token, adminToken, { report_type: 'google_ads_sync_routes', routes }, 'google_ads_sync_routes', options);
+}
+
+export function fetchGuruMediaGoogleAdsStatus(token, adminToken, options) {
+  return guruMediaAdsAdminRequest(token, adminToken, { report_type: 'google_ads_status' }, 'google_ads_status', options);
+}
+
+export function setGuruMediaGoogleAdsEnabled(token, adminToken, liveEnabled, options) {
+  if (typeof liveEnabled !== 'boolean') throw new Error('O estado do envio automático é inválido.');
+  return guruMediaAdsAdminRequest(token, adminToken, { report_type: 'google_ads_set_enabled', live_enabled: liveEnabled }, 'google_ads_set_enabled', options);
+}
+
+function validateGuruMediaSaleKey(saleKey) {
+  if (typeof saleKey !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saleKey)) {
+    throw new Error('O identificador local da venda GuruMedia é inválido.');
+  }
+  return saleKey.toLowerCase();
+}
+
+export function validateGuruMediaGoogleAdsSale(token, adminToken, saleKey, options) {
+  return guruMediaAdsAdminRequest(token, adminToken, {
+    report_type: 'google_ads_validate_sale', sale_key: validateGuruMediaSaleKey(saleKey),
+  }, 'google_ads_validate_sale', options);
+}
+
+export function sendGuruMediaGoogleAdsSale(token, adminToken, saleKey, options) {
+  return guruMediaAdsAdminRequest(token, adminToken, {
+    report_type: 'google_ads_send_sale', sale_key: validateGuruMediaSaleKey(saleKey),
+  }, 'google_ads_send_sale', options);
+}
+
+export function fetchGuruMediaBillingSalesPage(token, dateRange, { pageSize = 500, afterSaleKey = null, fetchImpl = globalThis.fetch } = {}) {
+  const range = validateTrackingClicksDateRange(dateRange?.startDate, dateRange?.endDate);
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 500) throw new Error('O tamanho da página GuruMedia está fora do limite permitido.');
+  if (afterSaleKey !== null && (typeof afterSaleKey !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(afterSaleKey))) {
+    throw new Error('O cursor local da GuruMedia é inválido.');
+  }
+  return withTrackingRequest(
+    TRACKING_API_ENDPOINTS.guruMediaSales,
+    token,
+    fetchImpl,
+    false,
+    payload => {
+      const page = normalizeGuruMediaBillingSalesPage(payload, range);
+      if (page.pageSize !== pageSize || (afterSaleKey !== null && page.nextCursor === afterSaleKey)) {
+        throw new Error('A paginação GuruMedia não avançou conforme solicitado.');
+      }
+      return page;
+    },
+    { method: 'POST', body: { start_date: range.startDate, end_date: range.endDate, report_type: 'billing_sales', page_size: pageSize, after_sale_key: afterSaleKey } },
   );
 }
 

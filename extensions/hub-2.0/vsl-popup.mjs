@@ -1,5 +1,6 @@
 export function mountVslSpeed({ document, sendMessage, setDisabled }) {
-  const buttons = [1,10,20,30].map(rate => document.querySelector(`#vsl-speed-${rate}`));
+  const rates = [1,20,30,40,50];
+  const buttons = rates.map(rate => document.querySelector(`#vsl-speed-${rate}`));
   const status = document.querySelector('#vsl-status');
   let pending = false, interacted = false;
   const show = (message, error = false) => {
@@ -7,7 +8,7 @@ export function mountVslSpeed({ document, sendMessage, setDisabled }) {
     status.classList.toggle('error', error);
   };
   const mark = rate => {
-    for (const [index, button] of buttons.entries()) button.setAttribute('aria-pressed', String([1,10,20,30][index] === rate));
+    for (const [index, button] of buttons.entries()) button.setAttribute('aria-pressed', String(rates[index] === rate));
   };
   for (const [index, button] of buttons.entries()) button.addEventListener('click', async () => {
     if (pending || button.disabled) return;
@@ -17,7 +18,7 @@ export function mountVslSpeed({ document, sendMessage, setDisabled }) {
     mark(null);
     show('Ajustando a VSL da aba ativa…');
     try {
-      const response = await sendMessage({ type:'SET_ACTIVE_VSL_SPEED', rate:[1,10,20,30][index] });
+      const response = await sendMessage({ type:'SET_ACTIVE_VSL_SPEED', rate:rates[index] });
       const result = response?.result;
       if (!response?.ok || !result?.ok) throw new Error(result?.message || response?.message || 'O player não respondeu.');
       if (result.verified) mark(result.rate);

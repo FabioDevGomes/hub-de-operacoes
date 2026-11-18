@@ -162,6 +162,8 @@ export function normalizeMonth(month) {
   };
   const appliedDay = String(month?.daily_actual_targets_applied_on || '');
   if (isoDay(appliedDay) && appliedDay.startsWith(`${month_key}-`)) normalized.daily_actual_targets_applied_on = appliedDay;
+  const weeklyAppliedDay = String(month?.weekly_actual_targets_applied_on || '');
+  if (isoDay(weeklyAppliedDay) && weeklyAppliedDay.startsWith(`${month_key}-`)) normalized.weekly_actual_targets_applied_on = weeklyAppliedDay;
   return normalized;
 }
 
@@ -418,6 +420,8 @@ export function createGlobalExpenseTotals(now = new Date()) {
 }
 
 export function dailyBudgetPace(entry, monthKey, now = new Date()) {
+  const weekNumber = weeklyCategoryWeekNumber(entry);
+  if (weekNumber != null) return weeklyBudgetPace(entry, monthKey, now);
   const isLunchDinner = isLunchDinnerCategory(entry);
   const isBreakfast = isBreakfastCategory(entry);
   if ((!isLunchDinner && !isBreakfast) || entry?.currency !== 'BRL' || !isoMonth(monthKey) || monthKey > localMonthKey(now)) return null;
@@ -444,11 +448,50 @@ export function dailyBudgetPace(entry, monthKey, now = new Date()) {
   };
 }
 
-export function dailyActualTargetUpdates(entries = [], monthKey, now = new Date()) {
+function weeklyCategoryWeekNumber(entry) {
+  const match = String(entry?.category_name || entry?.name || '').match(/\bsemana\s*(\d+)\b/i);
+  return match ? Number(match[1]) : null;
+}
+
+function weeklyBudgetPace(entry, monthKey, now = new Date(), { includeCompleted = false } = {}) {
+  const weekNumber = weeklyCategoryWeekNumber(entry);
+  if (weekNumber == null || entry?.currency !== 'BRL' || !isoMonth(monthKey) || monthKey > localMonthKey(now)) return null;
+  const plannedBudget = amountOrNull(entry.planned_amount, 'Orçamento semanal');
+  if (plannedBudget == null) return null;
+  const range = monthWeekRange(monthKey, weekNumber);
+  if (!range) return null;
+  const today = localDateKey(now);
+  if (today < range.start_date || (!includeCompleted && today > range.end_date)) return null;
+  const daysSinceStart = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${range.start_date}T00:00:00Z`)) / 86_400_000) + 1;
+  const elapsedDays = Math.min(7, daysSinceStart);
+  const dailyBudget = plannedBudget / 7;
+  const expectedToDate = Math.round((dailyBudget * elapsedDays + Number.EPSILON) * 100) / 100;
+  const actual = amountOrNull(entry.actual_amount, 'Gasto realizado');
+  const remaining = actual == null ? null : Math.round((expectedToDate - actual + Number.EPSILON) * 100) / 100;
+  return {
+    monthlyBudget:plannedBudget,
+    daysInMonth:7,
+    elapsedDays,
+    dailyBudget,
+    expectedToDate,
+    actualDailyAverage:actual == null ? null : actual / elapsedDays,
+    remaining,
+    status:monthlyCategoryStatus({ planned_amount:expectedToDate, actual_amount:actual }),
+    period:'week',
+  };
+}
+
+export function dailyActualTargetUpdates(entries = [], monthKey, now = new Date(), { includeMeals = true, includeWeeks = true } = {}) {
   if (!isoMonth(monthKey) || monthKey !== localMonthKey(now)) return [];
   return entries.flatMap(entry => {
-    if (entry?.month_key !== monthKey || entry?.currency !== 'BRL' || (!isLunchDinnerCategory(entry) && !isBreakfastCategory(entry))) return [];
-    const pace = dailyBudgetPace(entry, monthKey, now);
+    if (entry?.month_key !== monthKey || entry?.currency !== 'BRL') return [];
+    const isWeekly = weeklyCategoryWeekNumber(entry) != null;
+    if (isWeekly && !includeWeeks) return [];
+    if (!isWeekly && !includeMeals) return [];
+    if (!isWeekly && !isLunchDinnerCategory(entry) && !isBreakfastCategory(entry)) return [];
+    const pace = isWeekly
+      ? weeklyBudgetPace(entry, monthKey, now, { includeCompleted:true })
+      : dailyBudgetPace(entry, monthKey, now);
     if (!pace || entry.actual_amount === pace.expectedToDate) return [];
     return [{ ...entry, actual_amount:pace.expectedToDate }];
   });

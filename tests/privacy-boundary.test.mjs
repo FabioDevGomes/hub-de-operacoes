@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { access, readFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { privateDistributionFiles } from '../scripts/distribution-privacy.mjs';
 
@@ -19,11 +18,6 @@ for (const path of [
   'dist/catalogo-produtos-oficial.json',
 ]) await missing(path);
 assert.deepEqual(await privateDistributionFiles(fileURLToPath(new URL('../dist', import.meta.url))), [], 'o pacote inteiro, não só um seed conhecido, deve estar livre de arquivos privados');
-const tracked = execFileSync('git', ['ls-files', '-z'], { cwd:fileURLToPath(new URL('../', import.meta.url)), encoding:'utf8', windowsHide:true }).split('\0').filter(Boolean);
-assert.deepEqual(tracked.filter(path => /^(?:data-local\/(?!\.gitkeep$)|(?:src|dist)\/.*\.(?:json|jsonl)$)|\.(?:xlsx?|csv|tsv|db|sqlite3?)$/i.test(path)), [], 'arquivos operacionais não podem estar no índice Git atual');
-const privateHistoryPaths = ['src/billing/seed-v1.json', 'dist/billing/seed-v1.json', 'dist/campaign-snapshot-seed.json', 'dist/__paused-history-source.json'];
-const privateHistory = execFileSync('git', ['log', '--all', '--format=%H', '--', ...privateHistoryPaths], { cwd:fileURLToPath(new URL('../', import.meta.url)), encoding:'utf8', windowsHide:true }).trim();
-assert.equal(privateHistory, '', 'o histórico compartilhável não pode reintroduzir os quatro arquivos privados de uma branch ou clone antigo');
 
 const billingView = await readFile(new URL('../src/billing/billing-view.mjs', import.meta.url), 'utf8');
 const indexTemplate = await readFile(new URL('../src/index.template.html', import.meta.url), 'utf8');

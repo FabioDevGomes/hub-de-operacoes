@@ -1,4 +1,4 @@
-import { parseGoogleAdsCampaignName } from './google-ads-campaign-name-parser.mjs?v=2';
+import { parseGoogleAdsCampaignName } from './google-ads-campaign-name-parser.mjs?v=6';
 
 export function normalizeCampaignSequenceProduct(value) {
   return String(value || '')

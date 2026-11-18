@@ -1,7 +1,7 @@
-import { fetchGoogleAdsSearchTerms } from './google-ads-service.mjs?v=10';
-import { normalizeGoogleAdsSearchTerms, validateGoogleAdsSearchTermsDateRange } from './google-ads-search-terms-domain.mjs?v=4';
+import { fetchGoogleAdsSearchTerms } from './google-ads-service.mjs?v=17';
+import { normalizeGoogleAdsSearchTerms, validateGoogleAdsSearchTermsDateRange } from './google-ads-search-terms-domain.mjs?v=6';
 
-export async function queryGoogleAdsSearchTerms({ accounts, managers = [], dateFrom, dateTo, campaignId = null, onProgress = () => {} } = {}) {
+export async function queryGoogleAdsSearchTerms({ accounts, managers = [], dateFrom, dateTo, campaignId = null, includePurchaseMetrics = false, onProgress = () => {} } = {}) {
   const range = validateGoogleAdsSearchTermsDateRange(dateFrom, dateTo);
   if (!range.valid) {
     throw new Error(range.reason === 'search_terms_date_range_too_large'
@@ -26,6 +26,7 @@ export async function queryGoogleAdsSearchTerms({ accounts, managers = [], dateF
         dateFrom,
         dateTo,
         campaignId,
+        includePurchaseMetrics,
       });
       const report = {
         ...normalizeGoogleAdsSearchTerms(payload, {
@@ -37,6 +38,7 @@ export async function queryGoogleAdsSearchTerms({ accounts, managers = [], dateF
         dateFrom,
         dateTo,
         campaignId,
+        includePurchaseMetrics,
         }),
         queryCompletedAtUtc: new Date().toISOString(),
       };

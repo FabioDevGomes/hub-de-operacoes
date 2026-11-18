@@ -1,7 +1,7 @@
-import { parseGoogleAdsCampaignName } from './google-ads-campaign-name-parser.mjs?v=2';
+import { parseGoogleAdsCampaignName } from './google-ads-campaign-name-parser.mjs?v=6';
 
 export const GOOGLE_ADS_DUPLICATION_CPA_LEVELS = Object.freeze([30, 40, 50, 60, 70, 80]);
-export const GOOGLE_ADS_DUPLICATION_B_TEST_NOTICE = 'Evolução futura: permitir sufixo B (por exemplo, 03 e 03B) e mapear a variação de 50% do teste B por campanha.';
+export const GOOGLE_ADS_DUPLICATION_B_TEST_NOTICE = 'A substituição de uma campanha ativa por sua variante B fica disponível no Diário de campanha. O fluxo em lote desta tela continua criando cópias pausadas com numeração sequencial.';
 
 const CAMPAIGN_ID = /^[1-9]\d{0,19}$/;
 const CUSTOMER_ID = /^\d{10}$/;
@@ -26,7 +26,7 @@ function campaignParts(name) {
   const text = String(name ?? '').trim();
   const parsed = parseGoogleAdsCampaignName(text);
   if (!parsed.ok) return null;
-  const match = text.match(/^(\d{1,2}\/\d{1,2})\s*-\s*(.+?)\s+(\d{1,3})\s+\(([^)]+)\)\s+(\d{1,3}(?:[.,]\d+)?)%\s*-\s*(US\$|U\$|USD|R\$|BRL|C\$|CAD|A\$|AUD|€|EUR|£|GBP)\s*(\d+(?:[.,]\d+)?)$/i);
+  const match = text.match(/^(\d{1,2}\/\d{1,2})\s*-\s*(.+?)\s+(\d{1,3})B?\s+\(([^)]+)\)\s+(\d{1,3}(?:[.,]\d+)?)%\s*-\s*(US\$|U\$|USD|R\$|BRL|C\$|CAD|A\$|AUD|€|EUR|£|GBP)\s*(\d+(?:[.,]\d+)?)$/i);
   if (!match) return null;
   return { parsed, match };
 }

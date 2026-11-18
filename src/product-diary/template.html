@@ -1,23 +1,57 @@
         <div id="productSummary" class="product-summary"></div>
         <section id="productCampaignEvents" class="product-campaign-events hidden" aria-labelledby="productCampaignEventsTitle">
           <div class="product-campaign-events-head"><h3 id="productCampaignEventsTitle">Histórico de eventos do produto e da campanha</h3><span id="productCampaignEventCount"></span></div>
-          <div class="product-campaign-events-toolbar">
-            <div id="productCampaignEventBackfill" class="product-campaign-event-backfill hidden">
-              <label for="productCampaignEventDate">Data da pausa já ocorrida</label>
-              <input id="productCampaignEventDate" type="date">
-              <button id="productCampaignEventAdd" class="btn" type="button">Registrar pausa anterior</button>
+          <div id="productCampaignEventsToolbar" class="product-campaign-events-toolbar">
+            <div id="productCampaignPrimary" class="product-campaign-primary">
+              <ul id="productCampaignEventList"></ul>
+              <div id="productCampaignActions" class="product-campaign-actions-card hidden" role="group" aria-label="Ações da campanha"></div>
             </div>
-            <div id="productCampaignPresell" class="product-campaign-presell" role="group" aria-label="Links das pré-sells da campanha" hidden></div>
+            <aside id="productSearchTermsAccessHistory" class="product-search-terms-history hidden" aria-label="Últimas consultas de Termos de Pesquisa desta campanha">
+              <h4>Últimas consultas</h4>
+              <ol id="productSearchTermsAccessHistoryList"></ol>
+            </aside>
+            <section id="productCampaignCpaAdjustment" class="product-campaign-cpa-adjustment hidden" aria-label="Ajuste do CPA desejado" hidden>
+              <p id="productCampaignCpaAdjustmentSummary"></p>
+              <div class="product-campaign-cpa-adjustment-groups">
+                <div class="product-campaign-cpa-adjustment-group" aria-label="Ajustes de CPA em quatro pontos percentuais">
+                  <div class="product-campaign-cpa-adjustment-row"><button class="btn" type="button" data-product-cpa-adjust="increase" data-product-cpa-step="4">CPA +4%</button><span class="product-campaign-cpa-adjustment-status" data-product-cpa-status="increase" data-product-cpa-step="4" hidden></span></div>
+                  <div class="product-campaign-cpa-adjustment-row"><button class="btn" type="button" data-product-cpa-adjust="decrease" data-product-cpa-step="4">CPA −4%</button><span class="product-campaign-cpa-adjustment-status" data-product-cpa-status="decrease" data-product-cpa-step="4" hidden></span></div>
+                </div>
+                <div class="product-campaign-cpa-adjustment-group" aria-label="Ajustes de CPA em dois pontos percentuais">
+                  <div class="product-campaign-cpa-adjustment-row"><button class="btn" type="button" data-product-cpa-adjust="increase" data-product-cpa-step="2">CPA +2%</button><span class="product-campaign-cpa-adjustment-status" data-product-cpa-status="increase" data-product-cpa-step="2" hidden></span></div>
+                  <div class="product-campaign-cpa-adjustment-row"><button class="btn" type="button" data-product-cpa-adjust="decrease" data-product-cpa-step="2">CPA −2%</button><span class="product-campaign-cpa-adjustment-status" data-product-cpa-status="decrease" data-product-cpa-step="2" hidden></span></div>
+                </div>
+              </div>
+            </section>
+            <section id="productCampaignBudgetAdjustment" class="product-campaign-budget-adjustment hidden" aria-label="Ajuste do orçamento diário" hidden>
+              <p id="productCampaignBudgetAdjustmentSummary"></p>
+              <div class="product-campaign-budget-adjustment-groups">
+                <div class="product-campaign-budget-adjustment-group" aria-label="Ajustes de orçamento em dez por cento">
+                  <div class="product-campaign-budget-adjustment-row"><button class="btn" type="button" data-product-budget-adjust="increase" data-product-budget-percent="10">Orçamento +10%</button><span class="product-campaign-budget-adjustment-status" data-product-budget-status="increase" data-product-budget-percent="10" hidden></span></div>
+                  <div class="product-campaign-budget-adjustment-row"><button class="btn" type="button" data-product-budget-adjust="decrease" data-product-budget-percent="10">Orçamento −10%</button><span class="product-campaign-budget-adjustment-status" data-product-budget-status="decrease" data-product-budget-percent="10" hidden></span></div>
+                </div>
+                <div class="product-campaign-budget-adjustment-group" aria-label="Ajustes de orçamento em cinco por cento">
+                  <div class="product-campaign-budget-adjustment-row"><button class="btn" type="button" data-product-budget-adjust="increase" data-product-budget-percent="5">Orçamento +5%</button><span class="product-campaign-budget-adjustment-status" data-product-budget-status="increase" data-product-budget-percent="5" hidden></span></div>
+                  <div class="product-campaign-budget-adjustment-row"><button class="btn" type="button" data-product-budget-adjust="decrease" data-product-budget-percent="5">Orçamento −5%</button><span class="product-campaign-budget-adjustment-status" data-product-budget-status="decrease" data-product-budget-percent="5" hidden></span></div>
+                </div>
+              </div>
+              <p class="product-budget-adjustment-confirmation" data-product-budget-confirmation aria-live="polite" hidden></p>
+            </section>
           </div>
-          <p id="productCampaignEventMessage" class="product-campaign-event-message" role="status"></p>
-          <ul id="productCampaignEventList"></ul>
         </section>
         <div id="productDiaryPanel" class="card panel">
-          <div class="panel-head"><div><h2 id="productPanelTitle">Diário de campanha</h2><p id="productCaption"></p></div><div class="product-diary-controls"><span id="rowCount" class="tag"></span><details id="productColumnPicker" class="hub-column-picker"><summary class="btn">Colunas</summary><div class="hub-column-menu"><strong>Colunas do Diário</strong><p>A data permanece visível. Ocultar colunas não altera os dados nem os totais.</p><div data-column-options></div><button data-column-reset class="btn" type="button">Restaurar padrão</button><p data-column-message role="status"></p></div></details></div></div>
+          <div class="panel-head"><div><h2 id="productPanelTitle">Diário de campanha</h2><p id="productCaption"></p></div><div id="productCampaignPresell" class="product-campaign-presell" role="group" aria-label="Links das pré-sells da campanha" hidden></div><div class="product-diary-controls"><span id="rowCount" class="tag"></span><details id="productColumnPicker" class="hub-column-picker"><summary class="btn">Colunas</summary><div class="hub-column-menu"><strong>Colunas do Diário</strong><p>A data permanece visível. Ocultar colunas não altera os dados nem os totais.</p><div data-column-options></div><button data-column-reset class="btn" type="button">Restaurar padrão</button><p data-column-message role="status"></p></div></details></div></div>
           <div id="productTableWrap" class="table-wrap" tabindex="0" role="region" aria-labelledby="productPanelTitle"><table class="product-table hub-table-layout"><thead id="productHead"></thead><tbody id="productBody"></tbody><tfoot id="productTotals"></tfoot></table></div>
           <div id="legacySummaryBody" class="legacy-summary-grid hidden"></div>
         </div>
         <div id="productFooterNote" class="footer-note">Campos ausentes permanecem vazios. Cliques da plataforma não são inferidos pelo manifesto.</div>
+        <div id="productCaptureAnalysis" class="product-capture-analysis hidden">
+          <section id="productCaptureChart" class="card product-capture-chart" aria-labelledby="productCaptureChartTitle">
+            <div class="product-capture-chart-head"><div><h3 id="productCaptureChartTitle">Cliques, impressões e conversões por captura</h3><p id="productCaptureChartNote">Cada ponto mostra métricas das capturas D0 e o horário em que uma conversão foi registrada no Hub.</p></div><label for="productCaptureChartDate">Data<select id="productCaptureChartDate" aria-label="Data das capturas D0 e conversões"></select></label></div>
+            <div id="productCaptureChartContent" class="product-capture-chart-content" aria-live="polite"></div>
+          </section>
+          <aside id="productCampaignKeywordInventory" class="card product-campaign-keyword-inventory" aria-label="Palavras-chave da campanha"></aside>
+        </div>
         <dialog id="productObservationDialog" class="product-observation-dialog" aria-labelledby="productObservationTitle">
           <form id="productObservationForm">
             <h2 id="productObservationTitle">Editar observações</h2>
@@ -29,6 +63,7 @@
             <div class="product-observation-actions"><button id="productObservationCancel" type="button" class="btn">Cancelar</button><button id="productObservationSave" type="submit" class="btn primary">Salvar</button></div>
           </form>
         </dialog>
+        <dialog id="productPauseExceptionsDialog" class="product-observation-dialog" aria-labelledby="productPauseExceptionsTitle"><form id="productPauseExceptionsForm"><h2 id="productPauseExceptionsTitle">Exceções de pausa automática</h2><p id="productPauseExceptionsCampaign"></p><p>Desmarque as regras que não devem pausar esta campanha. As opções marcadas continuam aplicáveis.</p><div id="productPauseExceptionOptions" class="product-pause-exception-options"></div><p id="productPauseExceptionsError" class="product-observation-error" role="alert"></p><div class="product-observation-actions"><button id="productPauseExceptionsCancel" type="button" class="btn">Cancelar</button><button type="submit" class="btn primary">Salvar</button></div></form></dialog>
         <details id="productSaleHistory" class="card product-sale-history" open>
           <summary>ROI no momento das vendas</summary>
           <p>Fotografias do ROI acumulado ao registrar cada venda manual. As capturas seguintes não alteram esses valores.</p>

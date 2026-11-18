@@ -1,7 +1,8 @@
 import { activeCampaignAccountSuffixesBySubdomain, activeCampaignRootHostnames, isHostingerSubdomain, hostingerSubdomainParent } from './hostinger-site-filter.mjs?v=6';
-import { readGoogleAdsFinalUrlHostRows } from '../google-ads/google-ads-final-url-host-cache.mjs?v=1';
+import { readGoogleAdsFinalUrlHostRows } from '../google-ads/google-ads-final-url-host-cache.mjs?v=2';
 import { accountDomainUrl } from '../accounts/accounts-domain.mjs?v=13';
 import { hostingerFileManagerUrl } from './hostinger-file-manager-link.mjs?v=1';
+import { refreshHostingerSitesDirectory } from './hostinger-sites-directory-service.mjs?v=1';
 import { mountColumnWidths } from '../curadoria/column-widths.mjs?v=1';
 
 const mountedRoots = new WeakMap();
@@ -11,7 +12,6 @@ const API = Object.freeze({
   connect: '/api/hostinger/connect',
   expiration: '/api/hostinger/expiration',
   sitesCache: '/api/hostinger/sites-cache',
-  websites: '/api/hostinger/websites',
   createSubdomain: '/api/hostinger/subdomains',
   deleteSubdomain: '/api/hostinger/subdomains/delete',
   verifySubdomainDeletion: '/api/hostinger/subdomains/verify-deletion',
@@ -249,7 +249,7 @@ export async function mountHostingerConnection({ root, fetchImpl = globalThis.fe
     button.textContent = state.bulkDeleting ? 'Excluindo selecionados…' : `Excluir selecionados${count ? ` (${count})` : ''}`;
   }
 
-  const renderSites = (filteredSites, trackingDomains, activeCampaignAccountsBySubdomain) => {
+  const renderSites = (filteredSites, trackingDomains, activeCampaignAccountsBySubdomain, activeDomains) => {
     if (state.sites === null) return '<div class="hostinger-empty">Use “Atualizar sites” para consultar seus domínios na Hostinger.</div>';
     if (!state.sites.length) return '<div class="hostinger-empty">A API respondeu, mas não encontrou sites acessíveis a este token.</div>';
     if (!filteredSites.length && state.siteFilter === 'hidden') return '<div class="hostinger-empty">Não há domínios ocultos para mostrar.</div>';
@@ -289,6 +289,8 @@ export async function mountHostingerConnection({ root, fetchImpl = globalThis.fe
       const activeCampaignAccountsCell = activeAccountSuffixes.length
         ? `<span title="Conta(s) Google Ads com campanha/anúncio ENABLED e hostname final correspondente">${activeAccountSuffixes.map(suffix => escapeHtml(suffix)).join(', ')}</span>`
         : '<span class="hostinger-campaign-account-empty" title="Nenhuma correspondência exata encontrada no cache local de destinos finais ativos">—</span>';
+      const hasActiveCampaign = hasActiveCampaignForSite(site, activeDomains) || activeCampaignAccountsBySubdomain.has(domain);
+      const activeCampaignCell = `<span class="${hasActiveCampaign ? 'hostinger-campaign-active-yes' : 'hostinger-campaign-active-no'}" title="${hasActiveCampaign ? 'Campanha ativa identificada nos registros e caches locais do Hub.' : 'Nenhuma campanha ativa foi associada a este domínio nos registros e caches locais do Hub.'}">${hasActiveCampaign ? 'Sim' : 'Não'}</span>`;
       const creationDate = formatCreationDate(site.createdAt);
       const creationDateCell = creationDate === '—'
         ? '<span title="Data não informada ou inválida na lista da Hostinger.">—</span>'
@@ -315,9 +317,9 @@ export async function mountHostingerConnection({ root, fetchImpl = globalThis.fe
           : '';
         subdomainCell = `<div class="hostinger-subdomain-cell"><span class="hostinger-subdomain-kind">${parentLabel}</span><div class="hostinger-subdomain-controls">${deleteButton}${selectionCheckbox}</div></div>`;
       }
-      return `<tr${protectedAppSubdomain ? ' class="hostinger-site-protected" title="Subdomínio protegido: contém dados do servidor da aplicação do Hub."' : ''} data-hostinger-site-index="${siteIndex}"><td>${creationDateCell}</td><td class="hostinger-domain">${escapeHtml(site.domain || '—')}</td><td>${escapeHtml(site.username || '—')}</td><td>${escapeHtml(site.websiteType || '—')}</td><td>${escapeHtml(site.status || 'Não informado')}</td><td>${hpanelLink}</td><td><button class="btn hostinger-site-visibility" type="button" data-hostinger-action="${action}" data-domain="${escapeHtml(domain)}" aria-label="${label} ${escapeHtml(site.domain || 'domínio')}">${label}</button></td><td>${activeCampaignAccountsCell}</td><td class="hostinger-subdomain-action-cell">${subdomainCell}</td></tr>`;
+      return `<tr${protectedAppSubdomain ? ' class="hostinger-site-protected" title="Subdomínio protegido: contém dados do servidor da aplicação do Hub."' : ''} data-hostinger-site-index="${siteIndex}"><td>${creationDateCell}</td><td class="hostinger-domain">${escapeHtml(site.domain || '—')}</td><td>${escapeHtml(site.username || '—')}</td><td>${escapeHtml(site.websiteType || '—')}</td><td>${escapeHtml(site.status || 'Não informado')}</td><td>${hpanelLink}</td><td><button class="btn hostinger-site-visibility" type="button" data-hostinger-action="${action}" data-domain="${escapeHtml(domain)}" aria-label="${label} ${escapeHtml(site.domain || 'domínio')}">${label}</button></td><td>${activeCampaignCell}</td><td>${activeCampaignAccountsCell}</td><td class="hostinger-subdomain-action-cell">${subdomainCell}</td></tr>`;
     }).join('');
-    return `<div class="hostinger-table-wrap"><p id="hostingerSitesWidthsMessage" class="hub-widths-message" role="status" aria-live="polite"></p><table class="hostinger-sites"><thead><tr><th data-column="createdAt" title="Criação do site na hospedagem Hostinger">Data de criação</th><th data-column="domain">Domínio</th><th data-column="hostingAccount">Conta Hostinger</th><th data-column="type">Tipo</th><th data-column="status">Situação</th><th data-column="hpanel">HPanel</th><th data-column="visibility">Visibilidade</th><th data-column="adsAccounts">Conta(s) Ads ativa(s)</th><th data-column="subdomain">Subdomínio</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="hostinger-table-wrap"><p id="hostingerSitesWidthsMessage" class="hub-widths-message" role="status" aria-live="polite"></p><table class="hostinger-sites"><thead><tr><th data-column="createdAt" title="Criação do site na hospedagem Hostinger">Data de criação</th><th data-column="domain">Domínio</th><th data-column="hostingAccount">Conta Hostinger</th><th data-column="type">Tipo</th><th data-column="status">Situação</th><th data-column="hpanel">HPanel</th><th data-column="visibility">Visibilidade</th><th data-column="activeCampaign">Campanha ativa</th><th data-column="adsAccounts">Conta(s) Ads ativa(s)</th><th data-column="subdomain">Subdomínio</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
 
   const renderPublishPanel = () => {
@@ -447,7 +449,7 @@ export async function mountHostingerConnection({ root, fetchImpl = globalThis.fe
       <section class="hostinger-panel hostinger-sites-panel" aria-labelledby="hostingerSitesTitle">
         <div class="hostinger-section-heading"><div><h3 id="hostingerSitesTitle">Sites disponíveis</h3><p>Os domínios Hostinger só são consultados ao clicar em atualizar. O filtro de Pre-Sells combina Tracks e destinos finais ENABLED guardados localmente; a API Google Ads atualiza esse cache durante a atualização manual ou automática quando ele passa de 24 horas.</p><p>A coluna de contas Ads mostra os quatro últimos dígitos quando uma Track ativa ou um destino final ENABLED coincide exatamente com o subdomínio. “—” significa que o cache local não identificou correspondência; não confirma ausência de campanhas. A tela não faz consulta extra à Google Ads API.</p><p class="hostinger-subdomain-limit-note">Referência Hostinger: até 100 subdomínios em hospedagem Web e até 300 em Cloud. O limite aplicável depende do plano e da versão; confirme no hPanel. <a href="https://www.hostinger.com/pt/tutoriais/o-que-sao-subdominios/" target="_blank" rel="noopener noreferrer">Ver referência de subdomínios</a> · <a href="https://support.hostinger.com/en/articles/10717644-new-web-and-cloud-hosting-limits" target="_blank" rel="noopener noreferrer">Limites por plano</a>.</p></div><div class="hostinger-sites-heading-actions">${bulkDeleteButton}${siteFilter}${state.sites === null ? '' : `<span class="hostinger-count">${filteredSiteCount} de ${loadedSites.length} sites · ${subdomainCount} subdomínio${subdomainCount === 1 ? '' : 's'} no total${state.siteFilter !== 'hidden' && hiddenSiteCount ? ` · ${hiddenSiteCount} ocultos` : ''}${state.checkedAtUtc ? ` · ${escapeHtml(formatTimestamp(state.checkedAtUtc))}` : ''}</span>`}</div></div>
         ${state.sites?.length ? `<p class="hostinger-column-width-help">Ordenação pela data de criação na hospedagem, da mais recente para a mais antiga; datas ausentes (“—”) ficam no fim. Não é necessariamente a data de registro do domínio. Arraste as divisórias entre os títulos para ajustar as larguras; o ajuste fica salvo neste navegador. ${escapeHtml(creationDateDiagnosticsText(state.creationDateDiagnostics, filteredSites, state.refreshCompletedWithoutDiagnostics))}</p>` : ''}
-        ${renderSites(filteredSites, trackingDomains, activeCampaignAccountsBySubdomain)}
+        ${renderSites(filteredSites, trackingDomains, activeCampaignAccountsBySubdomain, activeDomains)}
       </section>` : '';
 
     root.innerHTML = `
@@ -658,7 +660,7 @@ export async function mountHostingerConnection({ root, fetchImpl = globalThis.fe
     state.message = '';
     render();
     try {
-      const result = await request(API.websites, { fetchImpl });
+      const result = await refreshHostingerSitesDirectory({fetchImpl});
       state.connected = true;
       state.verified = true;
       state.sites = Array.isArray(result.sites) ? result.sites : [];

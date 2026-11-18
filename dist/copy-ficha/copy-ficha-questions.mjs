@@ -50,7 +50,10 @@ export function productPriceCondition(price){
   return parts.join(' · ');
 }
 
-function bonusAnswer(raw){
+function bonusAnswer(raw,{status='',description=''}={}){
+  const confirmedDescription=clean(description);
+  if(status==='no')return {answer:'Não.',pending:false};
+  if(confirmedDescription)return {answer:`Sim — ${confirmedDescription}.`,pending:false};
   const lines=String(raw||'').split(/\r?\n/).map(line=>clean(line.replace(/^#+\s*/,'').replace(/\*\*/g,''))).filter(Boolean);
   const bonuses=[];
   const stop=/^(?:checkout|bonus deals|receipt|payment|customer|shipping|delivery|guarantee|order|terms|privacy|contact|address|email|frete|garantia|pagamento|value|worth)\b/i;
@@ -62,30 +65,37 @@ function bonusAnswer(raw){
     const value=clean(match[1]||lines[i+1]);
     if(value&&!stop.test(value)&&!/^\d+$/.test(value)&&value.length<=180)bonuses.push(value);
   }
-  return bonuses.length?{answer:`Sim — ${unique(bonuses).join('; ')}.`,pending:false}:{answer:'Não',pending:false};
+  return bonuses.length?{answer:`Sim — ${unique(bonuses).join('; ')}.`,pending:false}:{answer:missing,pending:true};
 }
 
 export function buildOfferQuestionAnswers(data={}){
+  const missingAnswer=data.pageSourceMode==='existing'?'Não identificado nos dados da oferta.':missing;
+  const displayName=(code,type)=>{
+    if(!code)return missingAnswer;
+    try{const name=new Intl.DisplayNames(['pt-BR'],{type}).of(code);return `${name.charAt(0).toLocaleUpperCase('pt-BR')}${name.slice(1)} (${code})`}
+    catch{return code}
+  };
   const detected=parseOfferText(data.rawText||'',data.dtcUrl||''),locale=clean(data.htmlLanguage)||detected.htmlLanguage,country=clean(data.countryCode).toUpperCase()||detected.countryCode,currency=clean(data.currency).toUpperCase()||detected.currency;
   const product=clean(data.product)||detected.productCandidate,discount=numeric(data.confirmedDiscountPercent)??detected.highestPercent;
   const confirmedAmount=numeric(data.confirmedDiscountAmount),evidence=offerEvidenceForDiscount(data.rawText,discount,confirmedAmount),direct=directOfferEvidence(data.rawText,discount);
   const amount=confirmedAmount??evidence?.amount??(discount===detected.highestPercent?detected.highestSavingsAmount:null)??direct.amount;
   const lowest=minimumOfferProductPrice(data.rawText),confirmedPrice=numeric(data.confirmedProductPrice),price=confirmedPrice??lowest?.value??null;
   const priceAnswer=formatMoney(price,currency,locale,{includeCode:false});
-  const bonus=bonusAnswer(data.rawText),days=numeric(data.guaranteeDays)??detected.guaranteeDays;
+  const bonus=bonusAnswer(data.rawText,{status:data.bonusStatus,description:data.bonusDescription}),days=numeric(data.guaranteeDays)??detected.guaranteeDays;
+  if(bonus.pending)bonus.answer=missingAnswer;
   const guaranteeAnswer=data.guaranteeStatus==='no'?'Não há garantia informada.':days>0?`${days} dias.`:missing;
   const shippingAnswer=data.freeShipping==='confirmed'||data.freeShipping!=='no'&&detected.freeShippingCandidate?'Sim.':data.freeShipping==='no'?'Não exibido na oferta.':missing;
   const amountCondition=data.discountAmountBasis==='unit'?' por unidade.':data.discountAmountBasis==='package'?' pelo pacote.':'';
   const priceCondition=data.discountAmountBasis==='unit'?productPriceCondition({basis:data.productPriceBasis,quantity:numeric(data.productPriceQuantity),terms:data.productPriceTerms}):'';
   return [
     {id:'locale',question:'Qual idioma e país você deseja que a copy seja criada?',answer:`Idioma: ${displayName(locale,'language')} · País: ${displayName(country,'region')}`,pending:!locale||!country},
-    {id:'product',question:'Qual o nome do produto?',answer:product||missing,pending:!product},
-    {id:'price',question:'Qual o valor do produto? (use a moeda referente ao anúncio)',answer:priceAnswer+(priceCondition&&price!==null?` · ${priceCondition}`:''),pending:price===null||!currency},
-    {id:'discountPercent',question:'Qual o desconto em porcentagem? (EX: 50%).',answer:discount!==null?`${discount}%`:missing,pending:discount===null},
-    {id:'discountAmount',question:'Qual o desconto em valor? (EX: $50.00).',answer:formatMoney(amount,currency,locale)+(amount!==null&&currency?amountCondition:''),pending:amount===null||!currency},
-    {id:'freeShipping',question:'Tem Frete Grátis? (ex: sim / não)',answer:shippingAnswer,pending:shippingAnswer===missing},
+    {id:'product',question:'Qual o nome do produto?',answer:product||missingAnswer,pending:!product},
+    {id:'price',question:'Qual o valor do produto? (use a moeda referente ao anúncio)',answer:price===null||!currency?missingAnswer:priceAnswer+(priceCondition?` · ${priceCondition}`:''),pending:price===null||!currency},
+    {id:'discountPercent',question:'Qual o desconto em porcentagem? (EX: 50%).',answer:discount!==null?`${discount}%`:missingAnswer,pending:discount===null},
+    {id:'discountAmount',question:'Qual o desconto em valor? (EX: $50.00).',answer:amount===null||!currency?missingAnswer:formatMoney(amount,currency,locale)+(amount!==null&&currency?amountCondition:''),pending:amount===null||!currency},
+    {id:'freeShipping',question:'Tem Frete Grátis? (ex: sim / não)',answer:shippingAnswer===missing?missingAnswer:shippingAnswer,pending:shippingAnswer===missing},
     {id:'bonus',question:'Tem alguma bonificação? (Se sim, descrever qual é).',...bonus},
-    {id:'guarantee',question:'Qual a duração da garantia (se houver: ex: 90 dias)?',answer:guaranteeAnswer,pending:guaranteeAnswer===missing}
+    {id:'guarantee',question:'Qual a duração da garantia (se houver: ex: 90 dias)?',answer:guaranteeAnswer===missing?missingAnswer:guaranteeAnswer,pending:guaranteeAnswer===missing}
   ];
 }
 

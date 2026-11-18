@@ -10,7 +10,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$TemplateRoot,
 
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+
+    [switch]$AssetStudioValidated
 )
 
 $ErrorActionPreference = 'Stop'
@@ -140,6 +142,7 @@ foreach ($faq in @($ficha.faqs)) {
 $htmlLanguage = Get-FichaValue $ficha 'htmlLanguage'
 $countryCode = Get-FichaValue $ficha 'countryCode'
 $assetFolder = Get-FichaValue $ficha 'assetFolder'
+$skipFavicon = [string]::Equals((Get-FichaValue $ficha 'skipFavicon'), 'true', [StringComparison]::OrdinalIgnoreCase)
 if ([string]::IsNullOrWhiteSpace($assetFolder)) {
     $assetFolder = 'background'
 }
@@ -184,7 +187,9 @@ if ($null -ne $tracking -and [bool]$tracking.enabled) {
 if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
     throw "Diretório de destino não encontrado: $Destination"
 }
-foreach ($asset in @('01.png', '02.png', '03.png')) {
+$requiredAssetNames = @('01.png', '02.png')
+if (-not $skipFavicon -and -not $AssetStudioValidated) { $requiredAssetNames += '03.png' }
+foreach ($asset in $requiredAssetNames) {
     $assetPath = Join-Path (Join-Path $Destination $assetFolder) $asset
     if (-not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
         throw "Asset obrigatório ausente: $assetFolder/$asset"
@@ -251,6 +256,11 @@ foreach ($entry in $replacements.GetEnumerator()) {
     $indexOutput = $indexOutput.Replace('{{' + $entry.Key + '}}', [string]$entry.Value)
 }
 $indexOutput = $indexOutput.Replace('./background/03.png', "./$assetFolder/03.png")
+if ($skipFavicon) {
+    $faviconReference = "./$assetFolder/03.png"
+    $faviconLinkPattern = '(?is)<link\b(?=[^>]*\bhref\s*=\s*["'']' + [regex]::Escape($faviconReference) + '["''])[^>]*>\s*'
+    $indexOutput = [regex]::Replace($indexOutput, $faviconLinkPattern, '')
+}
 if ($indexOutput -match '\{\{[^}]+\}\}') {
     throw 'O template contém placeholders sem valor na ficha.'
 }

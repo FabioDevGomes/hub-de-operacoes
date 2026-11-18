@@ -1,5 +1,19 @@
+import {
+  GOOGLE_ADS_PRESELL_HANDOFF_ACK_KEY,
+  GOOGLE_ADS_PRESELL_HANDOFF_JOB_QUERY_PARAM,
+  GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM,
+  GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY,
+  acknowledgeGoogleAdsPresellCampaignHandoff,
+  buildGoogleAdsPresellCampaignHandoff,
+  googleAdsPresellCampaignHandoffFingerprint,
+  readGoogleAdsPresellCampaignHandoffAcknowledgement,
+  writeGoogleAdsPresellCampaignHandoff,
+} from '../google-ads/google-ads-presell-campaign-handoff.mjs?v=4';
+import {refreshHostingerSitesDirectory} from '../hostinger/hostinger-sites-directory-service.mjs?v=1';
+
 const JOBS_KEY='hub:presell-deploy-jobs:v1';
 const JOBS_EVENT='hub:presell-deploy-jobs-updated';
+export const PRESELL_DEPLOY_JOBS_UPDATED_EVENT=JOBS_EVENT;
 const VALID_PREFIX=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const plans=new Map();
 let mountedRoot=null;
@@ -13,6 +27,7 @@ const by=(root,selector)=>root.querySelector(selector);
 function readJobs(storage=globalThis.localStorage){
   try{const value=JSON.parse(storage.getItem(JOBS_KEY)||'[]');return Array.isArray(value)?value.filter(job=>job&&typeof job.id==='string'&&Array.isArray(job.targets)):[]}catch{return[]}
 }
+export function readPresellDeployJobs(storage=globalThis.localStorage){return readJobs(storage)}
 function writeJobs(jobs,storage=globalThis.localStorage){
   try{storage.setItem(JOBS_KEY,JSON.stringify(jobs));globalThis.dispatchEvent?.(new CustomEvent(JOBS_EVENT));return true}catch{return false}
 }
@@ -23,7 +38,7 @@ function notify(storage){
 function isTargetSuperseded(target){return target?.status==='superseded'||target?.deploymentState==='superseded'}
 function manualTargetDomain(target){const parent=String(target?.parentDomain||'').trim().toLowerCase(),prefix=String(target?.prefix||'').trim().toLowerCase();return String(target?.domain||'').trim().toLowerCase()||(prefix&&parent?`${prefix}.${parent}`:'')}
 function normalizedTargetDirectory(value){return String(value||'').replace(/\\/g,'/').replace(/^[/]+|[/]+$/g,'').trim()}
-function isTargetManuallyVerified(target){
+function isTargetManuallyVerified(target){if(target?.pageSourceMode==='existing')return false;
   const verification=target?.manualVerification;
   if(verification?.status!=='confirmed')return false;
   return String(verification.domain||'').trim().toLowerCase()===manualTargetDomain(target)
@@ -74,7 +89,8 @@ function pendingCountWithDraft(jobs,draft){
 
 export function queuePresellDeployJob(job,{storage=globalThis.localStorage}={}){
   if(!job||!Array.isArray(job.targets)||!job.targets.length)return null;
-  const normalized={...job,generationSummary:Array.isArray(job.generationSummary)?job.generationSummary.map(item=>({...item})):[],id:String(job.id||`${Date.now()}-${Math.random().toString(36).slice(2,8)}`),createdAtUtc:String(job.createdAtUtc||new Date().toISOString()),status:'pending',targets:job.targets.map((target,index)=>({
+  const campaignDeliveryId=String(job.campaignDeliveryId||'').trim().slice(0,120);
+  const normalized={...job,...(campaignDeliveryId?{campaignDeliveryId}:{}),generationSummary:Array.isArray(job.generationSummary)?job.generationSummary.map(item=>({...item})):[],id:String(job.id||`${Date.now()}-${Math.random().toString(36).slice(2,8)}`),createdAtUtc:String(job.createdAtUtc||new Date().toISOString()),status:'pending',targets:job.targets.map((target,index)=>({
     ...target,id:String(target.id||target.accountId||`${index+1}`),status:'pending',deploymentState:'pending',deploymentHistory:[],hasPublished:false,error:'',planSummary:null,
   }))};
   const jobs=readJobs(storage);
@@ -111,7 +127,7 @@ export function confirmManualDeployVerification(jobId,targetId,{storage=globalTh
   const jobs=readJobs(storage),jobIndex=jobs.findIndex(job=>job.id===String(jobId||''));
   if(jobIndex<0)return false;
   const job=jobs[jobIndex],target=job.targets.find(item=>item.id===String(targetId||''));
-  if(!target||job.draftOnly||target.draftOnly||isTargetSuperseded(target)||isTargetPublished(target)||isTargetManuallyVerified(target))return false;
+  if(!target||job.draftOnly||target.draftOnly||target.pageSourceMode==='existing'||isTargetSuperseded(target)||isTargetPublished(target)||isTargetManuallyVerified(target))return false;
   const domain=manualTargetDomain(target),directory=normalizedTargetDirectory(target.directory),username=String(target.username||'').trim();
   if(!domain||!directory||!username||!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)||directory.split('/').some(part=>!part||part==='.'||part==='..'))return false;
   const publicHost=getHostname(target.publicUrl||'');
@@ -253,6 +269,112 @@ function renderRequiredAction(root,jobs,draft=null){
   }
 }
 
+function campaignHandoffCandidates(jobs){
+  return (Array.isArray(jobs)?jobs:[]).map(job=>({job,prepared:buildGoogleAdsPresellCampaignHandoff(job)})).filter(item=>item.prepared.ok);
+}
+
+function latestJob(jobs){
+  return (Array.isArray(jobs)?jobs:[]).slice().sort((left,right)=>{
+    const leftTime=Date.parse(left?.createdAtUtc||'')||0,rightTime=Date.parse(right?.createdAtUtc||'')||0;
+    return leftTime-rightTime;
+  }).at(-1)||null;
+}
+
+export function resolveCampaignHandoffSelection(jobs,storage,deliveryContext,draft,selectedId=''){
+  const candidates=campaignHandoffCandidates(jobs);
+  if(deliveryContext?.id){
+    const product=normalizedProduct(deliveryContext.productName||draft?.product);
+    const linked=latestJob((Array.isArray(jobs)?jobs:[]).filter(job=>String(job?.campaignDeliveryId||'')===String(deliveryContext.id)&&!isJobSuperseded(job)));
+    let job=linked,reason='';
+    if(!job&&draft?.targets?.length){
+      const matched=matchingDraftJob(jobs,draft);
+      if(matched&&product&&normalizedProduct(matched.product)===product)job=matched;
+    }
+    if(!job&&product){
+      const deliveryTime=Date.parse(deliveryContext.createdAt||'');
+      const legacyJobs=(Array.isArray(jobs)?jobs:[]).filter(item=>!item?.campaignDeliveryId&&!isJobSuperseded(item)
+        &&normalizedProduct(item?.product)===product&&Number.isFinite(deliveryTime)
+        &&(Date.parse(item?.createdAtUtc||'')||0)>=deliveryTime);
+      if(legacyJobs.length===1)job=legacyJobs[0];
+      else if(legacyJobs.length>1)reason=`Há mais de uma Pre-Sell de ${deliveryContext.productName} associada ao período desta entrega; o Hub não consegue escolher uma com segurança.`;
+    }
+    if(!job&&!reason)reason=product
+      ?`Ainda não há uma Pre-Sell vinculada à entrega de ${deliveryContext.productName||draft?.product||'produto'}. Gere a Pre-Sell a partir desta entrega e conclua a hospedagem.`
+      :'Não foi possível identificar o produto da entrega atual neste navegador.';
+    if(!job)return{candidates,current:null,job:null,prepared:null,reason};
+    if(!linked&&product&&normalizedProduct(job.product)!==product)return{candidates,current:null,job,prepared:null,reason:`A Pre-Sell selecionada é de ${job.product||'outro produto'} e não corresponde à entrega de ${deliveryContext.productName||draft?.product||'produto'}.`};
+    let prepared=buildGoogleAdsPresellCampaignHandoff(job);
+    if(prepared.ok&&linked&&product&&String(prepared.payload.product||'')!==String(deliveryContext.productName||'')){
+      const payload={...prepared.payload,product:String(deliveryContext.productName)};
+      prepared={...prepared,payload,fingerprint:googleAdsPresellCampaignHandoffFingerprint(payload)};
+    }
+    return prepared.ok
+      ?{candidates,current:{job,prepared},job,prepared,reason:''}
+      :{candidates,current:null,job,prepared,reason:prepared.reason||'Conclua todas as páginas desta Pre-Sell antes de continuar.'};
+  }
+  const current=candidates.find(item=>item.job.id===selectedId)||candidates.at(-1)||null;
+  return{candidates,current,job:current?.job||null,prepared:current?.prepared||null,reason:''};
+}
+
+function renderCampaignHandoff(root,jobs,storage,deliveryContext=null,draft=null){
+  const section=by(root,'#copyPresellCampaignHandoff'),select=by(root,'#copyPresellCampaignHandoffJob'),button=by(root,'#copyPresellCampaignHandoffSend'),status=by(root,'#copyPresellCampaignHandoffStatus');
+  if(!section||!select||!button||!status)return;
+  const hasDeliveryContext=Boolean(deliveryContext?.id),label=section.querySelector('label[for="copyPresellCampaignHandoffJob"]');
+  const knownJobs=(Array.isArray(jobs)?jobs:[]).length>0;
+  section.hidden=!hasDeliveryContext&&!knownJobs;
+  let selectedId='';
+  try{selectedId=storage.getItem(GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY)||''}catch{}
+  const selection=resolveCampaignHandoffSelection(jobs,storage,deliveryContext,draft,selectedId);
+  const summary=section.querySelector('[data-handoff-delivery-summary]')||document.createElement('div');
+  if(!summary.dataset.handoffDeliverySummary){summary.dataset.handoffDeliverySummary='true';summary.className='copy-ficha-campaign-handoff-context';select.after(summary)}
+  if(label)label.hidden=hasDeliveryContext;
+  select.hidden=hasDeliveryContext;
+  summary.hidden=!hasDeliveryContext;
+  if(hasDeliveryContext){
+    const title=document.createElement('strong'),detail=document.createElement('small');
+    title.textContent=`${String(deliveryContext.productName||draft?.product||selection.job?.product||'Entrega atual')} · Pre-Sell desta entrega`;
+    detail.textContent=selection.job?`${selection.job.targets.length} conta(s)${selection.current?' · pronta para continuar':' · hospedagem/publicação pendente'}`:'Aguardando a Pre-Sell desta entrega.';
+    summary.replaceChildren(title,detail);
+  }else{
+    const candidates=selection.candidates;
+    if(!candidates.some(item=>item.job.id===selectedId))selectedId=candidates.at(-1)?.job.id||'';
+    select.replaceChildren();
+    if(candidates.length){
+      candidates.forEach(({job,prepared})=>{
+        const option=document.createElement('option');option.value=job.id;
+        const time=new Date(job.createdAtUtc||'');
+        const labelTime=Number.isNaN(time.getTime())?'':new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(time);
+        option.textContent=`${job.product} · ${prepared.payload.targets.length} conta(s)${labelTime?' · '+labelTime:''}`;
+        select.append(option);
+      });
+      select.value=selectedId;
+      try{storage.setItem(GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY,selectedId)}catch{}
+    }else{
+      const option=document.createElement('option');option.value='';option.textContent='Nenhuma Pre-Sell concluída disponível';select.append(option);
+    }
+  }
+  const current=selection.current;
+  const ack=current?readGoogleAdsPresellCampaignHandoffAcknowledgement(current.job.id,storage):null;
+  const complete=Boolean(current&&ack?.fingerprint===current.prepared.fingerprint);
+  section.classList.toggle('is-complete',complete);
+  section.classList.toggle('is-required',!complete);
+  button.disabled=!current;
+  button.className='copy-ficha-btn copy-ficha-campaign-handoff-button '+(complete?'is-complete':'is-required');
+  button.textContent=complete?'Enviar novamente para criar campanha':hasDeliveryContext?'Continuar para criação de campanha':'Enviar para criar campanha';
+  if(hasDeliveryContext&&!current){status.textContent=selection.reason||'Conclua a Pre-Sell da entrega atual para liberar a transferência.';return}
+  if(!knownJobs&&!hasDeliveryContext){status.textContent='Hospede e publique a Pre-Sell para liberar a transferência.';return}
+  if(!current){
+    const pending=countPendingDeployTargets(jobs);
+    status.textContent=pending
+      ?`Conclua a hospedagem e a publicação dos ${pending} destino(s) pendente(s). A campanha só receberá dados de páginas publicadas ou confirmadas manualmente.`
+      :'Nenhuma Pre-Sell com páginas publicadas ou confirmadas manualmente está pronta para envio.';
+    return;
+  }
+  status.textContent=complete
+    ?`Dados recebidos na criação de campanha em ${new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date(ack.acknowledgedAt))}. Produto: ${current.prepared.payload.product} · ${current.prepared.payload.targets.length} conta(s).`
+    :`Ao continuar, o Hub abre a criação de campanha com ${current.prepared.payload.targets.length} conta(s) e as URLs publicadas desta Pre-Sell. O formulário será um rascunho novo.`;
+}
+
 function getHostname(value){
   try{return new URL(String(value||'').trim()).hostname.toLowerCase().replace(/\.$/,'')}catch{return String(value||'').trim().toLowerCase().replace(/^https?:\/\//,'').split(/[/?#]/)[0].replace(/\.$/,'')}
 }
@@ -265,6 +387,8 @@ function publicPresellHref(value){
 function isRootSite(site){return String(site?.websiteType||'').toLowerCase()!=='subdomain'}
 function isEnabled(site){return !/^(disabled|desabilitado|inativo)$/i.test(String(site?.status||''))}
 function rootSites(sites){return (Array.isArray(sites)?sites:[]).filter(site=>site?.domain&&site?.username&&isRootSite(site)&&isEnabled(site))}
+function rootSitesForDomain(sites,domain){const normalized=String(domain||'').trim().toLowerCase();return normalized?rootSites(sites).filter(site=>String(site.domain).trim().toLowerCase()===normalized):[]}
+function targetParentDomain(target){return String(target?.parentDomain||target?.hpanelDomain||'').trim().toLowerCase()}
 function matchExisting(sites,domain,username){return (sites||[]).find(site=>String(site.domain||'').toLowerCase()===String(domain||'').toLowerCase()&&String(site.username||'')===String(username||''))||null}
 function chooseInitialParent(target,sites){
   const roots=rootSites(sites),hostname=getHostname(target.publicUrl),known=String(target.parentDomain||target.hpanelDomain||'').toLowerCase();
@@ -331,7 +455,7 @@ export function deploymentNextAction(target,{hasConflicts=false,conflicts=[]}={}
   if(target?.status==='error')return {title:'Próxima ação: corrigir a pendência indicada',text:'Leia o erro acima: ele indica a etapa que falhou. Nenhum envio novo deve ser iniciado até a análise liberar o destino.',steps:['Corrija o dado ou acesso indicado na mensagem.','Clique em Reanalisar páginas pendentes. Se o erro continuar sem indicar como corrigir, envie o texto ao Codex para investigação.'],showHpanel:false};
   return null;
 }
-function renderTargetSummary(container,job,hpanelUrlForDomain){
+function renderTargetSummary(container,job,hpanelUrlForDomain,sites=[]){
   if(!container)return;
   const targets=Array.isArray(job?.targets)?job.targets:[];
   const generation=Array.isArray(job?.generationSummary)?job.generationSummary:[];
@@ -342,19 +466,22 @@ function renderTargetSummary(container,job,hpanelUrlForDomain){
     const prefix=String(target?.prefix||'').trim().toLowerCase();
     const generatedDomain=prefix&&parent?prefix+'.'+parent:'';
     const domain=String(target?.domain||'').trim().toLowerCase()||generatedDomain||getHostname(target?.publicUrl||summary.publicUrl)||String(summary.domain||summary.hpanelDomain||target?.hpanelDomain||target?.accountName||'Domínio pendente');
+    const parentCandidates=rootSitesForDomain(sites,parent),rootConfirmed=parentCandidates.some(site=>!target?.username||String(site.username)===String(target.username)),rootAmbiguous=!target?.username&&parentCandidates.length>1;
     const conflicts=target?.planSummary?.conflicts||[],conflictError=/destino já contém arquivo\(s\)|prévia encontrou \d+ arquivo\(s\) já existente/i.test(String(target?.error||'')),hasConflicts=conflicts.length>0||conflictError;
     const superseded=isTargetSuperseded(target),manualVerified=isTargetManuallyVerified(target),published=isTargetPublished(target),staleReady=target?.status==='ready'&&targetNeedsAnalysis(job,target),savedStatus=target?.status==='manual-verified'&&!manualVerified?'pending':target?.status,status=superseded?'superseded':manualVerified?'manual-verified':published?'published':hasConflicts?'conflict':staleReady?'preview-stale':savedStatus||summary.status||'pending';
     const labels={ready:'Pronto para publicar','preview-stale':'Prévia expirada · reanalisar','manual-verified':'✓ Funcionando · validado manualmente',published:'Publicado',superseded:'Substituído · histórico mantido',draft:'Ficha atual não gerada',conflict:'Arquivos existentes · limpar no HPanel',blocked:'Prévia bloqueada',partial:'Envio parcial',error:'Revisar pendência',pending:'Aguardando análise','generation-blocked':'Geração bloqueada','generation-error':'Falha na geração'};
-    const label=status==='partial'&&hasUnconfirmedRemoteOutcome(target)?'Envio interrompido · destino incerto':labels[status]||'Aguardando análise';
-    const state=['published','manual-verified'].includes(status)?'is-ok':['conflict','blocked','partial','error','generation-blocked','generation-error'].includes(status)?'is-warning':status==='ready'?'is-ready':'is-pending';
+    const hostingerPending=Boolean(target&&!isTargetResolved(target)&&(!parent||!rootConfirmed||rootAmbiguous));
+    const label=hostingerPending?'Site principal pendente':status==='partial'&&hasUnconfirmedRemoteOutcome(target)?'Envio interrompido · destino incerto':labels[status]||'Aguardando análise';
+    const state=hostingerPending?'is-warning':['published','manual-verified'].includes(status)?'is-ok':['conflict','blocked','partial','error','generation-blocked','generation-error'].includes(status)?'is-warning':status==='ready'?'is-ready':'is-pending';
     const lastExecution=Array.isArray(target?.deploymentHistory)?target.deploymentHistory.at(-1):null;
-    const detail=superseded?'A configuração atual desta conta substituiu este destino pendente; as tentativas anteriores continuam no histórico.':manualVerified?`Você confirmou manualmente que este destino está funcionando (${formatDeployTime(target.manualVerification.confirmedAtUtc)}). O Hub considera a validação concluída e libera o fluxo.`:published?lastExecution?.status==='success'?`Publicado em ${formatDeployTime(lastExecution.completedAtUtc)}.`:'Hospedagem publicada anteriormente; mantida fora de novos envios.':hasConflicts?conflicts.length?`${conflicts.length} caminho(s) ocupado(s); envio bloqueado até revisão.`:deploymentErrorForDisplay(target?.error||'Caminho ocupado; envio bloqueado até revisão.',lastExecution):staleReady?'A prévia anterior não está ativa nesta sessão; reanalise antes de publicar.':deploymentErrorForDisplay(target?.error||summary.detail||'',lastExecution).trim();
+    const detail=hostingerPending?parent?`Pendente: o site principal ${parent} não está confirmado na lista atualizada da Hostinger${rootAmbiguous?' em uma conta específica':''}. A criação e a análise ficam bloqueadas até essa confirmação.`:'Pendente: selecione o site principal Hostinger antes de criar e analisar o subdomínio.':superseded?'A configuração atual desta conta substituiu este destino pendente; as tentativas anteriores continuam no histórico.':manualVerified?`Você confirmou manualmente que este destino está funcionando (${formatDeployTime(target.manualVerification.confirmedAtUtc)}). O Hub considera a validação concluída e libera o fluxo.`:published?lastExecution?.status==='success'?`Publicado em ${formatDeployTime(lastExecution.completedAtUtc)}.`:'Hospedagem publicada anteriormente; mantida fora de novos envios.':hasConflicts?conflicts.length?`${conflicts.length} caminho(s) ocupado(s); envio bloqueado até revisão.`:deploymentErrorForDisplay(target?.error||'Caminho ocupado; envio bloqueado até revisão.',lastExecution):staleReady?'A prévia anterior não está ativa nesta sessão; reanalise antes de publicar.':deploymentErrorForDisplay(target?.error||summary.detail||'',lastExecution).trim();
     const href=publicPresellHref(target?.publicUrl||summary.publicUrl);
-    const domainLabel=href?'<a class="copy-ficha-deploy-summary-link" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+esc(domain)+'</a>':'<span class="copy-ficha-deploy-summary-domain">'+esc(domain)+'</span>';
+    const domainHint=hostingerPending?detail:manualVerified||published?detail:status==='ready'?'Análise concluída: prévia pronta, mas os arquivos ainda não foram publicados.':detail||`Pendente: ${label}. O destino ainda não foi confirmado como publicado.`;
+    const domainLabel=href?'<a class="copy-ficha-deploy-summary-link '+state+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer" title="'+esc(domainHint)+'" aria-label="'+esc(`${domain}. ${domainHint}`)+'">'+esc(domain)+'</a>':'<span class="copy-ficha-deploy-summary-domain '+state+'" title="'+esc(domainHint)+'">'+esc(domain)+'</span>';
     const hpanelHref=target&&typeof hpanelUrlForDomain==='function'?String(hpanelUrlForDomain(domain,parent)||''):'';
     const hpanelLink=hpanelHref?'<a class="copy-ficha-deploy-summary-hpanel" href="'+esc(hpanelHref)+'" target="_blank" rel="noopener noreferrer" title="Abrir '+esc(parent||domain)+' no HPanel" aria-label="Abrir HPanel do domínio '+esc(parent||domain)+'">Abrir HPanel</a>':'';
     const domainInfo='<div class="copy-ficha-deploy-summary-domain-group">'+domainLabel+hpanelLink+'</div>';
-    const targetIndex=targets.indexOf(target),canValidateManually=target&&!job?.draftOnly&&!target.draftOnly&&!superseded&&!published&&!manualVerified&&Boolean(domain&&target.username&&target.directory);
+    const targetIndex=targets.indexOf(target),canValidateManually=target&&target.pageSourceMode!=='existing'&&!job?.draftOnly&&!target.draftOnly&&!superseded&&!published&&!manualVerified&&Boolean(domain&&target.username&&target.directory);
     const manualControl=manualVerified?'<span class="copy-ficha-deploy-summary-manual is-confirmed" role="status"><span aria-hidden="true">✓</span> Funcionando · validado manualmente</span>':canValidateManually?'<button type="button" class="copy-ficha-deploy-summary-manual" data-deploy-action="manual-verify" data-deploy-index="'+targetIndex+'">Validar manualmente</button>':'';
     return '<li class="copy-ficha-deploy-summary-row '+state+'"><span class="copy-ficha-deploy-summary-page">Página '+page+'</span>'+domainInfo+'<span class="copy-ficha-deploy-summary-state">'+label+'</span>'+(detail?'<small class="copy-ficha-deploy-summary-detail">'+esc(detail)+'</small>':'')+manualControl+'</li>';
   }).join('');
@@ -376,7 +503,7 @@ function showStatus(host,text,type='info'){
 }
 
 function targetFields(target,index,sites){
-  const roots=rootSites(sites),parent=chooseInitialParent(target,sites),hostname=getHostname(target.publicUrl),parentDomain=String(parent?.domain||''),username=String(parent?.username||''),derived=prefixFor(hostname,parentDomain);
+  const roots=rootSites(sites),parent=chooseInitialParent(target,sites),hostname=getHostname(target.publicUrl),knownParent=targetParentDomain(target),parentDomain=String(parent?.domain||knownParent),username=String(parent?.username||target.username||''),derived=prefixFor(hostname,parentDomain);
   if(!target.parentDomain)target.parentDomain=parentDomain;
   if(!target.username)target.username=username;
   if(!target.prefix)target.prefix=VALID_PREFIX.test(derived)?derived:'';
@@ -388,7 +515,7 @@ function targetFields(target,index,sites){
 function renderTarget(target,index,sites,jobId=''){
   const fields=targetFields(target,index,sites),options=fields.roots.map((site,optionIndex)=>`<option value="${optionIndex}" ${String(site.domain).toLowerCase()===String(fields.parentDomain).toLowerCase()&&String(site.username)===String(fields.username)?'selected':''}>${esc(site.domain)} · ${esc(site.username)}</option>`).join('');
   const parentListed=fields.roots.some(site=>String(site.domain).toLowerCase()===String(fields.parentDomain).toLowerCase()&&(!fields.username||String(site.username)===String(fields.username)));
-  const parentFallback=fields.parentDomain&&!parentListed?`<option value="" selected disabled>${esc(fields.parentDomain)} · ainda não consta no cache Hostinger</option>`:'';
+  const parentFallback=fields.parentDomain&&!parentListed?`<option value="" selected disabled>${esc(fields.parentDomain)} · pendente: site principal não confirmado</option>`:'';
   const domain=target.prefix&&fields.parentDomain?`${target.prefix}.${fields.parentDomain}`:'';
   const remoteDirectory=`public_html${target.directory?`/${String(target.directory).trim().replace(/^[/]+|[/]+$/g,'')}`:''}`;
   const existing=domain&&matchExisting(sites,domain,fields.username),manualVerified=isTargetManuallyVerified(target);
@@ -397,8 +524,9 @@ function renderTarget(target,index,sites,jobId=''){
   const conflicts=plan?.conflicts||[],conflictError=/destino já contém arquivo\(s\)|prévia encontrou \d+ arquivo\(s\) já existente/i.test(String(target.error||'')),hasConflicts=conflicts.length>0||conflictError;
   const published=isTargetPublished(target),staleReady=target.status==='ready'&&targetNeedsAnalysis({id:jobId},target),stalePlan=published||manualVerified||target.status==='partial'||superseded||staleReady;
   const effectiveStatus=target.status==='manual-verified'&&!manualVerified?'pending':target.status;
-  const status=superseded?'Substituído · histórico mantido':draftOnly?'Ficha atual não gerada':manualVerified?'✓ Funcionando · validado manualmente':published?'Publicado':effectiveStatus==='partial'&&hasUnconfirmedRemoteOutcome(target)?'Envio interrompido · destino incerto':effectiveStatus==='partial'?'Envio parcial':hasConflicts?'Caminho em conflito · revisar no HPanel':effectiveStatus==='error'?'Revisar pendência':staleReady?'Prévia expirada · reanalisar':effectiveStatus==='ready'?'Pronto para publicar':effectiveStatus==='blocked'?'Prévia bloqueada':manualVerified?'Destino validado manualmente como funcionando':existing?'Subdomínio já existe':'Aguardando análise';
-  const statusClass=published||manualVerified?'is-ok':!superseded&&(hasConflicts||staleReady||['partial','error'].includes(effectiveStatus))?'is-warning':'';
+  const parentPending=!readOnly&&!isTargetResolved(target)&&(!fields.parentDomain||!parentListed);
+  const status=parentPending?'Site principal pendente':superseded?'Substituído · histórico mantido':draftOnly?'Ficha atual não gerada':manualVerified?'✓ Funcionando · validado manualmente':published?'Publicado':effectiveStatus==='partial'&&hasUnconfirmedRemoteOutcome(target)?'Envio interrompido · destino incerto':effectiveStatus==='partial'?'Envio parcial':hasConflicts?'Caminho em conflito · revisar no HPanel':effectiveStatus==='error'?'Revisar pendência':staleReady?'Prévia expirada · reanalisar':effectiveStatus==='ready'?'Pronto para publicar':effectiveStatus==='blocked'?'Prévia bloqueada':manualVerified?'Destino validado manualmente como funcionando':existing?'Subdomínio já existe':'Aguardando análise';
+  const statusClass=published||manualVerified?'is-ok':!superseded&&(parentPending||hasConflicts||staleReady||['partial','error'].includes(effectiveStatus))?'is-warning':'';
   const allPlanFiles=(plan?.files||[]).map(file=>`<li>${esc(file.relativePath)} · ${labelSize(file.sizeBytes)}</li>`).join('');
   const planFiles=(plan?.files||[]).slice(0,8).map(file=>`<li>${esc(file.relativePath)} · ${labelSize(file.sizeBytes)}</li>`).join('');
   const moreFiles=(plan?.files||[]).length>8?`<li>e mais ${(plan.files||[]).length-8} arquivo(s)</li>`:'';
@@ -426,20 +554,27 @@ function renderTarget(target,index,sites,jobId=''){
   const inventoryHtml=!manualVerified&&latestExecution&&(latestVerification||verificationNeedsAction)?'<section class="copy-ficha-deploy-inventory '+inventoryTone+'" aria-live="polite"><strong>Confirmação do destino no Hub</strong><p>'+esc(inventoryText)+'</p>'+renderInventoryDetails(latestVerification)+renderRemoteInventoryQueryDetails(latestVerification)+inventoryButton+'</section>':'';
   const historyHtml=renderDeployHistory(target)+inventoryHtml;
   const disabled=readOnly?'disabled':'';
-  return `<article class="copy-ficha-deploy-item" data-deploy-item="${index}"><div class="copy-ficha-deploy-item-heading"><h3>Página ${String(target.pageNumber||index+1).padStart(2,'0')} · ${esc(target.accountName||target.hpanelDomain||'Conta')}</h3><span class="copy-ficha-deploy-state ${statusClass}">${status}</span></div><p class="copy-ficha-note">Pasta local: <code>${esc(target.sourceDirectory||'')}</code></p><label>Endereço público da Pre-Sell<input class="copy-ficha-input" type="url" data-deploy-field="publicUrl" data-deploy-index="${index}" value="${esc(target.publicUrl||'')}" placeholder="https://produto.seu-dominio.com" ${disabled}></label><div class="copy-ficha-deploy-fields"><label>Site principal Hostinger<select class="copy-ficha-select" data-deploy-field="parent" data-deploy-index="${index}" ${fields.roots.length&&!readOnly?'':'disabled'}><option value="">${fields.roots.length?'Selecione um domínio principal':'Nenhum domínio principal no cache Hostinger'}</option>${parentFallback}${options}</select></label><label>Prefixo do subdomínio<input class="copy-ficha-input" data-deploy-field="prefix" data-deploy-index="${index}" value="${esc(target.prefix||'')}" placeholder="ex.: lymph-tonic" ${disabled}></label></div><p class="copy-ficha-deploy-address">Destino: <strong>${esc(domain||'informe o prefixo e o site principal')}</strong>${manualVerified?` · <span class="copy-ficha-deploy-existing">Validado manualmente como funcionando.</span>`:existing?` · <span class="copy-ficha-deploy-existing">Já existe na conta ${esc(fields.username)}; será usado sem recriação.</span>`:''}</p><p class="copy-ficha-note">Pasta Hostinger: <code class="copy-ficha-deploy-storage-path">${esc(remoteDirectory)}</code></p>${manualVerified?'':target.error?`<p class="copy-ficha-warning">${esc(deploymentErrorForDisplay(target.error,latestExecution))}</p>`:''}${previousPublishNote}${planHtml}${recoveryHtml}${manualVerificationNote}${historyHtml}</article>`;
+  const statusTitle=parentPending?fields.parentDomain?`Pendente: ${fields.parentDomain} não aparece como site principal na lista Hostinger atualizada. Confirme esse site no HPanel e atualize a lista.`:'Pendente: selecione um site principal Hostinger válido antes de criar o subdomínio e analisar os arquivos.':published?'Arquivos publicados na Hostinger.':manualVerified?'Você confirmou manualmente que o destino está funcionando.':effectiveStatus==='ready'?'Análise concluída; os arquivos continuam aguardando publicação.':'Este destino aguarda análise.';
+  const finalStatusClass=published||manualVerified?'is-ok':!superseded&&(parentPending||hasConflicts||staleReady||['partial','error'].includes(effectiveStatus))?'is-warning':effectiveStatus==='ready'?'is-ready':'is-pending';
+  return `<article class="copy-ficha-deploy-item" data-deploy-item="${index}"><div class="copy-ficha-deploy-item-heading"><h3>Página ${String(target.pageNumber||index+1).padStart(2,'0')} · ${esc(target.accountName||target.hpanelDomain||'Conta')}</h3><span class="copy-ficha-deploy-state ${finalStatusClass}" title="${esc(statusTitle)}">${status}</span></div><p class="copy-ficha-note">Pasta local: <code>${esc(target.sourceDirectory||'')}</code></p><label>Endereço público da Pre-Sell<input class="copy-ficha-input" type="url" data-deploy-field="publicUrl" data-deploy-index="${index}" value="${esc(target.publicUrl||'')}" placeholder="https://produto.seu-dominio.com" ${disabled}></label><div class="copy-ficha-deploy-fields"><label>Site principal Hostinger<select class="copy-ficha-select" data-deploy-field="parent" data-deploy-index="${index}" title="${esc(statusTitle)}" ${fields.roots.length&&!readOnly?'':'disabled'}><option value="">${fields.roots.length?'Selecione um domínio principal':'Nenhum domínio principal na lista Hostinger'}</option>${parentFallback}${options}</select></label><label>Prefixo do subdomínio<input class="copy-ficha-input" data-deploy-field="prefix" data-deploy-index="${index}" value="${esc(target.prefix||'')}" placeholder="ex.: lymph-tonic" ${disabled}></label></div><p class="copy-ficha-deploy-address">Destino: <strong>${esc(domain||'informe o prefixo e o site principal')}</strong>${manualVerified?` · <span class="copy-ficha-deploy-existing">Validado manualmente como funcionando.</span>`:existing?` · <span class="copy-ficha-deploy-existing">Já existe na conta ${esc(fields.username)}; será usado sem recriação.</span>`:''}</p><p class="copy-ficha-note">Pasta Hostinger: <code class="copy-ficha-deploy-storage-path">${esc(remoteDirectory)}</code></p>${manualVerified?'':target.error?`<p class="copy-ficha-warning">${esc(deploymentErrorForDisplay(target.error,latestExecution))}</p>`:''}${previousPublishNote}${planHtml}${recoveryHtml}${manualVerificationNote}${historyHtml}</article>`;
 }
 
-export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage,fetchImpl=globalThis.fetch,confirmFn=globalThis.confirm?.bind(globalThis),hpanelUrlForDomain=()=>null,getDraftTargets=()=>null,toast=()=>{}}={}){
+export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage,fetchImpl=globalThis.fetch,confirmFn=globalThis.confirm?.bind(globalThis),hpanelUrlForDomain=()=>null,getDraftTargets=()=>null,getCampaignDeliveryContext=()=>null,onGenerateDraft=()=>false,toast=()=>{}}={}){
   if(!root)return()=>{};
   mountedRoot=root;
   const button=by(root,'#copyPresellDeployOpen');
   if(!button)return()=>{};
   const status=by(root,'#copyPresellDeployStatus');
+  const handoffSection=by(root,'#copyPresellCampaignHandoff');
+  const handoffSelect=by(root,'#copyPresellCampaignHandoffJob');
+  const handoffButton=by(root,'#copyPresellCampaignHandoffSend');
   let overlay=null,sites=[],configured=false,checkedAtUtc='',busy=false,currentJobId='',activeDraftJob=null,refreshOpenDraft=()=>{};
   const readDraftCandidate=()=>{try{const draft=getDraftTargets?.();return draft?.targets?.length?draft:null}catch{return null}};
-  const getActiveDraft=()=>{const draft=readDraftCandidate();return draft&&!matchingDraftJob(readJobs(storage),draft)?draft:null};
+  const getCampaignDraft=()=>{try{return getDraftTargets?.()||null}catch{return null}};
+  const getDeliveryContext=()=>{try{return getCampaignDeliveryContext?.()||null}catch{return null}};
+  const getActiveDraft=()=>{const draft=getCampaignDraft();return draft&&!matchingDraftJob(readJobs(storage),draft)?draft:null};
   mountedDraftGetter=getActiveDraft;
-  const renderAction=()=>renderRequiredAction(root,readJobs(storage),getActiveDraft());
+  const renderAction=()=>{const jobs=readJobs(storage);renderRequiredAction(root,jobs,getActiveDraft());renderCampaignHandoff(root,jobs,storage,getDeliveryContext(),getCampaignDraft())};
   const findJob=id=>readJobs(storage).find(job=>job.id===id)||null;
   const currentJob=()=>currentJobId===CURRENT_DRAFT_ID?activeDraftJob:findJob(currentJobId);
   const dismiss=()=>{overlay?.remove();overlay=null;currentJobId='';activeDraftJob=null;refreshOpenDraft=()=>{};renderAction();if(root.isConnected)button.focus()};
@@ -461,6 +596,7 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
     const job=findJob(currentJobId);if(!job||!overlay)return;
     overlay.querySelectorAll('[data-deploy-field]').forEach(field=>{
       const target=job.targets[Number(field.dataset.deployIndex)];if(!target)return;
+      if(field.dataset.deployField==='parent'&&field.value===''&&field.selectedOptions?.[0]?.disabled){if(!target.parentDomain)target.parentDomain=targetParentDomain(target);return}
       saveTargetField(target,field.dataset.deployField,field.value);
     });
     updateJob(currentJobId,()=>job,storage);
@@ -489,8 +625,44 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
     const dialog=document.createElement('section');dialog.className='copy-ficha-deploy-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','copyPresellDeployTitle');
     const active=requested&&!isJobSuperseded(requested)?requested:(!requestedJobId&&draft&&!matchedJob?{...draft,id:CURRENT_DRAFT_ID,draftOnly:true,targets:draft.targets.map((target,index)=>({...target,id:String(target.id||target.accountId||index+1),status:'draft',deploymentState:'pending',draftOnly:true})),generationSummary:draft.targets.map(target=>({...target,status:'draft',detail:''}))}:matchedJob||selectActiveDeployJob(jobs,requestedJobId));
     if(!active)return;activeDraftJob=active.draftOnly?active:null;currentJobId=active.id;
-    dialog.innerHTML=`<header><div><h2 id="copyPresellDeployTitle">Hospedagem e deploy da Pre-Sell</h2><p class="copy-ficha-note">A análise vale para cada endereço e pasta mostrados. Se o prefixo mudar na ficha, gere as páginas novamente e analise os novos destinos.</p></div><button type="button" class="copy-ficha-btn" data-deploy-action="close" aria-label="Fechar">Fechar</button></header><p class="copy-ficha-note" data-deploy-queue-note></p><div data-deploy-feedback class="copy-ficha-deploy-feedback is-info" role="status" aria-live="polite">Carregando conexão Hostinger…</div><div data-deploy-summary class="copy-ficha-deploy-summary" aria-label="Resumo dos domínios deste lote"></div><div data-deploy-items class="copy-ficha-deploy-items"></div><div class="copy-ficha-deploy-toolbar"><span data-deploy-cache-note></span></div><footer class="copy-ficha-actions"><span class="copy-ficha-deploy-spinner" data-deploy-spinner aria-hidden="true" hidden></span><span class="copy-ficha-deploy-complete" data-deploy-analyze-complete role="status" hidden>Todos os destinos publicados</span><button type="button" class="copy-ficha-btn primary" data-deploy-action="analyze">Criar subdomínios faltantes e analisar</button><button type="button" class="copy-ficha-btn copy-ficha-deploy-button is-required" data-deploy-action="publish" hidden>Publicar arquivos</button></footer>`;
+    dialog.innerHTML=`<header><div><h2 id="copyPresellDeployTitle">Hospedagem e deploy da Pre-Sell</h2><p class="copy-ficha-note">A análise vale para cada endereço e pasta mostrados. Se o prefixo mudar na ficha, gere as páginas novamente e analise os novos destinos.</p></div><button type="button" class="copy-ficha-btn" data-deploy-action="close" aria-label="Fechar">Fechar</button></header><p class="copy-ficha-note" data-deploy-queue-note></p><div data-deploy-feedback class="copy-ficha-deploy-feedback is-info" role="status" aria-live="polite">Carregando conexão Hostinger…</div><section class="copy-ficha-deploy-progress" data-deploy-publish-progress aria-labelledby="copyPresellDeployProgressTitle" hidden><div class="copy-ficha-deploy-progress-head"><div><h3 id="copyPresellDeployProgressTitle">Publicação por destino</h3><p data-deploy-publish-status role="status" aria-live="polite"></p></div><strong data-deploy-publish-count></strong></div><progress data-deploy-publish-bar max="1" value="0" aria-label="Destinos concluídos"></progress><ol data-deploy-publish-list></ol><small>O Hub envia um destino por vez. A Hostinger não informa progresso por arquivo durante o envio; a contagem de arquivos só aparece quando ela responde.</small></section><div data-deploy-summary class="copy-ficha-deploy-summary" aria-label="Resumo dos domínios deste lote"></div><div data-deploy-items class="copy-ficha-deploy-items"></div><div class="copy-ficha-deploy-toolbar"><span data-deploy-cache-note></span></div><footer class="copy-ficha-actions"><span class="copy-ficha-deploy-spinner" data-deploy-spinner aria-hidden="true" hidden></span><span class="copy-ficha-deploy-complete" data-deploy-analyze-complete role="status" hidden>Todos os destinos publicados</span><button type="button" class="copy-ficha-btn primary" data-deploy-action="analyze">Criar subdomínios faltantes e analisar</button><button type="button" class="copy-ficha-btn copy-ficha-deploy-button is-required" data-deploy-action="publish" hidden>Publicar arquivos</button></footer>`;
     overlay.append(dialog);root.append(overlay);
+    if(active.pageSourceMode==='existing'){
+      dialog.querySelector('#copyPresellDeployTitle').textContent='Análise da página local existente';
+      dialog.querySelector('header .copy-ficha-note').textContent='A pasta local não será alterada. A análise exige index.html na raiz e assets diretamente em assets/ (sem subpastas), confere os destinos e prepara uma prévia. Imagens assets/imagem-produto-* também entram nesta publicação; os metadados do Asset Studio não. Subdomínios ausentes só serão criados após confirmação; os arquivos só serão enviados após clicar em Publicar.';
+    }
+    let publishProgress=null;
+    const renderPublishProgress=()=>{
+      const panel=dialog.querySelector('[data-deploy-publish-progress]');
+      if(!panel)return;
+      panel.hidden=!publishProgress;
+      if(!publishProgress)return;
+      const items=publishProgress.items,completed=items.filter(item=>['complete','partial','error'].includes(item.state)).length;
+      const confirmedFiles=items.reduce((sum,item)=>sum+(Number.isFinite(item.uploadedCount)?Math.max(0,item.uploadedCount):0),0);
+      const totalFiles=items.reduce((sum,item)=>sum+item.fileCount,0);
+      const status=dialog.querySelector('[data-deploy-publish-status]'),count=dialog.querySelector('[data-deploy-publish-count]'),bar=dialog.querySelector('[data-deploy-publish-bar]'),list=dialog.querySelector('[data-deploy-publish-list]');
+      if(status)status.textContent=completed===items.length?`Envio finalizado: ${items.filter(item=>item.state==='complete').length} publicado(s), ${items.filter(item=>item.state==='partial').length} parcial(is) e ${items.filter(item=>item.state==='error').length} com falha.`:`Processando destino ${Math.min(completed+1,items.length)} de ${items.length}. ${items.filter(item=>item.state==='checking').length?'Conferindo o resultado recebido da Hostinger.':'Aguardando o resultado do destino atual.'}`;
+      if(count)count.textContent=`${completed}/${items.length} destinos concluídos · ${confirmedFiles}/${totalFiles} arquivos confirmados`;
+      if(bar){bar.max=Math.max(1,items.length);bar.value=completed;bar.setAttribute('aria-valuetext',`${completed} de ${items.length} destinos concluídos`)}
+      if(list)list.innerHTML=items.map(item=>{
+        const labels={queued:'Na fila',sending:'Enviando',checking:item.outcome==='success'?'Conferindo inventário':item.outcome==='partial'?'Parcial · conferindo inventário':'Falha · conferindo inventário',complete:'Publicado',partial:'Envio parcial',error:'Falha no envio'};
+        let detail='';
+        if(item.state==='queued')detail=`Aguardando a vez · ${item.fileCount} arquivo(s) previstos.`;
+        else if(item.state==='sending')detail=`Enviando ${item.fileCount} arquivo(s). Aguardando a resposta da Hostinger; ainda não há contagem confirmada.`;
+        else if(item.state==='checking'&&item.outcome==='success')detail=`A Hostinger confirmou ${item.uploadedCount}/${item.responseTotal} arquivos. O Hub está conferindo caminhos e tamanhos no inventário.`;
+        else if(item.state==='checking'&&item.outcome==='partial')detail=`A resposta confirmou ${item.uploadedCount}/${item.responseTotal} arquivos${item.failedPath?`; falha em ${item.failedPath}`:''}. O Hub está conferindo o inventário antes de encerrar este destino.`;
+        else if(item.state==='checking')detail=`O envio não foi confirmado integralmente${item.error?`: ${item.error}`:'.'} O Hub está conferindo o inventário; não repita antes de revisar o resultado.`;
+        else if(item.state==='complete'){
+          const verification=item.verification;
+          detail=`Hostinger confirmou ${item.uploadedCount}/${item.responseTotal} arquivos.`;
+          if(verification?.available!==true)detail+=` A conferência do inventário não foi concluída: ${String(verification?.error||'sem resposta')}.`;
+          else if(verification.allPathsPresent===true&&verification.allSizesMatch===true&&!(Number(verification.pathTypeConflictCount)||0))detail+=' O inventário também confirmou os caminhos e tamanhos esperados.';
+          else detail+=' A conferência do inventário encontrou diferenças; veja os detalhes do destino abaixo.';
+        }else if(item.state==='partial')detail=`Resposta parcial: ${item.uploadedCount}/${item.responseTotal} arquivos confirmados${item.failedPath?`; falha em ${item.failedPath}`:''}. Reanalise antes de tentar novamente.`;
+        else detail=`Envio não confirmado${item.error?`: ${item.error}`:'.'} A resposta não confirmou arquivos; confira o histórico e o inventário antes de repetir.`;
+        return `<li class="copy-ficha-deploy-progress-row is-${esc(item.state)}"><div><strong>Página ${esc(item.page)} · ${esc(item.domain)}</strong><span class="copy-ficha-deploy-progress-state">${esc(labels[item.state]||'Pendente')}</span></div><p>${esc(detail)}</p></li>`;
+      }).join('');
+    };
     const renderItems=()=>{
       const job=currentJob(),host=dialog.querySelector('[data-deploy-items]');
       if(!job){host.innerHTML='<p class="copy-ficha-warning">Este trabalho não está mais disponível.</p>';return}
@@ -501,7 +673,7 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       }else queueNote.textContent=job.draftOnly
         ?`Rascunho atual: ${job.targets.length} subdomínio(s) planejado(s). A ficha atual ainda não foi validada e gerada neste lote; por isso, a análise está bloqueada. O aviso de pasta existente confirma apenas os caminhos locais listados nele e libera um lote separado para enviá-los. ${pendingCountWithDraft(readJobs(storage),job)>job.targets.length?`Há também ${pendingCountWithDraft(readJobs(storage),job)-job.targets.length} destino(s) salvo(s) pendente(s).`:''}`
         :remaining?`Pre-Sell atual: ${job.product||'Pre-Sell'}. Há mais ${remaining} Pre-Sell(s) pendente(s); conclua esta etapa e reabra o botão para continuar.`:`Pre-Sell atual: ${job.product||'Pre-Sell'}.`;
-      renderTargetSummary(dialog.querySelector('[data-deploy-summary]'),job,hpanelUrlForDomain);host.innerHTML=job.targets.map((target,index)=>renderTarget(target,index,sites,job.id)).join('');
+      renderTargetSummary(dialog.querySelector('[data-deploy-summary]'),job,hpanelUrlForDomain,sites);host.innerHTML=job.targets.map((target,index)=>renderTarget(target,index,sites,job.id)).join('');
       job.targets.forEach((target,index)=>{const item=host.querySelector(`[data-deploy-item="${index}"]`);if(item)updateAddress(item,target)});
       const readyTargets=job.targets.filter(target=>!isTargetResolved(target)&&isPlanPublishable(plans.get(`${job.id}:${target.id}`)));
       const readyCount=readyTargets.length;
@@ -510,7 +682,12 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       const cache=dialog.querySelector('[data-deploy-cache-note]');cache.textContent=sites.length?`${sites.length} sites no cache local${checkedAtUtc?` · lista atualizada em ${new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date(checkedAtUtc))}`:''}.`:'A lista local da Hostinger está vazia; atualize os sites na Integração Hostinger.';
       const pendingCount=targetsNeedingAnalysis(job).length,hasActivity=job.targets.some(target=>isTargetResolved(target)||['ready','blocked','partial','error'].includes(target.status));
     const analyzeButton=dialog.querySelector('[data-deploy-action="analyze"]'),completeStatus=dialog.querySelector('[data-deploy-analyze-complete]'),allResolved=pendingCount===0,allPublished=job.targets.length>0&&job.targets.every(isTargetPublished),manualCount=job.targets.filter(isTargetManuallyVerified).length;
-      analyzeButton.textContent=job.draftOnly?'Valide e gere a Pre-Sell para liberar análise':hasActivity?pendingCount===1?'Reanalisar página pendente (1)':`Reanalisar páginas pendentes (${pendingCount})`:'Criar subdomínios faltantes e analisar';analyzeButton.hidden=allResolved;analyzeButton.disabled=busy||job.draftOnly;
+      analyzeButton.textContent=job.draftOnly?'Valide e gere a Pre-Sell para liberar análise':hasActivity?pendingCount===1?'Reanalisar página pendente (1)':`Reanalisar páginas pendentes (${pendingCount})`:'Criar subdomínios faltantes e analisar';analyzeButton.title='Etapa 1: criar os subdomínios ausentes. Etapa 2: analisar os arquivos locais e mostrar a prévia. Nenhum arquivo é enviado até você clicar em Publicar.';
+      if(job.pageSourceMode==='existing'){
+        analyzeButton.textContent=job.draftOnly?'Gere a página pela ficha para liberar análise':hasActivity?pendingCount===1?'Reanalisar página existente (1)':`Reanalisar páginas existentes (${pendingCount})`:'Criar subdomínios faltantes e analisar página existente';
+        analyzeButton.title='A pasta existente será analisada sem gerar a página. Subdomínios ausentes só serão criados após confirmação. Nenhum arquivo local será alterado e nada será enviado até você clicar em Publicar.';
+      }
+      analyzeButton.hidden=allResolved;analyzeButton.disabled=busy;
     if(completeStatus){completeStatus.textContent=allPublished?'Todos os destinos publicados':`${manualCount} destino(s) validado(s) manualmente como funcionando.`;completeStatus.hidden=!allPublished&&!(allResolved&&manualCount>0)}
     };
     refreshOpenDraft=()=>{
@@ -528,6 +705,7 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
     const setBusy=(value,text,action='')=>{
       busy=value;dialog.querySelectorAll('button').forEach(control=>{control.disabled=value});
       const spinner=dialog.querySelector('[data-deploy-spinner]'),analyzeButton=dialog.querySelector('[data-deploy-action="analyze"]'),publishButton=dialog.querySelector('[data-deploy-action="publish"]');
+      if(analyzeButton&&value&&action==='analyze')analyzeButton.textContent=/atualizando a lista/i.test(String(text||''))?'Atualizando lista Hostinger…':'Criando subdomínios e analisando…';
       const showSpinner=value&&['analyze','publish'].includes(action);
       if(spinner)spinner.hidden=!showSpinner;
       if(analyzeButton)analyzeButton.setAttribute('aria-busy',String(Boolean(value&&action==='analyze')));
@@ -546,8 +724,14 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
     const validateTargets=job=>{
       const domains=new Set();
       for(const target of job.targets){
-        const domain=String(target.parentDomain||'').trim().toLowerCase(),prefix=String(target.prefix||'').trim().toLowerCase(),directory=String(target.directory||'').trim();
-        if(!domain||!rootSites(sites).some(site=>String(site.domain).toLowerCase()===domain&&String(site.username)===String(target.username)))throw new Error(`Selecione um site principal válido para ${target.accountName||target.hpanelDomain}.`);
+        const domain=targetParentDomain(target),prefix=String(target.prefix||'').trim().toLowerCase(),directory=String(target.directory||'').trim();
+        if(!domain)throw new Error(`Selecione um site principal Hostinger para ${target.accountName||target.hpanelDomain}.`);
+        target.parentDomain=domain;
+        const matchingRoots=rootSitesForDomain(sites,domain);
+        if(!matchingRoots.length)throw new Error(`O domínio principal ${domain} não aparece como site principal válido na lista atualizada da Hostinger. Confira o cadastro e o status dele no HPanel. Nenhum subdomínio foi criado ou analisado.`);
+        if(!target.username&&matchingRoots.length===1)target.username=String(matchingRoots[0].username||'');
+        if(!target.username)throw new Error(`Há mais de uma conta Hostinger para ${domain}. Selecione a opção correta no campo Site principal Hostinger.`);
+        if(!matchingRoots.some(site=>String(site.username)===String(target.username)))throw new Error(`A conta Hostinger selecionada para ${domain} não foi confirmada na lista atualizada. Escolha o site principal correspondente.`);
         if(!VALID_PREFIX.test(prefix))throw new Error(`Informe um prefixo válido para a página ${String(target.pageNumber).padStart(2,'0')}.`);
         if(!directory||/[\\:?*"<>|#%\x00-\x1f]/.test(directory)||/(^|\/)\.\.?($|\/)/.test(directory))throw new Error(`Informe um diretório raiz relativo válido para ${target.accountName||target.hpanelDomain}.`);
         const address=`${prefix}.${domain}`;
@@ -557,11 +741,44 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
         domains.add(`${address}|${target.username}`);
       }
     };
+    const explainMissingHostingSites=async job=>{
+      const missingDomains=[...new Set((job?.targets||[]).map(targetParentDomain).filter(domain=>domain&&!(Array.isArray(sites)?sites:[]).some(site=>String(site?.domain||'').trim().toLowerCase()===domain)))];
+      if(!missingDomains.length)return false;
+      setBusy(true,'Conferindo se o domínio está no portfólio da Hostinger…');
+      try{
+        const portfolio=await request('/api/hostinger/domain-portfolio',{fetchImpl});
+        const portfolioDomains=new Set((Array.isArray(portfolio?.domains)?portfolio.domains:[]).map(item=>String(item?.domain||'').trim().toLowerCase()).filter(Boolean));
+        const listed=missingDomains.filter(domain=>portfolioDomains.has(domain));
+        if(!listed.length)return false;
+        const absent=missingDomains.filter(domain=>!portfolioDomains.has(domain));
+        const guidance=`${listed.join(', ')} consta${listed.length===1?'':'m'} no portfólio de domínios, mas não ${listed.length===1?'consta':'constam'} como site${listed.length===1?'':'s'} de hospedagem. Adicione ${listed.length===1?'esse domínio como site principal':'esses domínios como sites principais'} em um plano de hospedagem e atualize a lista de sites.`;
+        const otherDomains=absent.length?` Outros domínios sem site confirmado: ${absent.join(', ')}.`:'';
+        showStatus(dialog.querySelector('[data-deploy-feedback]'),`${guidance}${otherDomains} Nenhum subdomínio foi criado ou analisado.`, 'error');
+        return true;
+      }catch{return false}
+      finally{setBusy(false)}
+    };
     const analyze=async()=>{
       const job=findJob(currentJobId);if(!job||busy)return;
       if(!configured){showStatus(dialog.querySelector('[data-deploy-feedback]'),'Conecte a API Hostinger antes de criar subdomínios ou analisar arquivos.','error');return}
       persistForm();
-      try{validateTargets(findJob(currentJobId))}catch(error){showStatus(dialog.querySelector('[data-deploy-feedback]'),error.message,'error');return}
+      const current=findJob(currentJobId),refreshSites=current?.targets.some(target=>{
+        const domain=targetParentDomain(target);if(!domain)return false;
+        const candidates=rootSitesForDomain(sites,domain);
+        return !candidates.length||Boolean(target.username&&!candidates.some(site=>String(site.username)===String(target.username)));
+      });
+      if(refreshSites){
+        setBusy(true,'Atualizando a lista de sites da Hostinger antes de validar os domínios…','analyze');
+        try{
+          const refreshed=await refreshHostingerSitesDirectory({fetchImpl});sites=refreshed.sites;checkedAtUtc=refreshed.checkedAtUtc;
+          const refreshedJob=findJob(currentJobId);
+          if(refreshedJob){for(const target of refreshedJob.targets){const domain=targetParentDomain(target);if(!target.parentDomain&&domain)target.parentDomain=domain;const matches=rootSitesForDomain(sites,domain);if(!target.username&&matches.length===1)target.username=String(matches[0].username||'')}updateJob(currentJobId,()=>refreshedJob,storage)}
+          setBusy(false);renderItems();
+        }catch(error){setBusy(false);renderItems();showStatus(dialog.querySelector('[data-deploy-feedback]'),`Não foi possível atualizar a lista da Hostinger. Nenhum subdomínio foi criado ou analisado. ${error.message}`,'error');return}
+      }
+      const validatedJob=findJob(currentJobId);
+      if(await explainMissingHostingSites(validatedJob))return;
+      try{validateTargets(validatedJob);updateJob(currentJobId,()=>validatedJob,storage)}catch(error){showStatus(dialog.querySelector('[data-deploy-feedback]'),error.message,'error');return}
       const latest=findJob(currentJobId),pendingTargets=targetsNeedingAnalysis(latest);
       if(!pendingTargets.length){const readyCount=latest.targets.filter(target=>!isTargetResolved(target)&&isPlanPublishable(plans.get(`${latest.id}:${target.id}`))).length,manualCount=latest.targets.filter(isTargetManuallyVerified).length;showStatus(dialog.querySelector('[data-deploy-feedback]'),readyCount?`Não há páginas pendentes de análise. ${readyCount} destino(s) já estão prontos para publicar.`:manualCount?`${manualCount} destino(s) foram validados manualmente como funcionando no HPanel. Não há outras ações pendentes neste lote.`:'Todos os destinos deste lote já foram publicados com sucesso. Não há novos envios pendentes.','success');renderItems();return}
       const missing=pendingTargets.filter(target=>{
@@ -586,7 +803,7 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
             if(result.confirmedExisting===true)confirmedExistingDomains.push(domain);
             else checkedAtUtc=String(result.checkedAtUtc||checkedAtUtc);
           }
-          const plan=await request('/api/hostinger/publish/preflight',{method:'POST',body:{domain,storageDomain:target.parentDomain,username:target.username,sourceDirectory:target.sourceDirectory,targetDirectory:target.directory},fetchImpl});
+          const plan=await request('/api/hostinger/publish/preflight',{method:'POST',body:{domain,storageDomain:target.parentDomain,username:target.username,sourceDirectory:target.sourceDirectory,targetDirectory:target.directory,requireIndexHtml:target.requireIndexHtml===true,includeProductImages:target.includeProductImages===true},fetchImpl});
           plans.set(`${latest.id}:${target.id}`,plan);
           const conflicts=Array.isArray(plan.conflicts)?plan.conflicts:[];
           target.domain=domain;target.status=isPlanPublishable(plan)?'ready':'blocked';target.error=conflicts.length?`A prévia encontrou ${conflicts.length} arquivo(s) já existente(s) no destino. O Hub bloqueou o envio; remova manualmente somente esses arquivos no HPanel e reanalise.`:'';
@@ -615,19 +832,24 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       const confirmation=`Enviar ${total} arquivo(s) para ${eligible.length} subdomínio(s)?`;
       const safeguard='O Hub não apaga nem substitui arquivos existentes. Se uma prévia encontrar conflito, o envio daquele destino será bloqueado para limpeza manual no HPanel.';
       if(typeof confirmFn!=='function'||!confirmFn(`${confirmation}\n\n${detail}\n\n${safeguard} Se houver interrupção, parte dos arquivos poderá ter sido enviada. Continuar?`))return;
+      publishProgress={items:eligible.map(target=>({targetId:String(target.id),page:String(target.pageNumber||'' ).padStart(2,'0'),domain:String(target.domain||`${target.prefix||''}.${target.parentDomain||''}`),fileCount:Number(plans.get(`${job.id}:${target.id}`)?.fileCount)||0,state:'queued',outcome:'',uploadedCount:null,responseTotal:Number(plans.get(`${job.id}:${target.id}`)?.fileCount)||0,failedPath:'',error:'',verification:null}))};
+      renderPublishProgress();
       setBusy(true,'Enviando os arquivos para os destinos confirmados…','publish');
       const outcomes=[];
       for(const target of eligible){
         const key=`${job.id}:${target.id}`,plan=plans.get(key);
+        const progressItem=publishProgress.items.find(item=>item.targetId===String(target.id));
+        if(progressItem){progressItem.state='sending';renderPublishProgress()}
         const attemptId=`${Date.now()}-${Math.random().toString(36).slice(2,8)}`,startedAtUtc=new Date().toISOString(),totalCount=Number(plan.fileCount)||0;
         const expectedFiles=snapshotExpectedFiles(plan.files);
         recordDeployExecution(target,{id:attemptId,status:'running',startedAtUtc,domain:target.domain,parentDomain:target.parentDomain,storageDomain:target.parentDomain,username:target.username,directory:target.directory,targetDirectory:target.directory,expectedFiles,uploadedCount:0,totalCount});
         updateJob(job.id,current=>{current.targets=job.targets;current.status='pending';return current},storage);
         try{
-          const result=await request('/api/hostinger/publish',{method:'POST',body:{domain:target.domain,storageDomain:target.parentDomain,username:target.username,sourceDirectory:target.sourceDirectory,targetDirectory:target.directory,fingerprint:plan.fingerprint,overwriteExisting:false,confirmed:true},fetchImpl});
+          const result=await request('/api/hostinger/publish',{method:'POST',body:{domain:target.domain,storageDomain:target.parentDomain,username:target.username,sourceDirectory:target.sourceDirectory,targetDirectory:target.directory,requireIndexHtml:target.requireIndexHtml===true,includeProductImages:target.includeProductImages===true,fingerprint:plan.fingerprint,overwriteExisting:false,confirmed:true},fetchImpl});
           if(result.complete){
             const uploadedCount=Number(result.uploadedCount)||Number(result.totalCount)||totalCount,confirmedTotal=Number(result.totalCount)||totalCount,overwrittenCount=Number(result.overwrittenCount)||0;
             recordDeployExecution(target,{id:attemptId,status:'success',startedAtUtc,completedAtUtc:new Date().toISOString(),domain:target.domain,parentDomain:target.parentDomain,directory:target.directory,uploadedCount,totalCount:confirmedTotal,overwrittenCount});
+            if(progressItem){progressItem.state='checking';progressItem.outcome='success';progressItem.uploadedCount=uploadedCount;progressItem.responseTotal=confirmedTotal}
             target.status='published';target.hasPublished=true;target.error='';outcomes.push(`${target.domain}: publicado${overwrittenCount>0?` · ${overwrittenCount} substituído(s)`:''}`);plans.delete(key)
           }
           else{
@@ -636,18 +858,22 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
             const failedPath=String(failedFile?.path||'').trim(),failure=String(failedFile?.error||result.error||'').trim();
             const remoteState=/falha de comunicação|resposta de rede indisponível|sem resposta HTTP/i.test(failure)?'unknown':'not-confirmed';
             recordDeployExecution(target,{id:attemptId,status:'partial',startedAtUtc,completedAtUtc:new Date().toISOString(),domain:target.domain,parentDomain:target.parentDomain,directory:target.directory,uploadedCount,totalCount:totalCount||Number(plan.fileCount)||0,failedPath,error:failure,remoteState});
+            if(progressItem){progressItem.state='checking';progressItem.outcome='partial';progressItem.uploadedCount=uploadedCount;progressItem.responseTotal=totalCount||Number(plan.fileCount)||0;progressItem.failedPath=failedPath;progressItem.error=failure}
             target.status='partial';
             target.error=[`Envio interrompido: ${uploadedCount} de ${totalCount} arquivos confirmados.`,failedPath?`Falha no arquivo ${failedPath}.`:'',failure?`Motivo: ${failure}`:'',remoteState==='unknown'?'A Hostinger não respondeu; não é possível confirmar se o primeiro arquivo chegou ao destino.':'A Hostinger não confirmou todos os arquivos desta tentativa.','Reanalise o destino antes de repetir.'].filter(Boolean).join(' ');
           outcomes.push(`${target.domain}: ${uploadedCount}/${totalCount} confirmados${failedPath?` · ${failedPath}`:''}${remoteState==='unknown'?hasPreviousSuccessfulDeployment(target,target.domain)?' · a página pode exibir a publicação anterior; o arquivo desta tentativa é incerto':' · a resposta não chegou; o estado remoto deste arquivo é incerto':''}`);
             plans.delete(key);
           }
-        }catch(error){recordDeployExecution(target,{id:attemptId,status:'error',startedAtUtc,completedAtUtc:new Date().toISOString(),domain:target.domain,parentDomain:target.parentDomain,directory:target.directory,uploadedCount:0,totalCount,error:error.message});target.status='error';target.error=error.message;target.planSummary=null;outcomes.push(`${target.domain}: ${error.message}`);plans.delete(key)}
+        }catch(error){recordDeployExecution(target,{id:attemptId,status:'error',startedAtUtc,completedAtUtc:new Date().toISOString(),domain:target.domain,parentDomain:target.parentDomain,directory:target.directory,uploadedCount:0,totalCount,error:error.message});if(progressItem){progressItem.state='checking';progressItem.outcome='error';progressItem.uploadedCount=0;progressItem.responseTotal=totalCount;progressItem.error=error.message}target.status='error';target.error=error.message;target.planSummary=null;outcomes.push(`${target.domain}: ${error.message}`);plans.delete(key)}
+        renderPublishProgress();
         const attemptRecord=Array.isArray(target.deploymentHistory)?target.deploymentHistory.find(item=>item?.id===attemptId):null;
         if(attemptRecord&&['success','partial','error'].includes(String(attemptRecord.status||''))){
           const remoteVerification=await queryHostingerInventory(attemptRecord,target,fetchImpl);
           recordDeployExecution(target,{id:attemptId,remoteVerification});
+          if(progressItem){progressItem.verification=remoteVerification;progressItem.state=attemptRecord.status==='success'?'complete':attemptRecord.status==='partial'?'partial':'error'}
         }
         updateJob(job.id,current=>{current.targets=job.targets;current.status=isJobComplete(current)?'complete':'pending';return current},storage);
+        renderPublishProgress();
       }
       const current=findJob(job.id),complete=current&&isJobComplete(current);
       showStatus(dialog.querySelector('[data-deploy-feedback]'),complete?'Hospedagem e publicação concluídas para todas as páginas.':`Etapa parcialmente concluída. ${outcomes.join(' · ')}. Corrija as pendências e analise novamente antes de repetir.` ,complete?'success':'error');
@@ -695,7 +921,14 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       const control=event.target.closest?.('[data-deploy-action]'),action=control?.dataset.deployAction;
       if(action==='close')return dismiss();
       if(action==='open-pending-job'){const jobId=String(control.dataset.deployJobId||'');if(jobId)showModal(jobId);return}
-      if(action==='analyze')return analyze();
+      if(action==='analyze'){
+        if(currentJob()?.draftOnly){
+          if(onGenerateDraft?.())dismiss();
+          else showStatus(dialog.querySelector('[data-deploy-feedback]'),'Não foi possível abrir a ação de geração da Pre-Sell. Feche esta janela e use “Validar ficha e criar Presell” na ficha.','error');
+          return;
+        }
+        return analyze();
+      }
       if(action==='publish')return publish();
       if(action==='verify-inventory')return verifyInventory(control.dataset.deployIndex);
       if(action==='manual-verify')return validateManually(control.dataset.deployIndex);
@@ -706,12 +939,40 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
   };
   const onOpen=()=>showModal();
   button.addEventListener('click',onOpen);
+  const onHandoffSelection=()=>{try{storage.setItem(GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY,handoffSelect.value)}catch{}renderAction()};
+  const onHandoffAckChanged=event=>{if(event?.key===GOOGLE_ADS_PRESELL_HANDOFF_ACK_KEY)renderAction()};
+  const onSendCampaignHandoff=()=>{
+    if(!handoffButton||handoffButton.disabled)return;
+    const selection=resolveCampaignHandoffSelection(readJobs(storage),storage,getDeliveryContext(),getCampaignDraft(),String(handoffSelect?.value||''));
+    const current=selection.current,job=current?.job,prepared=current?.prepared;
+    if(!job||!prepared?.ok){if(handoffSection){handoffSection.classList.add('is-required');const message=by(root,'#copyPresellCampaignHandoffStatus');if(message)message.textContent=selection.reason||prepared?.reason||'A Pre-Sell ainda não está pronta para envio.'}return}
+    const payload=writeGoogleAdsPresellCampaignHandoff(prepared.payload,storage);
+    if(!payload){
+      const destination=new URL(globalThis.location.href);
+      destination.searchParams.set('view','google-ads-create');
+      destination.searchParams.delete(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM);
+      destination.searchParams.set(GOOGLE_ADS_PRESELL_HANDOFF_JOB_QUERY_PARAM,String(job.id));
+      handoffButton.disabled=true;handoffButton.textContent='Abrindo criação de campanha…';
+      const message=by(root,'#copyPresellCampaignHandoffStatus');if(message)message.textContent='A cópia temporária não foi gravada; a criação vai ler e validar a Pre-Sell publicada pelo ID deste lote.';
+      globalThis.location.assign(destination.href);
+      return;
+    }
+    try{storage.setItem(GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY,String(job.id))}catch{}
+    const destination=new URL(globalThis.location.href);
+    destination.searchParams.set('view','google-ads-create');
+    destination.searchParams.set(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM,payload.id);
+    handoffButton.disabled=true;handoffButton.textContent='Abrindo criação de campanha…';
+    globalThis.location.assign(destination.href);
+  };
+  handoffSelect?.addEventListener('change',onHandoffSelection);
+  handoffButton?.addEventListener('click',onSendCampaignHandoff);
   activeDeployModalOpener=showModal;
   const onJobsUpdated=()=>renderAction();
   const onDraftChanged=()=>queueMicrotask(()=>{renderAction();refreshOpenDraft()});
   root.addEventListener('input',onDraftChanged);root.addEventListener('change',onDraftChanged);
   root.addEventListener('hub:presell-deploy-draft-updated',onDraftChanged);
   globalThis.addEventListener?.(JOBS_EVENT,onJobsUpdated);
+  globalThis.addEventListener?.('storage',onHandoffAckChanged);
   renderAction();
-  return()=>{button.removeEventListener('click',onOpen);root.removeEventListener('input',onDraftChanged);root.removeEventListener('change',onDraftChanged);root.removeEventListener('hub:presell-deploy-draft-updated',onDraftChanged);globalThis.removeEventListener?.(JOBS_EVENT,onJobsUpdated);if(mountedRoot===root){mountedRoot=null;mountedDraftGetter=()=>null}if(activeDeployModalOpener===showModal)activeDeployModalOpener=null;overlay?.remove()};
+  return()=>{button.removeEventListener('click',onOpen);handoffSelect?.removeEventListener('change',onHandoffSelection);handoffButton?.removeEventListener('click',onSendCampaignHandoff);root.removeEventListener('input',onDraftChanged);root.removeEventListener('change',onDraftChanged);root.removeEventListener('hub:presell-deploy-draft-updated',onDraftChanged);globalThis.removeEventListener?.(JOBS_EVENT,onJobsUpdated);globalThis.removeEventListener?.('storage',onHandoffAckChanged);if(mountedRoot===root){mountedRoot=null;mountedDraftGetter=()=>null}if(activeDeployModalOpener===showModal)activeDeployModalOpener=null;overlay?.remove()};
 }

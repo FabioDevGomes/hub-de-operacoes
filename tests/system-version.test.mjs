@@ -92,7 +92,11 @@ test('todas as páginas completas canônicas publicam versão e assets; não usa
   for (const file of ['system-version.js', 'system-version.css']) {
     assert.equal(await readFile(new URL('../src/' + file, import.meta.url), 'utf8'), await readFile(new URL('../dist/' + file, import.meta.url), 'utf8'));
   }
-  assert.doesNotMatch(source, /localStorage|indexedDB|fetch\(|XMLHttpRequest/);
+  assert.doesNotMatch(source, /indexedDB|XMLHttpRequest/);
+  assert.match(source, /new URL\('\/version\.txt', window\.location\.origin\)/, 'o verificador consulta apenas o arquivo de versão textual');
+  assert.match(source, /headers: \{Accept: 'text\/plain'\}/, 'a consulta não solicita payload JSON');
+  assert.match(source, /response\.text\(\)/, 'a resposta de versão é lida como texto');
+  assert.match(source, /versionPattern\.test\(available\) && compareVersions\(available, version\) > 0/, 'somente versão estável superior pode abrir o aviso');
 });
 
 function browserHarness({ embedded = false, version = '1.2.3', loading = false } = {}) {

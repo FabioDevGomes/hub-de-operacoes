@@ -35,6 +35,7 @@
   function startUpdateCheck() {
     if (typeof window.fetch !== 'function' || !window.location?.origin) return;
     const dismissedVersionKey = 'hub:system-version:dismissed:v1';
+    const acceptedNoticeKey = 'hub:system-version:accepted-notice:v1';
     const confirmedUpdateKey = 'hub:system-version:confirmed-update:v1';
     const reloadAttemptKey = 'hub:system-version:reload-attempted:v1';
     let checking = false, dismissedVersion = '', notice = null, noticeVersion = '';
@@ -46,6 +47,45 @@
         return versionPattern.test(confirmed) ? confirmed : '';
       } catch { return ''; }
     };
+    const readAcceptedNoticeVersion = () => {
+      try {
+        const accepted = window.localStorage.getItem(acceptedNoticeKey) || '';
+        return versionPattern.test(accepted) ? accepted : '';
+      } catch { return ''; }
+    };
+    const hideNotice = targetVersion => {
+      if (versionPattern.test(targetVersion || '')) dismissedVersion = targetVersion;
+      notice?.remove();
+      notice = null;
+      noticeVersion = '';
+    };
+    const acceptNoticeAcrossTabs = targetVersion => {
+      if (!versionPattern.test(targetVersion || '')) return false;
+      const previous = readAcceptedNoticeVersion();
+      const accepted = previous && compareVersions(previous, targetVersion) > 0 ? previous : targetVersion;
+      dismissedVersion = accepted;
+      try { window.sessionStorage.setItem(dismissedVersionKey, accepted); } catch {}
+      try { window.localStorage.setItem(acceptedNoticeKey, accepted); } catch {}
+      try { updateChannel?.postMessage({type: 'notice-accepted', version: accepted}); } catch {}
+      hideNotice(accepted);
+      return true;
+    };
+    const applyStoredNoticeAcceptance = () => {
+      const accepted = readAcceptedNoticeVersion();
+      if (accepted && notice && compareVersions(accepted, noticeVersion) >= 0) hideNotice(accepted);
+      if (accepted && (!dismissedVersion || compareVersions(accepted, dismissedVersion) > 0)) dismissedVersion = accepted;
+    };
+    const isOverviewScreen = () => {
+      try {
+        const route = window.PanelViews?.resolveRoute?.(window.location.href);
+        if (route?.id) return route.id === 'totals';
+      } catch {}
+      try {
+        const url = new URL(window.location.href);
+        return (url.pathname === '/' || url.pathname === '/index.html')
+          && (!url.searchParams.has('view') || url.searchParams.get('view') === 'totals');
+      } catch { return false; }
+    };
     const confirmUpdateForAllTabs = targetVersion => {
       if (!versionPattern.test(targetVersion || '')) return '';
       const previous = readConfirmedUpdateVersion();
@@ -55,7 +95,7 @@
       return latest;
     };
     const reloadForConfirmedUpdate = (targetVersion, {retry = false} = {}) => {
-      if (!versionPattern.test(targetVersion || '') || compareVersions(targetVersion, version) <= 0 || reloadRequested) return false;
+      if (!versionPattern.test(targetVersion || '') || compareVersions(targetVersion, version) <= 0 || reloadRequested || isOverviewScreen()) return false;
       let attempted = '';
       try { attempted = window.sessionStorage.getItem(reloadAttemptKey) || ''; } catch {}
       if (versionPattern.test(attempted)) {
@@ -68,7 +108,8 @@
       return true;
     };
     const showNotice = nextVersion => {
-      if (nextVersion === dismissedVersion) return;
+      const acceptedVersion = readAcceptedNoticeVersion();
+      if (nextVersion === dismissedVersion || (acceptedVersion && compareVersions(acceptedVersion, nextVersion) >= 0)) return;
       if (notice && compareVersions(nextVersion, noticeVersion) <= 0) return;
       if (!notice) {
         notice = document.createElement('section');
@@ -94,6 +135,7 @@
         updateCurrent.className = 'hub-update-notice__action hub-update-notice__action--current';
         updateCurrent.type = 'button';
         updateCurrent.addEventListener('click', () => {
+          if (!acceptNoticeAcrossTabs(noticeVersion)) return;
           updateCurrent.disabled = true;
           updateCurrent.textContent = 'Atualizando esta tela…';
           window.location.reload();
@@ -103,10 +145,12 @@
         updateAll.className = 'hub-update-notice__action hub-update-notice__action--all';
         updateAll.type = 'button';
         updateAll.addEventListener('click', () => {
-          const confirmedVersion = confirmUpdateForAllTabs(noticeVersion);
+          const versionToUpdate = noticeVersion;
+          if (!acceptNoticeAcrossTabs(versionToUpdate)) return;
+          const confirmedVersion = confirmUpdateForAllTabs(versionToUpdate);
           if (!confirmedVersion) return;
           updateAll.disabled = true;
-          updateAll.textContent = 'Atualizando todas…';
+          updateAll.textContent = 'Atualizando demais telas…';
           reloadForConfirmedUpdate(confirmedVersion, {retry: true});
         });
         actions.append(updateCurrent, updateAll);
@@ -117,23 +161,21 @@
         dismiss.setAttribute('aria-label', 'Fechar aviso de atualização');
         dismiss.textContent = '×';
         dismiss.addEventListener('click', () => {
-          dismissedVersion = noticeVersion;
-          try { window.sessionStorage.setItem(dismissedVersionKey, dismissedVersion); } catch {}
-          notice?.remove();
-          notice = null;
+          const versionToDismiss = noticeVersion;
+          acceptNoticeAcrossTabs(versionToDismiss);
         });
         notice.append(copy, actions, dismiss);
         document.body.append(notice);
       }
       noticeVersion = nextVersion;
       notice.querySelector('.hub-update-notice__title').textContent = `Nova versão v${nextVersion} disponível`;
-      notice.querySelector('.hub-update-notice__detail').textContent = `Esta tela está na v${version}. Escolha atualizar somente esta tela ou todas as telas abertas.`;
+      notice.querySelector('.hub-update-notice__detail').textContent = `Esta tela está na v${version}. Escolha atualizar somente esta tela ou todas as telas abertas, exceto a Visão geral.`;
       const updateCurrent = notice.querySelector('.hub-update-notice__action--current');
       updateCurrent.disabled = false;
       updateCurrent.textContent = 'Atualizar somente esta tela';
       const updateAll = notice.querySelector('.hub-update-notice__action--all');
       updateAll.disabled = false;
-      updateAll.textContent = 'Atualizar todas as telas';
+      updateAll.textContent = 'Atualizar todas as telas (menos Visão geral)';
     };
     let updateChannel = null;
     try {
@@ -146,6 +188,10 @@
             showNotice(message.version);
             return;
           }
+          if (message.type === 'notice-accepted') {
+            if (!notice || compareVersions(message.version, noticeVersion) >= 0) hideNotice(message.version);
+            return;
+          }
           if (message.type === 'update-confirmed') {
             reloadForConfirmedUpdate(message.version, {retry: message.retry === true});
           }
@@ -154,6 +200,9 @@
     } catch {}
     const applyStoredConfirmation = () => reloadForConfirmedUpdate(readConfirmedUpdateVersion());
     window.addEventListener('storage', event => {
+      if (event.key === acceptedNoticeKey && versionPattern.test(event.newValue || '')) {
+        applyStoredNoticeAcceptance();
+      }
       if (event.key === confirmedUpdateKey && versionPattern.test(event.newValue || '')) {
         reloadForConfirmedUpdate(event.newValue);
       }
@@ -180,10 +229,10 @@
     };
     void checkVersion();
     window.setInterval(checkVersion, 60_000);
-    window.addEventListener('focus', () => { applyStoredConfirmation(); void checkVersion(); });
-    window.addEventListener('online', () => { applyStoredConfirmation(); void checkVersion(); });
+    window.addEventListener('focus', () => { applyStoredNoticeAcceptance(); applyStoredConfirmation(); void checkVersion(); });
+    window.addEventListener('online', () => { applyStoredNoticeAcceptance(); applyStoredConfirmation(); void checkVersion(); });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) { applyStoredConfirmation(); void checkVersion(); }
+      if (!document.hidden) { applyStoredNoticeAcceptance(); applyStoredConfirmation(); void checkVersion(); }
     });
   }
   window.HubSystemVersion = Object.freeze({ version, formatTitle });

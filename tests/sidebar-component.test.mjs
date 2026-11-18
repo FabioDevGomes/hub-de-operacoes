@@ -19,6 +19,7 @@ const pages = [
   ['Ofertas SmartAdv', '../dist/curadoria/smartadv-offers/index.html', 'data-hub-sidebar-active="smartadv-offers"'],
   ['Curadoria manual', '../dist/curadoria/manual/index.html', 'data-hub-sidebar-active="manual"'],
   ['Asset Studio', '../dist/asset-studio/index.html', 'data-hub-sidebar-active="asset-studio"'],
+  ['Entrega de campanha', '../dist/campaign-delivery/index.html', 'data-hub-sidebar-active="campaign-delivery"'],
 ];
 
 for (const [name, path, mode] of pages) {
@@ -26,12 +27,24 @@ for (const [name, path, mode] of pages) {
   assert.ok(html.includes('data-hub-sidebar'), `${name}: mount do menu compartilhado ausente`);
   assert.ok(html.includes(mode), `${name}: modo ou item ativo não foi configurado`);
   assert.ok(html.includes('sidebar-component.js') && html.includes('sidebar-component.css'), `${name}: dependência compartilhada não foi conectada`);
-  assert.ok(html.includes('sidebar-component.css?v=17'), `${name}: cache do CSS compartilhado do menu está desatualizado`);
-  assert.ok(html.includes('sidebar-component.js?v=20261028-google-ads-api-screen-gating'), `${name}: versão do componente compartilhado está desatualizada`);
+  if (name === 'Visão Geral' || name === 'Entrega de campanha') {
+    assert.ok(html.includes('sidebar-component.css?v=26'), `${name}: cache do CSS compartilhado deve acompanhar o menu atual`);
+  } else {
+    assert.ok(html.includes('sidebar-component.css?v=26'), `${name}: cache do CSS compartilhado do menu está desatualizada`);
+  }
+  assert.ok(html.includes('sidebar-component.js?v=20261101-quick-access-pins'), `${name}: script do menu deve acompanhar a versão atual`);
   assert.ok(html.includes('data-hub-sidebar-products'), `${name}: área Produtos não usa o componente`);
   assert.doesNotMatch(html, /data-sidebar-group="(?:operation|analysis|curation|creation|personal|products)"/, `${name}: grupos continuam copiados na página`);
   assert.doesNotMatch(html, /painel-sidebar-grupo-aberto-v1/, `${name}: implementação antiga do acordeão ainda está duplicada`);
 }
+
+const deliveryHtml = await readFile(new URL('../dist/campaign-delivery/index.html', import.meta.url), 'utf8');
+const deliveryCss = await readFile(new URL('../dist/campaign-delivery/styles.css', import.meta.url), 'utf8');
+assert.match(deliveryHtml, /class="delivery-shell hub-sidebar-layout"/, 'Entrega de campanha deve usar o shell compartilhado');
+assert.match(deliveryHtml, /<aside class="delivery-sidebar hub-sidebar-aside">[\s\S]*?<div class="brand"><div class="brand-mark"><img src="\/brand-logo\.png/, 'Entrega de campanha deve usar o cabeçalho compartilhado com o logo do Hub');
+assert.doesNotMatch(deliveryHtml, /class="delivery-brand"/, 'Entrega de campanha não deve manter cabeçalho local fora do padrão');
+assert.match(deliveryCss, /\.delivery-shell\{[^}]*grid-template-columns:224px minmax\(0,1fr\)/, 'Entrega de campanha deve usar a largura padrão do menu compartilhado');
+assert.match(deliveryCss, /\.delivery-sidebar\{[^}]*gap:0\}/, 'a página não deve adicionar espaçamento próprio entre o controle, a marca e o menu');
 
 const groupOrder = ['operation', 'tracking', 'analysis', 'finance', 'curation', 'creation', 'personal'];
 let previous = -1;

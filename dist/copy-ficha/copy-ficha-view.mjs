@@ -1,33 +1,40 @@
-import {parseOfferText,dictionaryFor,discountEvidenceAtPrice,calculateDiscountFromFinalPrice} from './copy-ficha-domain.mjs?v=22';
-import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=4';
+import {parseOfferText,dictionaryFor,discountEvidenceAtPrice,calculateDiscountFromFinalPrice} from './copy-ficha-domain.mjs?v=23';
+import {minimumOfferProductPrice,productPriceCondition,buildOfferQuestionAnswers} from './copy-ficha-questions.mjs?v=5';
 import {renderOfferQuestions,resizeOfferAnswer,copyOfferQuestions} from './copy-ficha-questions-view.mjs?v=2';
-import {renderTemplate} from './copy-ficha-template.mjs?v=18';
-import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=2';
+import {renderTemplate} from './copy-ficha-template.mjs?v=25';
+import {countryPresentationDefaults} from './copy-ficha-country-defaults.mjs?v=1';
+import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=4';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=3';
-import {createPresellFromFicha,createPresellBatch,callApi} from '../presell/presell-service.mjs?v=7';
+import {createPresellFromFicha,createPresellBatch,callApi} from '../presell/presell-service.mjs?v=8';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=4';
 import {readClipboardText} from './copy-ficha-clipboard.mjs?v=1';
 import {preparePresellTracking,preparePresellTrackingBatch} from './copy-ficha-tracking-service.mjs?v=3';
 import {buildTrackingProductLabel,formatTrackingAccountId,normalizeTrackingAccountId} from './copy-ficha-tracking-domain.mjs?v=1';
-import {parseStructuredFicha} from './copy-ficha-structured.mjs?v=3';
+import {parseStructuredFicha} from './copy-ficha-structured.mjs?v=4';
 import {buildTrackingPresellScriptTag,normalizeTrackingDomainInput,normalizeTrackingProductKey} from '../tracking/tracking-domain-admin.mjs?v=11';
 import {accountDomainUrl} from '../accounts/accounts-domain.mjs?v=13';
-import {findAccountDomainAssociation,ACCOUNT_DOMAIN_ASSOCIATIONS_KEY,ACCOUNT_DOMAIN_ASSOCIATIONS_UPDATED_EVENT} from '../accounts/account-domains-storage.mjs?v=1';
+import {findAccountDomainAssociation,saveAccountDomainAssociation,ACCOUNT_DOMAIN_ASSOCIATIONS_KEY,ACCOUNT_DOMAIN_ASSOCIATIONS_UPDATED_EVENT} from '../accounts/account-domains-storage.mjs?v=1';
 import {ACCOUNT_MAP_DUPLICATION_TARGET_KEY,ACCOUNT_MAP_DUPLICATION_TARGET_UPDATED_EVENT,createAccountDuplicationTargetStorage} from '../accounts/accounts-target-storage.mjs?v=3';
-import {GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY,loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=2';
-import {queuePresellDeployJob,mountPresellDeployWorkflow,openPresellDeployWorkflow} from './copy-ficha-deploy.mjs?v=40';
+import {GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY,loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=4';
+import {queuePresellDeployJob,mountPresellDeployWorkflow,openPresellDeployWorkflow} from './copy-ficha-deploy.mjs?v=56';
+import {getCampaignDelivery,getCampaignDeliveryAssetStudioPageDirectory} from '../campaign-delivery/delivery-store.mjs?v=17';
 
 let mounted=false,creatingPresell=false,assetStudioAppliedGenerationId='',nextPresellOverwriteOnce=false;
 const ASSET_STUDIO_PAGE_HANDOFF_KEY='hub:asset-studio:pending-page-directory:v1';
 const ASSET_STUDIO_PAGE_HANDOFF_EVENT='hub:asset-studio-page-directory-generated';
+const campaignDeliveryQueryId=()=>new URLSearchParams(window.location.search).get('campaign_delivery_id')||'';
 let currentTrackingTarget=null;
 let currentAccountDirectory={managers:[],accounts:[]};
 let currentSelectedTrackingAccountIds=null;
 let currentTrackingPreSellUrls=new Map();
 let currentTrackingPreSellAutoUrls=new Map();
+const currentAccountDomainDrafts=new Map(),currentAccountDomainEditing=new Set(),currentAccountDomainErrors=new Map();
 // Persistence is isolated in copy-ficha-draft.mjs.
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const by=(root,id)=>root.querySelector(`#${id}`);
+const readFichaDraft=()=>readDraft(undefined,campaignDeliveryQueryId());
+const writeFichaDraft=data=>writeDraft(data,undefined,campaignDeliveryQueryId());
+const clearFichaDraft=()=>clearDraft(undefined,campaignDeliveryQueryId());
 
 function updateProductPriceNote(root){
   const field=by(root,'copyProductPrice'),note=by(root,'copyProductPriceNote');if(!field||!note)return;
@@ -44,6 +51,40 @@ export function canApplyDetectedValue(field,value,{force=false}={}){
   const candidate=String(value??'').trim(),current=String(field?.value??'').trim();
   if(!field||!candidate||current===candidate)return false;
   return force||!current||field.dataset?.autoFilled==='true';
+}
+
+export function applyCountryPresentationDefaults(root,countryCode=inputValue(root,'copyCountry')){
+  const defaults=countryPresentationDefaults(countryCode);
+  if(!defaults){
+    let changed=false,languageChanged=false,currencyChanged=false;
+    for(const [id,changedFlag] of [['copyLanguage','languageChanged'],['copyCurrency','currencyChanged']]){
+      const field=by(root,id);
+      if(field?.dataset.autoFilled!=='true')continue;
+      field.value='';delete field.dataset.autoFilled;field.classList?.remove('is-autofilled');changed=true;
+      if(changedFlag==='languageChanged')languageChanged=true;
+      if(changedFlag==='currencyChanged')currencyChanged=true;
+    }
+    if(currencyChanged){if(by(root,'copyDiscountAmount')?.dataset.autoFilled==='true')clearAutoDiscountAmount(root);updateDiscountAmountLabel(root)}
+    return {changed,languageChanged,currencyChanged};
+  }
+  let changed=false,languageChanged=false,currencyChanged=false;
+  for(const [id,value] of [['copyLanguage',defaults.htmlLanguage],['copyCurrency',defaults.currency]]){
+    const field=by(root,id);
+    if(!canApplyDetectedValue(field,value))continue;
+    if(id==='copyCurrency'&&by(root,'copyDiscountAmount')?.dataset.autoFilled==='true')clearAutoDiscountAmount(root);
+    field.value=value;field.dataset.autoFilled='true';field.classList?.add('is-autofilled');
+    changed=true;
+    if(id==='copyLanguage')languageChanged=true;
+    if(id==='copyCurrency')currencyChanged=true;
+  }
+  if(currencyChanged)updateDiscountAmountLabel(root);
+  return {changed,languageChanged,currencyChanged};
+}
+
+function updateAutoPageTitleForLanguage(root,product=inputValue(root,'copyProduct')){
+  const field=by(root,'copyPageTitle');
+  if(field?.dataset.autoFilled!=='true'||!product||!inputValue(root,'copyLanguage'))return false;
+  return applyDetected(root,'copyPageTitle',`${product} | ${dictionaryFor(inputValue(root,'copyLanguage')||'en-US').offer}`,{force:true});
 }
 
 export function collectAutoFilledFieldIds(fields){
@@ -124,7 +165,7 @@ async function analyzeStructuredFichaClipboard(root){
   button.disabled=true;button.textContent='Lendo…';
   try{
     const source=await readClipboardText(),field=by(root,'copyFichaSource');
-    field.value=source;writeDraft({structuredFicha:source});field.dispatchEvent(new Event('input',{bubbles:true}));
+    field.value=source;writeFichaDraft({structuredFicha:source});field.dispatchEvent(new Event('input',{bubbles:true}));
     renderStructuredFichaAnalysis(root,source);
   }catch(error){
     status.className='copy-ficha-clipboard-status error';
@@ -150,45 +191,180 @@ function updatePendingHighlights(root,{fields=[]}={}){
 }
 
 function inputValue(root,id){return by(root,id)?.value?.trim()||''}
+function consumeAssetStudioPageHandoff(handoffId){
+  try{if(JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null')?.id===handoffId)localStorage.removeItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)}catch{}
+}
+function normalizedWindowsPath(value){return String(value||'').trim().replace(/[\\/]+/g,'\\').replace(/\\+$/,'').toLocaleLowerCase('pt-BR')}
 function applyAssetStudioPageDirectory(root,handoff){
   if(!handoff?.id||!handoff.directory)return false;
+  const deliveryId=campaignDeliveryQueryId();
+  if(deliveryId){
+    const delivery=getCampaignDelivery(deliveryId);
+    const normalizeProduct=value=>String(value||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');
+    if(!delivery||!normalizeProduct(handoff.productName)||normalizeProduct(handoff.productName)!==normalizeProduct(delivery.productName))return false;
+  }
   const field=by(root,'copyDestination');
   if(!field)return false;
-  if(handoff.id===assetStudioAppliedGenerationId){
-    try{if(JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null')?.id===handoff.id)localStorage.removeItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)}catch{}
+  const directory=String(handoff.directory).trim(),sameDirectory=normalizedWindowsPath(field.value)===normalizedWindowsPath(directory);
+  if(sameDirectory){
+    if(field.dataset.autoFilled==='true'&&handoff.id!==assetStudioAppliedGenerationId){
+      assetStudioAppliedGenerationId=String(handoff.id);
+      const note=by(root,'copyDestinationAutoNotice');if(note)note.hidden=false;
+      writeFichaDraft({destination:field.value,assetStudioGenerationId:assetStudioAppliedGenerationId,assetStudioDirectoryAutoUpdated:true,autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
+    }
+    consumeAssetStudioPageHandoff(handoff.id);
     return false;
   }
-  field.value=String(handoff.directory);
+  if(!canApplyDetectedValue(field,directory))return false;
+  field.value=directory;
   field.dataset.autoFilled='true';field.classList.add('is-autofilled');
   const note=by(root,'copyDestinationAutoNotice');if(note)note.hidden=false;
   assetStudioAppliedGenerationId=String(handoff.id);
-  writeDraft({
+  writeFichaDraft({
     destination:field.value,
     assetStudioGenerationId:assetStudioAppliedGenerationId,
     assetStudioDirectoryAutoUpdated:true,
     autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))
   });
-  try{if(JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null')?.id===handoff.id)localStorage.removeItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)}catch{}
+  consumeAssetStudioPageHandoff(handoff.id);
   root.dispatchEvent(new Event('hub:presell-deploy-draft-updated'));
   return true;
 }
 function applyPendingAssetStudioPageDirectory(root){
   try{applyAssetStudioPageDirectory(root,JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null'))}catch{}
 }
+function updateCampaignDeliveryAffiliatePresentation(root,delivery=getCampaignDelivery(campaignDeliveryQueryId())){
+  const field=by(root,'copyAffiliateUrl'),view=by(root,'copyAffiliateUrlIntegrated'),link=by(root,'copyAffiliateUrlLink');
+  if(!field||!view||!link)return false;
+  const deliveredUrl=normalizedUrl(delivery?.affiliateUrl),currentUrl=normalizedUrl(field.value);
+  let integrated=false;
+  if(campaignDeliveryQueryId()&&deliveredUrl&&currentUrl===deliveredUrl){
+    try{const parsed=new URL(deliveredUrl);integrated=['http:','https:'].includes(parsed.protocol)}catch{}
+  }
+  view.hidden=!integrated;field.hidden=integrated;
+  if(integrated){
+    link.href=deliveredUrl;link.textContent=deliveredUrl;
+    const status=by(root,'copyCampaignDeliveryStatus');if(status){status.hidden=true;status.textContent=''}
+  }
+  updateExistingAffiliateLink(root);
+  return integrated;
+}
+function renderCampaignDeliveryFaviconStatus(root,delivery=getCampaignDelivery(campaignDeliveryQueryId())){
+  const status=by(root,'copyAssetFaviconStatus');
+  if(!status)return;
+  if(!campaignDeliveryQueryId()||!delivery){status.hidden=true;status.textContent='';return}
+  status.hidden=false;
+  const skipFavicon=delivery.assetStudioWork?.skipFavicon;
+  if(skipFavicon===true){status.textContent='Asset Studio registrou “Sem favicon”. A Ficha e Pre-Sell não repete essa validação.';status.dataset.state='ok'}
+  else if(skipFavicon===false){status.textContent='Asset Studio registrou o favicon habilitado. A Ficha e Pre-Sell confia nessa checagem e não valida assets/03.png novamente.';status.dataset.state='ok'}
+  else{status.textContent='Sem escolha de favicon registrada nesta entrega. A validação fica no Asset Studio; a Ficha e Pre-Sell não verifica assets/03.png.';status.dataset.state='info'}
+}
+function applyCampaignDeliveryPrefill(root,id=campaignDeliveryQueryId()){
+  if(!id){updateCampaignDeliveryAffiliatePresentation(root,null);renderCampaignDeliveryFaviconStatus(root,null);return false}
+  const delivery=getCampaignDelivery(id);if(!delivery){updateCampaignDeliveryAffiliatePresentation(root,null);renderCampaignDeliveryFaviconStatus(root,null);return false}
+  renderCampaignDeliveryFaviconStatus(root,delivery);
+  const productField=by(root,'copyProduct'),currentProduct=String(productField?.value||'').trim(),deliveryProduct=String(delivery.productName||'').trim();
+  const normalizeProduct=value=>String(value||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');
+  const productConflict=currentProduct&&normalizeProduct(currentProduct)!==normalizeProduct(deliveryProduct)&&productField?.dataset.autoFilled!=='true';
+  const notice=by(root,'copyCampaignDeliveryStatus');
+  updateCampaignDeliveryAffiliatePresentation(root,delivery);
+  if(productConflict){if(notice){notice.hidden=false;notice.textContent='Entrega local de '+deliveryProduct+' disponível, mas o produto preenchido é '+currentProduct+'. Os campos atuais foram preservados para evitar misturar ofertas.'}return false}
+  let changed=false;
+  const values=[['copyProduct',deliveryProduct],['copyAffiliateUrl',delivery.affiliateUrl]];
+  if((delivery.countries||[]).length===1)values.push(['copyCountry',delivery.countries[0]]);
+  for(const [fieldId,value] of values){
+    const field=by(root,fieldId),candidate=String(value||'').trim();
+    if(!field||!candidate||!canApplyDetectedValue(field,candidate))continue;
+    if(fieldId==='copyAffiliateUrl'){
+      try{const parsed=new URL(candidate);if(!['http:','https:'].includes(parsed.protocol))continue}catch{continue}
+    }
+    field.value=candidate;field.dataset.autoFilled='true';field.classList.add('is-autofilled');changed=true;
+  }
+  const assetStudioDirectory=getCampaignDeliveryAssetStudioPageDirectory(delivery);
+  if(assetStudioDirectory&&applyAssetStudioPageDirectory(root,{id:`delivery:${id}:${assetStudioDirectory}`,directory:assetStudioDirectory,productName:deliveryProduct}))changed=true;
+  const countryDefaults=applyCountryPresentationDefaults(root);
+  changed=countryDefaults.changed||changed;
+  const pageTitle=`${inputValue(root,'copyProduct')||deliveryProduct} | ${dictionaryFor(inputValue(root,'copyLanguage')||'en-US').offer}`;
+  const titleField=by(root,'copyPageTitle');
+  if(titleField&&canApplyDetectedValue(titleField,pageTitle)){
+    titleField.value=pageTitle;titleField.dataset.autoFilled='true';titleField.classList.add('is-autofilled');changed=true;
+  }
+  const affiliateLinkIntegrated=updateCampaignDeliveryAffiliatePresentation(root,delivery);
+  if(changed){
+    syncTrackingPlatformFromAffiliate(root);updateTrackingFields(root);updateTrackingTitlePreview(root);saveDraft(root);saveTrackingDraft(root);
+    if(notice){notice.hidden=affiliateLinkIntegrated;notice.textContent=affiliateLinkIntegrated?'':'Nova ficha desta entrega aberta em rascunho separado. Produto, país e URL foram transferidos quando aplicável; idioma e moeda foram sugeridos para países reconhecidos. Valores manuais foram preservados. Não é preciso usar “Nova coleta”. A URL final da Pre-Sell continua sendo uma etapa separada.'}
+  }else if(notice){
+    notice.hidden=affiliateLinkIntegrated;notice.textContent=affiliateLinkIntegrated?'':'Ficha desta entrega recuperada do rascunho separado. Os campos já preenchidos foram preservados; confira país, idioma e moeda antes de continuar. Não é preciso usar “Nova coleta”.'
+  }
+  return changed;
+}
 function syncTrackingPlatformFromAffiliate(root){
   const select=by(root,'copyTrackingPlatform');if(!select)return;
+  const delivery=campaignDeliveryQueryId()?getCampaignDelivery(campaignDeliveryQueryId()):null;
+  const deliveryPlatform=String(delivery?.platformCode||'').trim().toUpperCase()==='GM'?'gurumedia':String(delivery?.platformCode||'').trim().toUpperCase()==='CB'?'clickbank':'';
   const urlText=normalizedUrl(inputValue(root,'copyAffiliateUrl'));
   let hostname='';try{hostname=new URL(urlText).hostname.toLowerCase()}catch{}
-  const detected=hostname==='fasttrack20.com'||hostname.endsWith('.fasttrack20.com')?'gurumedia'
-    :hostname==='hop.clickbank.net'||hostname.endsWith('.hop.clickbank.net')?'clickbank':'';
+  const detected=deliveryPlatform||(hostname==='fasttrack20.com'||hostname.endsWith('.fasttrack20.com')?'gurumedia'
+    :hostname==='hop.clickbank.net'||hostname.endsWith('.hop.clickbank.net')?'clickbank':'');
   if(select.dataset.autoFilled==='true'){select.value=detected;return}
   if(!select.value&&detected){select.value=detected;select.dataset.autoFilled='true';select.classList.add('is-autofilled')}
 }
+function existingPageMode(root){return by(root,'copyPresellSourceMode')?.value==='existing'}
+function updateExistingAffiliateLink(root){
+  const link=by(root,'copyExistingAffiliateLink');if(!link)return;
+  let href='';
+  try{const url=new URL(normalizedUrl(inputValue(root,'copyAffiliateUrl')));if(['http:','https:'].includes(url.protocol))href=url.href}catch{}
+  link.hidden=!existingPageMode(root)||!href;
+  if(href)link.href=href;else link.removeAttribute('href');
+}
 function updateTrackingFields(root){
-  const enabled=Boolean(by(root,'copyTrackingEnabled')?.checked);
+  const enabled=existingPageMode(root)||Boolean(by(root,'copyTrackingEnabled')?.checked);
   const fields=by(root,'copyTrackingFields');
   if(fields)fields.querySelectorAll('input,select').forEach(field=>{field.disabled=!enabled});
   updateTrackingAccountSelection(root);
+}
+function updatePresellSourceMode(root,{save=false}={}){
+  const existing=existingPageMode(root),shell=root.querySelector('.copy-ficha-shell');
+  const suggestedDiscount=by(root,'copyDiscount');
+  if(existing&&suggestedDiscount?.dataset.defaultSuggested==='true'){suggestedDiscount.value='';delete suggestedDiscount.dataset.defaultSuggested}
+  if(!existing)applyDefaultDiscountPercent(root);
+  if(existing){
+    for(const [accountId,autoUrl] of currentTrackingPreSellAutoUrls){if(String(currentTrackingPreSellUrls.get(accountId)||'')===String(autoUrl||''))currentTrackingPreSellUrls.delete(accountId)}
+    currentTrackingPreSellAutoUrls.clear();
+    const suggestedHostname=by(root,'copyTrackingHostname');
+    if(suggestedHostname?.dataset.autoFilled==='true'){suggestedHostname.value='';delete suggestedHostname.dataset.autoFilled;suggestedHostname.classList.remove('is-autofilled')}
+  }
+  if(shell)shell.dataset.sourceMode=existing?'existing':'generate';
+  const sourceCard=shell?.querySelector('.copy-ficha-card:not(.copy-ficha-source-mode)');if(sourceCard)sourceCard.hidden=existing;
+  const questionsCard=by(root,'copyOfferQuestions')?.closest('.copy-ficha-questions-card');if(questionsCard)questionsCard.hidden=false;
+  const validation= root.querySelector('.copy-ficha-validation');
+  const keepInExisting=new Set(['copyProduct','copyCountry','copyLanguage','copyCurrency','copyProductPrice','copyDiscount','copyDiscountAmount','copyGuaranteeStatus','copyGuarantee','copyFreeShipping','copyBonusStatus','copyBonusDescription','copyDestination','copyTrackingHostname','copyTrackingManager','copyTrackingAccount','copyTrackingAccountId','copyTrackingAllAccounts','copyTrackingSubdomain']);
+  validation?.querySelectorAll('.copy-ficha-field,.copy-ficha-discount-pair').forEach(field=>{
+    const controls=[...field.querySelectorAll('[id]')],keep=controls.some(control=>keepInExisting.has(control.id));
+    field.hidden=existing&&!keep;
+  });
+  const structuredField=by(root,'copyFichaSource')?.closest('.copy-ficha-structured-field');if(structuredField)structuredField.hidden=existing;
+  const trackingHeading=by(root,'copyTrackingTitle');if(trackingHeading)trackingHeading.textContent=existing?'Página existente e destinos de hospedagem':'Tracking desta Pre-Sell';
+  const trackingToggle=by(root,'copyTrackingEnabled')?.closest('label');if(trackingToggle)trackingToggle.hidden=existing;
+  for(const id of ['copyTrackingPlatform','copyTrackingTitlePreview']){const field=by(root,id)?.closest('.copy-ficha-field');if(field)field.hidden=existing}
+  const multiLabel=by(root,'copyTrackingAllAccounts')?.closest('label');
+  if(multiLabel){const input=by(root,'copyTrackingAllAccounts');multiLabel.setAttribute('aria-label',existing?'Usar esta página em mais de uma conta desta MCC':'Quero subir esta Pre-Sell em mais de uma conta desta MCC');for(const node of multiLabel.childNodes)if(node.nodeType===Node.TEXT_NODE&&node.textContent.trim())node.textContent=existing?' Usar esta página em mais de uma conta desta MCC':' Quero subir esta Pre-Sell em mais de uma conta desta MCC'}
+  const instructions=root.querySelector('.copy-ficha-hpanel-setup>.copy-ficha-note');if(instructions)instructions.textContent=existing?'Informe o prefixo do subdomínio; o Hub combina esse prefixo com o domínio de cada conta selecionada e preenche o destino público. Edite as URLs por conta e desmarque as contas nas quais não vai publicar. A pasta local deve ficar sob a raiz de produtos configurada no Hub, conter index.html na raiz e, se usar assets, deixá-los diretamente em assets/ (sem subpastas). Imagens assets/imagem-produto-* são incluídas nesta modalidade; os metadados do Asset Studio não. A análise usa essa pasta como origem; o Hub não gera nem altera os arquivos locais, não registra Track e não insere script. O destino precisa ser um subdomínio direto do domínio Hostinger associado à conta. Subdomínios ausentes só serão criados após confirmação; a publicação exige outra confirmação.':'Ao ativar, todas as contas começam marcadas. Desmarque as que não vai usar. Informe o prefixo do subdomínio; o Hub aplica esse prefixo a cada domínio das contas marcadas e cria uma URL pública, uma página e uma Track por conta. Alterar o prefixo muda os destinos de hospedagem. A análise anterior vale somente para os endereços e pastas analisados; gere as páginas novamente para liberar a análise dos novos destinos. As pastas seguem “pag01 voltreva.shop”, “pag02 vornella.shop” (número primeiro, domínio depois), ao lado da pasta de origem. Depois da geração, conclua a hospedagem e a publicação na etapa obrigatória ao final desta tela.';
+  const subdomain=by(root,'copyTrackingSubdomainField');if(subdomain)subdomain.hidden=!by(root,'copyTrackingAllAccounts')?.checked;
+  const singleLabel=by(root,'copyTrackingHostname')?.closest('.copy-ficha-field')?.querySelector('label');if(singleLabel)singleLabel.textContent=existing?'URL pública da Pre-Sell existente':'Domínio público da Pre-Sell';
+  const singleInput=by(root,'copyTrackingHostname');if(singleInput){singleInput.placeholder=existing?'https://produto.seudominio.com':'https://presell.seudominio.com';singleInput.required=existing&&!by(root,'copyTrackingAllAccounts')?.checked}
+  const trackingNote=by(root,'copyTrackingFields')?.parentElement?.querySelector(':scope > .copy-ficha-note');if(trackingNote)trackingNote.textContent=existing?'A plataforma vem da Entrega quando disponível; este modo não registra Track. O diretório local de MCC/contas e os domínios Hostinger são lidos do Hub. Selecione somente os destinos desta página; IDs digitados manualmente não podem ser associados com segurança a um domínio. A URL pública deve pertencer ao subdomínio direto da conta selecionada.':'A MCC e as contas são reutilizadas do diretório local; abrir esta tela não consulta a API. A conta marcada como alvo no Mapa por conta recebe prioridade. O título usa os quatro últimos dígitos do ID da conta selecionada.';
+  const validationHeader=validation?.querySelector('header h2');if(validationHeader)validationHeader.textContent=existing?'Página local e dados da oferta':'2. Dados da oferta';
+  const validationDescription=validation?.querySelector('header p');if(validationDescription)validationDescription.textContent=existing?'Informe os dados confirmados para gerar as perguntas e respostas. Campos sem confirmação ficam pendentes; não é necessário ler a área de transferência.':'Revise os dados usados nas perguntas e respostas e na configuração da ficha.';
+  const destinationLabel=by(root,'copyDestination')?.closest('.copy-ficha-field')?.querySelector('label');if(destinationLabel)destinationLabel.firstChild.textContent=existing?'Pasta local da página existente':'Diretório da Presell ';
+  const destination=by(root,'copyDestination');if(destination)destination.placeholder=existing?'C:\\Users\\...\\produto\\pag01':'C:\\Users\\...\\pag01';
+  const structuredHeader=by(root,'copyFichaSource')?.closest('.copy-ficha-card')?.querySelector('header h2');if(structuredHeader)structuredHeader.textContent=existing?'Hospedagem da página existente':'3. Conteúdo obrigatório da ficha';
+  const structuredDescription=by(root,'copyFichaSource')?.closest('.copy-ficha-card')?.querySelector('header p');if(structuredDescription)structuredDescription.textContent=existing?'A análise da pasta e a publicação ficam em etapas separadas.':'Os textos colados são preservados sem reescrita. País, idioma, URL de afiliação e destino vêm dos campos acima.';
+  const action=by(root,'copyGenerateFicha');if(action)action.textContent=existing?'Preparar hospedagem da página existente':'Validar ficha e criar Presell';
+  const note=by(root,'copyPresellSourceModeNote');if(note)note.textContent=existing?'A página precisa estar em uma pasta dentro da raiz de produtos do Hub, com index.html diretamente na raiz. Assets devem ficar diretamente em assets/ (sem subpastas); imagens assets/imagem-produto-* também são publicadas, mas metadados do Asset Studio não. O Hub analisa a pasta e os destinos sem gerar ou alterar os arquivos locais; a publicação continua separada e só ocorre após confirmação.':'O fluxo padrão monta a página pela ficha e pode registrar/reutilizar o Tracking.';
+  updateExistingAffiliateLink(root);
+  updateTrackingFields(root);
+  if(save){saveDraft(root);saveTrackingDraft(root);root.dispatchEvent(new Event('hub:presell-deploy-draft-updated'))}
 }
 function readAccountMapTarget(){
   try{
@@ -287,6 +463,12 @@ function syncSuggestedAccountPreSellUrls(root,accounts,selectedIds){
 function updateTrackingSubdomainHint(root){
   const hint=by(root,'copyTrackingSubdomainHint');if(!hint)return;
   const subdomain=inputValue(root,'copyTrackingSubdomain'),domain=accountHostForHpanel(selectedDirectoryAccount(root));
+  if(existingPageMode(root)){
+    if(!validTrackingSubdomain(subdomain)){hint.textContent='Use uma única parte antes do domínio da conta. O prefixo preencherá os destinos das contas selecionadas; cada URL continuará editável.';return}
+    const example=accountPreSellSuggestion(subdomain,domain);
+    hint.textContent='O prefixo preenche os endereços públicos das contas selecionadas. Você pode editar cada URL e desmarcar as contas que não vai publicar.'+(example?' Exemplo: '+example+'.':'');
+    return;
+  }
   if(!domain){hint.textContent='O prefixo será combinado com o domínio principal de cada conta marcada para formar os endereços públicos.';return}
   if(!validTrackingSubdomain(subdomain)){hint.textContent='Use uma única parte antes do domínio da conta, sem pontos, espaços ou protocolo. Esse prefixo compõe os endereços públicos das contas marcadas.';return}
   const source=producerUrlSubdomainSuggestion(inputValue(root,'copyDtcUrl'))?'URL da página do produtor':'nome do produto';
@@ -302,22 +484,49 @@ function selectedTrackingTargetAccounts(root){
     const account=accounts.find(row=>String(row.customerId)===selectedId)||selectedDirectoryAccount(root);
     return account?[account]:[];
   }
-  const ids=selectedTrackingAccounts(root);ids.add(selectedId);
+  const ids=selectedTrackingAccounts(root);
+  if(existingPageMode(root))return accounts.filter(account=>ids.has(String(account.customerId)));
+  ids.add(selectedId);
   const selected=accounts.filter(account=>ids.has(String(account.customerId)));
   const primary=selected.find(account=>String(account.customerId)===selectedId);
   return primary?[primary,...selected.filter(account=>String(account.customerId)!==selectedId)]:selected;
+}
+function renderAccountDomainEditor(root,row,account){
+  const accountId=String(account.customerId);
+  if(!currentAccountDomainEditing.has(accountId))return;
+  const editor=document.createElement('div');editor.className='copy-ficha-hpanel-domain-editor';
+  const field=document.createElement('div');field.className='copy-ficha-hpanel-domain-field';
+  const inputId=`copyAccountPrimaryDomain-${accountId}`,label=document.createElement('label');label.htmlFor=inputId;label.textContent='Domínio principal desta conta';
+  const input=document.createElement('input');input.id=inputId;input.type='text';input.inputMode='url';input.autocomplete='off';input.spellcheck=false;input.className='copy-ficha-input';input.placeholder='exemplo.com';input.value=currentAccountDomainDrafts.get(accountId)||'';input.dataset.accountDomainInput=accountId;
+  field.append(label,input);editor.append(field);
+  const actions=document.createElement('div');actions.className='copy-ficha-hpanel-domain-editor-actions';
+  const save=document.createElement('button');save.type='button';save.className='copy-ficha-btn primary';save.textContent='Salvar domínio';
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='copy-ficha-btn';cancel.textContent='Cancelar';
+  const feedback=document.createElement('span');feedback.className='copy-ficha-hpanel-domain-feedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');feedback.textContent=currentAccountDomainErrors.get(accountId)||'Será salvo localmente para esta conta e usado nas próximas sugestões.';
+  cancel.addEventListener('click',()=>{currentAccountDomainEditing.delete(accountId);currentAccountDomainDrafts.delete(accountId);currentAccountDomainErrors.delete(accountId);renderHpanelLinks(root)});
+  const saveDomain=()=>{
+    const domain=input.value.trim();currentAccountDomainDrafts.set(accountId,domain);
+    if(!domain){feedback.textContent='Informe o domínio principal, por exemplo voltreva.shop.';input.focus();return}
+    currentAccountDomainEditing.delete(accountId);currentAccountDomainErrors.delete(accountId);
+    const manager=currentAccountDirectory.managers.find(item=>String(item.customerId)===String(account.managerCustomerId));
+    try{saveAccountDomainAssociation({customerId:accountId,managerCustomerId:account.managerCustomerId,accountName:account.name,managerName:manager?.name||'',domain});currentAccountDomainDrafts.delete(accountId)}
+    catch(error){currentAccountDomainEditing.add(accountId);currentAccountDomainErrors.set(accountId,error.message||'Não foi possível salvar o domínio.');renderHpanelLinks(root);root.querySelector(`[data-account-domain-input="${accountId}"]`)?.focus()}
+  };
+  save.addEventListener('click',saveDomain);
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();saveDomain()}});
+  actions.append(save,cancel);editor.append(actions,feedback);row.append(editor);
 }
 function renderHpanelLinks(root){
   const host=by(root,'copyTrackingHpanelLinks');if(!host)return;
   host.replaceChildren();
   const all=Boolean(by(root,'copyTrackingAllAccounts')?.checked);
-  const trackingEnabled=Boolean(by(root,'copyTrackingEnabled')?.checked);
+  const trackingEnabled=existingPageMode(root)||Boolean(by(root,'copyTrackingEnabled')?.checked);
   const singleField=by(root,'copyTrackingSingleHostnameField');if(singleField)singleField.hidden=all;
   const subdomainField=by(root,'copyTrackingSubdomainField');if(subdomainField)subdomainField.hidden=!all;
   if(all)syncTrackingSubdomainSuggestion(root);
   const accounts=all?accountsForSelectedManager(root):[selectedDirectoryAccount(root)].filter(Boolean);
   const selectedIds=all?selectedTrackingAccounts(root):new Set();
-  if(all){const primaryId=selectedTrackingAccountId(root);if(accounts.some(account=>String(account.customerId)===primaryId))selectedIds.add(primaryId)}
+  if(all&&!existingPageMode(root)){const primaryId=selectedTrackingAccountId(root);if(accounts.some(account=>String(account.customerId)===primaryId))selectedIds.add(primaryId)}
   const primaryId=selectedTrackingAccountId(root);
   if(all&&primaryId&&!currentTrackingPreSellUrls.get(primaryId)&&inputValue(root,'copyTrackingHostname')){
     currentTrackingPreSellUrls.set(primaryId,inputValue(root,'copyTrackingHostname'));currentTrackingPreSellAutoUrls.delete(primaryId);
@@ -339,7 +548,7 @@ function renderHpanelLinks(root){
     const row=document.createElement('div');row.className=`copy-ficha-hpanel-row${all?' is-multi':''}${selected?'':' is-unselected'}`;
     if(all){
       const choice=document.createElement('label');choice.className='copy-ficha-hpanel-choice';
-      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected;checkbox.dataset.trackingMultiAccount=accountId;checkbox.disabled=selected&&accountId===selectedTrackingAccountId(root);checkbox.title=checkbox.disabled?'Conta da Track selecionada acima; permanece incluída.':'';checkbox.setAttribute('aria-label',`Usar ${String(account.name||'esta conta')} para publicação`);
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected;checkbox.dataset.trackingMultiAccount=accountId;checkbox.disabled=!existingPageMode(root)&&selected&&accountId===selectedTrackingAccountId(root);checkbox.title=checkbox.disabled?'Conta da Track selecionada acima; permanece incluída.':'';checkbox.setAttribute('aria-label',`Usar ${String(account.name||'esta conta')} para publicação`);
       choice.append(checkbox);row.append(choice);
     }
     const details=document.createElement('span');details.className='copy-ficha-hpanel-account';
@@ -358,9 +567,16 @@ function renderHpanelLinks(root){
       if(url){
         const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=`Abrir HPanel · ${domain}`;link.title=`Abrir ${domain} no HPanel da Hostinger`;
         actions.append(link);
+      }else{
+        const note=document.createElement('span');note.className='copy-ficha-note';note.textContent='Domínio não identificado nos dados locais desta conta.';actions.append(note);
+        if(!currentAccountDomainEditing.has(accountId)){
+          const define=document.createElement('button');define.type='button';define.className='copy-ficha-btn copy-ficha-hpanel-define-domain';define.textContent='Definir domínio';
+          define.addEventListener('click',()=>{currentAccountDomainEditing.add(accountId);currentAccountDomainDrafts.set(accountId,'');currentAccountDomainErrors.delete(accountId);renderHpanelLinks(root);root.querySelector(`[data-account-domain-input="${accountId}"]`)?.focus()});
+          actions.append(define);
+        }
       }
-      if(actions.childElementCount)row.append(actions);
-      else{const note=document.createElement('span');note.className='copy-ficha-note';note.textContent='Domínio não identificado nos dados locais desta conta.';row.append(note)}
+      row.append(actions);
+      if(!url)renderAccountDomainEditor(root,row,account);
     }else if(url&&all){
       const note=document.createElement('span');note.className='copy-ficha-note';note.textContent='Conta desmarcada';row.append(note);
     }else{
@@ -372,7 +588,7 @@ function renderHpanelLinks(root){
 function updateTrackingAccountSelection(root,{clearManual=false}={}){
   const accountSelect=by(root,'copyTrackingAccount'),manualField=by(root,'copyTrackingAccountId'),status=by(root,'copyTrackingAccountStatus');
   if(!accountSelect||!manualField)return;
-  const enabled=Boolean(by(root,'copyTrackingEnabled')?.checked),manual=accountSelect.value==='manual',account=selectedDirectoryAccount(root),target=currentTrackingTarget;
+  const enabled=existingPageMode(root)||Boolean(by(root,'copyTrackingEnabled')?.checked),manual=accountSelect.value==='manual',account=selectedDirectoryAccount(root),target=currentTrackingTarget;
   manualField.hidden=!manual;manualField.disabled=!enabled||!manual;manualField.readOnly=false;
   if(clearManual)manualField.value='';
   if(status){
@@ -440,6 +656,8 @@ function normalizedUrl(value){
   return markdown?markdown[1]:text;
 }
 function payload(root){
+  const deliveryId=campaignDeliveryQueryId(),delivery=deliveryId?getCampaignDelivery(deliveryId):null;
+  renderCampaignDeliveryFaviconStatus(root,delivery);
   return {
     dtcUrl:normalizedUrl(inputValue(root,'copyDtcUrl')),
     rawText:inputValue(root,'copyRawText'),
@@ -448,6 +666,9 @@ function payload(root){
     htmlLanguage:inputValue(root,'copyLanguage'),
     currency:inputValue(root,'copyCurrency').toUpperCase(),
     confirmedDiscountPercent:inputValue(root,'copyDiscount'),
+    discountPercentDefaultSuggested:by(root,'copyDiscount')?.dataset.defaultSuggested==='true',
+    bonusStatus:inputValue(root,'copyBonusStatus'),
+    bonusDescription:inputValue(root,'copyBonusDescription'),
     confirmedDiscountAmount:inputValue(root,'copyDiscountAmount'),
     discountAmountBasis:by(root,'copyDiscountAmount')?.dataset.amountBasis||'',
     discountAmountQuantity:by(root,'copyDiscountAmount')?.dataset.amountQuantity||'',
@@ -459,10 +680,12 @@ function payload(root){
     pageTitle:inputValue(root,'copyPageTitle'),
     destination:inputValue(root,'copyDestination'),
     assetFolder:inputValue(root,'copyAssetFolder')||'assets',
+    skipFavicon:delivery?.assetStudioWork?.skipFavicon===true,
     affiliateUrl:normalizedUrl(inputValue(root,'copyAffiliateUrl')),
     guaranteeDays:inputValue(root,'copyGuarantee'),
     guaranteeStatus:inputValue(root,'copyGuaranteeStatus'),
     freeShipping:inputValue(root,'copyFreeShipping'),
+    pageSourceMode:existingPageMode(root)?'existing':'generate',
     trackingEnabled:Boolean(by(root,'copyTrackingEnabled')?.checked),
     trackingHostname:by(root,'copyTrackingAllAccounts')?.checked?accountPublicPreSellUrl(root,selectedTrackingAccountId(root)):inputValue(root,'copyTrackingHostname'),
     trackingSubdomain:inputValue(root,'copyTrackingSubdomain'),
@@ -474,12 +697,13 @@ function payload(root){
   };
 }
 function saveDraft(root){
-  writeDraft({...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
+  writeFichaDraft({...payload(root),autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
 }
 function saveTrackingDraft(root){
   const platform=by(root,'copyTrackingPlatform');
-  writeDraft({
+  writeFichaDraft({
     dtcUrl:normalizedUrl(inputValue(root,'copyDtcUrl')),
+    pageSourceMode:existingPageMode(root)?'existing':'generate',
     trackingEnabled:Boolean(by(root,'copyTrackingEnabled')?.checked),
     trackingHostname:inputValue(root,'copyTrackingHostname'),
     trackingPlatform:inputValue(root,'copyTrackingPlatform'),
@@ -491,6 +715,7 @@ function saveTrackingDraft(root){
     trackingAllAccounts:Boolean(by(root,'copyTrackingAllAccounts')?.checked),
     trackingSubdomain:inputValue(root,'copyTrackingSubdomain'),
     trackingSubdomainAuto:by(root,'copyTrackingSubdomain')?.dataset.autoFilled==='true',
+    autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]')),
     trackingSelectedAccountIds:currentSelectedTrackingAccountIds instanceof Set?[...currentSelectedTrackingAccountIds]:null,
     trackingAccountPreSellUrls:Object.fromEntries(currentTrackingPreSellUrls),
     trackingAccountPreSellAutoUrls:Object.fromEntries(currentTrackingPreSellAutoUrls)
@@ -498,23 +723,29 @@ function saveTrackingDraft(root){
 }
 function restoreDraft(root){
   try{
-    const draft=readDraft();
+    const draft=readFichaDraft();
     if(!draft)return;
     assetStudioAppliedGenerationId=String(draft.assetStudioGenerationId||'');
     currentTrackingPreSellUrls=new Map(Object.entries(draft.trackingAccountPreSellUrls||{}).map(([id,value])=>[String(id),String(value||'')]));
     currentTrackingPreSellAutoUrls=new Map(Object.entries(draft.trackingAccountPreSellAutoUrls||{}).map(([id,value])=>[String(id),String(value||'')]));
+    if(draft.pageSourceMode==='existing')by(root,'copyPresellSourceMode').value='existing';
     const savedSubdomain=String(draft.trackingSubdomain||'').trim().toLowerCase();
     if(validTrackingSubdomain(savedSubdomain))for(const account of currentAccountDirectory.accounts){
       const accountId=String(account.customerId),expected=accountPreSellSuggestion(savedSubdomain,accountHostForHpanel(account));
       if(expected&&currentTrackingPreSellUrls.get(accountId)===expected&&!currentTrackingPreSellAutoUrls.has(accountId))currentTrackingPreSellAutoUrls.set(accountId,expected);
     }
-    const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyFichaSource:draft.structuredFicha,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyDiscountAmount:draft.confirmedDiscountAmount,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyGuaranteeStatus:draft.guaranteeStatus,copyFreeShipping:draft.freeShipping,copyTrackingHostname:draft.trackingHostname,copyTrackingSubdomain:draft.trackingSubdomain,copyTrackingPlatform:draft.trackingPlatform};
+    const fields={copyDtcUrl:draft.dtcUrl,copyRawText:draft.rawText,copyFichaSource:draft.structuredFicha,copyProduct:draft.product,copyCountry:draft.countryCode,copyLanguage:draft.htmlLanguage,copyCurrency:draft.currency,copyDiscount:draft.confirmedDiscountPercent,copyBonusStatus:draft.bonusStatus,copyBonusDescription:draft.bonusDescription,copyDiscountAmount:draft.confirmedDiscountAmount,copyPageTitle:draft.pageTitle,copyDestination:draft.destination,copyAssetFolder:draft.assetFolder,copyAffiliateUrl:draft.affiliateUrl,copyGuarantee:draft.guaranteeDays,copyGuaranteeStatus:draft.guaranteeStatus,copyFreeShipping:draft.freeShipping,copyTrackingHostname:draft.trackingHostname,copyTrackingSubdomain:draft.trackingSubdomain,copyTrackingPlatform:draft.trackingPlatform};
     for(const [id,value] of Object.entries(fields))if(by(root,id)&&value!==undefined)by(root,id).value=value;
+    if(draft.discountPercentDefaultSuggested===true)by(root,'copyDiscount').dataset.defaultSuggested='true';
     if(draft.assetStudioDirectoryAutoUpdated===true){const note=by(root,'copyDestinationAutoNotice');if(note)note.hidden=false}
-    if(draft.trackingSubdomainAuto===true){by(root,'copyTrackingSubdomain').dataset.autoFilled='true';by(root,'copyTrackingSubdomain').classList.add('is-autofilled')}
     by(root,'copyTrackingEnabled').checked=draft.trackingEnabled!==false;
     if(draft.guaranteeStatus===undefined&&draft.guaranteeDays)by(root,'copyGuaranteeStatus').value='confirmed';
     restoreAutoFilledFieldIds(root.querySelectorAll('input,select,textarea'),draft.autoFilledFields);
+    const trackingSubdomainField=by(root,'copyTrackingSubdomain');
+    if(Object.prototype.hasOwnProperty.call(draft,'trackingSubdomainAuto')){
+      if(draft.trackingSubdomainAuto===true){trackingSubdomainField.dataset.autoFilled='true';trackingSubdomainField.classList.add('is-autofilled')}
+      else{delete trackingSubdomainField.dataset.autoFilled;trackingSubdomainField.classList.remove('is-autofilled')}
+    }
     const trackingPlatform=by(root,'copyTrackingPlatform');
     if(draft.trackingPlatformAuto){trackingPlatform.dataset.autoFilled='true';trackingPlatform.classList.add('is-autofilled')}
     else{delete trackingPlatform.dataset.autoFilled;trackingPlatform.classList.remove('is-autofilled')}
@@ -526,7 +757,7 @@ function restoreDraft(root){
     if([...managerSelect.options].some(option=>option.value===requestedManager))managerSelect.value=requestedManager;
     populateTrackingAccountOptions(root,{preferredAccountId:accountSource,preferTarget:!accountSource});
     if(accountSource==='manual')accountField.value=draft.trackingManualAccountId||(draft.trackingAccountSource==='manual'?'':oldAccountId)||'';
-    by(root,'copyTrackingAllAccounts').checked=draft.trackingAllAccounts===true;
+    if(Object.prototype.hasOwnProperty.call(draft,'trackingAllAccounts'))by(root,'copyTrackingAllAccounts').checked=draft.trackingAllAccounts===true;
     currentSelectedTrackingAccountIds=Array.isArray(draft.trackingSelectedAccountIds)
       ?new Set(draft.trackingSelectedAccountIds.map(String).filter(id=>accountsForSelectedManager(root).some(account=>String(account.customerId)===id)))
       :null;
@@ -537,22 +768,27 @@ function restoreDraft(root){
       const price=by(root,'copyProductPrice');price.value=draft.confirmedProductPrice;
       price.dataset.priceBasis=draft.productPriceBasis||'';price.dataset.priceQuantity=draft.productPriceQuantity||'';price.dataset.priceTerms=draft.productPriceTerms||'';
     }
-    syncTrackingPlatformFromAffiliate(root);updateTrackingFields(root);updateTrackingTitlePreview(root);
+     syncTrackingPlatformFromAffiliate(root);updatePresellSourceMode(root);updateTrackingTitlePreview(root);
   }catch{}
+}
+
+function applyDefaultDiscountPercent(root){
+  const field=by(root,'copyDiscount');
+  if(field&&!existingPageMode(root)&&!String(field.value||'').trim()){field.value='72';field.dataset.defaultSuggested='true'}
 }
 
 function resetCollection(root,toast){
   if(!confirm('Limpar todos os campos e resultados desta coleta?'))return;
-  clearDraft();
+  clearFichaDraft();
   assetStudioAppliedGenerationId='';
   try{localStorage.removeItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)}catch{}
   currentTrackingPreSellUrls=new Map();currentTrackingPreSellAutoUrls=new Map();
-  const blankFields=['copyDtcUrl','copyAffiliateUrl','copyRawText','copyProduct','copyCountry','copyLanguage','copyCurrency','copyDiscount','copyDiscountAmount','copyProductPrice','copyGuarantee','copyPageTitle','copyDestination','copyFichaSource','copyTrackingHostname','copyTrackingSubdomain','copyTrackingAccountId'];
+  const blankFields=['copyDtcUrl','copyAffiliateUrl','copyRawText','copyProduct','copyCountry','copyLanguage','copyCurrency','copyDiscount','copyDiscountAmount','copyProductPrice','copyGuarantee','copyBonusDescription','copyPageTitle','copyDestination','copyFichaSource','copyTrackingHostname','copyTrackingSubdomain','copyTrackingAccountId'];
   blankFields.forEach(id=>{const field=by(root,id);if(field)field.value=''});
   clearStructuredFichaAnalysis(root);
-  by(root,'copyTrackingPlatform').value='';by(root,'copyTrackingEnabled').checked=true;by(root,'copyTrackingAccountId').value='';by(root,'copyTrackingAllAccounts').checked=false;currentSelectedTrackingAccountIds=null;populateTrackingAccountOptions(root,{preferTarget:true});updateTrackingFields(root);updateTrackingTitlePreview(root);
+  by(root,'copyTrackingPlatform').value='';by(root,'copyTrackingEnabled').checked=true;by(root,'copyTrackingAccountId').value='';by(root,'copyTrackingAllAccounts').checked=true;currentSelectedTrackingAccountIds=null;populateTrackingAccountOptions(root,{preferTarget:true});by(root,'copyPresellSourceMode').value='generate';updatePresellSourceMode(root);updateTrackingTitlePreview(root);
   const destinationAutoNotice=by(root,'copyDestinationAutoNotice');if(destinationAutoNotice)destinationAutoNotice.hidden=true;
-  const pendingFields=['copyFreeShipping','copyGuaranteeStatus'];
+  const pendingFields=['copyFreeShipping','copyGuaranteeStatus','copyBonusStatus'];
   pendingFields.forEach(id=>{const field=by(root,id);if(field)field.value='pending'});
   by(root,'copyAssetFolder').value='assets';
   root.querySelectorAll('[data-auto-filled],.is-autofilled').forEach(field=>{delete field.dataset.autoFilled;field.classList.remove('is-autofilled')});
@@ -783,6 +1019,15 @@ function renderWarnings(root,warnings,{blocked=false}={}){
   for(const warning of warnings){const item=document.createElement('li');item.textContent=warning;list.append(item)}
   host.append(list);
 }
+function renderExistingDestinationNotice(root,warnings=[]){
+  const host=by(root,'copyWarnings');
+  host.replaceChildren();host.className='copy-ficha-existing-notice';
+  const title=document.createElement('strong');title.textContent='Páginas locais preservadas';
+  const message=document.createElement('p');message.textContent='Os destinos listados já contêm páginas e o Hub manteve os arquivos como estão. Alterar o prefixo do subdomínio não exige gerar essas páginas novamente. Este aviso é informativo; se a etapa final indicar contas prontas, você pode continuar para a campanha.';
+  host.append(title,message);
+  const paths=(Array.isArray(warnings)?warnings:[]).map(value=>String(value||'').replace(/^O destino já existe e não será sobrescrito automaticamente:\s*/i,'').trim()).filter(Boolean);
+  if(paths.length){const list=document.createElement('ul');for(const path of paths){for(const destination of path.split(/;\s*/).filter(Boolean)){const item=document.createElement('li');item.textContent=destination;list.append(item)}}host.append(list)}
+}
 function clearValidationMessages(root){
   const host=by(root,'copyWarnings');
   host.replaceChildren();host.className='copy-ficha-note';
@@ -800,8 +1045,10 @@ function refreshDetectedProductPrice(root){
 }
 
 function generateQuestions(root,toast){
-  refreshDetectedProductPrice(root);
-  renderOfferQuestions(root,buildOfferQuestionAnswers(payload(root)));
+  if(!existingPageMode(root))refreshDetectedProductPrice(root);
+  const questionData=payload(root);
+  if(existingPageMode(root)){questionData.rawText='';questionData.dtcUrl=''}
+  renderOfferQuestions(root,buildOfferQuestionAnswers(questionData));
   toast?.('Perguntas e respostas geradas');
 }
 
@@ -941,7 +1188,7 @@ function buildPresellBatchTargets(root,baseFicha){
 }
 
 function presellDeployDraftTargets(root){
-  if(!by(root,'copyTrackingEnabled')?.checked||!by(root,'copyTrackingAllAccounts')?.checked)return null;
+  if(existingPageMode(root)||!by(root,'copyTrackingEnabled')?.checked||!by(root,'copyTrackingAllAccounts')?.checked)return null;
   const product=String(inputValue(root,'copyProduct')||'Pre-Sell');
   let targets;
   try{
@@ -960,6 +1207,48 @@ function presellDeployDraftTargets(root){
       };
     }),
   };
+}
+
+function buildExistingPageDeployJob(root){
+  const product=inputValue(root,'copyProduct'),sourceDirectory=inputValue(root,'copyDestination');
+  if(!product)throw new Error('Informe o produto associado à página existente.');
+  if(!sourceDirectory){const field=by(root,'copyDestination');field?.classList.add('is-pending');field?.setAttribute('aria-invalid','true');field?.focus();throw new Error('Informe a pasta local da página existente. Ela precisa estar dentro da pasta de produtos configurada no Hub.')}
+  if(trackingAccountSource(root)==='manual')throw new Error('Selecione uma conta salva no diretório local; o ID manual não informa qual domínio Hostinger deve receber a página.');
+  const accounts=selectedTrackingTargetAccounts(root);
+  if(!accounts.length)throw new Error('Selecione ao menos uma conta da MCC para associar à página existente.');
+  const all=Boolean(by(root,'copyTrackingAllAccounts')?.checked);
+  const targets=accounts.map((account,index)=>{
+    const accountId=normalizeTrackingAccountId(account.customerId),parentDomain=accountHostForHpanel(account);
+    if(!parentDomain)throw new Error(`Não foi possível identificar o domínio Hostinger associado a ${account.name||accountId}.`);
+    const value=all?accountPublicPreSellUrl(root,accountId):inputValue(root,'copyTrackingHostname');
+    if(!value)throw new Error(`Informe a URL HTTPS da página existente para ${account.name||accountId}.`);
+    let hostname;
+    try{hostname=normalizeTrackingDomainInput(value)}catch(error){throw new Error(`${account.name||accountId}: ${error.message}`)}
+    const suffix=`.${parentDomain.toLowerCase()}`;
+    if(!hostname.endsWith(suffix))throw new Error(`${account.name||accountId}: use um subdomínio direto do domínio Hostinger associado (${parentDomain}).`);
+    const prefix=hostname.slice(0,-suffix.length);
+    if(!validTrackingSubdomain(prefix))throw new Error(`${account.name||accountId}: o endereço deve usar apenas um nível de subdomínio antes de ${parentDomain}.`);
+    return {
+      id:accountId,pageNumber:index+1,accountId,accountName:String(account.name||''),hpanelDomain:parentDomain,
+      publicUrl:`https://${hostname}`,domain:hostname,sourceDirectory,parentDomain,prefix,directory:prefix,
+      requireIndexHtml:true,includeProductImages:true,pageSourceMode:'existing',status:'pending',deploymentState:'pending'
+    };
+  });
+  return {product,sourceDirectory,targets};
+}
+
+async function prepareExistingPageForHosting(root,toast){
+  const {product,sourceDirectory,targets}=buildExistingPageDeployJob(root);
+  const targetSummary=targets.map(target=>`• ${target.accountName||target.accountId} · ${target.publicUrl}`).join('\n');
+  const confirmed=confirm(`Preparar a hospedagem da página local existente?\n\nProduto: ${product}\nPasta: ${sourceDirectory}\n\nDestinos:\n${targetSummary}\n\nA pasta precisa estar sob a raiz de produtos do Hub, conter index.html na raiz e manter os arquivos de assets diretamente dentro de assets/ (sem subpastas). O Hub vai somente registrar a tarefa local e abrir a análise; não vai gerar nem alterar a página local. Subdomínios ausentes podem ser criados somente após outra confirmação; o envio dos arquivos também exige confirmação separada. Uma tarefa pendente do mesmo produto, conta e pasta pode ser marcada como substituída no histórico.`);
+  if(!confirmed)return false;
+  const job=queuePresellDeployJob({campaignDeliveryId:campaignDeliveryQueryId(),product,pageSourceMode:'existing',targets});
+  if(!job)throw new Error('Não foi possível salvar a tarefa local de hospedagem neste navegador.');
+  by(root,'copyPresellStatus').textContent='A página existente foi adicionada à etapa de hospedagem. A pasta local permanece intacta; a análise ainda não foi executada.';
+  by(root,'copyWarnings').textContent='Página existente selecionada. Confira a pasta, as contas e os endereços no modal antes de analisar.';
+  toast?.('Página existente adicionada à hospedagem');
+  openPresellDeployWorkflow(job.id);
+  return true;
 }
 
 function showTrackingBatchPopup(root,{registrations=[],targets=[],production=null,uncertain=false,errorText=''}={}){
@@ -1055,7 +1344,7 @@ function queueDeployFromResult(root,result,ficha){
     }
   }
   if(!targets.length)return null;
-  return queuePresellDeployJob({product:String(ficha.product||'Pre-Sell'),targets,generationSummary});
+  return queuePresellDeployJob({campaignDeliveryId:campaignDeliveryQueryId(),product:String(ficha.product||'Pre-Sell'),targets,generationSummary});
 }
 
 function isExistingPresellDestinationError(error){
@@ -1225,10 +1514,13 @@ async function generateFichaAndCreatePresell(root,toast,{overwriteExisting=false
 
 export async function mount({root,toast}={}){
   if(!root)return;
+  if(mounted){if(campaignDeliveryQueryId()){const resetButton=by(root,'copyReset');if(resetButton)resetButton.hidden=true}applyCampaignDeliveryPrefill(root);applyDefaultDiscountPercent(root);applyPendingAssetStudioPageDirectory(root);return}
   if(!mounted){
     root.innerHTML=renderTemplate();
-    refreshTrackingAccountDirectory(root,{initial:true});restoreDraft(root);syncTrackingPlatformFromAffiliate(root);updateTrackingFields(root);updateTrackingTitlePreview(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);updateDiscountNote(root);renderOfferQuestions(root);
-    mountPresellDeployWorkflow({root,toast,getDraftTargets:()=>presellDeployDraftTargets(root),hpanelUrlForDomain:(domain,parentDomain)=>accountDomainUrl(parentDomain)||accountDomainUrl(domain)});
+    if(campaignDeliveryQueryId()){const resetButton=by(root,'copyReset');if(resetButton)resetButton.hidden=true}
+    refreshTrackingAccountDirectory(root,{initial:true});restoreDraft(root);applyDefaultDiscountPercent(root);syncTrackingPlatformFromAffiliate(root);updatePresellSourceMode(root);updateTrackingTitlePreview(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);updateDiscountNote(root);renderOfferQuestions(root);
+    applyCampaignDeliveryPrefill(root);
+    mountPresellDeployWorkflow({root,toast,getDraftTargets:()=>presellDeployDraftTargets(root),getCampaignDeliveryContext:()=>{const id=campaignDeliveryQueryId();if(!id)return null;const delivery=getCampaignDelivery(id);return{id,productName:String(delivery?.productName||by(root,'copyProduct')?.value||'').trim(),createdAt:String(delivery?.createdAt||'')}},onGenerateDraft:()=>{const generateButton=by(root,'copyGenerateFicha');if(!generateButton)return false;generateButton.scrollIntoView({behavior:'smooth',block:'center'});generateButton.focus({preventScroll:true});generateButton.click();return true},hpanelUrlForDomain:(domain,parentDomain)=>accountDomainUrl(parentDomain)||accountDomainUrl(domain)});
     by(root,'copyAnalyze').onclick=()=>analyzeClipboard(root);
     by(root,'copyAnalyzeManual').onclick=()=>analyzeManualText(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
@@ -1246,18 +1538,26 @@ export async function mount({root,toast}={}){
     });
     by(root,'copyGenerateFicha').onclick=async()=>{
       if(creatingPresell)return;
+      if(existingPageMode(root)){
+        creatingPresell=true;const button=by(root,'copyGenerateFicha');button.disabled=true;button.textContent='Preparando página existente…';
+        try{await prepareExistingPageForHosting(root,toast)}catch(error){by(root,'copyPresellStatus').textContent=error.message;by(root,'copyWarnings').textContent=error.message;toast?.(error.message,true)}
+        finally{creatingPresell=false;button.disabled=false;button.textContent='Preparar hospedagem da página existente'}
+        return;
+      }
       const overwriteExisting=nextPresellOverwriteOnce;nextPresellOverwriteOnce=false;
       creatingPresell=true;const button=by(root,'copyGenerateFicha');button.disabled=true;button.textContent='Validando e preparando…';
       try{await generateFichaAndCreatePresell(root,toast,{overwriteExisting})}catch(error){
-        updatePendingHighlights(root,{fields:error?.fields});renderWarnings(root,error.blockers||[error.message],{blocked:true});
-        if(isExistingPresellDestinationError(error)&&!overwriteExisting){
+        const existingDestinationConflict=isExistingPresellDestinationError(error)&&!overwriteExisting;
+        if(existingDestinationConflict)renderExistingDestinationNotice(root,error.blockers||[error.message]);
+        else{updatePendingHighlights(root,{fields:error?.fields});renderWarnings(root,error.blockers||[error.message],{blocked:true})}
+        if(existingDestinationConflict){
           const ficha=error.singleFicha||error.baseFicha||{},targets=existingPresellDeployTargets(root,error),product=String(ficha.product||'Pre-Sell');
-          by(root,'copyPresellStatus').textContent='A pasta de saída já existe. Escolha configurar o domínio e publicar a pasta, cancelar ou sobrescrever somente os arquivos da página.';
+          by(root,'copyPresellStatus').textContent='As páginas locais já existem e foram preservadas. Mudar o prefixo do subdomínio não exige recriá-las.';
           showExistingPresellDecision(root,{
             targets,product,
             onQueueDeploy:()=>{
               const publishableTargets=targets.filter(target=>target.exists);
-              const job=queuePresellDeployJob({product,targets:publishableTargets});
+              const job=queuePresellDeployJob({campaignDeliveryId:campaignDeliveryQueryId(),product,targets:publishableTargets});
               if(job)by(root,'copyPresellStatus').textContent='A pasta existente foi adicionada à etapa de hospedagem e publicação.';
               return job;
             },
@@ -1280,7 +1580,7 @@ export async function mount({root,toast}={}){
         }else by(root,'copyPresellStatus').textContent=error.message;
         root.querySelector('.is-pending')?.focus();toast?.(error.message,true)
       }
-      finally{creatingPresell=false;button.disabled=false;button.textContent='Validar ficha e criar Presell'}
+      finally{creatingPresell=false;button.disabled=false;button.textContent=existingPageMode(root)?'Preparar hospedagem da página existente':'Validar ficha e criar Presell'}
     };
     const markManual=event=>{
       if(event.target.matches('[data-offer-answer]')){
@@ -1295,26 +1595,38 @@ export async function mount({root,toast}={}){
         if(previousCurrency&&previousCurrency!==inputValue(root,'copyCurrency')&&by(root,'copyDiscountAmount')?.dataset.autoFilled==='true')clearAutoDiscountAmount(root);
         updateDiscountAmountLabel(root);
       }
+      if(event.target.id==='copyDiscount')delete event.target.dataset.defaultSuggested;
       if(event.target.matches('.copy-ficha-input,.copy-ficha-select')){delete event.target.dataset.autoFilled;event.target.classList.remove('is-autofilled')}
+      if(event.target.id==='copyCountry'){
+        const defaults=applyCountryPresentationDefaults(root);
+        if(defaults.languageChanged)updateAutoPageTitleForLanguage(root);
+      }
       if(event.target.id==='copyDiscount')syncDiscountFields(root,'percent');
       if(event.target.id==='copyDiscountAmount')syncDiscountFields(root,'amount');
       if(event.target.id==='copyProductPrice'){updateProductPriceNote(root);syncDiscountFields(root,'price')}
       if(event.target.id==='copyDestination'){
         const note=by(root,'copyDestinationAutoNotice');if(note)note.hidden=true;
-        writeDraft({destination:event.target.value,assetStudioDirectoryAutoUpdated:false,autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
+        writeFichaDraft({destination:event.target.value,assetStudioDirectoryAutoUpdated:false,autoFilledFields:collectAutoFilledFieldIds(root.querySelectorAll('[data-auto-filled="true"]'))});
         return;
       }
       if(['copyAffiliateUrl','copyAssetFolder','copyPageTitle'].includes(event.target.id))return;
       if(event.target.matches('input,select,textarea')&&!event.target.readOnly)invalidateGeneratedOutputs(root,'Dados alterados. Revise e valide novamente a ficha.');
     };
     const handleFieldEdit=event=>{
+      if(event.target.id==='copyPresellSourceMode'){
+        updatePresellSourceMode(root,{save:true});
+        return;
+      }
+      if(event.target.matches('[data-account-domain-input]')){
+        currentAccountDomainDrafts.set(event.target.dataset.accountDomainInput,event.target.value);return;
+      }
       if(event.target.matches('[data-tracking-multi-account]')){
         const selected=selectedTrackingAccounts(root),accountId=event.target.dataset.trackingMultiAccount;
-        if(event.target.checked)selected.add(accountId);else selected.delete(accountId);
+        if(event.target.checked)selected.add(accountId);else{selected.delete(accountId);currentAccountDomainEditing.delete(accountId);currentAccountDomainDrafts.delete(accountId);currentAccountDomainErrors.delete(accountId)}
         renderHpanelLinks(root);root.querySelector(`[data-tracking-multi-account="${accountId}"]`)?.focus();saveTrackingDraft(root);return;
       }
       markManual(event);
-      if(event.target.id==='copyAffiliateUrl')syncTrackingPlatformFromAffiliate(root);
+      if(event.target.id==='copyAffiliateUrl'){syncTrackingPlatformFromAffiliate(root);updateCampaignDeliveryAffiliatePresentation(root);updateExistingAffiliateLink(root)}
       if(event.target.id==='copyTrackingEnabled')updateTrackingFields(root);
       if(event.target.id==='copyTrackingManager'){
         populateTrackingAccountOptions(root,{preferTarget:true});
@@ -1353,7 +1665,7 @@ export async function mount({root,toast}={}){
       if(['copyTrackingEnabled','copyTrackingHostname','copyTrackingSubdomain','copyTrackingPlatform','copyTrackingManager','copyTrackingAccount','copyTrackingAccountId','copyTrackingAllAccounts','copyAffiliateUrl'].includes(event.target.id)||event.target.matches('[data-tracking-presell-url]'))saveTrackingDraft(root);
       if(event.target.id==='copyTrackingAccount'&&event.target.value==='manual')by(root,'copyTrackingAccountId').focus();
       if(event.target.id!=='copyFichaSource')updatePendingHighlights(root);
-      if(['copyProductPrice','copyDiscount','copyDiscountAmount','copyCurrency'].includes(event.target.id))saveDraft(root);
+      if(['copyProductPrice','copyDiscount','copyDiscountAmount','copyCurrency','copyCountry','copyLanguage','copyGuarantee','copyGuaranteeStatus','copyFreeShipping','copyBonusStatus','copyBonusDescription'].includes(event.target.id))saveDraft(root);
     };
     root.addEventListener('input',handleFieldEdit);root.addEventListener('change',handleFieldEdit);
     if(inputValue(root,'copyFichaSource'))renderStructuredFichaAnalysis(root,inputValue(root,'copyFichaSource'),{origin:'draft'});

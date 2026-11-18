@@ -1,14 +1,20 @@
-import { fetchGoogleAdsAccounts } from './google-ads-service.mjs?v=10';
-import { normalizeGoogleAdsAccounts } from './google-ads-domain.mjs?v=6';
-import { loadGoogleAdsAccountsCache, saveGoogleAdsAccountsCache } from './google-ads-accounts-cache.mjs?v=2';
+import { fetchGoogleAdsAccounts } from './google-ads-service.mjs?v=16';
+import { normalizeGoogleAdsAccounts } from './google-ads-domain.mjs?v=7';
+import { loadGoogleAdsAccountsCache, saveGoogleAdsAccountsCache } from './google-ads-accounts-cache.mjs?v=4';
 import { readTrackingHubToken } from '../tracking/tracking-token-storage.mjs?v=2';
+import { listDrafts } from '../copy-ficha/copy-ficha-draft.mjs?v=4';
+import { buildStructuredFicha } from '../copy-ficha/copy-ficha-structured.mjs?v=4';
+import { preparePresellTrackingBatch } from '../copy-ficha/copy-ficha-tracking-service.mjs?v=3';
+import { mountPresellDeployWorkflow, openPresellDeployWorkflow, queuePresellDeployJob, readPresellDeployJobs, PRESELL_DEPLOY_JOBS_UPDATED_EVENT } from '../copy-ficha/copy-ficha-deploy.mjs?v=48';
+import { createPresellBatch } from '../presell/presell-service.mjs?v=8';
+import { accountDomainUrl } from '../accounts/accounts-domain.mjs?v=13';
 import {
   createGoogleAdsCampaignDuplicationEntry,
   fetchGoogleAdsCampaignsForDuplication,
   inspectGoogleAdsCampaignForDuplication,
   previewGoogleAdsCampaignDuplication,
-} from './google-ads-campaign-duplication-service.mjs?v=2';
-import { GOOGLE_ADS_DUPLICATION_B_TEST_NOTICE, GOOGLE_ADS_DUPLICATION_CPA_LEVELS } from './google-ads-campaign-duplication-domain.mjs?v=1';
+} from './google-ads-campaign-duplication-service.mjs?v=7';
+import { GOOGLE_ADS_DUPLICATION_B_TEST_NOTICE, GOOGLE_ADS_DUPLICATION_CPA_LEVELS } from './google-ads-campaign-duplication-domain.mjs?v=2';
 
 const mountedRoots = new WeakMap();
 const confirmedNoWriteErrors = new Set([
@@ -44,8 +50,13 @@ function html(rootMarkup) {
           <div class="google-ads-duplication-inspection" data-source-inspection hidden></div>
         </section>
         <section class="google-ads-duplication-section"><h3>2. Contas de destino e Pre-Sell</h3>
-          <p class="google-ads-duplication-help">Marque as contas que receberão as cópias. Informe uma URL HTTPS por conta; todas as faixas de CPA enviadas à mesma conta usarão essa URL.</p>
+          <p class="google-ads-duplication-help">Marque as contas que receberão as cópias. Você pode informar uma URL HTTPS por conta ou reutilizar uma Ficha salva para gerar as páginas em lote; todas as faixas enviadas à mesma conta usarão a mesma URL.</p>
+          <div class="google-ads-duplication-presell-setup">
+            <div class="google-ads-duplication-presell-controls"><label class="google-ads-creation-field"><span>Ficha salva para reutilizar</span><select class="input" data-ficha-draft><option value="">Carregando Fichas locais…</option></select></label><button class="btn" type="button" data-refresh-ficha-drafts>Atualizar Fichas</button><button class="btn" type="button" data-load-hostinger-sites>Atualizar sites Hostinger</button><button class="btn primary" type="button" data-generate-presells disabled>Gerar Pre-Sells para as contas marcadas</button></div>
+            <p class="google-ads-duplication-status" data-presell-status role="status" aria-live="polite">Uma única Ficha e a pasta de assets dela serão reutilizadas; cada conta terá seu próprio subdomínio.</p>
+          </div>
           <div class="google-ads-duplication-targets" data-targets></div>
+          <section class="google-ads-duplication-presell-deploy" id="copyPresellDeployTask" hidden><p id="copyPresellDeployStatus" class="copy-ficha-deploy-status"></p><button id="copyPresellDeployOpen" class="copy-ficha-btn copy-ficha-deploy-button" type="button">Abrir hospedagem e publicação</button></section>
         </section>
         <section class="google-ads-duplication-section"><h3>3. Faixas de CPA</h3>
           <p class="google-ads-duplication-help">As faixas são calculadas pela comissão no nome da campanha. A sequência será global na conta de origem e nas contas de destino marcadas; nomes existentes não serão renumerados e outras contas não serão consultadas. O lote aceita até 24 cópias. Cada cópia é validada e criada em uma operação separada da Google Ads API.</p>
@@ -94,6 +105,12 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
   const createButton = page.querySelector('[data-create]');
   const resultsArea = page.querySelector('[data-results]');
   const resultList = page.querySelector('[data-result-list]');
+  const fichaDraftSelect = page.querySelector('[data-ficha-draft]');
+  const refreshFichaDraftsButton = page.querySelector('[data-refresh-ficha-drafts]');
+  const loadHostingerSitesButton = page.querySelector('[data-load-hostinger-sites]');
+  const generatePresellsButton = page.querySelector('[data-generate-presells]');
+  const presellStatus = page.querySelector('[data-presell-status]');
+  const deployOpenButton = page.querySelector('#copyPresellDeployOpen');
 
   let directory = loadGoogleAdsAccountsCache()?.accounts || null;
   let campaigns = [];
@@ -102,6 +119,11 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
   let busy = false;
   let created = false;
   let sourceCampaignPrefill = null;
+  let fichaDrafts = [];
+  let hostingerSites = [];
+  let activePresellJobId = '';
+  const targetUrlValues = new Map();
+  const presellTargetConfig = new Map();
   const selectedTargetKeys = new Set();
 
   const selectedManagerId = () => sourceManager.value === 'direct' ? null : sourceManager.value || null;
@@ -109,6 +131,91 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
     && String(item.managerCustomerId ?? 'direct') === String(selectedManagerId() ?? 'direct')) || null;
   const selectedSourceCampaign = () => campaigns.find(item => item.campaignId === sourceCampaign.value) || null;
   const accountKey = account => `${account?.managerCustomerId ?? 'direct'}:${account?.customerId ?? ''}`;
+  const selectedFichaDraft = () => fichaDrafts.find(item => item.key === fichaDraftSelect.value) || null;
+  const rootHostingerSites = () => hostingerSites.filter(site => site?.domain && site?.username
+    && String(site.websiteType || '').toLowerCase() !== 'subdomain'
+    && !/^(disabled|desabilitado|inativo)$/i.test(String(site.status || '')));
+  const FICHA_SELECTION_KEY = 'hub:google-ads-campaign-duplication:ficha-draft:v1';
+  const FICHA_CONFIG_KEY = 'hub:google-ads-campaign-duplication:presell-config:v1';
+  try {
+    const saved = JSON.parse(localStorage.getItem(FICHA_CONFIG_KEY) || '{}');
+    if (saved && typeof saved === 'object') {
+      for (const [key, value] of Object.entries(saved)) if (value && typeof value === 'object') presellTargetConfig.set(key, { site: String(value.site || ''), prefix: String(value.prefix || '') });
+    }
+  } catch {}
+
+  function setPresellMessage(text, error = false) { message(presellStatus, text, error); }
+
+  function defaultPrefix(draft, account) {
+    const product = String(draft?.product || draft?.structuredFicha?.match(/^\s*\[PRODUTO\]\s*(.+)$/m)?.[1] || 'presell');
+    const slug = product.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'presell';
+    const suffix = String(account?.customerId || '').replace(/\D/g, '').slice(-6);
+    return `${slug.slice(0, Math.max(1, 62 - (suffix ? suffix.length : 0))).replace(/-+$/g, '')}${suffix ? `-${suffix}` : ''}`;
+  }
+
+  function loadFichaDraftChoices({ keepSelection = true } = {}) {
+    const previous = keepSelection ? fichaDraftSelect.value : '';
+    fichaDrafts = listDrafts();
+    fichaDraftSelect.replaceChildren(new Option(fichaDrafts.length ? 'Selecione uma Ficha salva' : 'Nenhuma Ficha local com pasta de assets', ''));
+    for (const item of fichaDrafts) {
+      const draft = item.draft;
+      const scope = item.key.includes(':delivery:') ? 'Entrega' : 'Manual';
+      const label = [draft.product || draft.pageTitle || 'Ficha sem nome', draft.countryCode, scope].filter(Boolean).join(' · ');
+      fichaDraftSelect.add(new Option(label, item.key));
+    }
+    let stored = '';
+    try { stored = localStorage.getItem(FICHA_SELECTION_KEY) || ''; } catch {}
+    fichaDraftSelect.value = fichaDrafts.some(item => item.key === previous) ? previous
+      : fichaDrafts.some(item => item.key === stored) ? stored : (fichaDrafts[0]?.key || '');
+    updatePresellControls();
+    renderTargets();
+  }
+
+  function configFor(account, draft = selectedFichaDraft()?.draft) {
+    const key = accountKey(account);
+    const saved = presellTargetConfig.get(key) || {};
+    return { site: String(saved.site || ''), prefix: String(saved.prefix || defaultPrefix(draft, account)) };
+  }
+
+  function hostingerSiteByKey(key) {
+    return rootHostingerSites().find(site => `${site.domain}|${site.username}` === String(key || '')) || null;
+  }
+
+  function updateConfiguredUrl(account) {
+    const config = configFor(account);
+    const site = hostingerSiteByKey(config.site);
+    const prefix = String(config.prefix || '').trim().toLowerCase();
+    const url = site && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix) ? `https://${prefix}.${String(site.domain).toLowerCase()}` : '';
+    const key = accountKey(account);
+    if (!url) {
+      targetUrlValues.set(key, '');
+      const field = targetArea.querySelector(`[data-target-url="${CSS.escape(key)}"]`);
+      if (field) field.value = '';
+      invalidatePlan();
+      return;
+    }
+    targetUrlValues.set(key, url);
+    const field = targetArea.querySelector(`[data-target-url="${CSS.escape(key)}"]`);
+    if (field) field.value = url;
+    invalidatePlan();
+  }
+
+  function updatePresellControls() {
+    const chosen = selectedFichaDraft();
+    const selectedCount = targetArea.querySelectorAll('[data-target-check]:checked').length;
+    const hostingerReady = rootHostingerSites().length > 0;
+    generatePresellsButton.disabled = busy || !chosen || !selectedCount || !hostingerReady;
+    loadHostingerSitesButton.disabled = busy;
+    refreshFichaDraftsButton.disabled = busy;
+    fichaDraftSelect.disabled = busy || !fichaDrafts.length;
+  }
+
+  function persistFichaConfiguration() {
+    try {
+      localStorage.setItem(FICHA_SELECTION_KEY, fichaDraftSelect.value || '');
+      localStorage.setItem(FICHA_CONFIG_KEY, JSON.stringify(Object.fromEntries(presellTargetConfig)));
+    } catch {}
+  }
 
   function message(node, text, error = false) {
     node.textContent = text;
@@ -166,12 +273,21 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
       targetArea.innerHTML = '<p class="google-ads-duplication-empty">Não há contas de destino disponíveis neste diretório. Atualize MCCs e contas.</p>';
       previewButton.disabled = true;
       updateSequenceAccountCount();
+      updatePresellControls();
       return;
     }
-    targetArea.innerHTML = accounts.map(account => `<label class="google-ads-duplication-target${selectedTargetKeys.has(accountKey(account))?' is-selected':''}" data-target-card="${escapeHtml(account.customerId)}">
-      <span class="google-ads-duplication-target-check"><input type="checkbox" data-target-check="${escapeHtml(account.customerId)}" data-target-manager="${escapeHtml(account.managerCustomerId || '')}"${selectedTargetKeys.has(accountKey(account))?' checked':''}><span><strong>${escapeHtml(account.name)}</strong><small>${escapeHtml(account.managerName)} · ${escapeHtml(account.currencyCode)} · ${escapeHtml(account.customerId)}</small></span></span>
-      <span class="google-ads-creation-field"><span>URL da Pre-Sell desta conta</span><input class="input" type="url" inputmode="url" placeholder="https://dominio-da-presell.com" data-target-url="${escapeHtml(account.customerId)}"${selectedTargetKeys.has(accountKey(account))?'':' disabled'}></span>
-    </label>`).join('');
+    const ficha = selectedFichaDraft()?.draft;
+    const sites = rootHostingerSites();
+    targetArea.innerHTML = accounts.map(account => {
+      const key = accountKey(account), config = configFor(account, ficha), site = hostingerSiteByKey(config.site);
+      const selected = selectedTargetKeys.has(key), publicUrl = targetUrlValues.get(key) || '';
+      const siteOptions = `<option value="">Selecione o site principal</option>${sites.map(item => `<option value="${escapeHtml(`${item.domain}|${item.username}`)}"${`${item.domain}|${item.username}`===config.site?' selected':''}>${escapeHtml(item.domain)}</option>`).join('')}`;
+      const hostingerControls = ficha ? `<div class="google-ads-duplication-presell-target"><label class="google-ads-creation-field"><span>Site principal Hostinger</span><select class="input" data-target-hostinger-site="${escapeHtml(key)}"${selected&&sites.length?'':' disabled'}>${siteOptions}</select></label><label class="google-ads-creation-field"><span>Prefixo do subdomínio</span><input class="input" type="text" maxlength="63" data-target-hostinger-prefix="${escapeHtml(key)}" value="${escapeHtml(config.prefix)}" placeholder="ex.: nome-do-produto"${selected?'':' disabled'}></label><small>${site&&config.prefix?`Endereço previsto: https://${escapeHtml(config.prefix)}.${escapeHtml(site.domain)}`:sites.length?'Escolha o site principal para definir a URL.':'Atualize a lista de sites da Hostinger.'}</small></div>` : '';
+      return `<article class="google-ads-duplication-target${selected?' is-selected':''}" data-target-card="${escapeHtml(key)}">
+        <label class="google-ads-duplication-target-check"><input type="checkbox" data-target-check="${escapeHtml(account.customerId)}" data-target-manager="${escapeHtml(account.managerCustomerId || '')}"${selected?' checked':''}><span><strong>${escapeHtml(account.name)}</strong><small>${escapeHtml(account.managerName)} · ${escapeHtml(account.currencyCode)} · ${escapeHtml(account.customerId)}</small></span></label>
+        <label class="google-ads-creation-field"><span>URL da Pre-Sell desta conta</span><input class="input" type="url" inputmode="url" placeholder="https://dominio-da-presell.com" data-target-url="${escapeHtml(key)}" value="${escapeHtml(publicUrl)}"${selected?'':' disabled'}></label>${hostingerControls}
+      </article>`;
+    }).join('');
     targetArea.querySelectorAll('[data-target-check]').forEach(input => input.addEventListener('change', () => {
       const card = input.closest('[data-target-card]');
       const url = card.querySelector('[data-target-url]');
@@ -185,8 +301,24 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
       }
       invalidatePlan();
       updateSequenceAccountCount();
+      updatePresellControls();
     }));
-    targetArea.querySelectorAll('[data-target-url]').forEach(input => input.addEventListener('input', invalidatePlan));
+    targetArea.querySelectorAll('[data-target-url]').forEach(input => input.addEventListener('input', () => { targetUrlValues.set(input.dataset.targetUrl, input.value); invalidatePlan(); }));
+    targetArea.querySelectorAll('[data-target-hostinger-site]').forEach(input => input.addEventListener('change', () => {
+      const key = input.dataset.targetHostingerSite, account = accounts.find(item => accountKey(item) === key);
+      if (!account) return;
+      const config = configFor(account); config.site = input.value; presellTargetConfig.set(key, config); updateConfiguredUrl(account);
+      const preview = input.closest('.google-ads-duplication-presell-target')?.querySelector('small'), site = hostingerSiteByKey(config.site);
+      if (preview) preview.textContent = site && config.prefix ? `Endereço previsto: https://${config.prefix}.${site.domain}` : 'Informe um prefixo válido para definir a URL.';
+    }));
+    targetArea.querySelectorAll('[data-target-hostinger-prefix]').forEach(input => input.addEventListener('input', () => {
+      const key = input.dataset.targetHostingerPrefix, account = accounts.find(item => accountKey(item) === key);
+      if (!account) return;
+      const config = configFor(account); config.prefix = input.value; presellTargetConfig.set(key, config); updateConfiguredUrl(account);
+      const preview = input.closest('.google-ads-duplication-presell-target')?.querySelector('small'), site = hostingerSiteByKey(config.site);
+      if (preview) preview.textContent = site ? `Endereço previsto: https://${input.value.trim().toLowerCase()}.${site.domain}` : 'Escolha o site principal para definir a URL.';
+    }));
+    updatePresellControls();
   }
 
   function renderCpaOptions() {
@@ -288,21 +420,181 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
         sourceAvailable = true;
       }
     }
-    if (sourceAvailable && managerAssociationChanged) {
+    renderTargets();
+    if (campaigns.length && sourceAlreadySelected) {
+      applySourceCampaignPrefill();
+    } else if (sourceAvailable && sourceCampaignPrefill.campaignName) {
+      const pendingValue = sourceCampaignPrefill.campaignId || 'map-model-pending';
+      sourceCampaign.replaceChildren(new Option(`${sourceCampaignPrefill.campaignName} · pendente de confirmação Search`, pendingValue));
+      sourceCampaign.value = pendingValue;
+      sourceCampaign.disabled = true;
+      inspectButton.disabled = true;
+      if (managerAssociationChanged) {
+        message(sourceStatus, 'A MCC do Mapa difere do diretório compartilhado. A origem foi associada pelo ID atual; o modelo selecionado será confirmado como Search quando você carregar as campanhas.', true);
+      } else {
+        message(sourceStatus, 'Modelo preenchido a partir do Mapa por Conta. Clique em Carregar campanhas para confirmar que ele está disponível como campanha Search nesta conta.', false);
+      }
+    } else if (sourceAvailable && managerAssociationChanged) {
       message(sourceStatus, 'A MCC do Mapa difere do diretório compartilhado. A origem foi preenchida conforme o vínculo atual da conta no cache; confira antes de carregar as campanhas.', true);
     }
-    renderTargets();
-    if (campaigns.length && sourceAlreadySelected) applySourceCampaignPrefill();
     updateSequenceAccountCount();
   }
 
   function selectedTargets() {
     return [...targetArea.querySelectorAll('[data-target-check]:checked')].map(check => {
-      const account = (directory?.accounts || []).find(item => item.customerId === check.dataset.targetCheck);
-      const preSellUrl = targetArea.querySelector(`[data-target-url="${CSS.escape(check.dataset.targetCheck)}"]`)?.value.trim() || '';
+      const account = (directory?.accounts || []).find(item => String(item.customerId) === check.dataset.targetCheck
+        && String(item.managerCustomerId || '') === String(check.dataset.targetManager || ''));
+      const key = account ? accountKey(account) : '';
+      const preSellUrl = key ? targetArea.querySelector(`[data-target-url="${CSS.escape(key)}"]`)?.value.trim() || '' : '';
       if (!account) throw new Error('Uma conta selecionada deixou de estar no diretório local. Atualize MCCs e contas.');
       return { ...account, preSellUrl };
     });
+  }
+
+  function pageDestination(source, pageNumber, domain) {
+    const clean = String(source || '').trim().replace(/[\\/]+$/g, '');
+    const separator = Math.max(clean.lastIndexOf('\\'), clean.lastIndexOf('/'));
+    if (separator < 0) throw new Error('A pasta da Ficha precisa estar dentro da pasta de um produto.');
+    const delimiter = clean[separator], parent = clean.slice(0, separator);
+    return `${parent}${delimiter}pag${String(pageNumber).padStart(2, '0')} ${domain}`;
+  }
+
+  function deployJobForDuplication(jobId = activePresellJobId) {
+    return readPresellDeployJobs().find(job => job.id === jobId && job.campaignDuplication === true) || null;
+  }
+
+  function syncPublishedPresellUrls() {
+    const jobs = readPresellDeployJobs().filter(job => job.campaignDuplication === true);
+    if (!activePresellJobId || !jobs.some(job => job.id === activePresellJobId)) {
+      activePresellJobId = jobs.slice().sort((left, right) => Date.parse(left.createdAtUtc || '') - Date.parse(right.createdAtUtc || '')).at(-1)?.id || '';
+    }
+    const job = deployJobForDuplication();
+    if (!job) return;
+    for (const target of job.targets || []) {
+      const account = (directory?.accounts || []).find(item => String(item.customerId) === String(target.accountId));
+      if (!account) continue;
+      const key = accountKey(account), url = String(target.publicUrl || '');
+      const field = targetArea.querySelector(`[data-target-url="${CSS.escape(key)}"]`);
+      if (!url) continue;
+      if (field && (!field.value || field.value === url)) field.value = url;
+      if (!targetUrlValues.get(key) || targetUrlValues.get(key) === url) targetUrlValues.set(key, url);
+    }
+  }
+
+  function unpublishedManagedTarget(targets) {
+    const jobs = readPresellDeployJobs().filter(job => job.campaignDuplication === true);
+    for (const account of targets) {
+      const url = String(account.preSellUrl || '').replace(/\/$/, '');
+      const matches = jobs.flatMap(job => job.targets || []).filter(item => String(item.accountId) === String(account.customerId)
+        && String(item.publicUrl || '').replace(/\/$/, '') === url);
+      const confirmed = matches.some(item => item.deploymentState === 'success' || item.status === 'published'
+        || (item.status === 'manual-verified' && item.manualVerification?.status === 'confirmed'));
+      if (matches.length && !confirmed) return matches[0];
+    }
+    return null;
+  }
+
+  async function refreshHostingerSites() {
+    if (busy) return;
+    busy = true; updateControls(); setPresellMessage('Consultando sites Hostinger conectados…');
+    try {
+      const response = await fetch('/api/hostinger/websites', { method: 'GET', cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'A Hostinger não retornou a lista de sites.');
+      hostingerSites = Array.isArray(result.sites) ? result.sites : [];
+      renderTargets();
+      setPresellMessage(rootHostingerSites().length
+        ? `Lista atualizada: ${rootHostingerSites().length} site(s) principal(is) disponível(is). Configure um para cada conta destino.`
+        : 'A conexão Hostinger não retornou sites principais ativos. Confira a Integração Hostinger.');
+    } catch (error) {
+      setPresellMessage(error.message || 'Não foi possível atualizar os sites Hostinger.', true);
+    } finally { busy = false; updateControls(); }
+  }
+
+  async function generatePresellsFromSavedFicha() {
+    if (busy) return;
+    const saved = selectedFichaDraft();
+    let accounts;
+    try { accounts = selectedTargets(); } catch (error) { setPresellMessage(error.message, true); return; }
+    if (!saved) { setPresellMessage('Escolha uma Ficha local salva para reutilizar.', true); return; }
+    if (!accounts.length) { setPresellMessage('Marque ao menos uma conta destino.', true); return; }
+    if (accounts.length > 50) { setPresellMessage('A geração da Ficha aceita até 50 contas por lote.', true); return; }
+    const draft = saved.draft, source = String(draft.destination || '').trim();
+    if (!source) { setPresellMessage('A Ficha salva não tem uma pasta local para copiar os assets.', true); return; }
+    let targets;
+    try {
+      const accountDomains = new Set();
+      targets = accounts.map((account, index) => {
+        const config = configFor(account, draft), site = hostingerSiteByKey(config.site);
+        const prefix = String(config.prefix || '').trim().toLowerCase();
+        if (!site) throw new Error(`Selecione um site principal Hostinger para ${account.name || account.customerId}.`);
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix)) throw new Error(`Informe um prefixo de subdomínio válido para ${account.name || account.customerId}.`);
+        const address = `${prefix}.${String(site.domain).trim().toLowerCase()}`;
+        const uniqueKey = `${site.username}|${address}`;
+        if (accountDomains.has(uniqueKey)) throw new Error(`O endereço ${address} foi atribuído a mais de uma conta destino.`);
+        accountDomains.add(uniqueKey);
+        const publicUrl = `https://${address}`;
+        const destination = pageDestination(source, index + 1, String(site.domain).trim().toLowerCase());
+        const { ficha } = buildStructuredFicha(draft.structuredFicha, {
+          htmlLanguage: draft.htmlLanguage, countryCode: String(draft.countryCode || '').toUpperCase(),
+          destination, assetFolder: draft.assetFolder || 'assets', skipFavicon: draft.skipFavicon === true,
+          affiliateUrl: draft.affiliateUrl, pageTitle: draft.pageTitle,
+          trackingEnabled: draft.trackingEnabled !== false,
+          trackingHostname: address, trackingPlatform: draft.trackingPlatform,
+          trackingAccountId: account.customerId,
+        });
+        return { pageNumber: index + 1, accountId: String(account.customerId), accountName: String(account.name || ''), hpanelDomain: String(site.domain).toLowerCase(), publicUrl, destination, ficha, hostinger: { parentDomain: String(site.domain).toLowerCase(), username: String(site.username), prefix, directory: prefix } };
+      });
+    } catch (error) { setPresellMessage(error.message || 'Revise a Ficha e os destinos Hostinger.', true); return; }
+
+    busy = true; updateControls(); setPresellMessage(`Validando a mesma Ficha e os assets para ${targets.length} conta(s)…`);
+    try {
+      const result = await createPresellBatch(targets, {
+        sourceDirectory: source,
+        assetFolder: draft.assetFolder || 'assets',
+        beforeConfirm: batchTargets => preparePresellTrackingBatch(batchTargets.map(target => target.ficha.tracking).filter(tracking => tracking.enabled)),
+        afterConfirm: (_batchTargets, preparation) => preparation?.commit() || null,
+        confirmationMessage: batchTargets => {
+          const paths = batchTargets.map(target => `• ${target.accountName || target.accountId} → ${target.publicUrl} · pasta local ${target.destination}`).join('\n');
+          return `Uma única Ficha será reutilizada para ${batchTargets.length} conta(s), com os assets de ${source}. O Hub vai validar e criar páginas locais sem sobrescrever destinos existentes. Depois, a tela Hostinger fará análise e publicação em uma etapa separada; as campanhas não serão validadas até o deploy ser confirmado.\n\n${paths}\n\nCriar as páginas locais?`;
+        },
+      });
+      if (result.cancelled) { setPresellMessage('Geração cancelada. Nenhuma página foi criada.'); return; }
+      const productionTargets = Array.isArray(result.production?.targets) ? result.production.targets : [];
+      const generationSummary = targets.map(target => {
+        const page = productionTargets.find(item => Number(item.pageNumber) === Number(target.pageNumber));
+        const checks = page?.report?.phases?.flatMap(phase => phase.report?.checks || []) || [];
+        const trackingOk = !target.ficha.tracking?.enabled || page?.trackingConfigured === true || checks.some(check => check.name === 'tracking-script' && check.status === 'PASS');
+        const ready = page?.created === true && ['PASS', 'PASS_WITH_WARNINGS'].includes(String(page.report?.overall || '')) && trackingOk;
+        return { pageNumber: target.pageNumber, accountId: target.accountId, accountName: target.accountName, hpanelDomain: target.hpanelDomain, publicUrl: target.publicUrl, sourceDirectory: target.destination, status: ready ? 'ready' : 'generation-blocked', detail: ready ? 'Ficha gerada e validada localmente; aguardando hospedagem e publicação.' : String(page?.error || 'A geração local não confirmou esta página como pronta.') };
+      });
+      const readyTargets = targets.filter(target => generationSummary.some(summary => summary.pageNumber === target.pageNumber && summary.status === 'ready'));
+      if (!readyTargets.length) { setPresellMessage('A geração não liberou nenhuma página para deploy. Consulte a Ficha e corrija os bloqueios antes de tentar novamente.', true); return; }
+      const job = queuePresellDeployJob({
+        campaignDuplication: true,
+        product: String(draft.product || draft.pageTitle || 'Pre-Sell'),
+        generationSummary,
+        targets: readyTargets.map(target => ({
+          pageNumber: target.pageNumber, accountId: target.accountId, accountName: target.accountName,
+          hpanelDomain: target.hpanelDomain, sourceDirectory: target.destination, publicUrl: target.publicUrl,
+          parentDomain: target.hostinger.parentDomain, username: target.hostinger.username,
+          prefix: target.hostinger.prefix, directory: target.hostinger.directory,
+        })),
+      });
+      if (!job) { setPresellMessage('As páginas foram geradas, mas o Hub não conseguiu salvar o lote de hospedagem localmente. Abra Ficha e Pre-Sell para recuperar o deploy.', true); return; }
+      activePresellJobId = job.id;
+      for (const target of readyTargets) {
+        const account = accounts.find(item => String(item.customerId) === target.accountId);
+        if (account) targetUrlValues.set(accountKey(account), target.publicUrl);
+      }
+      renderTargets(); syncPublishedPresellUrls();
+      const blockedCount = targets.length - readyTargets.length;
+      setPresellMessage(`${readyTargets.length} de ${targets.length} Pre-Sell(s) pronta(s) localmente${blockedCount ? `; ${blockedCount} página(s) ficaram bloqueada(s) pela validação` : ''}. Conclua a análise e a publicação na Hostinger antes de validar a duplicação.`);
+      openPresellDeployWorkflow(job.id);
+    } catch (error) {
+      const committed = Array.isArray(error?.afterConfirmation?.registrations) ? error.afterConfirmation.registrations.length : 0;
+      setPresellMessage(`${error.message || 'Não foi possível gerar as Pre-Sells.'}${committed ? ` ${committed} Track(s) foram confirmadas; confira o relatório antes de repetir.` : ''}`, true);
+    } finally { busy = false; updateControls(); }
   }
 
   function sequenceAccountsFromSelection(targets = null) {
@@ -375,6 +667,9 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
     createButton.disabled = busy || !plan?.allValidated || created;
     previewButton.disabled = busy || !inspection?.copyable || !selectedSourceCampaign();
     targetArea.querySelectorAll('input').forEach(input => { input.disabled = busy || (input.matches('[data-target-url]') && !input.closest('[data-target-card]').querySelector('[data-target-check]').checked); });
+    targetArea.querySelectorAll('select[data-target-hostinger-site]').forEach(input => { input.disabled = busy || !input.closest('[data-target-card]').querySelector('[data-target-check]').checked || !rootHostingerSites().length; });
+    targetArea.querySelectorAll('input[data-target-hostinger-prefix]').forEach(input => { input.disabled = busy || !input.closest('[data-target-card]').querySelector('[data-target-check]').checked; });
+    updatePresellControls();
     cpaArea.querySelectorAll('input').forEach(input => { input.disabled = busy; });
   }
 
@@ -430,6 +725,12 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
     let targets;
     try { targets = selectedTargets(); } catch (error) { message(mainStatus, error.message, true); return; }
     if (!targets.length || targets.some(item => !item.preSellUrl)) { message(mainStatus, 'Selecione as contas de destino e informe uma URL HTTPS para cada uma.', true); return; }
+    const unpublishedTarget = unpublishedManagedTarget(targets);
+    if (unpublishedTarget) {
+      const account = targets.find(item => String(item.customerId) === String(unpublishedTarget.accountId));
+      message(mainStatus, `A Pre-Sell de ${account?.name || unpublishedTarget.accountName || unpublishedTarget.accountId} ainda não tem publicação confirmada na Hostinger. Conclua o deploy antes de validar as campanhas.`, true);
+      return;
+    }
     const percents = selectedPercents();
     if (!percents.length) { message(mainStatus, 'Marque ao menos uma faixa de CPA entre 30% e 80%.', true); return; }
     const sequenceAccounts = sequenceAccountsFromSelection(targets);
@@ -491,10 +792,45 @@ export function mountGoogleAdsCampaignDuplication({ root, initialSelection = nul
   loadCampaignsButton.addEventListener('click', loadCampaigns);
   inspectButton.addEventListener('click', inspectCampaign);
   refreshButton.addEventListener('click', refreshDirectory);
+  fichaDraftSelect.addEventListener('change', () => {
+    try { localStorage.setItem(FICHA_SELECTION_KEY, fichaDraftSelect.value || ''); } catch {}
+    renderTargets(); invalidatePlan();
+    setPresellMessage(fichaDraftSelect.value ? 'A mesma Ficha salva será usada para todas as contas selecionadas.' : 'Selecione uma Ficha salva para gerar as páginas.');
+  });
+  refreshFichaDraftsButton.addEventListener('click', () => loadFichaDraftChoices());
+  loadHostingerSitesButton.addEventListener('click', refreshHostingerSites);
+  generatePresellsButton.addEventListener('click', generatePresellsFromSavedFicha);
+  deployOpenButton.addEventListener('click', event => {
+    const job = deployJobForDuplication();
+    if (!job) return;
+    event.preventDefault(); event.stopImmediatePropagation(); openPresellDeployWorkflow(job.id);
+  }, true);
+  targetArea.addEventListener('change', event => {
+    if (!event.target.matches('[data-target-hostinger-site]')) return;
+    persistFichaConfiguration();
+  });
+  targetArea.addEventListener('input', event => {
+    if (!event.target.matches('[data-target-hostinger-prefix]')) return;
+    persistFichaConfiguration();
+  });
   previewButton.addEventListener('click', validatePlan);
   createButton.addEventListener('click', () => runEntries(plan?.entries.map(item => item.entryId) || []));
+  mountPresellDeployWorkflow({ root, getDraftTargets: () => null, hpanelUrlForDomain: (domain, parentDomain) => accountDomainUrl(parentDomain) || accountDomainUrl(domain) });
+  loadFichaDraftChoices({ keepSelection: false });
   renderCpaOptions();
   renderManagers();
+  syncPublishedPresellUrls();
+  globalThis.addEventListener?.(PRESELL_DEPLOY_JOBS_UPDATED_EVENT, () => {
+    if (!page.isConnected) return;
+    syncPublishedPresellUrls();
+    const job = deployJobForDuplication();
+    if (job?.targets?.length) {
+      const published = job.targets.filter(target => target.deploymentState === 'success' || target.status === 'published'
+        || (target.status === 'manual-verified' && target.manualVerification?.status === 'confirmed')).length;
+      if (published === job.targets.length) setPresellMessage('Deploy ou verificação manual confirmados para todas as Pre-Sells deste lote. Já é possível validar a duplicação.');
+      else if (published) setPresellMessage(`${published} de ${job.targets.length} Pre-Sell(s) deste lote já foram confirmadas. A validação libera cada URL após o deploy ou a verificação manual do respectivo destino.`);
+    }
+  });
   message(sourceStatus, directory ? 'Lista reutilizada do cache local do Hub; abrir a tela não consulta a API.' : 'Atualize MCCs e contas para selecionar a origem e os destinos.');
   window.addEventListener('storage', event => {
     if (event.key === 'hub.google-ads-account-directory:v1') syncDirectory();

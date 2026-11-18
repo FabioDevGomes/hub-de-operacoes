@@ -118,7 +118,7 @@ export function normalizeTrackingClicksReport(payload, requestedRange = null, re
   }
   const seen = new Set();
   const rows = payload.rows.map(row => {
-    const allowedRowFields = ['date_utc', 'product_key', 'product_label', 'presell_host', 'page_views', 'outbound_clicks'];
+    const allowedRowFields = ['date_utc', 'product_key', 'product_label', 'presell_host', 'traffic_source', 'page_views', 'outbound_clicks'];
     if (!row || Object.keys(row).some(key => !allowedRowFields.includes(key))) throw new Error('O relatório contém campos não permitidos.');
     if (!isDate(row.date_utc) || row.date_utc < startDate || row.date_utc > endDate) {
       throw new Error('O relatório contém uma data fora do período solicitado.');
@@ -126,16 +126,22 @@ export function normalizeTrackingClicksReport(payload, requestedRange = null, re
     const productKey = optionalSafeText(row.product_key, /^[a-z0-9](?:[a-z0-9._-]{0,251}[a-z0-9])?$/, 'identificador de produto');
     const productLabel = optionalSafeText(row.product_label, /^[^\x00-\x1f\x7f]{1,253}$/, 'nome de Track');
     const presellHost = optionalSafeText(row.presell_host, /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, 'domínio');
+    const trafficSource = platform === 'gurumedia'
+      ? optionalSafeText(row.traffic_source ?? null, /^[^\x00-\x1f\x7f]{1,180}$/, 'origem do tráfego') || 'Origem não disponibilizada pelo servidor'
+      : null;
     const pageViews = row.page_views;
     const outboundClicks = row.outbound_clicks;
     if (!Number.isSafeInteger(pageViews) || pageViews < 0 || !Number.isSafeInteger(outboundClicks) || outboundClicks < 0
         || pageViews + outboundClicks < 1) {
       throw new Error('O relatório contém contagens inválidas.');
     }
-    const identity = `${row.date_utc}\0${productKey ?? ''}\0${presellHost ?? ''}`;
+    const identity = `${row.date_utc}\0${productKey ?? ''}\0${presellHost ?? ''}\0${trafficSource}`;
     if (seen.has(identity)) throw new Error('O relatório contém uma linha agregada duplicada.');
     seen.add(identity);
-    return { dateUtc: row.date_utc, productKey, productLabel, presellHost, pageViews, outboundClicks };
+    return {
+      dateUtc: row.date_utc, productKey, productLabel, presellHost,
+      ...(trafficSource ? { trafficSource } : {}), pageViews, outboundClicks,
+    };
   });
   return { startDate, endDate, platform, generatedAtUtc: payload.generated_at_utc, rows };
 }
@@ -176,6 +182,7 @@ export function normalizeTrackingClicksSnapshot(value) {
       product_key: row?.productKey ?? null,
       product_label: row?.productLabel ?? null,
       presell_host: row?.presellHost ?? null,
+      traffic_source: row?.trafficSource ?? null,
       page_views: row?.pageViews,
       outbound_clicks: row?.outboundClicks,
     })) : value.rows,
@@ -195,7 +202,8 @@ function compareTrackingRows(left, right) {
   if (left.dateUtc !== right.dateUtc) return left.dateUtc < right.dateUtc ? 1 : -1;
   const productOrder = String(left.productKey ?? '').localeCompare(String(right.productKey ?? ''));
   if (productOrder) return productOrder;
-  return String(left.presellHost ?? '').localeCompare(String(right.presellHost ?? ''));
+  const hostOrder = String(left.presellHost ?? '').localeCompare(String(right.presellHost ?? ''));
+  return hostOrder || String(left.trafficSource ?? '').localeCompare(String(right.trafficSource ?? ''));
 }
 
 export function resolveTrackingClicksCache(snapshots, dateRange, platform = 'clickbank') {

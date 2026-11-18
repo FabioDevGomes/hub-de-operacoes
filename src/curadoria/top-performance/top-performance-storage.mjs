@@ -1,11 +1,124 @@
-export const DB_NAME='radar-top-performance';
-export const DB_VERSION=1;
-export const STORES=Object.freeze({offers:'offers',collections:'collections',snapshots:'collection_offer_snapshots',decisions:'decisions',trends:'trends',images:'images'});
-export function openTopPerformanceDB(){return new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,DB_VERSION);request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(STORES.offers))db.createObjectStore(STORES.offers,{keyPath:'offerId'});if(!db.objectStoreNames.contains(STORES.collections))db.createObjectStore(STORES.collections,{keyPath:'collectionId'});if(!db.objectStoreNames.contains(STORES.snapshots)){const store=db.createObjectStore(STORES.snapshots,{keyPath:'snapshotId'});store.createIndex('collectionId','collectionId');store.createIndex('offerId','offerId')}if(!db.objectStoreNames.contains(STORES.decisions))db.createObjectStore(STORES.decisions,{keyPath:'offerId'});if(!db.objectStoreNames.contains(STORES.trends))db.createObjectStore(STORES.trends,{keyPath:'offerId'});if(!db.objectStoreNames.contains(STORES.images))db.createObjectStore(STORES.images,{keyPath:'offerId'})};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-export async function getAll(store){const db=await openTopPerformanceDB();return new Promise((resolve,reject)=>{const request=db.transaction(store).objectStore(store).getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-export async function getByKey(store,key){const db=await openTopPerformanceDB();return new Promise((resolve,reject)=>{const request=db.transaction(store).objectStore(store).get(key);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)})}
-export async function put(store,value){const db=await openTopPerformanceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(value);tx.oncomplete=()=>{if(['decisions','trends','images'].includes(store)&&typeof window!=='undefined')window.dispatchEvent(new CustomEvent('curation-record-written',{detail:{origin:'guru-media-ecommerce-gm',store,record:value}}));resolve(value)};tx.onerror=()=>reject(tx.error)})}
+export const DB_NAME = 'radar-top-performance';
+export const DB_VERSION = 2;
+export const STORES = Object.freeze({
+  offers: 'offers',
+  collections: 'collections',
+  snapshots: 'collection_offer_snapshots',
+  decisions: 'decisions',
+  trends: 'trends',
+  images: 'images',
+});
+
+export function openTopPerformanceDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let blocked = false;
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORES.offers)) db.createObjectStore(STORES.offers, { keyPath: 'offerId' });
+      if (!db.objectStoreNames.contains(STORES.collections)) db.createObjectStore(STORES.collections, { keyPath: 'collectionId' });
+      const snapshots = db.objectStoreNames.contains(STORES.snapshots)
+        ? request.transaction.objectStore(STORES.snapshots)
+        : db.createObjectStore(STORES.snapshots, { keyPath: 'snapshotId' });
+      if (!snapshots.indexNames.contains('collectionId')) snapshots.createIndex('collectionId', 'collectionId');
+      if (!snapshots.indexNames.contains('offerId')) snapshots.createIndex('offerId', 'offerId');
+      if (!db.objectStoreNames.contains(STORES.decisions)) db.createObjectStore(STORES.decisions, { keyPath: 'offerId' });
+      if (!db.objectStoreNames.contains(STORES.trends)) db.createObjectStore(STORES.trends, { keyPath: 'offerId' });
+      if (!db.objectStoreNames.contains(STORES.images)) db.createObjectStore(STORES.images, { keyPath: 'offerId' });
+    };
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error('Feche ou atualize outras abas antigas do Hub para concluir a migração do banco Guru Media.'));
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (blocked) {
+        db.close();
+        return;
+      }
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function withTransaction(storeNames, mode, configure) {
+  return openTopPerformanceDB().then(db => new Promise((resolve, reject) => {
+    let transaction;
+    let result;
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      db.close();
+      callback(value);
+    };
+    try {
+      transaction = db.transaction(storeNames, mode);
+      transaction.oncomplete = () => finish(resolve, result);
+      transaction.onerror = () => finish(reject, transaction.error || new Error('A transação do banco Guru Media falhou.'));
+      transaction.onabort = () => finish(reject, transaction.error || new Error('A transação do banco Guru Media foi interrompida.'));
+      configure(transaction, value => { result = value; });
+    } catch (error) {
+      try { transaction?.abort(); } catch {}
+      finish(reject, error);
+    }
+  }));
+}
+
+export function getAll(store) {
+  return withTransaction(store, 'readonly', (transaction, setResult) => {
+    const request = transaction.objectStore(store).getAll();
+    request.onsuccess = () => setResult(request.result);
+  });
+}
+
+export function getByKey(store, key) {
+  return withTransaction(store, 'readonly', (transaction, setResult) => {
+    const request = transaction.objectStore(store).get(key);
+    request.onsuccess = () => setResult(request.result || null);
+  });
+}
+
+export function put(store, value, { notifyCuration = true } = {}) {
+  return withTransaction(store, 'readwrite', (transaction, setResult) => {
+    transaction.objectStore(store).put(value);
+    setResult(value);
+  }).then(saved => {
+    if (notifyCuration && ['decisions', 'trends', 'images'].includes(store) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('curation-record-written', {
+        detail: { origin: 'guru-media-ecommerce-gm', store, record: value },
+      }));
+    }
+    return saved;
+  });
+}
 export function trendSearchHistory(entry){const history=(Array.isArray(entry?.searchHistory)?entry.searchHistory:[]).filter(search=>search&&typeof search.searchedAt==='string'&&Number.isFinite(new Date(search.searchedAt).getTime())).map(search=>({term:String(search.term||'').trim(),searchedAt:search.searchedAt}));if(typeof entry?.lastSearchedAt==='string'&&Number.isFinite(new Date(entry.lastSearchedAt).getTime())&&!history.some(search=>search.searchedAt===entry.lastSearchedAt))history.push({term:'',searchedAt:entry.lastSearchedAt});return history.sort((a,b)=>new Date(b.searchedAt)-new Date(a.searchedAt))}
 export function appendTrendSearch(entry,searchedAt,term){const normalizedTerm=String(term||'').trim();if(!normalizedTerm||!Number.isFinite(new Date(searchedAt).getTime()))return trendSearchHistory(entry);return[{term:normalizedTerm,searchedAt},...trendSearchHistory(entry)]}
-export async function setTrendSearchTimestamp(offerId,productName,searchedAt,searchedTerm){const db=await openTopPerformanceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORES.trends,'readwrite'),store=tx.objectStore(STORES.trends),request=store.get(offerId);let saved=null;request.onsuccess=()=>{const current=request.result||{offerId,productName,assessments:[]};saved={...current,offerId,productName,lastSearchedAt:searchedAt,searchHistory:appendTrendSearch(current,searchedAt,searchedTerm)};store.put(saved)};tx.oncomplete=()=>resolve(saved);tx.onerror=()=>reject(tx.error||request.error);tx.onabort=()=>reject(tx.error||request.error||new Error('Não foi possível registrar a busca no Google Trends.'))})}
-export async function saveCollection({offers,collection,snapshots}){const db=await openTopPerformanceDB();return new Promise((resolve,reject)=>{const tx=db.transaction([STORES.offers,STORES.collections,STORES.snapshots],'readwrite');for(const item of offers)tx.objectStore(STORES.offers).put(item);tx.objectStore(STORES.collections).put(collection);for(const item of snapshots)tx.objectStore(STORES.snapshots).put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
+export function setTrendSearchTimestamp(offerId, productName, searchedAt, searchedTerm) {
+  return withTransaction(STORES.trends, 'readwrite', (transaction, setResult) => {
+    const store = transaction.objectStore(STORES.trends);
+    const request = store.get(offerId);
+    request.onsuccess = () => {
+      const current = request.result || { offerId, productName, assessments: [] };
+      const saved = {
+        ...current,
+        offerId,
+        productName,
+        lastSearchedAt: searchedAt,
+        searchHistory: appendTrendSearch(current, searchedAt, searchedTerm),
+      };
+      store.put(saved);
+      setResult(saved);
+    };
+  });
+}
+
+export function saveCollection({ offers, collection, snapshots }) {
+  return withTransaction([STORES.offers, STORES.collections, STORES.snapshots], 'readwrite', transaction => {
+    for (const item of offers) transaction.objectStore(STORES.offers).put(item);
+    transaction.objectStore(STORES.collections).put(collection);
+    for (const item of snapshots) transaction.objectStore(STORES.snapshots).put(item);
+  });
+}

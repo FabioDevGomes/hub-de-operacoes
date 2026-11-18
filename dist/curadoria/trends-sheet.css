@@ -61,6 +61,8 @@
 .decision-badge.live,.decision-option.live{border-color:#276249;background:var(--curation-decision-live-bg);color:var(--curation-decision-live-text)}
 .decision-badge.review,.decision-option.review{border-color:#684f25;background:var(--curation-decision-review-bg);color:var(--curation-decision-review-text)}
 .decision-badge.hide,.decision-option.hide{border-color:#714153;background:var(--curation-decision-hide-bg);color:var(--curation-decision-hide-text)}
+.decision-badge.app,.decision-option.app{border-color:#355d85;background:#142b45;color:#91caff}
+.decision-dialog-actions.has-app-option{grid-template-columns:repeat(6,minmax(0,1fr))}
 /* #rows specificity keeps one decision color across screens despite local row/hover styles. */
 #rows tr.decision-row-launch>td{background:var(--curation-decision-launch-row)}
 #rows tr.decision-row-live>td{background:var(--curation-decision-live-row)}
@@ -68,6 +70,7 @@
 #rows tr.decision-row-live:hover>td{background:var(--curation-decision-live-row-hover)!important}
 .decision-option.selected.launch{outline-color:#ffe46d}
 .decision-option.selected.live{outline-color:#34d399}
+.decision-option.selected.app{outline-color:#60a5fa}
 
 /* Ações principais da validação de imagens seguem o CTA azul da referência. */
 button.image-search-button[data-manager-image-search],button.image-search-button[data-top-image-search],#managerFinishImages,#topFinishImages{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 19px;border:1px solid #4b9df5;border-radius:10px;background:linear-gradient(180deg,#4697ec 0%,#2876ce 100%);box-shadow:0 3px 11px rgba(37,117,205,.22);color:#fff;font:inherit;font-weight:750;white-space:nowrap;text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}

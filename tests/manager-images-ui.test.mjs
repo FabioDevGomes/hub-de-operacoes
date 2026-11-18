@@ -7,6 +7,10 @@ const css=await readFile(new URL('../dist/curadoria/trends-sheet.css',import.met
 const imagesUi=await readFile(new URL('../dist/curadoria/image-search-ui.mjs',import.meta.url),'utf8');
 assert.equal(Images.imageSearchUrl('PodBloom','US'),'https://www.google.com/search?q=PodBloom&udm=2&gl=us&hl=en');
 assert.equal(Images.imageSearchUrl('Produto teste','DE'),'https://www.google.com/search?q=Produto+teste&udm=2&gl=de&hl=de');
+assert.equal(Images.imageSearchUrl('Produto teste','WORLD'),'https://www.google.com/search?q=Produto+teste&udm=2&hl=en','Mundo abre a busca sem filtro de país');
+assert.equal(Images.imageSearchUrlExcluding('Produto teste','WORLD','concorrente'),'https://www.google.com/search?q=Produto+teste+-concorrente&udm=2&hl=en','busca negativa para Mundo também omite o filtro de país');
+assert.equal(Images.googleSearchUrl('Gluco Extend','US'),'https://www.google.com/search?q=Gluco+Extend&gl=us&hl=en');
+assert.equal(Images.googleSearchUrl('Produto teste','DE'),'https://www.google.com/search?q=Produto+teste&gl=de&hl=de');
 assert.equal(Images.imageSearchUrlExcluding('BareEarth Grounding Bed Sheets','US','weighted'),'https://www.google.com/search?q=BareEarth+Grounding+Bed+Sheets+-weighted&udm=2&gl=us&hl=en');
 assert.equal(Images.imageSearchUrlExcluding('Produto teste','DE','produto concorrente'),'https://www.google.com/search?q=Produto+teste+-%22produto+concorrente%22&udm=2&gl=de&hl=de');
 assert.equal(Images.imageSearchUrlExcluding('Produto teste','DE',['organic','produto concorrente','mat']),'https://www.google.com/search?q=Produto+teste+-organic+-%22produto+concorrente%22+-mat&udm=2&gl=de&hl=de');

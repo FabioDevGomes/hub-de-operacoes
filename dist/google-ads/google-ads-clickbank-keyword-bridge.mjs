@@ -1,4 +1,4 @@
-import {getAll,STORES} from '../curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs?v=12';
+import {getAll,STORES} from '../curadoria/clickbank-top-offers/clickbank-top-offers-storage.mjs?v=17';
 import {latestByCountry} from '../curadoria/image-search-domain.mjs?v=1';
 
 function normalizedCandidates(values) {
@@ -30,16 +30,18 @@ export async function listClickBankKeywordSources() {
     if(!current.offerName&&record.offerName.trim())current.offerName=record.offerName.trim();
     if(!current.seller&&typeof record.seller==='string')current.seller=record.seller.trim();
     if(record.assessments){
-      const latest=latestByCountry(record.assessments);
-      const countries=[...latest.keys()].sort((left,right)=>left.localeCompare(right,'en'));
-      const candidatesByCountry=countries.map(country=>{
-        const assessment=latest.get(country);
-        const candidates=Array.isArray(assessment?.negativeKeywordCandidates)
-          ?assessment.negativeKeywordCandidates:assessment?.relatedProducts;
-        return {country,candidates:normalizedCandidates((Array.isArray(candidates)?candidates:[]).flatMap(value=>typeof value==='string'?value.split(/\s*×\s*/u):[]))};
-      });
-      current.negativeKeywords=normalizedCandidates(candidatesByCountry.flatMap(item=>item.candidates));
-      current.negativeKeywordCountries=candidatesByCountry.filter(item=>item.candidates.length).map(item=>item.country);
+      if(Array.isArray(record.negativeKeywordCandidates)) {
+        current.negativeKeywords=normalizedCandidates(record.negativeKeywordCandidates);
+      } else {
+        const latest=latestByCountry(record.assessments);
+        const candidatesByCountry=[...latest.values()].map(assessment=>{
+          const candidates=Array.isArray(assessment?.negativeKeywordCandidates)
+            ?assessment.negativeKeywordCandidates:assessment?.relatedProducts;
+          return normalizedCandidates((Array.isArray(candidates)?candidates:[]).flatMap(value=>typeof value==='string'?value.split(/\s*×\s*/u):[]));
+        });
+        current.negativeKeywords=normalizedCandidates(candidatesByCountry.flat());
+      }
+      current.negativeKeywordCountries=[];
     }
     if(Array.isArray(record.keywordCandidates))current.keywords=normalizedCandidates(record.keywordCandidates);
     byOfferKey.set(record.offerKey,current);

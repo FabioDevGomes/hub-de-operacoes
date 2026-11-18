@@ -1,4 +1,4 @@
-import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=2';
+import {loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=4';
 import {normalizeAccountDomain, normalizeCustomerId, suggestedLegacyAccountDomain} from './account-domains-domain.mjs?v=1';
 import {ACCOUNT_DOMAIN_ASSOCIATIONS_KEY, ACCOUNT_DOMAIN_ASSOCIATIONS_UPDATED_EVENT, readAccountDomainAssociations, saveAccountDomainAssociation} from './account-domains-storage.mjs?v=1';
 
@@ -74,7 +74,7 @@ export function mountAccountDomains({root, storage = globalThis.localStorage, fe
 
   function renderRows() {
     const rows = accountRows();
-    if (!state.accounts.length) return '<div class="account-domains-empty">Nenhuma lista local de contas foi encontrada. Atualize a lista na tela Google Ads API; essa ação não consulta a API automaticamente.</div>';
+    if (!state.accounts.length) return '<div class="account-domains-empty">Nenhuma lista local de contas foi encontrada. Atualize a lista na tela Snapshots da Operação; essa ação não consulta a API automaticamente.</div>';
     if (!rows.length) return '<div class="account-domains-empty">Nenhuma conta corresponde à busca.</div>';
     return `<div class="account-domains-table-wrap"><table class="account-domains-table"><thead><tr><th>MCC</th><th>Conta Google Ads</th><th>Domínio associado</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(row => {
       const status = row.entry ? (row.entry.domain ? 'Associação salva' : 'Sem domínio definido') : row.legacyDomain ? 'Sugestão do nome atual' : 'Sem associação';

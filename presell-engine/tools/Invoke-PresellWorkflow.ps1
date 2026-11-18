@@ -14,6 +14,8 @@ param(
 
     [string]$AssetFolder = 'background',
 
+    [switch]$AssetStudioValidated,
+
     [switch]$Json
 )
 
@@ -38,13 +40,36 @@ function Get-FichaArguments {
     return @()
 }
 
+function Get-SkipFaviconArguments {
+    $fichaText = ''
+    if (-not [string]::IsNullOrWhiteSpace($FichaPath) -and (Test-Path -LiteralPath $FichaPath -PathType Leaf)) {
+        $fichaText = [System.IO.File]::ReadAllText($FichaPath, [System.Text.Encoding]::UTF8)
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($FichaJson)) {
+        $fichaText = $FichaJson
+    }
+    if ([string]::IsNullOrWhiteSpace($fichaText)) { return @() }
+    try {
+        $ficha = $fichaText | ConvertFrom-Json -ErrorAction Stop
+        if ($ficha.skipFavicon -is [bool] -and $ficha.skipFavicon) { return @('-SkipFavicon') }
+    }
+    catch { }
+    return @()
+}
+
+function Get-AssetStudioValidatedArguments {
+    if ($AssetStudioValidated) { return @('-AssetStudioValidated') }
+    return @()
+}
+
 $phases = [System.Collections.Generic.List[object]]::new()
 $structureScript = Join-Path $PSScriptRoot 'Test-PresellStructure.ps1'
 $fichaScript = Join-Path $PSScriptRoot 'Test-PresellAgainstFicha.ps1'
 
 # A validação inicial é informativa quando o destino ainda não existe ou está vazio.
 if (Test-Path -LiteralPath $Destination -PathType Container) {
-    $initial = Invoke-PresellValidator $structureScript @('-Destination', $Destination, '-AssetFolder', $AssetFolder, '-Json')
+    $initialStructureArgs = @('-Destination', $Destination, '-AssetFolder', $AssetFolder) + (Get-SkipFaviconArguments) + (Get-AssetStudioValidatedArguments) + @('-Json')
+    $initial = Invoke-PresellValidator $structureScript $initialStructureArgs
     $initialStatus = Get-PhaseStatus $initial
     if ($initialStatus -eq 'BLOCKED') {
         $initialStatus = 'PASS_WITH_WARNINGS'
@@ -81,7 +106,7 @@ if ($Mode -eq 'Produce') {
         })))
     }
     else {
-        $productionArgs = @('-Destination', $Destination) + (Get-FichaArguments)
+        $productionArgs = @('-Destination', $Destination) + (Get-FichaArguments) + (Get-AssetStudioValidatedArguments)
         $powerShellExecutable = Get-PresellPowerShellExecutable
         & $powerShellExecutable -NoProfile -ExecutionPolicy Bypass -File $ProductionScript @productionArgs
         if ($LASTEXITCODE -ne 0) {
@@ -110,7 +135,8 @@ else {
 
 # Validações finais só são executadas quando há uma produção solicitada ou um destino existente.
 if ($Mode -eq 'Produce' -or (Test-Path -LiteralPath $Destination -PathType Container)) {
-    $finalStructure = Invoke-PresellValidator $structureScript @('-Destination', $Destination, '-AssetFolder', $AssetFolder, '-Json')
+    $finalStructureArgs = @('-Destination', $Destination, '-AssetFolder', $AssetFolder) + (Get-SkipFaviconArguments) + (Get-AssetStudioValidatedArguments) + @('-Json')
+    $finalStructure = Invoke-PresellValidator $structureScript $finalStructureArgs
     $phases.Add((New-PresellWorkflowPhase 'final-structure' (Get-PhaseStatus $finalStructure) $finalStructure))
 
     $fichaArgs = Get-FichaArguments
@@ -122,7 +148,8 @@ if ($Mode -eq 'Produce' -or (Test-Path -LiteralPath $Destination -PathType Conta
         })))
     }
     else {
-        $fichaReport = Invoke-PresellValidator $fichaScript (@('-Destination', $Destination, '-Json') + $fichaArgs)
+        $fichaValidationArgs = @('-Destination', $Destination, '-Json') + $fichaArgs + (Get-AssetStudioValidatedArguments)
+        $fichaReport = Invoke-PresellValidator $fichaScript $fichaValidationArgs
         $phases.Add((New-PresellWorkflowPhase 'ficha' (Get-PhaseStatus $fichaReport) $fichaReport))
     }
 }

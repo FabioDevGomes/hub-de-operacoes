@@ -21,7 +21,6 @@ body:has(#accountReportView:not(.hidden)){overflow:hidden}
 .account-matrix-mcc{display:block;max-width:160px;margin:0 auto 3px;color:#8eb0d3;font-size:.62rem;font-weight:500;line-height:1.2;white-space:normal}
 .account-matrix-account{display:block;white-space:nowrap}
 .account-matrix-account--suspended{color:#ff9aa5}
-.account-matrix-name{display:block;max-width:160px;margin:3px auto 0;color:var(--muted);font-size:.62rem;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
 .account-matrix td{text-align:center}
 .account-matrix td:first-child,.account-matrix th:first-child{text-align:left;position:sticky;left:0;z-index:1;background:#101e32}
 .account-matrix tbody tr{cursor:pointer}
@@ -211,7 +210,8 @@ main:has(#accountDirectoryView:not(.hidden)) #statusbar{display:none}
 .account-domain-link:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
 
 .account-filters{grid-template-columns:repeat(2,minmax(150px,1fr))}
-.account-report-controls{gap:9px;flex-wrap:nowrap}
+.account-report-controls{position:relative;padding-top:23px;gap:9px;flex-wrap:nowrap}
+#accountReportPeriod{position:absolute;top:0;right:0;white-space:nowrap}
 .account-report-status-filter,.account-report-visibility-filter{display:flex;align-items:center;gap:7px}
 .account-report-paused-toggle{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.66rem;white-space:nowrap;cursor:pointer}
 .account-report-paused-toggle[hidden]{display:none}

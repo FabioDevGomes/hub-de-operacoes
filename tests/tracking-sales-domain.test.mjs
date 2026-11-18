@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   normalizeTrackingSalesPage,
+  resolveTrackingSaleCampaign,
   summarizeTrackingSales,
   TRACKING_SALES_PAGE_SIZE,
 } from '../src/tracking/tracking-sales-domain.mjs';
@@ -34,9 +35,14 @@ test('normaliza só a projeção reduzida, com cursor e vínculo Track exatos', 
   assert.deepEqual(result.sales[0], {
     transactionId: '12',
     transactionTimeUtc: '2026-10-20T12:00:00.123Z',
+    receivedAtUtc: null,
+    commissionTotal: null,
+    commissionCurrency: null,
     attributionStatus: 'matched',
     presellHost: 'buy.example.com',
     productKey: 'product-a',
+    clickLinkDiagnosticStatus: 'not_available',
+    clickCampaignCandidate: { status: 'not_evaluated', source: null, campaignId: null },
   });
   assert.equal(Object.hasOwn(result.sales[0], 'extclid'), false);
 });
@@ -87,4 +93,39 @@ test('resume vendas somente pelo par exato de hostname e product_key e separa hi
   assert.equal(summary.ambiguousCount, 1);
   assert.equal(summary.historicalCount, 1);
   assert.equal(summary.countsByTrack.get(JSON.stringify(['buy.example.com', 'product-a'])), 2);
+});
+
+test('resolve candidato pelo ID exato em campanha criada no Hub ou confirmada por snapshot completo', () => {
+  const sale = { clickCampaignCandidate: { status: 'candidate', campaignId: '1234567890123456789' } };
+  for (const origin of ['hub_created', 'google_ads_api_snapshot']) {
+    assert.deepEqual(resolveTrackingSaleCampaign(sale, [{
+      google_ads_campaign_id: sale.clickCampaignCandidate.campaignId,
+      google_ads_campaign_origem: origin,
+      mcc_id: '1234567890',
+      conta_id: '9876543210',
+    }]), {
+      status: 'matched', managerCustomerId: '1234567890', customerId: '9876543210', campaignId: '1234567890123456789',
+    });
+  }
+  assert.equal(resolveTrackingSaleCampaign(sale, [{
+    google_ads_campaign_id: '1234567890123456788',
+    google_ads_campaign_origem: 'google_ads_api_snapshot',
+    mcc_id: '1234567890',
+    conta_id: '9876543210',
+  }]).status, 'candidate_unmapped', 'ID parecido não equivale ao candidato');
+});
+
+test('mantém associação direta, ambiguidade e proveniência incompleta em estados explícitos', () => {
+  const sale = { clickCampaignCandidate: { status: 'candidate', campaignId: '456' } };
+  const row = { google_ads_campaign_id: '456', google_ads_campaign_origem: 'google_ads_api_snapshot', conta_id: '9876543210' };
+  assert.deepEqual(resolveTrackingSaleCampaign(sale, [row]), {
+    status: 'matched', managerCustomerId: '', customerId: '9876543210', campaignId: '456',
+  }, 'conta direta pode não ter MCC');
+  assert.equal(resolveTrackingSaleCampaign(sale, [
+    row,
+    { ...row, conta_id: '9876543211' },
+  ]).status, 'campaign_ambiguous', 'o mesmo campaign ID em identidades diferentes não escolhe uma conta');
+  assert.equal(resolveTrackingSaleCampaign(sale, [{ ...row, google_ads_campaign_origem: undefined }]).status, 'campaign_source_unverified');
+  assert.equal(resolveTrackingSaleCampaign(sale, [{ ...row, conta_id: null }]).status, 'campaign_identity_incomplete');
+  assert.equal(resolveTrackingSaleCampaign({ clickCampaignCandidate: { status: 'click_not_found' } }, []).status, 'click_not_found');
 });

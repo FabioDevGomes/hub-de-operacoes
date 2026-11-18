@@ -1,0 +1,45 @@
+#offerSheet .gm-negative-candidate-panel{display:grid;gap:12px;margin:0}
+#offerSheet .gm-negative-candidate-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#offerSheet .gm-negative-candidate-heading-copy{display:grid;gap:5px;min-width:0}
+#offerSheet .gm-negative-candidate-heading b{color:#ffb5c3;font-size:.9rem}
+#offerSheet .gm-negative-candidate-heading p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.45}
+#offerSheet .gm-negative-candidate-review{flex:0 0 auto;max-width:100%;padding:8px 12px;border:0;background:linear-gradient(100deg,#2a91eb,#32b9c1);color:#061626;box-shadow:none;font-size:.78rem}
+#offerSheet .gm-negative-candidate-review:hover:not(:disabled){filter:brightness(1.08)}
+#offerSheet .gm-negative-candidate-review:focus-visible{outline:2px solid #9bdcff;outline-offset:2px}
+#offerSheet .gm-negative-candidate-review.is-confirmed{background:linear-gradient(100deg,#16895e,#27b982);color:#041b14}
+#offerSheet .gm-negative-candidate-review[hidden]{display:none!important}
+#offerSheet .gm-negative-candidate-grid{display:grid;grid-template-columns:minmax(245px,.82fr) minmax(300px,1.18fr);gap:12px 18px;align-items:stretch}
+#offerSheet .gm-negative-candidate-entry{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:8px;width:100%;min-width:0;margin:0}
+#offerSheet .gm-negative-candidate-entry-label{color:var(--muted);font-size:.78rem;font-weight:600}
+#offerSheet .gm-negative-candidate-entry textarea{width:100%;min-height:228px;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:.9rem;line-height:1.45}
+#offerSheet .gm-negative-candidate-entry-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#offerSheet .gm-negative-candidate-entry-actions .btn{display:inline-flex;align-items:center;gap:8px}
+#offerSheet .gm-negative-candidate-entry-actions .btn.primary{border:0;background:linear-gradient(100deg,#2a91eb,#32b9c1);color:#061626;box-shadow:none}
+#offerSheet .gm-negative-candidate-entry-actions .btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+#offerSheet .gm-negative-candidate-entry-actions .btn.primary:focus-visible{outline:2px solid #9bdcff;outline-offset:2px}
+#offerSheet .gm-negative-candidate-count{color:var(--muted);font-size:.76rem;line-height:1.35}
+#offerSheet .gm-negative-candidate-output{display:flex;flex-direction:column;gap:0;min-width:0;min-height:228px;max-height:min(430px,60vh);overflow:auto;padding:10px 12px;border:1px solid #31506e;border-radius:12px;background:#071222}
+#offerSheet .gm-negative-candidate-output-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 0 10px;border-bottom:1px solid var(--line);color:#a9cfff;font-size:.8rem}
+#offerSheet .gm-negative-candidate-list{display:flex;flex-direction:column;align-items:stretch;gap:0;width:100%;margin:0}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-items{display:grid;grid-template-columns:minmax(0,1fr);gap:0;width:100%;max-width:none;flex:none;align-items:stretch}
+#offerSheet .gm-negative-candidate-list .keyword-candidate.image-candidate,#offerSheet .gm-negative-candidate-list .keyword-candidate.image-candidate.saved{display:grid;grid-template-columns:minmax(0,1fr) 26px 26px;align-items:center;justify-self:stretch;gap:5px;width:100%;max-width:none;padding:5px 0;border:0;border-bottom:1px solid rgba(96,124,157,.24);border-radius:0;background:transparent;box-shadow:none;color:#ffb5c3;font-size:.9rem;font-weight:400;line-height:1.35}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-text{min-width:0;overflow-wrap:anywhere;font-size:.9rem}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-edit,#offerSheet .gm-negative-candidate-list .keyword-candidate-remove{display:inline-grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:#a9c3df;cursor:pointer}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-edit svg{width:16px;height:16px}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-remove{font-size:1.2rem;line-height:1}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-edit:hover,#offerSheet .gm-negative-candidate-list .keyword-candidate-remove:hover{background:rgba(169,214,255,.08);color:#e1efff}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-edit:focus-visible,#offerSheet .gm-negative-candidate-list .keyword-candidate-remove:focus-visible{outline:2px solid #9bdcff;outline-offset:2px}
+#offerSheet .gm-negative-candidate-list .keyword-candidate-empty{padding:12px 0;color:var(--muted);font-size:.78rem}
+#offerSheet .gm-negative-candidate-feedback{grid-column:1/-1;min-height:0;margin:0;color:#83e5bb;font-size:.74rem}
+#offerSheet .gm-negative-candidate-feedback:empty{display:none}
+#offerSheet .gm-negative-candidate-feedback[data-state="error"]{color:#ff9aaa}
+.gm-negative-candidate-edit-dialog{width:min(520px,calc(100vw - 28px));max-height:calc(100vh - 32px);overflow:auto;padding:0;border:1px solid #31506e;border-radius:14px;background:#0e1d31;color:#e7eef8;box-shadow:0 18px 54px rgba(0,0,0,.48)}
+.gm-negative-candidate-edit-dialog::backdrop{background:rgba(2,8,18,.72)}
+.gm-negative-candidate-edit-form>header,.gm-negative-candidate-edit-form>footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(96,124,157,.28)}
+.gm-negative-candidate-edit-form>header b{font-size:.95rem}
+.gm-negative-candidate-edit-form>header p{margin:4px 0 0;color:#9db1ca;font-size:.78rem;line-height:1.4}
+.gm-negative-candidate-edit-body{display:grid;gap:8px;padding:16px}
+.gm-negative-candidate-edit-body label{font-size:.78rem;font-weight:650}
+.gm-negative-candidate-edit-body p{min-height:1em;margin:0;color:#ff9aaa;font-size:.76rem}
+.gm-negative-candidate-edit-form>footer{justify-content:flex-end;border-top:1px solid rgba(96,124,157,.28);border-bottom:0}
+@media(max-width:760px){#offerSheet .gm-negative-candidate-heading{flex-direction:column}#offerSheet .gm-negative-candidate-review{width:100%}#offerSheet .gm-negative-candidate-grid{grid-template-columns:minmax(0,1fr);gap:12px}#offerSheet .gm-negative-candidate-entry textarea{min-height:168px}#offerSheet .gm-negative-candidate-output{min-height:0;max-height:min(380px,58vh)}}

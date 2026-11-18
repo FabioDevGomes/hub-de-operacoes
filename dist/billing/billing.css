@@ -25,6 +25,7 @@
 .billing-kpis>.billing-kpi:first-child{border-color:#31506e;background:rgba(17,32,52,.62)}
 @media(max-width:1400px){.billing-kpis{display:flex;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}.billing-kpis>.billing-kpi{flex:0 0 185px}}
 .billing-toolbar{align-items:flex-end}
+.billing-consolidate-button{border-color:#8d4248;background:#321c25;color:#ffb4bb}.billing-consolidate-button:hover{border-color:#c95a63;background:#40212a;color:#ffe0e2}
 .billing-custom-period{column-gap:12px;row-gap:8px}
 .billing-custom-period input{padding-left:5px;padding-right:5px}
 .billing-custom-period>.btn{display:flex;align-items:center;justify-content:center;line-height:1;text-align:center}
@@ -42,3 +43,4 @@
 .billing-root .billing-audit,
 .billing-root .billing-modal-card{border:0}
 .billing-mcc-correction .billing-form-grid>label:not(#billingPlatformField):not(#billingValueBrlField):not(#billingValueUsdField){display:none}
+.billing-covered td{opacity:.78}

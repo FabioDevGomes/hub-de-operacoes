@@ -118,6 +118,7 @@ function Get-StatusReason {
         405 { 'Method Not Allowed' }
         413 { 'Payload Too Large' }
         500 { 'Internal Server Error' }
+        502 { 'Bad Gateway' }
         default { 'Error' }
     }
 }
@@ -247,6 +248,8 @@ function Find-ChromeExecutable {
     }
     return $null
 }
+
+. (Join-Path $PSScriptRoot 'asset-studio-capture.ps1')
 
 function Open-PresellLocalPage {
     param([string]$Destination)
@@ -1444,6 +1447,26 @@ function Get-HostingerFlattenedTextBytes {
     [Array]::Copy($contentBytes, 0, $outputBytes, $prefixLength, $contentBytes.Length)
     return ,$outputBytes
 }
+
+function Remove-AssetStudioMetadataFromCopiedPageAssets {
+    param([string]$PageDirectory, [string]$AssetFolder)
+    $copiedAssets = Join-Path $PageDirectory $AssetFolder
+    foreach ($name in @('imagens-produto.json', 'LEIA-ME-imagens-produto.txt')) {
+        $path = Join-Path $copiedAssets $name
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+        }
+    }
+}
+
+function Test-HostingerPublishExcludedFile {
+    param([string]$RelativePath, [bool]$IncludeProductImages = $false)
+    $path = ([string]$RelativePath).Replace('\', '/')
+    $metadata = $path -match '^(?i:assets/(?:imagens-produto\.json|LEIA-ME-imagens-produto\.txt))$'
+    $productImage = $path -match '^(?i:assets/imagem-produto-\d+\.[^/]+)$'
+    return $metadata -or ($productImage -and -not $IncludeProductImages)
+}
+
 function Get-HostingerPublishPlan {
     param([string]$Body)
     if (-not (Test-Path -LiteralPath $hostingerTokenPath -PathType Leaf)) { throw 'Conecte a API Hostinger antes de preparar a publicação.' }
@@ -1488,7 +1511,13 @@ function Get-HostingerPublishPlan {
     $allEntries = @(Get-ChildItem -LiteralPath $sourceDirectory -Force -Recurse -ErrorAction Stop)
     $reparseEntries = @($allEntries | Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -and -not [HubLocal.FileReparseTagReader]::IsCloudFilesReparsePoint($_.FullName) })
     if ($reparseEntries.Count -gt 0) { throw 'A pasta contém links do sistema de arquivos. Remova-os da cópia antes de publicar.' }
-    $files = @($allEntries | Where-Object { -not $_.PSIsContainer } | Sort-Object FullName)
+    $sourcePrefix = $sourceDirectory.TrimEnd('\') + '\'
+    $includeProductImages = $payload.includeProductImages -eq $true
+    $files = @($allEntries | Where-Object {
+        if ($_.PSIsContainer) { return $false }
+        $relativePath = $_.FullName.Substring($sourcePrefix.Length).Replace('\', '/')
+        -not (Test-HostingerPublishExcludedFile -RelativePath $relativePath -IncludeProductImages $includeProductImages)
+    } | Sort-Object FullName)
     if ($files.Count -eq 0) { throw 'A pasta de origem não contém arquivos para publicar.' }
     if ($files.Count -gt 200) { throw 'O limite deste MVP é 200 arquivos por publicação.' }
     $allowedExtensions = @('.html','.htm','.css','.js','.mjs','.json','.png','.jpg','.jpeg','.webp','.avif','.gif','.svg','.ico','.woff','.woff2','.ttf','.otf','.txt','.xml','.webmanifest','.pdf')
@@ -1500,7 +1529,6 @@ function Get-HostingerPublishPlan {
 
     $sourceEntries = [System.Collections.Generic.List[object]]::new()
     $deployPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $sourcePrefix = $sourceDirectory.TrimEnd('\') + '\'
     foreach ($file in $files) {
         $sourcePath = $file.FullName.Substring($sourcePrefix.Length).Replace('\', '/')
         $segments = @($sourcePath -split '/')
@@ -1512,6 +1540,9 @@ function Get-HostingerPublishPlan {
         }
         if (-not $deployPaths.Add($relativePath)) { throw 'Dois arquivos da origem teriam o mesmo nome ao enviar os assets para a raiz. Renomeie o arquivo duplicado.' }
         $sourceEntries.Add([PSCustomObject]@{ file = $file; sourcePath = $sourcePath; relativePath = $relativePath })
+    }
+    if ($payload.requireIndexHtml -eq $true -and @($sourceEntries.ToArray() | Where-Object { [string]$_.sourcePath -ieq 'index.html' }).Count -ne 1) {
+        throw 'A página local existente precisa ter um arquivo index.html diretamente na raiz da pasta selecionada.'
     }
     $assetMappings = @($sourceEntries.ToArray() | Where-Object { $_.sourcePath -match '^(?i:assets)/' } | ForEach-Object {
         [PSCustomObject]@{ sourcePath = $_.sourcePath.Substring(7).Replace('\', '/'); targetPath = $_.relativePath }
@@ -1745,14 +1776,14 @@ function Invoke-PresellApi {
         [IO.File]::WriteAllText($temporaryFicha, $fichaJson, [Text.UTF8Encoding]::new($false))
         if ($Preflight) {
             $producer = Join-Path $engineRoot 'tools\New-PresellFromFicha.ps1'
-            $null = & $producer -Destination $destination -FichaPath $temporaryFicha -TemplateRoot $templateRoot -ValidateOnly
+            $null = & $producer -Destination $destination -FichaPath $temporaryFicha -TemplateRoot $templateRoot -ValidateOnly -AssetStudioValidated
             return @{ ready = $true }
         }
         if ($Produce) {
             $producer = Join-Path $engineRoot 'tools\New-PresellFromFicha.ps1'
-            $null = & $producer -Destination $destination -FichaPath $temporaryFicha -TemplateRoot $templateRoot
+            $null = & $producer -Destination $destination -FichaPath $temporaryFicha -TemplateRoot $templateRoot -AssetStudioValidated
         }
-        $reportText = (& $workflow -Destination $destination -Mode Validate -FichaPath $temporaryFicha -AssetFolder $assetFolder -Json | Out-String).Trim()
+        $reportText = (& $workflow -Destination $destination -Mode Validate -FichaPath $temporaryFicha -AssetFolder $assetFolder -AssetStudioValidated -Json | Out-String).Trim()
         $report = $reportText | ConvertFrom-Json
         $result = @{ report = $report }
         if ($Produce) {
@@ -1815,12 +1846,13 @@ function Invoke-PresellOverwriteApi {
     try {
         [IO.Directory]::CreateDirectory($stagePage) | Out-Null
         Copy-Item -LiteralPath $assetSource -Destination (Join-Path $stagePage $assetFolder) -Recurse -ErrorAction Stop | Out-Null
+        Remove-AssetStudioMetadataFromCopiedPageAssets -PageDirectory $stagePage -AssetFolder $assetFolder
         $fichaJson = $payload.ficha | ConvertTo-Json -Depth 30 -Compress
         [IO.File]::WriteAllText($temporaryFicha, $fichaJson, [Text.UTF8Encoding]::new($false))
         $producer = Join-Path $engineRoot 'tools\New-PresellFromFicha.ps1'
         $workflow = Join-Path $engineRoot 'tools\Invoke-PresellWorkflow.ps1'
-        $null = & $producer -Destination $stagePage -FichaPath $temporaryFicha -TemplateRoot $templateRoot
-        $reportText = (& $workflow -Destination $stagePage -Mode Validate -FichaPath $temporaryFicha -AssetFolder $assetFolder -Json | Out-String).Trim()
+        $null = & $producer -Destination $stagePage -FichaPath $temporaryFicha -TemplateRoot $templateRoot -AssetStudioValidated
+        $reportText = (& $workflow -Destination $stagePage -Mode Validate -FichaPath $temporaryFicha -AssetFolder $assetFolder -AssetStudioValidated -Json | Out-String).Trim()
         $report = $reportText | ConvertFrom-Json
         if ([string]$report.overall -eq 'BLOCKED') { throw 'A nova página não passou pela validação final; os arquivos existentes foram preservados.' }
         if (-not $Produce) { return @{ ready = $true; report = $report; destination = $destination; requestedDestination = $requestedDestination; destinationLinkTarget = $destinationLinkTarget; destinationRedirected = $destinationRedirected; exists = $true; files = $pageFiles } }
@@ -1879,7 +1911,7 @@ function Get-PresellBatchPlan {
     if ($assetFolder -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$') { throw 'Nome da pasta de assets inválido.' }
     $assetSource = Join-Path $source $assetFolder
     if (-not (Test-Path -LiteralPath $assetSource -PathType Container)) { throw "A pasta de assets '$assetFolder' não existe na origem informada." }
-    foreach ($asset in @('01.png','02.png','03.png')) {
+    foreach ($asset in @('01.png','02.png')) {
         if (-not (Test-Path -LiteralPath (Join-Path $assetSource $asset) -PathType Leaf)) { throw "Asset obrigatório ausente na origem: $assetFolder/$asset" }
     }
     $parent = Split-Path -Parent $source
@@ -2001,9 +2033,10 @@ function Invoke-PresellBatchValidation {
             try {
                 [IO.File]::WriteAllText($temporaryFicha, [string]$plan.fichaJson, [Text.UTF8Encoding]::new($false))
                 Copy-Item -LiteralPath $plan.assetSource -Destination (Join-Path $stageDirectory $AssetFolder) -Recurse -ErrorAction Stop | Out-Null
+                Remove-AssetStudioMetadataFromCopiedPageAssets -PageDirectory $stageDirectory -AssetFolder $AssetFolder
                 if ($Produce) {
-                    $null = & $producer -Destination $stageDirectory -FichaPath $temporaryFicha -TemplateRoot $templateRoot
-                    $reportText = (& $workflow -Destination $stageDirectory -Mode Validate -FichaPath $temporaryFicha -AssetFolder $AssetFolder -Json | Out-String).Trim()
+                    $null = & $producer -Destination $stageDirectory -FichaPath $temporaryFicha -TemplateRoot $templateRoot -AssetStudioValidated
+                    $reportText = (& $workflow -Destination $stageDirectory -Mode Validate -FichaPath $temporaryFicha -AssetFolder $AssetFolder -AssetStudioValidated -Json | Out-String).Trim()
                     $report = $reportText | ConvertFrom-Json
                     if ($report.PSObject.Properties['destination']) { $report.destination = [string]$plan.destination }
                     $status = [string]$report.overall
@@ -2022,7 +2055,7 @@ function Invoke-PresellBatchValidation {
                     $items.Add([PSCustomObject]@{pageNumber=$plan.pageNumber;hpanelDomain=$plan.hpanelDomain;destination=$plan.destination;publicUrl=$plan.publicUrl;created=$false;overwritten=$false;trackingConfigured=$trackingConfigured;report=$report})
                     if ($status -eq 'BLOCKED') { $commitErrors.Add("A validação final bloqueou a página $($plan.pageNumber) ($($plan.hpanelDomain)).") }
                 } else {
-                    $producerOutput = (& $producer -Destination $stageDirectory -FichaPath $temporaryFicha -TemplateRoot $templateRoot -ValidateOnly | Out-String).Trim()
+                    $producerOutput = (& $producer -Destination $stageDirectory -FichaPath $temporaryFicha -TemplateRoot $templateRoot -ValidateOnly -AssetStudioValidated | Out-String).Trim()
                     $validation = $producerOutput | ConvertFrom-Json
                     if ($validation.ready -ne $true) { throw "A prévia local da página $($plan.pageNumber) não passou." }
                     $items.Add([PSCustomObject]@{pageNumber=$plan.pageNumber;hpanelDomain=$plan.hpanelDomain;destination=$plan.destination;requestedDestination=$plan.requestedDestination;destinationLinkTarget=$plan.destinationLinkTarget;destinationRedirected=$plan.destinationRedirected;exists=$plan.overwrite;created=$false;ready=$true})
@@ -2145,8 +2178,9 @@ try {
             $request = Read-HttpRequest $stream
             $path = [Uri]::UnescapeDataString(($request.Target -split '\?', 2)[0])
             if ($path -in @('/api/hostinger/publish','/api/hostinger/publish/verify','/api/presell/overwrite','/api/presell/batch-overwrite')) { $client.SendTimeout = 600000 }
+            if ($path -eq '/api/asset-studio/capture') { $client.SendTimeout = 180000 }
             if ($request.Method -eq 'GET' -and $path -eq '/api/presell/health') {
-                Write-JsonResponse $stream 200 @{ presellApi = 'v2'; runtime = 'powershell'; engine = 'embedded'; instanceId = $serverInstanceId }
+                Write-JsonResponse $stream 200 @{ presellApi = 'v2'; runtime = 'powershell'; engine = 'embedded'; instanceId = $serverInstanceId; mcpBridgeApi = $false }
                 continue
             }
             if ($path -eq '/api/server/restart') {
@@ -2174,6 +2208,24 @@ try {
                     Write-JsonResponse $stream 500 @{ error = $_.Exception.Message }
                 }
                 if ($restartRequested) { break }
+                continue
+            }
+            if ($path -eq '/api/asset-studio/capture') {
+                if (-not (Test-HubLocalRequest $request.Headers)) {
+                    Write-JsonResponse $stream 403 @{ error = 'A captura só pode ser iniciada pela tela local do Hub.' }
+                    continue
+                }
+                if ($request.Method -ne 'POST') {
+                    Write-JsonResponse $stream 405 @{ error = 'Método não permitido.' }
+                    continue
+                }
+                try {
+                    Write-JsonResponse $stream 200 (Get-AssetStudioCapture -Body $request.Body -Port $Port)
+                } catch [ArgumentException] {
+                    Write-JsonResponse $stream 400 @{ error = $_.Exception.Message }
+                } catch {
+                    Write-JsonResponse $stream 502 @{ error = $_.Exception.Message }
+                }
                 continue
             }
             if ($request.Method -eq 'POST' -and $path -eq '/api/asset-studio/page-directory') {

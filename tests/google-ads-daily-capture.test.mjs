@@ -56,10 +56,13 @@ assert.equal(repeated.base.google_ads_api_daily_captures.find(item => item.date 
 assert.equal(JSON.stringify(repeated.base.diario), diaryBefore, 'repetir a captura de hoje continua sem tocar nos dados MCC anteriores');
 
 const beforeRejectedWrite = JSON.stringify(existingBase);
-assert.throws(() => database.saveGoogleAdsDailyCaptures(existingBase, [{ ...currentReport, dateFrom: yesterday, dateTo: yesterday, rows: [{ ...currentReport.rows[0], date: yesterday }] }], {
+const outsideWindow = new Date(`${today}T00:00:00Z`);
+outsideWindow.setUTCDate(outsideWindow.getUTCDate() - 15);
+const tooOldDate = outsideWindow.toISOString().slice(0, 10);
+assert.throws(() => database.saveGoogleAdsDailyCaptures(existingBase, [{ ...currentReport, dateFrom: tooOldDate, dateTo: tooOldDate, rows: [{ ...currentReport.rows[0], date: tooOldDate }] }], {
   todayByAccount: { '2222222222': today },
 }), /janela/);
-assert.equal(JSON.stringify(existingBase), beforeRejectedWrite, 'tentativa de gravar data passada recusa a operação sem alterar a base');
+assert.equal(JSON.stringify(existingBase), beforeRejectedWrite, 'tentativa fora da janela recusa a operação sem alterar a base');
 assert.throws(() => database.saveGoogleAdsDailyCaptures({ ...existingBase, schema: -1 }, [currentReport], {
   todayByAccount: { '2222222222': today },
 }), /proteger os dados existentes/);

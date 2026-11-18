@@ -2,10 +2,23 @@
   const number=value=>value==null||value===''||!Number.isFinite(Number(value))?null:Number(value);
   const compare=(a,b)=>String(a.data||'').localeCompare(String(b.data||''))||String(a.hora||'').localeCompare(String(b.hora||''))||String(a.registrada_em||'').localeCompare(String(b.registrada_em||''))||String(a.id).localeCompare(String(b.id));
   function campaignSales(base,campaignId){
-    return (base?.vendas_provisorias||[]).filter(sale=>sale.campanha_id===campaignId&&sale.status!=='cancelada').slice().sort(compare).map((sale,index)=>({
-      ...sale,sequence:index+1,
-      snapshot:sale.roi_no_registro?.campaign_id===campaignId?sale.roi_no_registro:null
-    }));
+    return campaignSalesMap(base).get(campaignId)||[];
+  }
+  function campaignSalesMap(base){
+    const grouped=new Map();
+    for(const sale of base?.vendas_provisorias||[]){
+      if(!sale||sale.status==='cancelada')continue;
+      const rows=grouped.get(sale?.campanha_id)||[];
+      rows.push(sale);grouped.set(sale?.campanha_id,rows);
+    }
+    for(const[campaignId,rows]of grouped){
+      rows.sort(compare);
+      grouped.set(campaignId,rows.map((sale,index)=>({
+        ...sale,sequence:index+1,
+        snapshot:sale.roi_no_registro?.campaign_id===campaignId?sale.roi_no_registro:null
+      })));
+    }
+    return grouped;
   }
   // Read-only projection: same MCC replacement and ROI convention as Overview.
   // The returned photograph is stored only by the explicit manual-sale action.
@@ -32,5 +45,5 @@
       source:'campaign_cumulative_at_manual_registration',
       unavailable_reason:roi!=null?null:investment==null?'Investimento não disponível':investment<=0?'Investimento zero; ROI indefinido':'Receita não disponível'};
   }
-  root.SaleRoiDomain=Object.freeze({capture,campaignSales});
+  root.SaleRoiDomain=Object.freeze({capture,campaignSales,campaignSalesMap});
 })(typeof window==='object'?window:globalThis);

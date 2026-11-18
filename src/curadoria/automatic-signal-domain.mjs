@@ -32,7 +32,7 @@ function trendsComponent(record) {
     stable: ['Estável', 'favorable'],
     down: ['Em queda', 'caution'],
     point_peak: ['Pico pontual', 'caution'],
-    low_volume: ['Volume baixo', 'caution'],
+    low_volume: ['Algum volume', 'caution'],
     no_data: ['Sem dados', 'insufficient'],
     inconclusive: ['Inconclusivo', 'insufficient'],
   };

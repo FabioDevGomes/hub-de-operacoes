@@ -1,0 +1,60 @@
+.guru-media-performance-diagnostics {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(83, 154, 218, .42);
+  border-radius: 10px;
+  background: rgba(14, 34, 57, .78);
+}
+
+.guru-media-performance-diagnostics-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.guru-media-performance-diagnostics h2 {
+  margin: 0;
+  color: #dce9f7;
+  font-size: .8rem;
+}
+
+.guru-media-performance-diagnostics p,
+.guru-media-performance-diagnostics summary {
+  margin: 3px 0 0;
+  color: #a9bfd9;
+  font-size: .68rem;
+  line-height: 1.45;
+}
+
+.guru-media-performance-diagnostics-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.guru-media-performance-diagnostics-actions .btn {
+  padding: 6px 9px;
+  font-size: .68rem;
+}
+
+.guru-media-performance-diagnostics-actions .btn:disabled {
+  cursor: default;
+}
+
+.guru-media-performance-diagnostics pre {
+  max-height: 32vh;
+  overflow: auto;
+  margin: 7px 0 0;
+  padding: 9px;
+  border: 1px solid rgba(48, 68, 95, .7);
+  border-radius: 7px;
+  background: rgba(5, 15, 27, .72);
+  color: #b8d4f2;
+  font: 11px/1.45 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

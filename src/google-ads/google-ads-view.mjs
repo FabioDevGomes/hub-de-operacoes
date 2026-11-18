@@ -1,17 +1,23 @@
-import { fetchGoogleAdsConfiguration, fetchGoogleAdsDailyReport, fetchGoogleAdsSaoPauloDayReport, fetchGoogleAdsReport } from './google-ads-service.mjs?v=13';
-import { normalizeGoogleAdsDailyReport, normalizeGoogleAdsReport, validateGoogleAdsDailyDateRange, validateGoogleAdsDateRange } from './google-ads-domain.mjs?v=6';
-import { refreshGoogleAdsAccountsDirectory } from './google-ads-accounts-directory-service.mjs?v=1';
+import { fetchGoogleAdsCampaignTrackingCoverage, fetchGoogleAdsConfiguration, fetchGoogleAdsDailyReport, fetchGoogleAdsSaoPauloDayReport, fetchGoogleAdsReport } from './google-ads-service.mjs?v=17';
+import { normalizeGoogleAdsDailyReport, normalizeGoogleAdsReport, validateGoogleAdsDailyDateRange, validateGoogleAdsDateRange } from './google-ads-domain.mjs?v=7';
+import { GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT, refreshGoogleAdsAccountsDirectory } from './google-ads-accounts-directory-service.mjs?v=3';
 import { validateGoogleAdsSearchTermsDateRange } from './google-ads-search-terms-domain.mjs?v=4';
-import { queryGoogleAdsSearchTerms } from './google-ads-search-terms-controller.mjs?v=4';
-import { renderGoogleAdsSearchTermsResults } from './google-ads-search-terms-results.mjs?v=2';
-import { normalizeGoogleAdsConfiguration, googleAdsQualification, googleAdsStrategy, googleAdsBudget, googleAdsStatusReason, googleAdsConfigurationIssues } from './google-ads-config-domain.mjs?v=1';
+import { queryGoogleAdsSearchTerms } from './google-ads-search-terms-controller.mjs?v=7';
+import { renderGoogleAdsSearchTermsResults } from './google-ads-search-terms-results.mjs?v=26';
+import { normalizeGoogleAdsConfiguration, googleAdsQualification, googleAdsStrategy, googleAdsBudget, googleAdsStatusReason, googleAdsConfigurationIssues } from './google-ads-config-domain.mjs?v=2';
 import { compareGoogleAdsDailyReports } from './google-ads-compare-domain.mjs?v=2';
 import { buildGoogleAdsCaptureDiff } from './google-ads-capture-diff-domain.mjs?v=4';
+import { captureHistoryChangeIndicatesPause, findGoogleAdsAutomaticPauseForChange, findGoogleAdsObservedPauseForChange, googleAdsObservedPauseIntervalForChange } from './google-ads-pause-history-match.mjs?v=2';
 import { compareGoogleAdsD0Snapshots } from './google-ads-d0-compare-domain.mjs?v=2';
 import { readTrackingHubToken } from '../tracking/tracking-token-storage.mjs?v=2';
-import { loadGoogleAdsAccountsCache } from './google-ads-accounts-cache.mjs?v=2';
+import { loadGoogleAdsAccountsCache } from './google-ads-accounts-cache.mjs?v=4';
 import { readGoogleAdsCaptureSnapshotRetention, writeGoogleAdsCaptureSnapshotRetention, normalizeGoogleAdsCaptureSnapshotRetention } from './google-ads-capture-snapshot-retention.mjs?v=1';
-import { syncGoogleAdsFinalUrlHostCache } from './google-ads-final-url-host-cache.mjs?v=1';
+import { readGoogleAdsD1ReviewEnabled, writeGoogleAdsD1ReviewEnabled } from './google-ads-auto-update.mjs?v=16';
+import { syncGoogleAdsFinalUrlHostCache } from './google-ads-final-url-host-cache.mjs?v=2';
+import { googleAdsCampaignBatchFinalUrlIndex } from './google-ads-campaign-batch-final-urls.mjs?v=1';
+import { mountGoogleAdsQuotaObservability } from './google-ads-quota-observability-view.mjs?v=6';
+import { refreshHostingerSitesDirectory } from '../hostinger/hostinger-sites-directory-service.mjs?v=1';
+import { mountGoogleAdsGeographicReportsView } from './google-ads-geographic-reports-view.mjs?v=3';
 
 const mountedRoots = new WeakMap();
 const GOOGLE_ADS_INITIAL_RENDER_ROWS = 20;
@@ -19,7 +25,7 @@ const GOOGLE_ADS_RENDER_PAGE_SIZE = 20;
 const GOOGLE_ADS_SEARCH_TERMS_PAGE_SIZE = 50;
 const GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_KEY = 'hub:google-ads:change-history-display-limit:v1';
 const GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_DEFAULT = 10;
-const GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX = 24;
+const GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX = 40;
 // Two accounts at a time; metrics and inventory for each account are fetched together.
 const GOOGLE_ADS_D0_QUERY_CONCURRENCY = 2;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
@@ -76,10 +82,26 @@ function moneyAmount(amount, currencyCode) {
   }
 }
 
+function clickBankSaleCommission(record) {
+  if (record?.commissionTotal == null) return 'indisponível';
+  const amount = Number(record.commissionTotal);
+  if (!Number.isFinite(amount)) return 'indisponível';
+  const currency = /^[A-Z]{3}$/.test(String(record.currencyCode || '')) ? record.currencyCode : null;
+  return currency
+    ? moneyAmount(amount, currency)
+    : `${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} (moeda indisponível)`;
+}
+
 function captureHistoryTimestamp(value) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Horário indisponível';
-  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'medium' }).format(date);
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 function captureHistoryBusinessDate(value) {
@@ -137,11 +159,40 @@ function channelType(value) {
   return ({ SEARCH: 'Pesquisa', DISPLAY: 'Display', SHOPPING: 'Shopping', VIDEO: 'Vídeo', PERFORMANCE_MAX: 'Performance Max', DEMAND_GEN: 'Demand Gen', MULTI_CHANNEL: 'Multicanal', LOCAL: 'Local', SMART: 'Smart' })[value] || value || '—';
 }
 
-export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot = () => null, getApiCapturesSnapshot = () => [], getApiCaptureHistorySnapshot = () => [], getApiCaptureSnapshotsSnapshot = () => [], onCaptureSnapshotRetentionChange = null, getOperationalSourceMode = () => 'manifest', onOperationalSourceModeChange = () => {}, onPreviewDailyCaptures = null, onSaveDailyCaptures = null, getApiCaptureDateRange = null, getGoogleAdsAutoUpdateStatus = () => null, onGoogleAdsAutoUpdateToggle = () => {}, onGoogleAdsAutoUpdateIntervalChange = () => {} } = {}) {
+function googleAdsCampaignDeliveryHistory(records) {
+  return (Array.isArray(records) ? records : []).flatMap(record => {
+    const snapshot = record?.operationSnapshot;
+    if (snapshot?.type !== 'campaign_delivery_started') return [];
+    const deliveryId = String(record.id || '').trim();
+    const productName = String(record.productName || '').trim();
+    const completedAtUtc = String(record.createdAt || '').trim();
+    if (!deliveryId || !productName || !Number.isFinite(Date.parse(completedAtUtc))) return [];
+    return [{
+      id: `campaign-delivery:${deliveryId}`,
+      eventType: 'campaign_delivery_started',
+      completedAtUtc,
+      deliveryId,
+      productName,
+      offerName: String(record.offerName || '').trim(),
+      sourceActivity: String(snapshot.sourceActivity || '').trim() || 'Curadoria ClickBank',
+      destinationActivity: String(snapshot.destinationActivity || '').trim() || 'Criação de campanha',
+      countries: Array.isArray(record.countries) ? [...record.countries] : [],
+    }];
+  });
+}
+
+function mergeGoogleAdsCaptureHistory(captureHistory, deliveryRecords) {
+  return [
+    ...(Array.isArray(captureHistory) ? captureHistory : []),
+    ...googleAdsCampaignDeliveryHistory(deliveryRecords),
+  ];
+}
+
+export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot = () => null, getApiCapturesSnapshot = () => [], getApiCaptureHistorySnapshot = () => [], getApiCaptureSnapshotsSnapshot = () => [], getCampaignDeliveryHistorySnapshot = () => [], getCampaignBatchSnapshot = () => ({ batches: [] }), onCaptureSnapshotRetentionChange = null, onPreviewDailyCaptures = null, onSaveDailyCaptures = null, getApiCaptureDateRange = null, getGoogleAdsAutoUpdateStatus = () => null, getGoogleAdsSourceMode = () => 'api', onGoogleAdsAutoUpdateToggle = () => {}, onGoogleAdsRunNow = async () => {}, onGoogleAdsAutoUpdateIntervalChange = () => {}, onGoogleAdsHttp502RetryIntervalChange = () => {}, getUnreadCaptureHistoryIds = () => [], onCaptureHistoryOpened = () => {}, onRecordObservedPause = async () => {} } = {}) {
   if (!root) throw new Error('A área da integração Google Ads não foi encontrada.');
   const existing = mountedRoots.get(root);
   if (existing) {
-    existing.refreshCaptureHistory?.({ google_ads_api_change_history: getApiCaptureHistorySnapshot(), google_ads_api_capture_snapshots: getApiCaptureSnapshotsSnapshot() });
+    existing.refreshCaptureHistory?.({ google_ads_api_change_history: getApiCaptureHistorySnapshot(), google_ads_api_capture_snapshots: getApiCaptureSnapshotsSnapshot(), google_ads_campaign_delivery_history: getCampaignDeliveryHistorySnapshot() });
     return existing;
   }
 
@@ -151,13 +202,11 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   const state = {
     tokenReady: Boolean(tokenState.token),
     accounts: cachedDirectory?.accounts || null,
-    accountsCacheAt: cachedDirectory?.savedAtUtc || '',
-    accountsCachePersisted: Boolean(cachedDirectory),
     report: null,
     dailyReport: null,
     dailyComparison: null,
     captureDiff: null,
-    captureHistory: Array.isArray(getApiCaptureHistorySnapshot()) ? getApiCaptureHistorySnapshot() : [],
+    captureHistory: mergeGoogleAdsCaptureHistory(getApiCaptureHistorySnapshot(), getCampaignDeliveryHistorySnapshot()),
     captureSnapshots: Array.isArray(getApiCaptureSnapshotsSnapshot()) ? getApiCaptureSnapshotsSnapshot() : [],
     captureHistoryDisplayLimit: readGoogleAdsCaptureHistoryDisplayLimit(),
     captureHistoryPageLimits: new Map(),
@@ -188,6 +237,11 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     searchTermsDateFrom: '',
     searchTermsDateTo: '',
     searchTermsVisibleCount: GOOGLE_ADS_SEARCH_TERMS_PAGE_SIZE,
+    trackingAuditReports: null,
+    trackingAuditFailures: [],
+    trackingAuditPending: false,
+    trackingAuditCompletedAt: '',
+    trackingAuditMessage: '',
     reportPageLimits: new Map(),
     capturePreviewDetailsOpen: false,
     operationalDiffOpen: false,
@@ -200,27 +254,22 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     reportPending: false,
     message: '',
     messageError: false,
-    operationalSourceMode: getOperationalSourceMode() === 'api' ? 'api' : 'manifest',
   };
 
   root.innerHTML = `
     <div class="google-ads-view">
-      <section class="google-ads-card">
-        <div class="google-ads-heading">
-          <div><div class="google-ads-eyebrow">RELATÓRIOS SOMENTE LEITURA</div><h2>Google Ads</h2></div>
-          <div class="google-ads-source-actions" role="group" aria-label="Configurações da integração">
-            <button id="googleAdsAutoUpdateSettings" class="btn" type="button">Abrir configurações</button>
-          </div>
+      <div class="google-ads-view-actions">
+        <div id="googleAdsCaptureHistoryLimit"></div>
+        <div class="google-ads-source-actions" role="group" aria-label="Ações da integração">
+          <button id="googleAdsRunAutomaticUpdateNow" class="btn primary" type="button" aria-describedby="googleAdsRunAutomaticUpdateStatus">Executar atualização agora</button>
+          <button id="googleAdsAutoUpdateSettings" class="btn" type="button">Abrir configurações</button>
+          <span id="googleAdsRunAutomaticUpdateStatus" class="google-ads-run-now-status" role="status" aria-live="polite"></span>
         </div>
+      </div>
+      <section class="google-ads-card">
         <dialog id="googleAdsAutoUpdateDialog" class="google-ads-auto-update-dialog" aria-labelledby="googleAdsAutoUpdateDialogTitle">
           <div class="google-ads-auto-update-dialog-content">
             <div><div class="google-ads-eyebrow">PREFERÊNCIAS DESTE PERFIL</div><h2 id="googleAdsAutoUpdateDialogTitle">Configurações da integração Google Ads</h2></div>
-            <section class="google-ads-auto-update-source" aria-labelledby="googleAdsSourceModeTitle">
-              <div><h3 id="googleAdsSourceModeTitle">Fonte operacional</h3><p id="googleAdsSourceModeStatus"></p></div>
-              <span id="googleAdsSourceModeLabel" class="google-ads-visually-hidden"></span>
-              <button id="googleAdsSourceModeToggle" class="btn" type="button" aria-describedby="googleAdsSourceModeLabel"></button>
-              <p>A escolha vale somente neste perfil do navegador. Ela não apaga capturas nem altera o Diário MCC.</p>
-            </section>
             <label for="googleAdsAutoUpdateInterval">Intervalo da captura D0</label>
             <select id="googleAdsAutoUpdateInterval" class="input">
               <option value="30">A cada 30 minutos</option>
@@ -229,17 +278,42 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
               <option value="60">A cada 1 hora (padrão)</option>
               <option value="70">A cada 1 hora e 10 minutos</option>
               <option value="80">A cada 1 hora e 20 minutos</option>
+              <option value="90">A cada 1 hora e 30 minutos</option>
+              <option value="100">A cada 1 hora e 40 minutos</option>
+              <option value="110">A cada 1 hora e 50 minutos</option>
               <option value="120">A cada 2 horas</option>
+              <option value="150">A cada 2 horas e 30 minutos</option>
+              <option value="180">A cada 3 horas</option>
               <option value="240">A cada 4 horas</option>
               <option value="360">A cada 6 horas</option>
               <option value="720">A cada 12 horas</option>
               <option value="1440">A cada 24 horas</option>
             </select>
+            <section class="google-ads-auto-update-controls google-ads-http-502-retry-settings" aria-labelledby="googleAdsHttp502RetryTitle">
+              <div>
+                <h3 id="googleAdsHttp502RetryTitle">Retentativa automática após HTTP 502</h3>
+                <p>Define quando o Hub repetirá uma captura D0 automática após indisponibilidade HTTP 502. Outros erros, incluindo HTTP 429 de cota, mantêm a retentativa atual de 1 hora.</p>
+                <p id="googleAdsHttp502RetryCurrent">Intervalo atual: 1 hora (60 minutos).</p>
+              </div>
+              <div class="google-ads-http-502-retry-form">
+                <label for="googleAdsHttp502RetryInterval">Tentar novamente após (minutos)</label>
+                <div class="google-ads-http-502-retry-actions">
+                  <input id="googleAdsHttp502RetryInterval" class="input" type="number" min="5" max="1440" step="1" value="60" inputmode="numeric" aria-describedby="googleAdsHttp502RetryHelp">
+                  <button id="googleAdsHttp502RetryApply" class="btn" type="button">Aplicar novo intervalo de tentativa automática</button>
+                </div>
+                <p id="googleAdsHttp502RetryHelp">Entre 5 minutos e 24 horas. Cada tentativa faz uma nova consulta e pode consumir cota.</p>
+                <p id="googleAdsHttp502RetryMessage" class="google-ads-http-502-retry-message" role="status" aria-live="polite"></p>
+              </div>
+            </section>
             <section class="google-ads-auto-update-controls" aria-labelledby="googleAdsAutoUpdateToggleHeading">
               <div><h3 id="googleAdsAutoUpdateToggleHeading">Atualização automática</h3><p>Ative ou pause as capturas automáticas D0 e o fechamento D−1 neste perfil.</p></div>
               <button id="googleAdsAutoUpdateToggle" class="btn" type="button" aria-describedby="googleAdsAutoUpdateStatus googleAdsAutoUpdateDetails"><span id="googleAdsAutoUpdateToggleTitle">Ativar atualização automática</span><span id="googleAdsAutoUpdateNextExecution" hidden></span></button>
               <span id="googleAdsAutoUpdateStatus" class="google-ads-visually-hidden" aria-live="polite"></span>
               <span id="googleAdsAutoUpdateDetails" class="google-ads-visually-hidden"></span>
+            </section>
+            <section class="google-ads-auto-update-controls google-ads-d1-review-controls" aria-labelledby="googleAdsD1ReviewTitle">
+              <div><h3 id="googleAdsD1ReviewTitle">Revisão automática de D−1</h3><p>Reconsulta as métricas do mesmo dia 24 horas após um fechamento completo; se falhar, tenta novamente a cada hora. É somente leitura, consome cota da Google Ads API e não altera campanhas.</p><p id="googleAdsD1ReviewStatus" role="status" aria-live="polite"></p></div>
+              <button id="googleAdsD1ReviewToggle" class="btn" type="button" aria-pressed="true" aria-describedby="googleAdsD1ReviewStatus"><span id="googleAdsD1ReviewToggleTitle">Pausar revisão automática D−1</span></button>
             </section>
             <div id="googleAdsSnapshotRetentionArea"></div>
             <section class="google-ads-closeout google-ads-d0-closeout google-ads-d0-settings" aria-labelledby="googleAdsD0Title">
@@ -260,10 +334,13 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
           <p>Prévia pronta. Revise os dados e confirme para atualizar a base.</p>
           <button id="googleAdsD0Save" class="btn primary" type="button">Atualizar base</button>
         </div>
-        <section id="googleAdsCaptureHistory" class="google-ads-capture-history" aria-labelledby="googleAdsCaptureHistoryTitle"></section>
-        <section class="google-ads-directory" aria-labelledby="googleAdsDirectoryTitle">
-          <div class="google-ads-directory-heading"><div><h3 id="googleAdsDirectoryTitle">MCCs e contas conectadas</h3><p id="googleAdsDirectoryStatus"></p></div><button id="googleAdsLoadAccounts" class="btn" type="button">Atualizar lista de MCCs e contas</button></div>
-          <div id="googleAdsAccountDirectory" class="google-ads-directory-list"></div>
+        <section id="googleAdsCaptureHistory" class="google-ads-capture-history" aria-label="Histórico de atividades e capturas"></section>
+        <div id="googleAdsGeographicReports"></div>
+        <div id="googleAdsQuotaObservability"></div>
+        <section class="google-ads-tracking-audit" aria-labelledby="googleAdsTrackingAuditTitle">
+          <div class="google-ads-tracking-audit-heading"><div><h3 id="googleAdsTrackingAuditTitle">Cobertura do rastreamento de vendas por campanha</h3><p>Consulta somente de leitura às contas selecionadas e consome cota da API. Procura <code>utm_campaign={campaignid}</code> nas rotas ativas; não confirma chegada ao Track nem venda.</p></div><button id="googleAdsTrackingAuditRun" class="btn primary" type="button">Consultar cobertura</button></div>
+          <p class="google-ads-tracking-audit-note">O resultado verifica a configuração de URL no Google Ads; não comprova que um clique chegou ao Track nem que uma venda foi recebida. Canais com URLs dinâmicas ou grupos de recursos podem ficar inconclusivos.</p>
+          <div id="googleAdsTrackingAuditResults" class="google-ads-tracking-audit-results" role="status" aria-live="polite">Selecione uma ou mais contas no seletor abaixo e consulte a cobertura.</div>
         </section>
         <details class="google-ads-advanced-tools">
           <summary>Consultas, filtros e capturas manuais</summary>
@@ -308,10 +385,9 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   const clearAccountsButton = $('#googleAdsClearAccounts');
   const message = $('#googleAdsMessage');
   const reportArea = $('#googleAdsReportArea');
-  const accountsButton = $('#googleAdsLoadAccounts');
   const feedAllAccountsButton = $('#googleAdsFeedAllAccounts');
-  const accountDirectoryStatus = $('#googleAdsDirectoryStatus');
-  const accountDirectory = $('#googleAdsAccountDirectory');
+  const trackingAuditButton = $('#googleAdsTrackingAuditRun');
+  const trackingAuditResults = $('#googleAdsTrackingAuditResults');
   const reportButton = $('#googleAdsRunReport');
   const dailyReportButton = $('#googleAdsRunDailyReport');
   const searchTermsButton = $('#googleAdsRunSearchTerms');
@@ -320,16 +396,22 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   const feedTodayButton = $('#googleAdsFeedToday');
   const last7DaysButton = $('#googleAdsLast7Days');
   const settingsButton = $('#googleAdsOpenSettings');
-  const sourceModeButton = $('#googleAdsSourceModeToggle');
-  const sourceModeLabel = $('#googleAdsSourceModeLabel');
-  const sourceModeStatus = $('#googleAdsSourceModeStatus');
-  const sourceModeDialog = $('#googleAdsAutoUpdateDialog');
   const autoUpdateButton = $('#googleAdsAutoUpdateToggle');
   const autoUpdateButtonTitle = $('#googleAdsAutoUpdateToggleTitle');
   const autoUpdateNextExecution = $('#googleAdsAutoUpdateNextExecution');
+  const d1ReviewButton = $('#googleAdsD1ReviewToggle');
+  const d1ReviewButtonTitle = $('#googleAdsD1ReviewToggleTitle');
+  const d1ReviewStatus = $('#googleAdsD1ReviewStatus');
   const autoUpdateSettingsButton = $('#googleAdsAutoUpdateSettings');
+  const runAutomaticUpdateNowButton = $('#googleAdsRunAutomaticUpdateNow');
+  const runAutomaticUpdateNowStatus = $('#googleAdsRunAutomaticUpdateStatus');
+  let runAutomaticUpdateNowPending = false;
   const autoUpdateDialog = $('#googleAdsAutoUpdateDialog');
   const autoUpdateIntervalSelect = $('#googleAdsAutoUpdateInterval');
+  const http502RetryIntervalInput = $('#googleAdsHttp502RetryInterval');
+  const http502RetryCurrent = $('#googleAdsHttp502RetryCurrent');
+  const http502RetryApply = $('#googleAdsHttp502RetryApply');
+  const http502RetryMessage = $('#googleAdsHttp502RetryMessage');
   const autoUpdateSettingsMessage = $('#googleAdsAutoUpdateSettingsMessage');
   const autoUpdateSettingsCancel = $('#googleAdsAutoUpdateSettingsCancel');
   const autoUpdateSettingsSave = $('#googleAdsAutoUpdateSettingsSave');
@@ -343,6 +425,8 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   const d0SaveActionsArea = $('#googleAdsD0SaveActions');
   const d0SaveButton = $('#googleAdsD0Save');
   const d0ComparisonArea = $('#googleAdsD0ComparisonArea');
+  mountGoogleAdsQuotaObservability({ root: $('#googleAdsQuotaObservability') });
+  mountGoogleAdsGeographicReportsView({ root: $('#googleAdsGeographicReports'), getSourceMode: getGoogleAdsSourceMode, getAutomaticEnabled: () => getGoogleAdsAutoUpdateStatus()?.enabled === true, getCampaignBatchSnapshot });
   const captureHistoryArea = $('#googleAdsCaptureHistory');
   const captureSnapshotRetentionArea = $('#googleAdsSnapshotRetentionArea');
   const queryDiagnosticsArea = $('#googleAdsQueryDiagnostics');
@@ -363,12 +447,39 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       : '';
   }
 
+  function autoUpdateRetryIntervalLabel(value) {
+    const minutes = Math.max(5, Math.trunc(Number(value) || 60));
+    const human = minutes % 60 === 0 ? `${minutes / 60} ${minutes === 60 ? 'hora' : 'horas'}` : `${minutes} minutos`;
+    return `${human} (${minutes} min)`;
+  }
+
   function renderAutoUpdateStatus() {
     const snapshot = getGoogleAdsAutoUpdateStatus() || {};
     const enabled = snapshot.enabled === true;
+    const running = snapshot.state === 'running';
+    runAutomaticUpdateNowButton.disabled = runAutomaticUpdateNowPending || running || snapshot.supported === false;
+    const d1ReviewEnabled = readGoogleAdsD1ReviewEnabled();
     autoUpdateButtonTitle.textContent = enabled ? 'Desativar atualização automática' : 'Ativar atualização automática';
     autoUpdateButton.setAttribute('aria-pressed', String(enabled));
     autoUpdateButton.disabled = snapshot.supported === false && !enabled;
+    d1ReviewButtonTitle.textContent = d1ReviewEnabled ? 'Pausar revisão automática D−1' : 'Ativar revisão automática D−1';
+    d1ReviewButton.setAttribute('aria-pressed', String(d1ReviewEnabled));
+    const reviewDate = autoUpdateBusinessDate(snapshot.d1ReconciliationPendingDate) || snapshot.d1ReconciliationPendingDate || '';
+    if (snapshot.d1ReconciliationRunning) {
+      d1ReviewStatus.textContent = `Em execução · dados de ${autoUpdateBusinessDate(snapshot.pendingD1Date) || snapshot.pendingD1Date || 'data não informada'}.`;
+    } else if (snapshot.d1ReconciliationBlocked) {
+      d1ReviewStatus.textContent = `Há uma revisão pendente fora da janela automática · ${snapshot.d1ReconciliationBlockedDate || 'data não informada'}.`;
+    } else if (!d1ReviewEnabled) {
+      d1ReviewStatus.textContent = reviewDate ? `Pausada · a revisão de ${reviewDate} permanece na fila.` : 'Pausada · nenhuma revisão está aguardando. Fechamentos futuros ficarão pendentes para revisão.';
+    } else if (reviewDate && (!enabled || snapshot.state === 'paused')) {
+      d1ReviewStatus.textContent = `Ativada, mas aguardando a atualização automática e a fonte Google Ads API · revisão de ${reviewDate}.`;
+    } else if (reviewDate) {
+      d1ReviewStatus.textContent = `Ativada · próxima revisão de ${reviewDate} prevista para ${autoUpdateTime(snapshot.d1ReconciliationNextAtUtc)}.`;
+    } else if (!enabled || snapshot.state === 'paused') {
+      d1ReviewStatus.textContent = 'Ativada, mas aguardando a atualização automática, a fonte Google Ads API e o Hub aberto.';
+    } else {
+      d1ReviewStatus.textContent = 'Ativada · será agendada 24 horas após o próximo fechamento completo de D−1.';
+    }
     let nextExecutionText = '';
     if (enabled && snapshot.state === 'running') {
       const operation = snapshot.d1ReconciliationRunning ? 'Revisão D−1' : snapshot.operation === 'D-1' ? 'D−1' : snapshot.operation || 'Captura';
@@ -387,6 +498,9 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       nextExecutionText = `D−1 pendente desde ${pendingDate} · ${pendingCount} dia(s)${snapshot.nextD1AttemptAtUtc ? ` · próxima: ${autoUpdateTime(snapshot.nextD1AttemptAtUtc)}` : ''}`;
     } else if (enabled && snapshot.d1ReconciliationBlocked) {
       nextExecutionText = `Revisão D−1 pendente desde ${snapshot.d1ReconciliationBlockedDate || 'data indisponível'} · fora da janela de 14 dias`;
+    } else if (enabled && !d1ReviewEnabled && snapshot.d1ReconciliationPendingDate) {
+      const reconciliationDate = autoUpdateBusinessDate(snapshot.d1ReconciliationPendingDate) || snapshot.d1ReconciliationPendingDate;
+      nextExecutionText = `Revisão D−1 pausada · dados de ${reconciliationDate} continuam pendentes`;
     } else if (enabled && snapshot.d1ReconciliationPendingDate) {
       const reconciliationDate = autoUpdateBusinessDate(snapshot.d1ReconciliationPendingDate) || snapshot.d1ReconciliationPendingDate;
       nextExecutionText = `Revisão D−1 de ${reconciliationDate} · prevista: ${autoUpdateTime(snapshot.d1ReconciliationNextAtUtc)}`;
@@ -401,7 +515,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       ? ` · ${Math.max(0, Math.round((Date.now() - Date.parse(snapshot.startedAtUtc)) / 1000))} s`
       : '';
     if (snapshot.state === 'running') autoUpdateStatus.textContent = `${snapshot.d1ReconciliationRunning ? 'Revisão D−1' : snapshot.operation || 'Captura'} · ${snapshot.phase || 'em andamento'}${snapshot.operation === 'D-1' && snapshot.pendingD1Date ? ` · dados de ${autoUpdateBusinessDate(snapshot.pendingD1Date) || snapshot.pendingD1Date}` : ''}${duration}`;
-    else if (snapshot.state === 'paused') autoUpdateStatus.textContent = 'Pausada · fonte operacional no Manifesto MCC';
+    else if (snapshot.state === 'paused') autoUpdateStatus.textContent = 'Pausada';
     else if (snapshot.state === 'unsupported') autoUpdateStatus.textContent = 'Indisponível neste navegador';
     else if (snapshot.d1BackfillBlocked) autoUpdateStatus.textContent = `Fechamento D−1 pendente fora da janela de 14 dias · ${snapshot.pendingD1Date || ''}`;
     else if (snapshot.state === 'failed' || snapshot.state === 'blocked') autoUpdateStatus.textContent = `Aguardando correção · ${String(snapshot.lastError || snapshot.phase || 'falha na última tentativa').slice(0, 220)}`;
@@ -422,13 +536,56 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       : snapshot.d1ReconciliationPendingDate ? ` · Revisão D−1 de ${snapshot.d1ReconciliationPendingDate} prevista para ${autoUpdateTime(snapshot.d1ReconciliationNextAtUtc)}`
         : snapshot.lastD1Reconciliation ? ` · Última revisão D−1 dos dados de ${snapshot.lastD1Reconciliation.date || 'data indisponível'} às ${autoUpdateTime(snapshot.lastD1Reconciliation.completedAtUtc)}` : '';
     autoUpdateDetails.textContent = `D0 a cada ${intervalLabel} · ${d0Text} · ${d1Text}${backfillText}${reconciliationText}${reconciliationQueue.length > 1 ? ` (${reconciliationQueue.length} revisões pendentes)` : ''}${nextText}${snapshot.lastError && snapshot.state !== 'failed' && snapshot.state !== 'blocked' ? ` · ${snapshot.lastError}` : ''}`;
+    if (runAutomaticUpdateNowPending && running) {
+      const operation = snapshot.d1ReconciliationRunning ? 'Revisão D−1' : snapshot.operation === 'D-1' ? 'Fechamento D−1' : 'Captura D0';
+      runAutomaticUpdateNowStatus.textContent = `${operation} · ${snapshot.phase || 'em andamento'}`;
+    }
   }
+
+  runAutomaticUpdateNowButton.addEventListener('click', async () => {
+    if (runAutomaticUpdateNowPending) return;
+    runAutomaticUpdateNowPending = true;
+    runAutomaticUpdateNowButton.disabled = true;
+    runAutomaticUpdateNowStatus.classList?.remove?.('is-error');
+    runAutomaticUpdateNowStatus.textContent = 'Iniciando atualização…';
+    try {
+      const result = await onGoogleAdsRunNow();
+      if (result?.busy) {
+        runAutomaticUpdateNowStatus.textContent = 'Já existe uma atualização em andamento neste perfil; aguarde a conclusão.';
+      } else if (result?.failures?.length) {
+        runAutomaticUpdateNowStatus.textContent = `Atualização parcial · ${result.savedCount} etapa(s) gravada(s). ${result.failures.join(' · ')}`;
+        runAutomaticUpdateNowStatus.classList?.add?.('is-error');
+      } else {
+        runAutomaticUpdateNowStatus.textContent = `Atualização concluída · ${result?.savedCount || 0} etapa(s) gravada(s).`;
+      }
+    } catch (error) {
+      runAutomaticUpdateNowStatus.textContent = error.message || 'Não foi possível executar a atualização agora.';
+      runAutomaticUpdateNowStatus.classList?.add?.('is-error');
+    } finally {
+      runAutomaticUpdateNowPending = false;
+      renderAutoUpdateStatus();
+    }
+  });
 
   autoUpdateSettingsButton.addEventListener('click', () => {
     const snapshot = getGoogleAdsAutoUpdateStatus() || {};
     autoUpdateIntervalSelect.value = String(Number(snapshot.intervalMinutes) || 60);
+    const retryMinutes = Number(snapshot.http502RetryIntervalMinutes) || 60;
+    http502RetryIntervalInput.value = String(retryMinutes);
+    http502RetryCurrent.textContent = `Intervalo atual: ${autoUpdateRetryIntervalLabel(retryMinutes)}.`;
     autoUpdateSettingsMessage.textContent = '';
+    http502RetryMessage.textContent = '';
+    http502RetryMessage.classList.remove('is-error');
     autoUpdateDialog.showModal();
+  });
+  d1ReviewButton.addEventListener('click', () => {
+    autoUpdateSettingsMessage.textContent = '';
+    try {
+      writeGoogleAdsD1ReviewEnabled(!readGoogleAdsD1ReviewEnabled());
+      renderAutoUpdateStatus();
+    } catch (error) {
+      autoUpdateSettingsMessage.textContent = error.message || 'Não foi possível alterar a revisão automática D−1.';
+    }
   });
   autoUpdateSettingsCancel.addEventListener('click', () => autoUpdateDialog.close());
   autoUpdateSettingsSave.addEventListener('click', async () => {
@@ -442,6 +599,25 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       autoUpdateSettingsMessage.textContent = error.message || 'Não foi possível salvar o intervalo.';
     } finally {
       autoUpdateSettingsSave.disabled = false;
+    }
+  });
+  http502RetryApply.addEventListener('click', async () => {
+    const intervalMinutes = Number(http502RetryIntervalInput.value);
+    http502RetryApply.disabled = true;
+    http502RetryMessage.textContent = '';
+    http502RetryMessage.classList.remove('is-error');
+    try {
+      if (!Number.isInteger(intervalMinutes) || intervalMinutes < 5 || intervalMinutes > 1440) {
+        throw new Error('Informe um número inteiro entre 5 e 1440 minutos.');
+      }
+      await onGoogleAdsHttp502RetryIntervalChange(intervalMinutes);
+      http502RetryCurrent.textContent = `Intervalo atual: ${autoUpdateRetryIntervalLabel(intervalMinutes)}.`;
+      http502RetryMessage.textContent = `Aplicado às próximas falhas D0 por HTTP 502: nova tentativa após ${autoUpdateRetryIntervalLabel(intervalMinutes)}. Uma tentativa já agendada mantém o horário atual.`;
+    } catch (error) {
+      http502RetryMessage.textContent = error.message || 'Não foi possível salvar o intervalo de retentativa.';
+      http502RetryMessage.classList.add('is-error');
+    } finally {
+      http502RetryApply.disabled = false;
     }
   });
 
@@ -683,48 +859,100 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     message.classList.toggle('success', Boolean(value) && !isError);
   }
 
-  function renderSourceMode() {
-    const useApi = state.operationalSourceMode === 'api';
-    sourceModeLabel.textContent = `Fonte operacional atual: ${useApi ? 'Google Ads API' : 'Manifesto MCC'}`;
-    sourceModeStatus.textContent = `Fonte operacional atual neste perfil: ${useApi ? 'Google Ads API' : 'Manifesto MCC'}.`;
-    sourceModeButton.textContent = useApi ? 'Voltar para o manifesto MCC neste perfil' : 'Ativar API neste perfil';
-    sourceModeButton.setAttribute('aria-pressed', String(useApi));
-    sourceModeDialog.classList.toggle('is-api-active', useApi);
-  }
-
   function directoryDateLabel(value) {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'horário indisponível' : date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   }
 
-  function renderAccountDirectory() {
-    const directory = state.accounts;
-    if (!directory) {
-      accountDirectoryStatus.textContent = 'A lista ainda não foi consultada neste perfil. Clique em “Atualizar lista de MCCs e contas” para montar e guardar a lista.';
-      accountDirectory.innerHTML = '<div class="google-ads-directory-empty">Nenhuma MCC ou conta em cache local.</div>';
-      updateCaptureWindowLabels();
+  function renderTrackingAudit() {
+    if (state.trackingAuditPending && state.trackingAuditReports?.length === 0) {
+      trackingAuditResults.textContent = state.trackingAuditMessage || 'Consultando a configuração do Google Ads…';
+      trackingAuditResults.classList.remove('is-error');
       return;
     }
-    const mccCount = directory.managers.filter(manager => manager.customerId != null).length;
-    const accountCount = directory.accounts.length;
-    const updatedAt = state.accountsCacheAt ? directoryDateLabel(state.accountsCacheAt) : '';
-    const storageLabel = state.accountsCachePersisted ? `Atualizada em ${updatedAt}` : 'Lista carregada somente nesta sessão; não foi possível persistir o cache local.';
-    accountDirectoryStatus.textContent = `${storageLabel} · ${mccCount} MCC(s) · ${accountCount} conta(s) cliente${directory.warningCount ? ` · ${directory.warningCount} aviso(s) na consulta` : ''}.`;
-    updateCaptureWindowLabels();
-
-    const groups = directory.managers.map(manager => ({
-      manager,
-      accounts: directory.accounts.filter(account => (account.managerCustomerId ?? 'direct') === managerKey(manager)),
-    }));
-    const directAccounts = directory.accounts.filter(account => account.managerCustomerId == null);
-    if (!groups.some(group => managerKey(group.manager) === 'direct') && directAccounts.length) {
-      groups.push({ manager: { customerId: null, name: 'Contas com acesso direto' }, accounts: directAccounts });
+    if (!state.trackingAuditReports) {
+      trackingAuditResults.textContent = state.trackingAuditPending
+        ? state.trackingAuditMessage || 'Consultando a configuração do Google Ads…'
+        : 'Selecione uma ou mais contas no seletor abaixo e consulte a cobertura.';
+      trackingAuditResults.classList.toggle('is-error', false);
+      return;
     }
-    accountDirectory.innerHTML = groups.length ? groups.map(({ manager, accounts }, index) => `
-      <details class="google-ads-directory-group">
-        <summary><strong>${escapeHtml(manager.name)}</strong><span>${manager.customerId ? escapeHtml(manager.customerId) : 'Acesso direto'}</span><b>${accounts.length} conta(s)</b><span class="google-ads-directory-disclosure" aria-hidden="true"></span></summary>
-        ${accounts.length ? `<div class="google-ads-table-wrap"><table class="google-ads-table google-ads-directory-table"><thead><tr><th>Conta Google Ads</th><th>ID da conta</th><th>Moeda</th><th>Fuso</th><th>Acesso</th></tr></thead><tbody>${accounts.map(account => `<tr><td>${escapeHtml(account.name)}</td><td>${escapeHtml(account.customerId)}</td><td>${escapeHtml(account.currencyCode)}</td><td>${escapeHtml(account.timeZone || '—')}</td><td>${escapeHtml(account.status || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="google-ads-directory-empty">Nenhuma conta cliente listada nesta MCC.</div>'}
-      </details>`).join('') : '<div class="google-ads-directory-empty">Nenhuma conta cliente foi encontrada nas MCCs acessíveis.</div>';
+    const labels = { covered: 'Detectada nas rotas avaliadas', partial: 'Parcial', missing: 'Não localizada', review: 'Revisar configuração', inconclusive: 'Inconclusivo' };
+    const campaigns = state.trackingAuditReports.flatMap(report => (Array.isArray(report.campaigns) ? report.campaigns : []).map(campaign => ({ ...campaign, accountName: report.accountName, customerId: report.customer_id })));
+    const counts = campaigns.reduce((result, campaign) => { result[campaign.coverage_status] = (result[campaign.coverage_status] || 0) + 1; return result; }, {});
+    const allFailed = state.trackingAuditFailures.length > 0 && state.trackingAuditReports.length === 0;
+    const someFailed = state.trackingAuditFailures.length > 0 && state.trackingAuditReports.length > 0;
+    const summary = allFailed
+      ? 'Nenhuma consulta foi concluída; não há um resultado de cobertura para exibir.'
+      : `${campaigns.length} campanha(s) ENABLED · ${counts.covered || 0} com parâmetro em todas as rotas avaliadas · ${(counts.partial || 0) + (counts.missing || 0) + (counts.review || 0) + (counts.inconclusive || 0)} para revisar${someFailed ? ` · ${state.trackingAuditFailures.length} conta(s) com falha` : ''}`;
+    const failures = state.trackingAuditFailures.length
+      ? `<div class="google-ads-tracking-audit-failure"><p>Falha ao consultar ${state.trackingAuditFailures.map(item => escapeHtml(item.accountName)).join(' · ')}.</p><ul>${state.trackingAuditFailures.map(item => {
+        const diagnostic = item.diagnostic || {};
+        const technical = [
+          diagnostic.upstreamHttpStatus ? `HTTP ${diagnostic.upstreamHttpStatus}` : '',
+          ...(Array.isArray(diagnostic.googleErrorCodes) ? diagnostic.googleErrorCodes : []),
+          diagnostic.googleStatus || '',
+          ...(Array.isArray(diagnostic.fieldPaths) && diagnostic.fieldPaths.length ? [`Campos: ${diagnostic.fieldPaths.join(', ')}`] : []),
+          diagnostic.id ? `Diagnóstico ${diagnostic.id}` : '',
+        ].filter(Boolean);
+        return `<li><strong>${escapeHtml(item.accountName)}</strong>: ${escapeHtml(item.reason)}${technical.length ? `<small>${technical.map(escapeHtml).join(' · ')}</small>` : ''}</li>`;
+      }).join('')}</ul></div>`
+      : '';
+    const rows = campaigns.map(campaign => {
+      const status = labels[campaign.coverage_status] || labels.inconclusive;
+      const sources = Array.isArray(campaign.tracking_sources) && campaign.tracking_sources.length
+        ? campaign.tracking_sources.map(escapeHtml).join(' · ') : 'Nenhuma identificada';
+      return `<tr><td><strong>${escapeHtml(campaign.accountName)}</strong><small>${escapeHtml(campaign.customerId)}</small></td><td><strong>${escapeHtml(campaign.campaign_name)}</strong><small>${escapeHtml(campaign.campaign_id)} · ${escapeHtml(campaign.channel_type || 'Canal não informado')}</small></td><td><span class="google-ads-tracking-audit-status is-${escapeHtml(campaign.coverage_status || 'inconclusive')}">${escapeHtml(status)}</span><small>${escapeHtml(campaign.coverage_detail || '')}</small></td><td>${integer(campaign.tracked_paths)} / ${integer(campaign.checked_paths)}<small>${integer(campaign.missing_paths)} sem parâmetro · ${integer(campaign.review_paths)} inconclusivas</small></td><td>${sources}</td><td>${integer(campaign.override_settings_count)}</td></tr>`;
+    }).join('');
+    trackingAuditResults.classList.toggle('is-error', !campaigns.length && state.trackingAuditFailures.length > 0);
+    const emptyMessage = allFailed
+      ? 'A consulta falhou em todas as contas selecionadas; confira os códigos e campos do diagnóstico acima.'
+      : someFailed
+        ? 'Nenhuma campanha ENABLED foi retornada pelas contas consultadas com sucesso; as falhas acima ainda precisam ser analisadas.'
+        : 'Nenhuma campanha ENABLED foi encontrada nas contas consultadas.';
+    trackingAuditResults.innerHTML = `<p class="google-ads-tracking-audit-summary">${escapeHtml(summary)}${state.trackingAuditCompletedAt ? ` · Consultada em ${escapeHtml(directoryDateLabel(state.trackingAuditCompletedAt))}` : ''}</p>${failures}${campaigns.length ? `<div class="google-ads-table-wrap"><table class="google-ads-table google-ads-tracking-audit-table"><thead><tr><th>Conta</th><th>Campanha ativa</th><th>Resultado</th><th>Rotas avaliadas</th><th>Origem detectada</th><th>Configurações inferiores</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="google-ads-directory-empty">${escapeHtml(emptyMessage)}</p>`}`;
+  }
+
+  async function runTrackingAudit() {
+    if (!state.tokenReady) {
+      state.trackingAuditReports = [];
+      state.trackingAuditFailures = [{ accountName: 'Integração', reason: 'Configure o token compartilhado nas configurações globais.' }];
+      renderTrackingAudit();
+      return;
+    }
+    const accounts = selectedAccounts();
+    if (!accounts.length) {
+      state.trackingAuditReports = [];
+      state.trackingAuditFailures = [{ accountName: 'Contas selecionadas', reason: 'Selecione ao menos uma conta.' }];
+      renderTrackingAudit();
+      return;
+    }
+    state.trackingAuditPending = true;
+    state.trackingAuditReports = [];
+    state.trackingAuditFailures = [];
+    state.trackingAuditCompletedAt = '';
+    renderTrackingAudit();
+    syncButtonAvailability();
+    try {
+      for (let index = 0; index < accounts.length; index++) {
+        const account = accounts[index];
+        state.trackingAuditMessage = `Consultando ${index + 1} de ${accounts.length}: ${account.name}…`;
+        renderTrackingAudit();
+        try {
+          const report = await fetchGoogleAdsCampaignTrackingCoverage({ managerCustomerId: account.managerCustomerId, customerId: account.customerId });
+          state.trackingAuditReports.push({ ...report, accountName: account.name });
+        } catch (error) {
+          state.trackingAuditFailures.push({ accountName: account.name, reason: error?.message || 'Falha na consulta.', diagnostic: error?.diagnostic || null });
+        }
+        renderTrackingAudit();
+      }
+      state.trackingAuditCompletedAt = new Date().toISOString();
+      state.trackingAuditMessage = '';
+      renderTrackingAudit();
+    } finally {
+      state.trackingAuditPending = false;
+      syncButtonAvailability();
+    }
   }
 
   function visibleAccounts() {
@@ -759,9 +987,8 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   function syncButtonAvailability() {
     const accounts = visibleAccounts();
     const selectedCount = selectedAccounts().length;
-    const queryPending = state.accountsPending || state.reportPending || state.searchTermsPending;
+    const queryPending = state.accountsPending || state.reportPending || state.searchTermsPending || state.trackingAuditPending;
     const available = state.tokenReady && selectedCount > 0;
-    accountsButton.disabled = !state.tokenReady || state.accountsPending || state.reportPending || state.searchTermsPending;
     closeoutPreviewButton.disabled = !state.tokenReady || queryPending || typeof onPreviewDailyCaptures !== 'function';
     closeoutPreviewButton.textContent = state.closeoutRunning && state.closeoutQueryMode === 'all' ? 'Consultando todas…' : 'Ver diferenças · todas';
     closeoutActivePreviewButton.disabled = !state.tokenReady || queryPending || typeof onPreviewDailyCaptures !== 'function';
@@ -780,8 +1007,9 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     dailyReportButton.disabled = !available || queryPending;
     searchTermsButton.disabled = !available || queryPending;
     searchTermsButton.textContent = state.searchTermsPending ? 'Consultando termos…' : 'Consultar termos de pesquisa';
+    trackingAuditButton.disabled = !available || queryPending;
+    trackingAuditButton.textContent = state.trackingAuditPending ? 'Consultando cobertura…' : 'Consultar cobertura';
     normalizedPreviewButton.disabled = !available || queryPending || typeof onPreviewDailyCaptures !== 'function';
-    sourceModeButton.disabled = queryPending;
     feedTodayButton.disabled = !available || queryPending || typeof onSaveDailyCaptures !== 'function';
     last7DaysButton.disabled = queryPending;
     managerSelect.disabled = !state.accounts?.managers.length || queryPending;
@@ -804,13 +1032,13 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     if (selectAll) state.selectedCustomerIds = new Set(visibleIds);
     else state.selectedCustomerIds = new Set([...state.selectedCustomerIds].filter(id => visibleIds.has(id)));
     accountOptions.innerHTML = accounts.length
-      ? accounts.map(account => `<label class="google-ads-account-option"><input type="checkbox" value="${escapeHtml(account.customerId)}" ${state.selectedCustomerIds.has(account.customerId) ? 'checked' : ''} ${state.accountsPending || state.reportPending || state.searchTermsPending ? 'disabled' : ''}><span><strong>${escapeHtml(account.name)}</strong><small>${escapeHtml(account.customerId)} · ${escapeHtml(account.currencyCode)}</small></span></label>`).join('')
+      ? accounts.map(account => `<label class="google-ads-account-option"><input type="checkbox" value="${escapeHtml(account.customerId)}" ${state.selectedCustomerIds.has(account.customerId) ? 'checked' : ''} ${state.accountsPending || state.reportPending || state.searchTermsPending || state.trackingAuditPending ? 'disabled' : ''}><span><strong>${escapeHtml(account.name)}</strong><small>${escapeHtml(account.customerId)} · ${escapeHtml(account.currencyCode)}</small></span></label>`).join('')
       : '<div class="google-ads-account-empty">Nenhuma conta disponível nesta MCC.</div>';
     const selectedCount = state.selectedCustomerIds.size;
     accountSummary.textContent = accounts.length
       ? selectedCount === accounts.length ? `Todas as ${accounts.length} contas selecionadas` : `${selectedCount} de ${accounts.length} contas selecionadas`
       : 'Nenhuma conta disponível';
-    const queryPending = state.accountsPending || state.reportPending || state.searchTermsPending;
+    const queryPending = state.accountsPending || state.reportPending || state.searchTermsPending || state.trackingAuditPending;
     const pickerDisabled = accounts.length === 0 || queryPending;
     accountPicker.classList.toggle('disabled', pickerDisabled);
     accountPicker.setAttribute('aria-disabled', String(pickerDisabled));
@@ -829,7 +1057,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     managerSelect.value = state.selectedManagerKey;
     managerSelect.disabled = managers.length === 0 || state.accountsPending;
     updateAccountOptions({ selectAll: true });
-    renderAccountDirectory();
   }
 
   function selectedAccounts() {
@@ -1393,7 +1620,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     searchTermsArea.innerHTML = markup;
   }
 
-  const historyFieldLabels = { impressions: 'Impressões', clicks: 'Cliques', costMicros: 'Custo', conversions: 'Conversões', conversionsValue: 'Valor de conversão', campaignName: 'Nome da campanha', campaignStatus: 'Status', primaryStatus: 'Qualificação', primaryStatusReasons: 'Motivo', biddingStrategyType: 'Estratégia', targetCpaMicros: 'CPA desejado', targetCpaResolution: 'Resolução do CPA', budgetPeriod: 'Período do orçamento', budgetAmountMicros: 'Orçamento diário', budgetTotalAmountMicros: 'Orçamento total', budgetShared: 'Orçamento compartilhado' };
+  const historyFieldLabels = { impressions: 'Impressões no dia', clicks: 'Cliques no dia', costMicros: 'Custo', conversions: 'Conversões', conversionsValue: 'Valor de conversão', campaignName: 'Nome da campanha', campaignStatus: 'Status', primaryStatus: 'Qualificação', primaryStatusReasons: 'Motivo', biddingStrategyType: 'Estratégia', targetCpaMicros: 'CPA desejado', targetCpaResolution: 'Resolução do CPA', budgetPeriod: 'Período do orçamento', budgetAmountMicros: 'Orçamento diário', budgetTotalAmountMicros: 'Orçamento total', budgetShared: 'Orçamento compartilhado' };
 
   function captureHistoryValue(key, value, currencyCode) {
     if (value == null || value === '') return 'Sem registro';
@@ -1419,28 +1646,206 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     return `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}`;
   }
 
-  function googleAdsAccountCampaignsHref(customerId, campaignId) {
-    const accountId = String(customerId || '').replace(/\D/g, '');
-    const id = String(campaignId || '').trim();
-    if (!/^\d{10}$/.test(accountId) || !/^[1-9]\d{0,19}$/.test(id)) return '';
-    const parameters = new URLSearchParams({
-      ocid: accountId,
-      euid: '1595241083',
-      __u: '7535994467',
-      uscid: accountId,
-      __c: '8442924178',
-      authuser: '4',
-      workspaceId: '0',
-    });
-    return `https://ads.google.com/aw/campaigns?${parameters.toString()}`;
+  function captureHistorySnapshot(record) {
+    if (!record?.id || record.status === 'failed') return null;
+    return (Array.isArray(state.captureSnapshots) ? state.captureSnapshots : []).find(snapshot =>
+      String(snapshot?.runId || snapshot?.id || '') === String(record.id) && snapshot?.periodType === record.periodType) || null;
   }
-  function renderCaptureHistoryDetails(record) {
-    if (record.status === 'failed') {
-      const businessDate = record.periodType === 'D-1' ? captureHistoryBusinessDate(record.dateTo || record.dateFrom) : '';
-      return `<p class="google-ads-history-empty google-ads-history-failure">Falha na execução automática${businessDate ? ` para os dados de ${escapeHtml(businessDate)}` : ''}. Esta tentativa não tem tabela de diferenças.</p>`;
+
+  function captureHistorySnapshotTotals(record) {
+    const snapshot = captureHistorySnapshot(record);
+    return snapshot ? globalThis.CampaignDatabase?.googleAdsCaptureSnapshotTotals?.(snapshot, getApiCapturesSnapshot()) || null : null;
+  }
+
+  function captureHistorySnapshotClickDetails(record) {
+    return globalThis.CampaignDatabase?.googleAdsCaptureHistoryClickDetails?.(record, state.captureSnapshots, getApiCapturesSnapshot()) || null;
+  }
+  function captureHistoryAutomaticPauseForChange(change, record) {
+    return findGoogleAdsAutomaticPauseForChange(change, record, state.captureHistory);
+  }
+
+  function captureHistoryShowsAlreadyPausedReasonChange(change) {
+    const fields = Array.isArray(change?.fields) ? change.fields : [];
+    const reasonField = fields.find(field => field?.key === 'primaryStatusReasons');
+    if (!reasonField) return false;
+    const containsPausedReason = value => {
+      const reasons = Array.isArray(value) ? value : String(value ?? '').split(/[;,|]/);
+      return reasons.some(reason => String(reason ?? '').trim().toUpperCase() === 'CAMPAIGN_PAUSED');
+    };
+    if (!containsPausedReason(reasonField.before) || !containsPausedReason(reasonField.after)) return false;
+    const campaignStatusField = fields.find(field => field?.key === 'campaignStatus');
+    return !campaignStatusField || [campaignStatusField.before, campaignStatusField.after]
+      .every(status => String(status ?? '').trim().toUpperCase() === 'PAUSED');
+  }
+
+  function captureHistoryObservedPauseForChange(change, record) {
+    return findGoogleAdsObservedPauseForChange(change, record, state.captureHistory);
+  }
+
+  function captureHistoryCanRecordObservedPause(change, record) {
+    const fields = Array.isArray(change?.fields) ? change.fields : [];
+    const status = fields.find(field => field?.key === 'campaignStatus' || field?.key === 'primaryStatus');
+    const interval = googleAdsObservedPauseIntervalForChange(change, record);
+    return !captureHistoryAutomaticPauseForChange(change, record)
+      && !captureHistoryObservedPauseForChange(change, record)
+      && Boolean(interval && change?.campaignInternalId && status
+        && String(status.before || '').toUpperCase() !== 'PAUSED'
+        && String(status.after || '').toUpperCase() === 'PAUSED');
+  }
+
+  function renderCaptureHistoryAutomaticPauseDetail(change, record) {
+    const match = captureHistoryAutomaticPauseForChange(change, record);
+    if (!match) {
+      const observed = captureHistoryObservedPauseForChange(change, record);
+      if (observed) return `<small class="google-ads-history-auto-pause is-observed"><strong>Pausa relatada · transição observada entre snapshots</strong> · ${escapeHtml(captureHistoryTimestamp(observed.observedFromUtc))}–${escapeHtml(captureHistoryTimestamp(observed.observedToUtc))} (São Paulo). Horário exato e regra não disponíveis.</small>`;
+      return captureHistoryChangeIndicatesPause(change)
+        ? '<small class="google-ads-history-auto-pause is-unconfirmed">Transição para pausada observada; origem e horário exato não confirmados.</small>'
+        : '';
     }
+    const ruleLabels = { negative_remaining: 'Valor restante negativo', product_performance: 'Desempenho do mesmo produto', campaign_age: 'Limite de dias da campanha', campaign_zero_impressions: 'Dias sem impressões', minimum_product_performance: 'Concorrente pausada após a referência atingir os mínimos de impressões e cliques', reference_competitor: 'Concorrente mais próxima da referência por impressões', clicks_without_sale: 'Cliques acumulados sem venda' };
+    const rule = String(match.pause.reason || ruleLabels[match.pause.rule] || 'Regra não registrada');
+    return `<small class="google-ads-history-auto-pause"><strong>Pausa automática confirmada</strong> · ${escapeHtml(captureHistoryTimestamp(match.entry.completedAtUtc))} · Regra: ${escapeHtml(rule)}</small>`;
+  }
+
+  function renderCaptureHistoryMetricSummary(record) {
+    const totals = captureHistorySnapshotTotals(record);
+    const date = captureHistoryBusinessDate(totals?.date || record.dateTo || record.dateFrom);
+    const summaryLabel = record.periodType === 'D-1' ? 'Fechamento D−1' : 'Snapshot D0';
+    const impressionsInfo = totals?.metricCoverage?.impressions;
+    const clicksInfo = totals?.metricCoverage?.clicks;
+    const costInfo = totals?.metricCoverage?.cost;
+    const impressionsValue = totals?.impressions ?? totals?.impressionsObserved;
+    const clicksValue = totals?.clicks ?? totals?.clicksObserved;
+    const coverageText = !totals ? 'Cobertura indisponível' : totals.coverage?.complete ? 'Cobertura completa · ' + integer(totals.accountCount) + ' conta(s)' : 'Cobertura parcial · veja os detalhes';
+    const metricCoverageLabel = (label, info) => label + ': ' + (info ? integer(info.completeAccounts) + '/' + integer(info.totalAccounts) + ' conta(s) completa(s)' : 'indisponível');
+    const coverageTitle = !totals
+      ? 'Não foi possível localizar o snapshot desta execução.'
+      : [metricCoverageLabel('Impressões', impressionsInfo), metricCoverageLabel('Cliques', clicksInfo), metricCoverageLabel('Custo', costInfo)].join('; ') + '. Em uma consulta completa de todas as campanhas, contas sem linhas podem ter zero confirmado pela omissão de métricas zero da API. Valores ausentes em linhas recebidas e escopos parciais continuam sem inferência.';
+    const metricTitle = (label, info) => {
+      if (!info) return 'Subtotal de ' + label + ' indisponível: não há linhas observadas no snapshot.';
+      const status = info.complete ? (info.inferredZeroAccounts ? 'Total completo, incluindo zero confirmado pela consulta' : 'Total completo') : info.observedRows ? 'Subtotal observado; cobertura parcial' : info.inferredZeroAccounts ? 'Zero confirmado em algumas contas; cobertura total parcial' : 'Sem métrica observada; nenhum valor foi inferido';
+      const inferredZeroNote = info.inferredZeroAccounts ? '; ' + integer(info.inferredZeroAccounts) + ' conta(s) sem linhas, zero inferido por consulta completa' : '';
+      const scopeNote = info.scopeIncompleteAccounts ? '; ' + integer(info.scopeIncompleteAccounts) + ' conta(s) fora do escopo completo' : '';
+      return status + ': ' + integer(info.completeAccounts) + '/' + integer(info.totalAccounts) + ' conta(s) completa(s); ' + integer(info.accountsWithValue) + ' conta(s) com linha observada; ' + integer(info.observedRows) + ' linha(s) com valor' + inferredZeroNote + scopeNote + (info.missingRows ? '; ' + integer(info.missingRows) + ' registro(s) sem valor' : '') + '.';
+    };
+    const metricMarkup = (label, value, info) => {
+      const title = metricTitle(label.toLocaleLowerCase('pt-BR'), info);
+      const suffix = info && !info.complete ? '*' : '';
+      const displayed = value == null ? '—' : integer(value);
+      return '<span title="' + escapeHtml(title) + '"><small>' + label + suffix + '</small><b>' + displayed + '</b></span>';
+    };
+    let cost = '—', costTitle = metricTitle('custo', costInfo);
+    const costAmount = totals?.costBrl ?? totals?.costBrlObserved;
+    if (costAmount != null) {
+      cost = moneyAmount(costAmount, 'BRL');
+      costTitle = metricTitle('custo', costInfo) + ' Custo em USD convertido pela cotação salva na captura.';
+    } else if (Array.isArray(totals?.costsByCurrency) && totals.costsByCurrency.length) {
+      cost = totals.costsByCurrency.map(item => escapeHtml(item.currencyCode || 'Moeda não informada') + ' ' + escapeHtml(moneyAmount(item.amount, item.currencyCode))).join(' · ');
+      costTitle = metricTitle('custo', costInfo) + ' Moedas não convertidas são exibidas separadamente.';
+    }
+    const costSuffix = costInfo && !costInfo.complete ? '*' : '';
+    const coverageClass = totals?.coverage?.complete ? 'is-complete' : 'is-partial';
+    const coverageMarkup = '<span class="google-ads-history-metric-coverage ' + coverageClass + '" title="' + escapeHtml(coverageTitle) + '">' + escapeHtml(coverageText) + '</span>';
+    const unavailable = totals ? '' : ' title="Snapshot não disponível para este registro"';
+    return '<div class="google-ads-history-metric-summary"' + unavailable + ' aria-label="' + summaryLabel + (date ? ' de ' + escapeHtml(date) : '') + '"><strong>' + summaryLabel + (date ? ' · ' + escapeHtml(date) : '') + '</strong>' + coverageMarkup + metricMarkup('Impressões', impressionsValue, impressionsInfo) + metricMarkup('Cliques', clicksValue, clicksInfo) + '<span title="' + escapeHtml(costTitle) + '"><small>Custo' + costSuffix + '</small><b>' + cost + '</b></span></div>';
+  }
+  const captureHistoryFailureLabels = Object.freeze({
+    google_ads_quota_exceeded: 'A Google Ads API indicou limite de cota.',
+    google_ads_access_denied: 'A Google Ads API recusou o acesso.',
+    google_ads_auth_failed: 'O serviço não conseguiu autenticar na Google Ads API.',
+    google_ads_unavailable: 'O serviço Google Ads não respondeu ou ficou indisponível.',
+    google_ads_request_rejected: 'A Google Ads API rejeitou a consulta.',
+    google_ads_report_incomplete: 'A Google Ads API devolveu uma resposta incompleta.',
+    google_ads_timezone_unavailable: 'Não foi possível confirmar o fuso da conta.',
+    sao_paulo_day_timezone_unsupported: 'O fuso da conta não permite fechar o dia de São Paulo com precisão.',
+    sao_paulo_day_report_unavailable: 'O serviço privado não oferece o relatório D−1 necessário.',
+    sao_paulo_day_not_yesterday: 'A data solicitada não foi aceita pelo serviço privado.',
+    sao_paulo_day_outside_window: 'A data está fora da janela de consulta do serviço privado.',
+    not_authorized: 'O serviço privado recusou o token do Hub.',
+    origin_not_allowed: 'O serviço privado recusou a origem do Hub.',
+    api_not_configured: 'O serviço privado não está configurado.',
+    credentials_missing: 'A credencial do serviço privado não está disponível.',
+    server_error: 'O serviço privado retornou um erro interno.',
+    invalid_payload: 'O serviço privado recusou os parâmetros enviados.',
+    account_directory_invalid: 'O diretório contém uma conta com dados inválidos.',
+    response_account_mismatch: 'A resposta não corresponde à conta ou MCC consultada.',
+    response_incomplete: 'A resposta não confirmou o dia e a consulta completos.',
+    response_scope_mismatch: 'A resposta não confirmou a consulta de todas as campanhas.',
+    response_business_date_mismatch: 'A resposta não confirmou a data civil de São Paulo.',
+    configuration_mismatch: 'O inventário de campanhas não corresponde ao relatório consultado.',
+    report_coverage_incomplete: 'A resposta não cobriu todas as contas conectadas.',
+    business_date_not_closed: 'A data D−1 ainda não estava fechada em São Paulo.',
+    day_rolled_during_query: 'O dia local de uma conta mudou durante a consulta.',
+    request_timeout: 'A consulta atingiu o limite de tempo.',
+    client_network_error: 'O Hub não conseguiu confirmar a resposta do serviço.',
+    response_validation_failed: 'A resposta recebida não passou na validação do Hub.',
+    local_capture_write_failed: 'A captura validada não pôde ser salva na base local.',
+    unclassified: 'A causa ainda não pôde ser classificada.',
+  });
+
+  function captureHistoryFailureLabel(record) {
+    const sample = record?.failureInfo?.samples?.[0];
+    if (!sample) return 'Falha · causa técnica não registrada';
+    const reason = captureHistoryFailureLabels[sample.reasonCode] || captureHistoryFailureLabels.unclassified;
+    const status = Number(sample.upstreamHttpStatus || sample.httpStatus);
+    const errorCode = (Array.isArray(sample.googleErrorCodes) ? sample.googleErrorCodes[0] : '') || sample.googleStatus || '';
+    return `${reason}${status >= 100 && status <= 599 ? ` · HTTP ${status}` : ''}${errorCode ? ` · ${errorCode}` : ''}`;
+  }
+
+  function renderCaptureHistoryFailureDetails(record) {
+    const businessDate = record.periodType === 'D-1' ? captureHistoryBusinessDate(record.dateTo || record.dateFrom) : '';
+    const samples = Array.isArray(record.failureInfo?.samples) ? record.failureInfo.samples.slice(0, 3) : [];
+    const failureCount = Math.max(samples.length, Math.trunc(Number(record.failureInfo?.failureCount) || 0));
+    const lines = samples.map(sample => {
+      const account = /^\d{4}$/.test(String(sample.accountSuffix || '')) ? `Conta ••••${sample.accountSuffix}` : 'Consulta';
+      const status = Number(sample.upstreamHttpStatus || sample.httpStatus);
+      const errorCodes = [...new Set([...(Array.isArray(sample.googleErrorCodes) ? sample.googleErrorCodes : []), sample.googleStatus].filter(Boolean))].slice(0, 3);
+      const references = [sample.diagnosticId ? `Diagnóstico ${sample.diagnosticId}` : '', sample.googleRequestId ? `Request ID ${sample.googleRequestId}` : ''].filter(Boolean);
+      const technical = [status >= 100 && status <= 599 ? `HTTP ${status}` : '', ...errorCodes, ...references].filter(Boolean).join(' · ');
+      const label = captureHistoryFailureLabels[sample.reasonCode] || captureHistoryFailureLabels.unclassified;
+      return `<li><strong>${escapeHtml(account)}</strong>: ${escapeHtml(label)}${technical ? `<small>${escapeHtml(technical)}</small>` : ''}</li>`;
+    }).join('');
+    const overflow = failureCount > samples.length ? `<li>Outras contas com falha: ${integer(failureCount - samples.length)}. O histórico guarda até 3 diagnósticos por tentativa.</li>` : '';
+    const reason = samples.length ? captureHistoryFailureLabel(record) : 'Este registro não contém diagnóstico técnico; ele foi criado antes da mudança de log.';
+    const directoryChange = record.triggerReason === 'account_directory_change'
+      ? `<p class="google-ads-history-empty">Tentativa disparada por ${integer(record.triggerAccountCount)} conta(s) nova(s) ou alterada(s); consultou ${integer(record.accountCount)} conta(s).</p>`
+      : '';
+    return `<div class="google-ads-history-failure-info"><p class="google-ads-history-empty google-ads-history-failure">Falha na execução automática${businessDate ? ` para os dados de ${escapeHtml(businessDate)}` : ''}. ${escapeHtml(reason)} Nenhuma métrica parcial foi aplicada à base operacional.</p>${directoryChange}${lines || overflow ? `<ul class="google-ads-history-failure-list">${lines}${overflow}</ul>` : ''}<p class="google-ads-history-failure-footnote">O histórico guarda apenas o motivo classificado, códigos e IDs de diagnóstico; não guarda a resposta bruta da API nem credenciais.</p></div>`;
+  }
+
+  function renderCaptureHistoryDetails(record) {
+    if (record.eventType === 'clickbank_sale_detected') {
+      const saleAt = captureHistoryTimestamp(record.saleOccurredAtUtc || record.completedAtUtc);
+      const detectedAt = captureHistoryTimestamp(record.completedAtUtc);
+      const commission = clickBankSaleCommission(record);
+      const track = [record.presellHost, record.productKey].filter(Boolean).join(' · ');
+      return `<div class="google-ads-operation-history-details google-ads-sale-history-details"><p><strong>Venda detectada pelo Tracking ClickBank.</strong></p><p><strong>Data/hora da venda:</strong> ${escapeHtml(saleAt)} (São Paulo)${record.saleTimeSource === 'received' ? ' · horário de recebimento' : record.saleTimeSource === 'detected' ? ' · horário da detecção; horário da venda indisponível' : ''}</p><p><strong>Produto:</strong> ${escapeHtml(record.productName || 'Produto não identificado')}</p>${track ? `<p><strong>Track:</strong> ${escapeHtml(track)}</p>` : ''}<p><strong>Comissão registrada:</strong> ${escapeHtml(commission)}</p><p><strong>Campanha:</strong> Não atribuída · o dado disponível não confirma uma campanha específica.</p><p><strong>ID da transação:</strong> ${escapeHtml(record.transactionId || '—')}</p><p><strong>Detectada no Hub:</strong> ${escapeHtml(detectedAt)} (São Paulo)</p></div>`;
+    }
+    if (record.eventType === 'campaign_delivery_started') {
+      const countries = Array.isArray(record.countries) ? record.countries.filter(Boolean) : [];
+      const countryLabel = countries.length ? `<p><strong>Países selecionados:</strong> ${countries.map(escapeHtml).join(', ')}</p>` : '';
+      const deliveryUrl = `/campaign-delivery/?delivery_id=${encodeURIComponent(record.deliveryId || '')}`;
+      return `<div class="google-ads-operation-history-details"><p><strong>Produto:</strong> ${escapeHtml(record.productName || '—')}</p><p><strong>Avanço:</strong> ${escapeHtml(record.sourceActivity || 'Curadoria ClickBank')} → ${escapeHtml(record.destinationActivity || 'Criação de campanha')}</p>${countryLabel}<p>Snapshot local da entrega iniciado na Curadoria. Nenhuma métrica foi consultada ou alterada por este evento.</p><a class="google-ads-history-campaign-link" href="${escapeHtml(deliveryUrl)}">Abrir entrega</a></div>`;
+    }
+    if (record.eventType === 'automatic_pause_observed') {
+      const change = (Array.isArray(record.changes) ? record.changes : [])[0] || {};
+      return `<div class="google-ads-operation-history-details"><p><strong>Pausa relatada pelo usuário; transição observada entre snapshots.</strong></p><p>${escapeHtml(change.campaignName || 'Campanha não identificada')} · ${escapeHtml(change.managerName || change.managerCustomerId || 'MCC não identificada')} · conta ${escapeHtml(change.customerId || '—')} · ID ${escapeHtml(change.campaignId || '—')}</p><p>Último snapshot ativo: ${escapeHtml(captureHistoryTimestamp(record.observedFromUtc))} (São Paulo). Primeiro snapshot pausado: ${escapeHtml(captureHistoryTimestamp(record.observedToUtc))} (São Paulo).</p><p>Os snapshots delimitam o intervalo, mas não comprovam o horário exato nem qual regra causou a pausa. Este registro não é uma confirmação de pausa pela API.</p></div>`;
+    }
+    if (record.status === 'failed') return renderCaptureHistoryFailureDetails(record);
+    const snapshotSummary = ['D0', 'D-1'].includes(record.periodType) ? renderCaptureHistoryMetricSummary(record) : '';
     const pageLimit = state.captureHistoryPageLimits.get(record.id) || 20;
     const changes = Array.isArray(record.changes) ? record.changes : [];
+    const directoryChange = record.triggerReason === 'account_directory_change'
+      ? `<p class="google-ads-history-empty">Execução disparada por ${integer(record.triggerAccountCount)} conta(s) nova(s) ou alterada(s); consultou ${integer(record.accountCount)} conta(s).</p>`
+      : '';
+    const comparisonBaselines = Array.isArray(record.comparisonBaselines) ? record.comparisonBaselines : [];
+    const baselineNote = record.crossDateComparisonsSuppressed
+      ? '<p class="google-ads-history-empty">Comparações com outra data foram ocultadas porque o snapshot original de referência não está mais retido para validar o mesmo dia e período.</p>'
+      : comparisonBaselines.length
+        ? '<p class="google-ads-history-empty">Comparação feita com captura completa anterior da mesma conta, data e período. Falhas, respostas incompletas e capturas de outras datas não são usadas como referência.</p>'
+        : '';
+    let campaignFinalUrls = new Map();
+    try { campaignFinalUrls = googleAdsCampaignBatchFinalUrlIndex(getCampaignBatchSnapshot()); } catch { /* Histórico continua disponível mesmo sem acesso aos lotes locais. */ }
     if (!changes.length) {
       const comparableCampaignDateCount = Number(record.comparedCampaignDateCount) || 0;
       const missingBaselineCount = Number(record.captureDatesWithoutBaseline) || 0;
@@ -1449,32 +1854,59 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
           ? `Execução registrada sem diferenças nas campanhas comparáveis; ${integer(missingBaselineCount)} conta/data(s) não tinham captura anterior.`
           : 'Execução registrada sem diferenças nas campanhas comparáveis.'
         : missingBaselineCount
-          ? `Captura de referência criada para ${integer(missingBaselineCount)} conta/data(s), sem uma gravação anterior para calcular diferenças.`
+          ? `Sem captura válida anterior da mesma data e período para ${integer(missingBaselineCount)} conta/data(s); os totais atuais continuam no resumo acima.`
           : 'Consulta registrada sem campanhas comparáveis nesta execução.';
-      return `<p class="google-ads-history-empty">${detail}</p>`;
+      return `${snapshotSummary}${directoryChange}${baselineNote}<p class="google-ads-history-empty">${detail}</p><p class="google-ads-history-empty">O resumo mostra os totais observados no snapshot. A tabela de diferenças não é exibida quando não há alterações comparáveis; ausência de métrica não significa zero.</p>`;
     }
-    const rows = changes.slice(0, pageLimit).map(change => {
+    const rows = changes.slice(0, pageLimit).map((change, index) => {
       const fields = (change.fields || []).map(field => {
         const delta = captureHistoryDelta(field, change.currencyCode);
         return `<div class="google-ads-history-field"><strong>${escapeHtml(historyFieldLabels[field.key] || field.key)}</strong><span>${escapeHtml(captureHistoryValue(field.key, field.before, change.currencyCode))} <b aria-hidden="true">→</b> ${escapeHtml(captureHistoryValue(field.key, field.after, change.currencyCode))}${delta ? ` <em>(${escapeHtml(delta)})</em>` : ''}</span></div>`;
       }).join('');
+      const pauseTimingNote = captureHistoryShowsAlreadyPausedReasonChange(change)
+        ? '<small class="google-ads-history-pause-context">A campanha já aparecia pausada na captura de referência. Este registro mostra a mudança do motivo, mas não confirma que a pausa ocorreu na data do snapshot nem informa quando ela aconteceu.</small>'
+        : '';
+      const customerId = String(change.customerId || '').replace(/\D/g, '');
       const campaignId = String(change.campaignId || '');
-      const campaignHref = googleAdsAccountCampaignsHref(change.customerId, campaignId);
-      const campaignIdLabel = campaignHref
-        ? `<a class="google-ads-history-campaign-link" href="${escapeHtml(campaignHref)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir a lista de campanhas da conta Google Ads ${escapeHtml(change.customerId)} em nova aba">ID Google Ads ${escapeHtml(campaignId)}</a>`
-        : `ID Google Ads ${escapeHtml(campaignId)}`;
-      const reason = change.reason ? `<small class="google-ads-history-event-reason">Motivo: ${escapeHtml(change.reason)}</small>` : '';
-      return `<tr><td>${escapeHtml(change.date)}<small>${escapeHtml(change.managerName || change.managerCustomerId || 'MCC não identificada')} · ${escapeHtml(change.managerCustomerId || '—')}</small><small>${escapeHtml(change.accountName || `Conta ${change.customerId}`)} · ${escapeHtml(change.customerId)}${change.currencyCode ? ` · ${escapeHtml(change.currencyCode)}` : ''}</small></td><td><strong>${escapeHtml(change.campaignName)}</strong><small>${campaignIdLabel}</small></td><td>${fields}${reason}</td></tr>`;
+      const hasDayClicks = (change.fields || []).some(field => field.key === 'clicks' && Number(field.after) > 0);
+      const campaignFinalUrl = campaignFinalUrls.get(`${customerId}:${campaignId}`) || '';
+      const campaignFinalUrlLabel = campaignFinalUrl
+        ? `<a class="google-ads-history-campaign-link" href="${escapeHtml(campaignFinalUrl)}" target="_blank" rel="noopener noreferrer" title="URL final da Pre-Sell registrada no lote local">${escapeHtml(campaignFinalUrl)}</a>`
+        : 'URL final não registrada no lote local';
+      const accountIdLabel = String(change.customerId || '').replace(/\D/g, '').slice(-4);
+      const baselineLabel = change.baselineDate && change.baselineDate !== change.date
+        ? `<small>Referência: dados de ${escapeHtml(change.baselineDate)}${change.baselineCapturedAtUtc ? ` · captura ${escapeHtml(captureHistoryTimestamp(change.baselineCapturedAtUtc))}` : ''}</small>`
+        : '';
+      const automaticPause = renderCaptureHistoryAutomaticPauseDetail(change, record);
+      const reason = change.reason && !automaticPause ? `<small class="google-ads-history-event-reason">Motivo: ${escapeHtml(change.reason)}</small>` : '';
+      const hasSearchActivity = (change.fields || []).some(field => ['impressions', 'clicks'].includes(field.key) && Number(field.after) > 0);
+      const managerCustomerId = String(change.managerCustomerId || '').replace(/\D/g, '');
+      const campaignName = String(change.campaignName || '').trim();
+      const canOpenSearchTerms = hasSearchActivity && /^\d{10}$/.test(managerCustomerId) && /^\d{10}$/.test(customerId) && /^[1-9]\d{0,19}$/.test(campaignId) && campaignName;
+      const searchTermsButton = canOpenSearchTerms
+        ? `<button class="btn google-ads-history-search-terms-button" type="button" data-google-ads-history-search-terms="${index}" aria-label="Consultar termos de pesquisa de ${escapeHtml(campaignName)} para ontem e hoje" title="Consultar termos de pesquisa · ontem e hoje">Termos · ontem + hoje</button>`
+        : '';
+      const observedPauseButton = captureHistoryCanRecordObservedPause(change, record)
+        ? `<button class="btn google-ads-history-search-terms-button google-ads-history-observed-pause-button" type="button" data-google-ads-record-observed-pause="${index}" aria-label="Registrar pausa relatada por snapshots de ${escapeHtml(campaignName)}" title="Registra no Diário e no histórico como pausa relatada; não confirma a origem na API">Registrar pausa relatada</button>`
+        : '';
+      const managerDisplayName = String(change.managerName || '').trim().replace(managerCustomerId, '').replace(/[\s·•:–—-]+$/, '').trim() || 'MCC não identificada';
+      return `<tr${hasDayClicks ? ' class="google-ads-history-row-has-clicks"' : ''}><td>${escapeHtml(change.date)}${baselineLabel}<small>${escapeHtml(managerDisplayName)}</small><small>Conta: ${escapeHtml(accountIdLabel || '—')}${change.currencyCode ? ` · ${escapeHtml(change.currencyCode)}` : ''}</td><td><strong>${escapeHtml(campaignName || 'Campanha não identificada')}</strong><small>${campaignFinalUrlLabel}</small></td><td>${fields}${pauseTimingNote}${reason}${automaticPause}</td><td>${searchTermsButton}${observedPauseButton}</td></tr>`;
     }).join('');
     const more = pageLimit < changes.length ? `<div class="google-ads-load-more-wrap"><button class="btn google-ads-load-more" type="button" data-google-ads-history-more="${escapeHtml(record.id)}">Carregar mais ${integer(Math.min(20, changes.length - pageLimit))} · ${integer(pageLimit)} de ${integer(changes.length)}</button></div>` : '';
-    return `<div class="google-ads-table-wrap"><table class="google-ads-table google-ads-history-table"><thead><tr><th>Data · MCC / conta</th><th>Campanha</th><th>Campos alterados · anterior → atual</th></tr></thead><tbody>${rows}</tbody></table></div>${more}`;
+    return `${snapshotSummary}${directoryChange}${baselineNote}<div class="google-ads-table-wrap"><table class="google-ads-table google-ads-history-table"><thead><tr><th>Data · MCC / conta</th><th>Campanha</th><th>Campos alterados · anterior → atual</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>${more}<p class="google-ads-history-empty">O resumo mostra impressões, cliques e custo acumulados no snapshot (ou subtotal quando a cobertura é parcial). A tabela lista somente campos diferentes da referência; por isso, cliques sem variação podem não aparecer como linha. A seta compara com o snapshot usado como referência e o valor entre parênteses é a variação, não o total histórico da campanha.</p>`;
   }
 
+  let reconciledCaptureHistoryCache = null;
   function renderCaptureHistory() {
-    const records = [...(state.captureHistory || [])].filter(item => item && item.id && item.completedAtUtc).sort((a, b) => String(b.completedAtUtc).localeCompare(String(a.completedAtUtc)));
-    const automaticPauses = records.filter(record => record.eventType === 'automatic_pause');
-    const visibleCaptures = records.filter(record => record.eventType !== 'automatic_pause').slice(0, state.captureHistoryDisplayLimit);
-    const visible = [...automaticPauses, ...visibleCaptures].sort((a, b) => String(b.completedAtUtc).localeCompare(String(a.completedAtUtc)));
+    const historyStartedAt = performance.now();
+    const reconciliationStartedAt = performance.now();
+    const usedCache = reconciledCaptureHistoryCache !== null;
+    const reconciledHistory = reconciledCaptureHistoryCache ?? (reconciledCaptureHistoryCache = globalThis.CampaignDatabase?.reconcileGoogleAdsCaptureHistoryComparisons?.(state.captureHistory, state.captureSnapshots, getApiCapturesSnapshot()) || state.captureHistory || []);
+    const reconciliationMs = performance.now() - reconciliationStartedAt;
+    const records = [...reconciledHistory].filter(item => item && item.id && item.completedAtUtc).sort((a, b) => String(b.completedAtUtc).localeCompare(String(a.completedAtUtc)));
+    const visible = records.slice(0, state.captureHistoryDisplayLimit);
+    const currentUnreadIds = getUnreadCaptureHistoryIds();
+    const unreadNotificationHistoryIds = new Set((Array.isArray(currentUnreadIds) ? currentUnreadIds : []).map(id => String(id || '')).filter(Boolean));
     const historyById = new Map((state.captureHistory || []).filter(item => item?.id).map(item => [String(item.id), item]));
     const snapshots = [...(state.captureSnapshots || [])].filter(item => {
       if (!item?.id || !item.completedAtUtc) return false;
@@ -1490,28 +1922,39 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     const retentionDirty = validRetentionDraft && requestedRetention !== state.captureSnapshotRetentionLimit;
     const snapshotSection = `<section class="google-ads-snapshot-retention" aria-labelledby="googleAdsSnapshotRetentionTitle"><div class="google-ads-history-heading"><div><h3 id="googleAdsSnapshotRetentionTitle">Snapshots automáticos D0 e D−1</h3><p>${integer(snapshots.length)} snapshot(s) completo(s) guardado(s) · ${integer(campaignCount)} linha(s) de campanha somadas · limite compartilhado: ${integer(state.captureSnapshotRetentionLimit)} leitura(s).</p></div><div class="google-ads-history-limit-control"><label for="googleAdsCaptureSnapshotRetention">Reter <input id="googleAdsCaptureSnapshotRetention" class="google-ads-history-limit" type="number" min="1" max="100" step="1" value="${escapeHtml(retentionDraft)}" inputmode="numeric" aria-label="Quantidade de snapshots automáticos D0 e D-1 a reter"> <span>snapshots (máx. 100)</span></label><button class="btn google-ads-history-limit-apply" type="button" data-google-ads-retention-apply ${state.captureSnapshotRetentionApplying || !retentionDirty ? 'disabled' : ''}>${state.captureSnapshotRetentionApplying ? 'Aplicando…' : 'Aplicar'}</button></div></div><p class="google-ads-history-empty">O limite reúne snapshots automáticos D0 e D−1. A análise da pausa automática continua usando somente D0. Cada snapshot é uma leitura salva, não uma hora fixa. Reduzir a retenção remove os mais antigos; aumentar depois não recupera os que já foram descartados.${snapshots.length ? '' : ' A primeira captura automática completa criará o primeiro snapshot.'}</p><p id="googleAdsCaptureSnapshotRetentionMessage" class="google-ads-snapshot-retention-message" role="status" aria-live="polite">${escapeHtml(state.captureSnapshotRetentionMessage)}</p></section>`;
     if (captureSnapshotRetentionArea) captureSnapshotRetentionArea.innerHTML = snapshotSection;
-    const heading = `<div class="google-ads-history-heading"><h3 id="googleAdsCaptureHistoryTitle">Histórico de capturas e pausas automáticas</h3><label class="google-ads-history-limit-control" for="googleAdsCaptureHistoryDisplayLimit">Capturas <input id="googleAdsCaptureHistoryDisplayLimit" class="google-ads-history-limit" type="number" min="1" max="${GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX}" step="1" value="${state.captureHistoryDisplayLimit}" inputmode="numeric" aria-label="Quantidade de capturas a exibir"> <span>(máx. ${GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX})</span></label></div>`;
+    const historyLimit = `<label class="google-ads-history-limit-control" for="googleAdsCaptureHistoryDisplayLimit">Exibir <input id="googleAdsCaptureHistoryDisplayLimit" class="google-ads-history-limit" type="number" min="1" max="${GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX}" step="1" value="${state.captureHistoryDisplayLimit}" inputmode="numeric" aria-label="Quantidade total de atividades e capturas a exibir"> <span>registros (máx. ${GOOGLE_ADS_CAPTURE_HISTORY_DISPLAY_MAX})</span></label>`;
+    const historyLimitArea = $('#googleAdsCaptureHistoryLimit');
+    if (historyLimitArea) historyLimitArea.innerHTML = historyLimit;
     if (!records.length) {
-      captureHistoryArea.innerHTML = `${heading}<div class="google-ads-history-empty">Ainda não há gravações registradas.</div>`;
+      captureHistoryArea.innerHTML = '<div class="google-ads-history-empty">Ainda não há gravações registradas.</div>';
       return;
     }
     const runs = visible.map(record => {
       const failed = record.status === 'failed';
+      const campaignDelivery = record.eventType === 'campaign_delivery_started';
+      const deliverySourceActivity = String(record.sourceActivity || 'Curadoria ClickBank').trim();
+      const deliveryDestinationActivity = String(record.destinationActivity || 'Criação de campanha').trim();
       const comparableCampaignDateCount = Number(record.comparedCampaignDateCount) || 0;
       const missingBaselineCount = Number(record.captureDatesWithoutBaseline) || 0;
       const changes = Array.isArray(record.changes) ? record.changes : [];
-      const changedCampaignCount = new Set(changes.map(change => {
+      const fallbackChangedCampaignCount = new Set(changes.map(change => {
         const accountKey = String(change?.customerId || change?.managerCustomerId || 'direct').trim();
         const campaignId = String(change?.campaignId || '').trim();
         const campaignInternalId = String(change?.campaignInternalId || '').trim();
         const campaignName = String(change?.campaignName || '').trim().toLowerCase();
         const campaignKey = campaignId ? `id:${campaignId}` : campaignInternalId ? `internal:${campaignInternalId}` : campaignName ? `name:${campaignName}` : '';
         return campaignKey ? `${accountKey}|${campaignKey}` : '';
-      }).filter(Boolean)).size || Number(record.diffRowCount) || 0;
-      const diffLabel = record.eventType === 'automatic_pause'
+      }).filter(Boolean)).size;
+      const storedChangedCampaignCount = Number(record.diffRowCount);
+      const changedCampaignCount = Number.isInteger(storedChangedCampaignCount) && storedChangedCampaignCount >= 0 ? storedChangedCampaignCount : fallbackChangedCampaignCount;
+      const diffLabel = campaignDelivery
+        ? `${deliverySourceActivity} → ${deliveryDestinationActivity}`
+        : record.eventType === 'automatic_pause'
         ? 'Pausa automática confirmada · status alterado para pausada'
+        : record.eventType === 'automatic_pause_observed'
+        ? 'Pausa relatada · transição ativa → pausada observada entre snapshots'
         : failed
-        ? 'Falha · consulta não concluída'
+        ? captureHistoryFailureLabel(record)
         : changedCampaignCount
         ? `${integer(changedCampaignCount)} campanha(s) com diferença · ${integer(record.changedFieldCount)} campo(s)`
         : comparableCampaignDateCount
@@ -1519,15 +1962,32 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
           : missingBaselineCount ? 'Captura de referência · sem comparação anterior' : 'Consulta sem campanhas comparáveis';
       const scope = record.scope === 'ENABLED' ? ' · somente ativas' : '';
       const isSelected = state.captureHistorySelectedId === record.id;
+      const isUnread = unreadNotificationHistoryIds.has(String(record.id));
       const execution = record.executionMode === 'automatic' ? ' · automática' : '';
       const periodType = record.periodType === 'D-1' ? 'D−1' : record.periodType || 'Captura API';
       const review = record.executionPass === 'reconciliation' ? ' · revisão' : '';
-      const period = record.eventType === 'automatic_pause' ? 'Pausa automática' : failed ? `Falha · ${periodType}${review} · automática` : `${periodType}${review}${scope}${execution}`;
-      const timestamp = captureHistoryTimestamp(record.completedAtUtc);
+      const directoryChange = record.triggerReason === 'account_directory_change';
+      const automaticD0 = record.executionMode === 'automatic' && record.periodType === 'D0';
+      const saleEvent = record.eventType === 'clickbank_sale_detected';
+      const period = saleEvent ? 'Venda realizada' : campaignDelivery ? `Entrega iniciada · ${record.productName}` : record.eventType === 'automatic_pause' ? 'Pausa automática' : record.eventType === 'automatic_pause_observed' ? 'Pausa relatada por snapshots' : failed ? `Falha · ${periodType}${review} · automática${directoryChange ? ' · contas novas/alteradas' : ''}` : automaticD0 ? `Atualização automática${review}${scope}${directoryChange ? ' · contas novas/alteradas' : ''}` : `${periodType}${review}${scope}${execution}${directoryChange ? ' · contas novas/alteradas' : ''}`;
+      const timestamp = captureHistoryTimestamp(saleEvent ? record.saleOccurredAtUtc || record.completedAtUtc : record.completedAtUtc);
       const businessDate = record.periodType === 'D-1' ? captureHistoryBusinessDate(record.dateTo || record.dateFrom) : '';
-      const cardDiffLabel = businessDate ? `Dados de ${businessDate} · ${diffLabel}` : diffLabel;
-      const ariaLabel = record.eventType === 'automatic_pause' ? `Mostrar registro de pausa automática em ${timestamp}` : failed ? `Falha automática de ${periodType}${businessDate ? ` para os dados de ${businessDate}` : ''} em ${timestamp}` : `Mostrar diferenças de ${period}${businessDate ? ` para os dados de ${businessDate}` : ''} em ${timestamp}`;
-      return `<button class="google-ads-history-button${failed ? ' is-failed' : ''}${isSelected ? ' is-selected' : ''}" type="button" data-google-ads-history-select="${escapeHtml(record.id)}" aria-pressed="${isSelected}" aria-label="${escapeHtml(ariaLabel)}"><span class="google-ads-history-button-title"><strong>${escapeHtml(period)}</strong></span><span class="google-ads-history-button-time">${escapeHtml(timestamp)}</span><span class="google-ads-history-button-diff">${escapeHtml(cardDiffLabel)}</span></button>`;
+      const directoryChangeLabel = directoryChange ? `${integer(record.triggerAccountCount)} conta(s) nova(s)/alterada(s) · ${integer(record.accountCount)} consultada(s)` : '';
+      const saleCommission = record.commissionTotal == null ? 'comissão indisponível' : clickBankSaleCommission(record);
+      const cardDiffLabel = saleEvent ? `${record.productName || 'Produto não identificado'} · ${saleCommission} · campanha não atribuída` : campaignDelivery ? diffLabel : [businessDate ? `Dados de ${businessDate}` : '', directoryChangeLabel, diffLabel].filter(Boolean).join(' · ');
+      const snapshotClickDetails = captureHistorySnapshotClickDetails(record);
+      const clickDelta = Number.isFinite(Number(snapshotClickDetails?.delta)) ? Number(snapshotClickDetails.delta) : null;
+      const clickMagnitude = clickDelta == null ? 0 : Math.abs(clickDelta);
+      const isCaptureRecord = !failed && !campaignDelivery && ['D0', 'D-1'].includes(record.periodType) && !['automatic_pause', 'automatic_pause_observed'].includes(record.eventType);
+      const clickComparisonUnavailable = isCaptureRecord && !snapshotClickDetails;
+      const clickDescription = clickDelta == null ? (clickComparisonUnavailable ? 'Variação de cliques indisponível' : '') : (clickDelta === 0 ? 'Sem variação de cliques' : (clickDelta > 0 ? '+' : '−') + integer(clickMagnitude) + ' clique' + (clickMagnitude === 1 ? '' : 's')) + ' desde a captura válida anterior' + (snapshotClickDetails.partial ? ' · comparação parcial; ' + integer(snapshotClickDetails.completeAccounts) + '/' + integer(snapshotClickDetails.totalAccounts) + ' contas comparáveis' : '');
+      const ariaLabel = `${saleEvent ? `Venda registrada de ${record.productName || 'produto não identificado'} em ${timestamp}` : campaignDelivery ? `Mostrar snapshot de entrega de ${record.productName || 'produto'} em ${timestamp}` : record.eventType === 'automatic_pause' ? `Mostrar registro de pausa automática confirmada em ${timestamp}` : record.eventType === 'automatic_pause_observed' ? `Mostrar pausa relatada por snapshots em ${timestamp}` : failed ? `Falha automática de ${periodType}${businessDate ? ` para os dados de ${businessDate}` : ''} em ${timestamp}` : `Mostrar diferenças de ${period}${businessDate ? ` para os dados de ${businessDate}` : ''} em ${timestamp}`}${clickDescription ? ` · ${clickDescription}` : ''}`;
+      const clickDots = Array.from({ length: Math.min(5, clickMagnitude) }, () => '<span class="google-ads-history-click-dot"></span>').join('');
+      const clickMinus = clickDelta < 0 ? '<span class="google-ads-history-click-minus">−</span>' : '';
+      const clickPlus = clickMagnitude > 5 ? '<span class="google-ads-history-click-plus">+</span>' : '';
+      const clickIndicator = clickMagnitude > 0 ? `<span class="google-ads-history-click-indicator${clickDelta < 0 ? ' is-decrease' : ''}" title="${escapeHtml(clickDescription)}" aria-hidden="true">${clickMinus}${clickDots}${clickPlus}</span>` : clickComparisonUnavailable ? `<span class="google-ads-history-click-unavailable" title="${escapeHtml(clickDescription)}">Cliques indisponíveis</span>` : '';
+      const automaticPauseIndicator = record.eventType === 'automatic_pause' ? '<span class="google-ads-history-auto-pause-icon" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><rect x="4" y="2.5" width="4.5" height="15" rx="2.25"></rect><rect x="11.5" y="2.5" width="4.5" height="15" rx="2.25"></rect></svg></span>' : '';
+      return `<button class="google-ads-history-button${failed ? ' is-failed' : ''}${saleEvent ? ' is-sale' : ''}${record.eventType === 'automatic_pause_observed' ? ' is-observed' : ''}${isUnread ? ' is-unread' : ''}${isSelected ? ' is-selected' : ''}" type="button" data-google-ads-history-select="${escapeHtml(record.id)}" aria-pressed="${isSelected}" aria-label="${escapeHtml(ariaLabel)}"><span class="google-ads-history-button-title"><strong${campaignDelivery ? ` class="google-ads-history-operation-title" title="${escapeHtml(period)}"` : ''}>${escapeHtml(period)}</strong>${automaticPauseIndicator}${clickIndicator}</span><span class="google-ads-history-button-time">${escapeHtml(timestamp)}</span><span class="google-ads-history-button-diff">${escapeHtml(cardDiffLabel)}</span></button>`;
     }).join('');
     const historyColumns = Math.min(6, visible.length);
     const selectedRecord = records.find(record => String(record.id) === String(state.captureHistorySelectedId));
@@ -1535,14 +1995,19 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     const selectedDetails = selectedRecord
       ? `<div class="google-ads-history-selected" data-google-ads-history-selected-details="${escapeHtml(selectedRecord.id)}" aria-live="polite">${renderCaptureHistoryDetails(selectedRecord)}</div>`
       : '';
-    captureHistoryArea.innerHTML = `${heading}<div class="google-ads-history-runs" style="--google-ads-history-columns:${historyColumns}">${runs}</div>${selectedDetails}`;
+    captureHistoryArea.innerHTML = `<div class="google-ads-history-runs" style="--google-ads-history-columns:${historyColumns}">${runs}</div>${selectedDetails}`;
+    globalThis.hubGoogleAdsLoadingDiagnostics = { ...(globalThis.hubGoogleAdsLoadingDiagnostics || {}), historico: { reconciliacaoMs: Math.round(reconciliationMs), montagemMs: Math.round(performance.now() - historyStartedAt), cacheUtilizado: usedCache } };
   }
 
   function refreshCaptureHistory(base) {
+    reconciledCaptureHistoryCache = null;
     const history = Array.isArray(base?.google_ads_api_change_history)
       ? base.google_ads_api_change_history
       : getApiCaptureHistorySnapshot();
-    state.captureHistory = Array.isArray(history) ? history : [];
+    const deliveryHistory = Array.isArray(base?.google_ads_campaign_delivery_history)
+      ? base.google_ads_campaign_delivery_history
+      : getCampaignDeliveryHistorySnapshot();
+    state.captureHistory = mergeGoogleAdsCaptureHistory(history, deliveryHistory);
     const snapshots = Array.isArray(base?.google_ads_api_capture_snapshots) ? base.google_ads_api_capture_snapshots : getApiCaptureSnapshotsSnapshot();
     state.captureSnapshots = Array.isArray(snapshots) ? snapshots : [];
     const availableIds = new Set(state.captureHistory.map(record => record?.id).filter(Boolean));
@@ -1555,6 +2020,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     const record = state.captureHistory.find(item => String(item?.id || '') === requestedId);
     if (!record) return false;
     state.captureHistorySelectedId = String(record.id);
+    if (!['campaign_delivery_started', 'clickbank_sale_detected'].includes(record.eventType)) onCaptureHistoryOpened(String(record.id));
     renderCaptureHistory();
     captureHistoryArea.querySelector('[data-google-ads-history-selected-details]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
@@ -1563,8 +2029,8 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   document.addEventListener('google-ads-capture-history-pruned', event => {
     const history = event.detail?.history;
     if (!Array.isArray(history)) return;
-    state.captureHistory = history;
-    const availableIds = new Set(history.map(record => record?.id).filter(Boolean));
+    state.captureHistory = mergeGoogleAdsCaptureHistory(history, getCampaignDeliveryHistorySnapshot());
+    const availableIds = new Set(state.captureHistory.map(record => record?.id).filter(Boolean));
     if (state.captureHistorySelectedId && !availableIds.has(state.captureHistorySelectedId)) state.captureHistorySelectedId = null;
     renderCaptureHistory();
   });
@@ -1581,6 +2047,15 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   });
 
   autoUpdateDialog.addEventListener('click', event => {
+    if (event.target === autoUpdateDialog) {
+      const bounds = autoUpdateDialog.getBoundingClientRect();
+      const clickedOutside = event.clientX < bounds.left || event.clientX > bounds.right
+        || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      if (clickedOutside) {
+        autoUpdateDialog.close();
+        return;
+      }
+    }
     const applyRetention = event.target.closest('[data-google-ads-retention-apply]');
     if (applyRetention) {
       const requested = Number(state.captureSnapshotRetentionDraft);
@@ -1619,8 +2094,67 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     const select = event.target.closest('[data-google-ads-history-select]');
     if (select) {
       const recordId = select.dataset.googleAdsHistorySelect;
-      state.captureHistorySelectedId = state.captureHistorySelectedId === recordId ? null : recordId;
+      const isOpening = state.captureHistorySelectedId !== recordId;
+      state.captureHistorySelectedId = isOpening ? recordId : null;
+      if (isOpening) {
+        const openedRecord = (reconciledCaptureHistoryCache || state.captureHistory).find(item => String(item?.id || '') === recordId);
+        if (!['campaign_delivery_started', 'clickbank_sale_detected'].includes(openedRecord?.eventType)) onCaptureHistoryOpened(recordId);
+      }
       renderCaptureHistory();
+      return;
+    }
+    const searchTermsButton = event.target.closest('[data-google-ads-history-search-terms]');
+    if (searchTermsButton) {
+      const record = (reconciledCaptureHistoryCache || state.captureHistory).find(item => item.id === state.captureHistorySelectedId)
+        || state.captureHistory.find(item => item.id === state.captureHistorySelectedId);
+      const changeIndex = Number(searchTermsButton.dataset.googleAdsHistorySearchTerms);
+      const change = Number.isInteger(changeIndex) && changeIndex >= 0 ? record?.changes?.[changeIndex] : null;
+      if (!change) return;
+      document.dispatchEvent(new CustomEvent('google-ads-history-search-terms', { detail: {
+        managerCustomerId: change.managerCustomerId,
+        customerId: change.customerId,
+        campaignId: change.campaignId,
+        campaignName: change.campaignName,
+        autoQuery: true,
+      } }));
+      return;
+    }
+    const observedPauseButton = event.target.closest('[data-google-ads-record-observed-pause]');
+    if (observedPauseButton) {
+      const record = state.captureHistory.find(item => item.id === state.captureHistorySelectedId);
+      const changeIndex = Number(observedPauseButton.dataset.googleAdsRecordObservedPause);
+      const change = Number.isInteger(changeIndex) && changeIndex >= 0 ? record?.changes?.[changeIndex] : null;
+      if (!change || !record || !captureHistoryCanRecordObservedPause(change, record)) return;
+      const status = (Array.isArray(change.fields) ? change.fields : []).find(field => field?.key === 'campaignStatus' || field?.key === 'primaryStatus');
+      const interval = googleAdsObservedPauseIntervalForChange(change, record);
+      if (!status || !interval) return;
+      observedPauseButton.disabled = true;
+      observedPauseButton.textContent = 'Registrando…';
+      onRecordObservedPause({
+        campaignId: change.campaignInternalId,
+        googleCampaignId: change.campaignId,
+        managerCustomerId: change.managerCustomerId,
+        customerId: change.customerId,
+        managerName: change.managerName,
+        accountName: change.accountName,
+        campaignName: change.campaignName,
+        captureRecordId: record.id,
+        observedFromUtc: interval.observedFromUtc,
+        observedToUtc: interval.observedToUtc,
+        beforeStatus: status.before,
+        afterStatus: status.after,
+      }).then(result => {
+        if (!result?.changed) {
+          observedPauseButton.textContent = 'Já registrada';
+          observedPauseButton.title = 'Esta transição já possui um registro no Diário e no histórico.';
+          return;
+        }
+        renderCaptureHistory();
+      }).catch(error => {
+        observedPauseButton.disabled = false;
+        observedPauseButton.textContent = 'Falha ao registrar';
+        observedPauseButton.title = String(error?.message || 'Não foi possível salvar o registro.');
+      });
       return;
     }
     const more = event.target.closest('[data-google-ads-history-more]');
@@ -1631,7 +2165,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     if (record && state.captureHistorySelectedId === recordId) renderCaptureHistory();
   });
 
-  captureHistoryArea.addEventListener('change', event => {
+  root.addEventListener('change', event => {
     const historyLimitInput = event.target.closest('#googleAdsCaptureHistoryDisplayLimit');
     if (historyLimitInput) {
       if (!historyLimitInput.value.trim()) {
@@ -1666,7 +2200,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   autoUpdateDialog.addEventListener('input', updateCaptureSnapshotRetentionDraft);
   autoUpdateDialog.addEventListener('change', updateCaptureSnapshotRetentionDraft);
 
-  async function loadAccounts() {
+  async function loadAccounts({refreshHostinger = false} = {}) {
     if (!state.tokenReady) {
       setMessage('Configure primeiro o token compartilhado em Configurações globais.', true);
       return false;
@@ -1675,33 +2209,54 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.accountsPending = true;
     clearReports();
     syncButtonAvailability();
-    accountsButton.textContent = 'Atualizando lista…';
-    setMessage('Consultando as MCCs autorizadas no Google Ads…');
+    setMessage(refreshHostinger
+      ? 'Consultando as MCCs do Google Ads e atualizando os sites Hostinger…'
+      : 'Consultando as MCCs autorizadas no Google Ads…');
     renderReport();
     try {
-      const refreshed = await refreshGoogleAdsAccountsDirectory();
-      state.accounts = refreshed.accounts;
-      state.accountsCacheAt = refreshed.savedAtUtc;
-      state.accountsCachePersisted = refreshed.persisted;
+      const results = await Promise.allSettled([
+        refreshGoogleAdsAccountsDirectory(),
+        ...(refreshHostinger ? [refreshHostingerSitesDirectory()] : []),
+      ]);
+      const googleResult = results[0];
+      const hostingerResult = refreshHostinger ? results[1] : null;
+      const messages = [];
+      let hasError = false;
+
+      if (googleResult.status === 'fulfilled') {
+        const refreshed = googleResult.value;
+        state.accounts = refreshed.accounts;
+        if (state.accounts.warningCount) messages.push(`Google Ads: lista atualizada com ${state.accounts.warningCount} aviso(s); algumas contas não responderam.${refreshed.persisted ? ' A lista acessível foi guardada neste perfil.' : ' O armazenamento local falhou; a lista fica disponível nesta sessão.'}`);
+        else if (state.accounts.accounts.length) messages.push(`Google Ads: ${state.accounts.accounts.length} conta(s) acessível(is) atualizada(s) e ${refreshed.persisted ? 'guardada(s) neste perfil' : 'mantida(s) nesta sessão'}.`);
+        else {
+          messages.push('Google Ads: nenhuma conta de anúncios foi encontrada nas MCCs acessíveis.');
+          hasError = true;
+        }
+      } else {
+        state.accounts = previousAccounts;
+        clearReports();
+        messages.push(`Google Ads: a atualização falhou; mantive as ${previousAccounts?.accounts.length || 0} conta(s) já guardadas. ${googleResult.reason?.message || ''}`.trim());
+        hasError = true;
+      }
+
+      if (hostingerResult) {
+        if (hostingerResult.status === 'fulfilled') {
+          const refreshed = hostingerResult.value;
+          const hostingerSitesSyncNote = `Hostinger: ${refreshed.sites.length} site(s), atualizado(s) ${refreshed.checkedAtUtc ? `às ${directoryDateLabel(refreshed.checkedAtUtc)}` : 'agora'}`;
+          messages.push(`${hostingerSitesSyncNote}; cache local renovado.`);
+        } else {
+          messages.push(`Hostinger: não foi possível atualizar os sites; o cache anterior foi mantido. ${hostingerResult.reason?.message || ''}`.trim());
+          hasError = true;
+        }
+      }
+
       updateManagerOptions();
-      if (state.accounts.warningCount) setMessage(`Lista atualizada com ${state.accounts.warningCount} aviso(s); algumas contas não responderam.${state.accountsCachePersisted ? ' A lista acessível ficou guardada neste perfil.' : ' O armazenamento local falhou; a lista fica disponível nesta sessão.'}`, false);
-      else if (state.accounts.accounts.length) setMessage(`${state.accounts.accounts.length} conta(s) acessível(is) atualizada(s) e ${state.accountsCachePersisted ? 'guardada(s) neste perfil' : 'mantida(s) nesta sessão'}.`, false);
-      else setMessage('Nenhuma conta de anúncios foi encontrada nas MCCs acessíveis.', true);
       renderReport();
-      return true;
-    } catch (error) {
-      state.accounts = previousAccounts;
-      clearReports();
-      updateManagerOptions();
-      renderReport();
-      setMessage(previousAccounts
-        ? `A atualização da lista falhou; mantive as ${previousAccounts.accounts.length} conta(s) já guardadas. ${error.message || ''}`
-        : error.message || 'Não foi possível carregar as contas.', true);
-      return false;
+      setMessage(messages.join(' '), hasError);
+      return googleResult.status === 'fulfilled';
     } finally {
       state.accountsPending = false;
       syncButtonAvailability();
-      accountsButton.textContent = 'Atualizar lista de MCCs e contas';
       updateAccountOptions();
     }
   }
@@ -1713,7 +2268,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = selectedAccounts();
     if (!state.accounts || !accounts.length) {
-      setMessage('Atualize a lista de MCCs e selecione pelo menos uma conta Google Ads.', true);
+      setMessage('Atualize o diretório em Integrações → Configurações globais e selecione pelo menos uma conta Google Ads.', true);
       return;
     }
     const dateRange = validateGoogleAdsDateRange(dateFromInput.value, dateToInput.value);
@@ -1731,7 +2286,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.reportPageLimits.clear();
     state.dailyMode = null;
     syncButtonAvailability();
-    accountsButton.textContent = 'Aguarde a consulta…';
+    
     reportButton.textContent = 'Consultando…';
     state.dailyReport = null;
     renderReport();
@@ -1766,7 +2321,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     } finally {
       state.reportPending = false;
       syncButtonAvailability();
-      accountsButton.textContent = 'Atualizar lista de MCCs e contas';
       reportButton.textContent = 'Consultar desempenho';
       renderReport();
     }
@@ -1779,7 +2333,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = selectedAccounts();
     if (!state.accounts || !accounts.length) {
-      setMessage('Atualize a lista de MCCs e selecione pelo menos uma conta Google Ads.', true);
+      setMessage('Atualize o diretório em Integrações → Configurações globais e selecione pelo menos uma conta Google Ads.', true);
       return;
     }
     const dateFrom = dateFromInput.value;
@@ -1843,7 +2397,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = selectedAccounts();
     if (!state.accounts || !accounts.length) {
-      setMessage('Atualize a lista de MCCs e selecione pelo menos uma conta Google Ads.', true);
+      setMessage('Atualize o diretório em Integrações → Configurações globais e selecione pelo menos uma conta Google Ads.', true);
       return;
     }
     const dateRange = validateGoogleAdsDailyDateRange(dateFromInput.value, dateToInput.value);
@@ -1877,7 +2431,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.dailyMode = null;
     state.reportPageLimits.clear();
     syncButtonAvailability();
-    accountsButton.textContent = 'Aguarde a consulta…';
+    
     dailyReportButton.textContent = 'Consultando série diária…';
     renderReport();
     setMessage(`Consultando até 14 dias em sequência para ${accounts.length} conta(s), campanha e data. A prévia não grava dados no Hub…`);
@@ -1923,7 +2477,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     } finally {
       state.reportPending = false;
       syncButtonAvailability();
-      accountsButton.textContent = 'Atualizar lista de MCCs e contas';
       dailyReportButton.textContent = 'Prévia diária para comparar';
       renderReport();
     }
@@ -1936,7 +2489,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = Array.isArray(accountsOverride) ? accountsOverride : selectedAccounts();
     if ((!state.accounts && !Array.isArray(accountsOverride)) || !accounts.length) {
-      setMessage('Atualize a lista de MCCs e selecione pelo menos uma conta Google Ads.', true);
+      setMessage('Atualize o diretório em Integrações → Configurações globais e selecione pelo menos uma conta Google Ads.', true);
       return;
     }
     if (typeof (previewOnly ? onPreviewDailyCaptures : onSaveDailyCaptures) !== 'function') {
@@ -1966,7 +2519,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.dailyMode = previewOnly ? 'normalized-loading' : 'feed-preview';
     state.reportPageLimits.clear();
     syncButtonAvailability();
-    accountsButton.textContent = 'Aguarde a consulta…';
+    
     if (previewOnly) normalizedPreviewButton.textContent = 'Conferindo os dados…';
     else if (Array.isArray(accountsOverride)) feedAllAccountsButton.textContent = 'Consultando todas as contas…';
     else feedTodayButton.textContent = 'Consultando e salvando…';
@@ -2135,12 +2688,12 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       const rowsLoaded = reports.reduce((total, report) => total + report.rows.length, 0);
       const emptyAccounts = reports.filter(report => report.rows.length === 0).length;
       const batch = saved?.projection?.batch || { rows:rowsLoaded, mappedRows:0, unmappedRows:rowsLoaded, ambiguousRows:0 };
-      const mappingNote = batch.unmappedRows || batch.ambiguousRows ? ` ${batch.unmappedRows + batch.ambiguousRows} linha(s) ficaram fora da projeção por falta ou ambiguidade de vínculo; elas continuam usando o dado MCC.` : '';
-      const sourceNote = state.operationalSourceMode === 'api' ? 'As linhas pareadas entram nas leituras operacionais deste perfil.' : 'A fonte operacional deste perfil continua sendo o manifesto MCC; a API só foi armazenada.';
+      const mappingNote = batch.unmappedRows || batch.ambiguousRows ? ` ${batch.unmappedRows + batch.ambiguousRows} linha(s) ficaram fora da projeção por falta ou ambiguidade de vínculo; sem fallback para métricas MCC.` : '';
+      const sourceNote = 'A fonte operacional deste perfil é Google Ads API; métricas ausentes não usam fallback MCC.';
       const directoryWarningNote = Array.isArray(accountsOverride) && state.accounts?.warningCount ? ` A lista de acesso tinha ${state.accounts.warningCount} aviso(s); confirme se as MCCs e contas esperadas aparecem no diretório.` : '';
       const incompleteConfigurations = reports.reduce((total, report) => total + report.configuration.campaigns.filter(row => googleAdsConfigurationIssues(row).length).length, 0);
       setMessage(previewOnly
-        ? `Prévia normalizada concluída para ${reports.length} conta(s)${mccScope}: ${batch.mappedRows} linha(s) com vínculo seguro. ${activeOnlyQuery ? 'Somente campanhas ENABLED no momento da consulta; linhas ausentes viraram zero apenas após confirmar consulta e inventário completos. Dados anteriores das demais campanhas são preservados.' : businessDayPreview ? `As métricas cobrem o dia civil de ontem em São Paulo (${businessDate}, até 23:59); status e demais configurações são a fotografia atual.` : 'Veja abaixo as diferenças que a API projetaria.'}${incompleteConfigurations ? ` ${incompleteConfigurations} campanha(s) têm campos de configuração indisponíveis.` : ''} Nenhum dado foi gravado e a fonte operacional não foi ativada.${mappingNote}`
+        ? `Prévia normalizada concluída para ${reports.length} conta(s)${mccScope}: ${batch.mappedRows} linha(s) com vínculo seguro. ${activeOnlyQuery ? 'Somente campanhas ENABLED no momento da consulta; linhas ausentes viraram zero apenas após confirmar consulta e inventário completos. Dados anteriores das demais campanhas são preservados.' : businessDayPreview ? `As métricas cobrem o dia civil de ontem em São Paulo (${businessDate}, até 23:59); status e demais configurações são a fotografia atual.` : 'Veja abaixo as diferenças que a API projetaria.'}${incompleteConfigurations ? ` ${incompleteConfigurations} campanha(s) têm campos de configuração indisponíveis.` : ''} Nenhum dado foi gravado.${mappingNote}`
          : `Captura API de ${businessDayCapture ? `ontem em São Paulo (${businessDate})` : captureWindowText.toLowerCase()} salva para ${reports.length} conta(s), ${saved.savedCaptures} conta/data: ${rowsLoaded.toLocaleString('pt-BR')} linha(s) recebida(s), ${batch.mappedRows} pareada(s), incluindo zeros sustentados por consulta completa e vínculo anterior. ${sourceNote}${mappingNote} ${emptyAccounts ? `${emptyAccounts} conta(s) não retornaram linhas de métricas; ausência sem vínculo prévio não foi convertida em zero.` : ''} Datas fora do período escolhido e o Diário MCC permanecem intactos.${directoryWarningNote}${finalUrlCacheNote}`);
     } catch (error) {
       diagnosticStatus = 'failed';
@@ -2151,8 +2704,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       state.reportPending = false;
       state.closeoutRunning = false;
       syncButtonAvailability();
-      accountsButton.textContent = 'Atualizar lista de MCCs e contas';
-      renderAccountDirectory();
       updateCloseoutDateLabel();
       updateCaptureWindowLabels();
       setQueryDiagnosticStage('Renderizando resultados da consulta');
@@ -2212,7 +2763,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = state.accounts?.accounts || [];
     if (!accounts.length) {
-      setMessage('Atualize primeiro a lista de MCCs e contas conectadas para comparar D0.', true);
+      setMessage('Atualize o diretório em Integrações → Configurações globais para comparar D0.', true);
       return;
     }
 
@@ -2514,7 +3065,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     }
     const accounts = state.accounts?.accounts || [];
     if (!accounts.length) {
-      setMessage('Nenhuma conta cliente conectada foi encontrada. Atualize a lista de MCCs e contas e tente de novo.', true);
+      setMessage('Nenhuma conta cliente conectada foi encontrada. Atualize o diretório em Integrações → Configurações globais e tente de novo.', true);
       return;
     }
     state.closeoutRunning = true;
@@ -2571,9 +3122,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
       d0ComparisonArea.hidden = true;
       d0ComparisonArea.innerHTML = '';
       state.dailyMode = 'normalized-preview-saved';
-      const sourceNote = state.operationalSourceMode === 'api'
-        ? 'A fonte operacional API deste perfil foi atualizada.'
-        : 'A fonte operacional deste perfil continua sendo o manifesto MCC.';
+      const sourceNote = 'A fonte operacional deste perfil é Google Ads API.';
       const scopeNote = pending.activeCampaignsOnly ? 'Somente campanhas ENABLED no momento da consulta foram atualizadas; zeros foram incluídos após confirmar consulta e inventário completos, e os dados anteriores das demais foram preservados.' : 'Todas as campanhas foram consultadas.';
       setMessage(`Fechamento D−1 de ${pending.date} salvo para ${result.savedCaptures} conta(s). ${scopeNote} ${sourceNote} O Diário MCC foi preservado.${finalUrlCacheNote}`);
     } catch (error) {
@@ -2610,21 +3159,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     await runCurrentDayFeed({ accountsOverride: accounts });
   }
 
-  sourceModeButton.addEventListener('click', () => {
-    const next = state.operationalSourceMode === 'api' ? 'manifest' : 'api';
-    try {
-      onOperationalSourceModeChange(next);
-      state.operationalSourceMode = next;
-      clearReports();
-      renderSourceMode();
-      renderReport();
-      setMessage(next === 'api'
-        ? 'Google Ads API ativada como fonte operacional somente neste perfil do navegador. O manifesto MCC e os dados anteriores continuam guardados.'
-        : 'Manifesto MCC definido como fonte operacional neste perfil. As capturas da API foram mantidas e não foram apagadas.');
-    } catch (error) {
-      setMessage(error.message || 'Não foi possível salvar a preferência de fonte neste perfil.', true);
-    }
-  });
   reportArea.addEventListener('click', event => {
     const button = event.target.closest('[data-google-ads-load-more]');
     if (!button) return;
@@ -2643,6 +3177,7 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     renderReport();
   });
   searchTermsButton.addEventListener('click', runSearchTermsReport);
+  trackingAuditButton.addEventListener('click', runTrackingAudit);
   searchTermsArea.addEventListener('click', event => {
     const button = event.target.closest('[data-google-ads-search-terms-more]');
     if (!button || state.searchTermsPending) return;
@@ -2686,15 +3221,29 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     void previewCurrentD0({ activeCampaignsOnly: true });
   });
   d0SaveButton.addEventListener('click', savePendingD0Capture);
+  window.addEventListener(GOOGLE_ADS_ACCOUNTS_DIRECTORY_UPDATED_EVENT, event => {
+    if (!root.isConnected || !event.detail?.accounts) return;
+    state.accounts = event.detail.accounts;
+    state.tokenReady = Boolean(readTrackingHubToken().token);
+    clearReports();
+    updateManagerOptions();
+    syncButtonAvailability();
+    renderReport();
+  });
   document.addEventListener('google-ads-capture-history-updated', event => {
     if (!root.isConnected || !Array.isArray(event.detail?.history)) return;
     refreshCaptureHistory({ google_ads_api_change_history: event.detail.history });
   });
-  renderSourceMode();
+  window.addEventListener('storage', event => {
+    if (!root.isConnected || event.key !== 'hub:campaign-delivery:records:v1') return;
+    refreshCaptureHistory();
+  });
+  window.addEventListener('pageshow', () => {
+    if (root.isConnected) refreshCaptureHistory();
+  });
   renderAutoUpdateStatus();
   updateCloseoutDateLabel();
   syncButtonAvailability();
-  accountsButton.addEventListener('click', loadAccounts);
   reportButton.addEventListener('click', runReport);
   dailyReportButton.addEventListener('click', runDailyReport);
   feedTodayButton.addEventListener('click', () => runCurrentDayFeed());
@@ -2728,6 +3277,10 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.selectedManagerKey = managerSelect.value;
     updateAccountOptions({ selectAll: true });
     clearReports();
+    state.trackingAuditReports = null;
+    state.trackingAuditFailures = [];
+    state.trackingAuditCompletedAt = '';
+    renderTrackingAudit();
     syncButtonAvailability();
     renderReport();
   });
@@ -2737,6 +3290,10 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     if (input.checked) state.selectedCustomerIds.add(input.value);
     else state.selectedCustomerIds.delete(input.value);
     clearReports();
+    state.trackingAuditReports = null;
+    state.trackingAuditFailures = [];
+    state.trackingAuditCompletedAt = '';
+    renderTrackingAudit();
     updateAccountOptions();
     syncButtonAvailability();
     renderReport();
@@ -2744,6 +3301,10 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
   selectAllAccountsButton.addEventListener('click', () => {
     updateAccountOptions({ selectAll: true });
     clearReports();
+    state.trackingAuditReports = null;
+    state.trackingAuditFailures = [];
+    state.trackingAuditCompletedAt = '';
+    renderTrackingAudit();
     syncButtonAvailability();
     renderReport();
   });
@@ -2751,6 +3312,10 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
     state.selectedCustomerIds = new Set();
     updateAccountOptions();
     clearReports();
+    state.trackingAuditReports = null;
+    state.trackingAuditFailures = [];
+    state.trackingAuditCompletedAt = '';
+    renderTrackingAudit();
     syncButtonAvailability();
     renderReport();
   });
@@ -2759,7 +3324,6 @@ export function mount({ root, onOpenSettings = () => {}, getComparisonSnapshot =
 
   renderCaptureHistory();
   if (state.accounts) updateManagerOptions();
-  else renderAccountDirectory();
   if (!state.tokenReady) {
     setMessage('O token compartilhado do Hub não está configurado neste navegador.', true);
   } else if (cachedDirectory) {

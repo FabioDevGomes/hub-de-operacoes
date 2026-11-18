@@ -66,7 +66,7 @@ test('margin renders between profit and period, with negative, zero and unavaila
   assert.match(html,/data-tested-col="margin" class="num">0\.00%<\/td>/);
   assert.equal((html.match(/data-tested-col="margin" class="num">—<\/td>/g)||[]).length,2);
   for(const tr of html.matchAll(/<tr>(.*?)<\/tr>/g)){
-    assert.equal((tr[1].match(/<td\b/g)||[]).length,11);
+    assert.equal((tr[1].match(/<td\b/g)||[]).length,14);
     assert.ok(tr[1].indexOf('data-tested-col="profit"')<tr[1].indexOf('data-tested-col="margin"'));
     assert.ok(tr[1].indexOf('data-tested-col="margin"')<tr[1].indexOf('data-tested-col="period"'));
   }
@@ -94,9 +94,9 @@ test('margin reflects manual values and does not add an editor input; empty tabl
   assert.match(h.get('#testedProductsBody').innerHTML,/<td data-manual="true" title="Ajuste manual somente em Produtos Testados" data-tested-col="margin" class="num">20\.00%<\/td>/);
   assert.equal(domain.EDIT_FIELDS.some(field=>field.key==='margin'),false);
   h.get('#testedSearch').value='missing';h.get('#testedSearch').oninput();
-  assert.match(h.get('#testedProductsBody').innerHTML,/colspan="11"/);
+  assert.match(h.get('#testedProductsBody').innerHTML,/colspan="14"/);
   const empty=harness([]);empty.controller.render();
-  assert.match(empty.get('#testedProductsBody').innerHTML,/colspan="11"/);
+  assert.match(empty.get('#testedProductsBody').innerHTML,/colspan="14"/);
   assert.deepEqual(h.calls,[]);
 });
 test('Tested product search filters product and related campaign names without changing totals or source data',()=>{

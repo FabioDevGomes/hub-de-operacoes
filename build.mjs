@@ -54,6 +54,7 @@ await cp(resolve(root, "src/overview-info-icon.png"), resolve(root, "dist/overvi
 await cp(resolve(root, "src/sidebar-component.js"), resolve(root, "dist/sidebar-component.js"));
 await cp(resolve(root, "src/navigation-controller.js"), resolve(root, "dist/navigation-controller.js"));
 await cp(resolve(root, "src/sidebar-component.css"), resolve(root, "dist/sidebar-component.css"));
+await cp(resolve(root, "src/hub-scrollbars.css"), resolve(root, "dist/hub-scrollbars.css"));
 await cp(resolve(root, "src/theme-colors.css"), resolve(root, "dist/theme-colors.css"));
 await cp(resolve(root, "src/control-surfaces.css"), resolve(root, "dist/control-surfaces.css"));
 await cp(resolve(root, "src/white-button.css"), resolve(root, "dist/white-button.css"));
@@ -68,11 +69,12 @@ await cp(resolve(root, "src/table-columns.mjs"), resolve(root, "dist/table-colum
 await cp(resolve(root, "src/table-edit-actions.css"), resolve(root, "dist/table-edit-actions.css"));
 await cp(resolve(root, "src/notification-center.css"), resolve(root, "dist/notification-center.css"));
 await cp(resolve(root, "src/overview-domain.js"), resolve(root, "dist/overview-domain.js"));
+await cp(resolve(root, "src/auto-pause-rules.js"), resolve(root, "dist/auto-pause-rules.js"));
 await cp(resolve(root, "src/usd-brl-rate.js"), resolve(root, "dist/usd-brl-rate.js"));
 // Publish only the canonical page; historical copies are not build inputs.
 await mkdir(resolve(root, "dist/preparador-MCC"), { recursive: true });
 await writeFile(resolve(root, "dist/preparador-MCC/index.html"), versionPage(await readFile(resolve(root, "src/preparador-MCC/index.html"), "utf8"), version), "utf8");
-for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking', 'hostinger', 'google-ads', 'review']) {
+for (const directory of ['curadoria', 'meu-tempo', 'copy-ficha', 'presell', 'asset-studio', 'campaign-delivery', 'control-macro', 'accounts', 'cpa', 'tested-products', 'overview', 'product-diary', 'billing', 'storage', 'personal-finance', 'tracking', 'hostinger', 'google-ads', 'first-sale', 'review', 'hub-mcp']) {
   await copyPublicDirectory(resolve(root, 'src', directory), resolve(root, 'dist', directory));
   await versionPublicPages(resolve(root, 'src', directory), resolve(root, 'dist', directory), version);
 }

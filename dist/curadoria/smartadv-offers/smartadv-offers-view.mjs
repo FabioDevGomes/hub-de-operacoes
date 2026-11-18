@@ -1,8 +1,8 @@
 import * as Domain from './smartadv-offers-domain.mjs?v=6';
 import {captureOfferHistory, historyLabel} from './smartadv-offers-domain.mjs?v=6';
 import {lastCollectionCell} from '../last-collection.mjs';
-import * as Trends from '../trends-domain.mjs';
-import * as TrendsUI from '../trends-ui.mjs';
+import * as Trends from '../trends-domain.mjs?v=5';
+import * as TrendsUI from '../trends-ui.mjs?v=2';
 import * as Images from '../image-search-domain.mjs';
 import * as ImagesUI from '../image-search-ui.mjs';
 import * as Glimpse from '../glimpse-domain.mjs';
@@ -180,7 +180,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
   function renderTrendPanel(item) {
     const record = trendsFor(item), assessments = record.assessments || [], latest = trendPageState(record,Trends.latestAssessment(assessments)), countries = countriesFor(item);
     $('#trendsTerm').value = latest?.searchTerm || item.productName;
-    $('#trendCountries').innerHTML = countries.length ? countries.map(code => `<button type="button" class="trends-country-action ${(latest?.countries || []).includes(code) ? 'selected' : ''}" data-country="${escape(code)}" aria-pressed="${(latest?.countries || []).includes(code)}">${escape(code)}${item.manualCountries.includes(code) ? ' · manual' : ''}</button>`).join('') : '<span class="sub">Nenhum país explícito; informe os países que quer analisar.</span>';
+    $('#trendCountries').innerHTML = countries.length ? countries.map(code => `<button type="button" class="trends-country-action ${(latest?.countries || []).includes(code) ? 'selected' : ''}" data-country="${escape(code)}" aria-pressed="${(latest?.countries || []).includes(code)}">${escape(Trends.locationLabel(code))}${item.manualCountries.includes(code) ? ' · manual' : ''}</button>`).join('') : '<span class="sub">Nenhum país explícito; informe os países que quer analisar.</span>';
     $('#manualCountryMessage').textContent = '';
     TrendsUI.renderProductAgeButtons($('#productAgeActions'), latest?.productAge || '', value => {
       $('#productAgeActions').dataset.selectedAge = value;
@@ -189,7 +189,7 @@ export function mountSmartAdvOffersView({root, actions, preferences}) {
     $('#productAgeActions').dataset.selectedAge = latest?.productAge || '';
     TrendsUI.renderResultButtons($('#trendResults'),trendsSave?.status(latest?.status||'')||'',status=>trendsSave.select(status));
     KeywordCandidatesUI.renderKeywordCandidates($('#trendCandidates'), {candidates:record.keywordCandidates || [],variant:'positive',searchContext:'Google Trends',onSearch:term => actions.openTrends(term),onRemove:(_candidate,index) => actions.removeTrendCandidate(item,index)});
-    $('#trendsHistory').innerHTML = assessments.slice().reverse().map(entry => `<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries || []).join(', '),entry.productAge || ''].filter(Boolean).join(' · '))}</span></div>`).join('') || '<p class="sub">Sem avaliações de Trends.</p>';
+    $('#trendsHistory').innerHTML = assessments.slice().reverse().map(entry => `<div class="history-row"><span>${escape(dateTime(entry.capturedAt))}</span><b>${escape(Trends.resultLabel(entry.status))}</b><span>${escape([entry.searchTerm,(entry.countries || []).map(Trends.locationLabel).join(', '),entry.productAge || ''].filter(Boolean).join(' · '))}</span></div>`).join('') || '<p class="sub">Sem avaliações de Trends.</p>';
   }
   function renderImagePanel(item) {
     const record = imagesFor(item), countries = countriesFor(item), latest = Images.latestByCountry(record.assessments || []);

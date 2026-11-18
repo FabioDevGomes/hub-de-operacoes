@@ -1,7 +1,7 @@
 import * as Domain from './manual-domain.mjs?v=2';
 import {manualStorage as storage} from './manual-storage.mjs?v=3';
-import {mountManualView} from './manual-view.mjs?v=4';
-import {exploreUrl} from '../trends-domain.mjs';
+import {mountManualView} from './manual-view.mjs?v=5';
+import {exploreUrl} from '../trends-domain.mjs?v=5';
 import {imageSearchUrl,imageSearchUrlExcluding} from '../image-search-domain.mjs';
 import {mountCurationListFocus} from '../list-focus.mjs?v=3';
 import {mountGlimpseHeaderAction} from '../glimpse-embed-controls.mjs?v=4';

@@ -3,14 +3,22 @@ import {
   formatGuruMediaPayout,
   GURUMEDIA_POSTBACK_ENDPOINT,
   GURUMEDIA_POSTBACK_MACRO_DEFAULTS,
+  GURUMEDIA_SALES_DETAILS_LIMIT,
   inspectGuruMediaPostbackUrl,
   guruMediaTrackFilterKey,
   sumGuruMediaPayouts,
   validateGuruMediaSalesDateRange,
-} from './tracking-gurumedia-domain.mjs?v=2';
-import { fetchGuruMediaSalesReport, fetchTrackingClicksReport, fetchTrackingDomains } from './tracking-service.mjs?v=18';
-import { readTrackingHubToken } from './tracking-token-storage.mjs?v=2';
-import { readGuruMediaSalesSnapshot, saveGuruMediaSalesSnapshot } from './tracking-gurumedia-storage.mjs?v=1';
+} from './tracking-gurumedia-domain.mjs?v=6';
+import { fetchGuruMediaCampaignAttribution, fetchGuruMediaSalesReport, fetchTrackingClicksReport, fetchTrackingDomains, sendGuruMediaGoogleAdsSale, validateGuruMediaGoogleAdsSale } from './tracking-service.mjs?v=25';
+import { syncGuruMediaSalesToBilling } from './tracking-billing-service.mjs?v=3';
+import { readTrackingDomainAdminToken, readTrackingHubToken } from './tracking-token-storage.mjs?v=3';
+import {
+  mergeGuruMediaCampaignAttributions,
+  readGuruMediaCampaignAttributions,
+  readGuruMediaSalesSnapshot,
+  saveGuruMediaSalesSnapshot,
+} from './tracking-gurumedia-storage.mjs?v=3';
+import { saveTrackingDomainList } from './tracking-domain-list-storage.mjs?v=8';
 import {
   formatTrackingDatePtBr,
   parseTrackingDatePtBr,
@@ -19,16 +27,9 @@ import {
   resolveTrackingClicksCache,
   summarizeTrackingClicks,
   trackingClicksRate,
-} from './tracking-clicks-domain.mjs?v=7';
-import { appendTrackingClicksSnapshot, readTrackingClicksSnapshots } from './tracking-clicks-storage.mjs?v=3';
-import { resolveTrackMcc } from '../accounts/accounts-presell-domain.mjs?v=3';
-import { fetchGoogleAdsConversionActions } from '../google-ads/google-ads-service.mjs?v=7';
-import { isGoogleAdsPurchaseUploadAction } from '../google-ads/google-ads-conversion-actions-domain.mjs?v=1';
-import {
-  readGuruMediaConversionActionSettings,
-  removeGuruMediaConversionActionSetting,
-  saveGuruMediaConversionActionSetting,
-} from './tracking-gurumedia-conversion-actions-storage.mjs?v=1';
+} from './tracking-clicks-domain.mjs?v=8';
+import { appendTrackingClicksSnapshot, readTrackingClicksSnapshots } from './tracking-clicks-storage.mjs?v=4';
+import { resolveTrackMcc } from '../accounts/accounts-presell-domain.mjs?v=4';
 
 export const TRACKING_GURUMEDIA_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const TRACKING_GURUMEDIA_POSTBACK_URL = GURUMEDIA_POSTBACK_ENDPOINT;
@@ -43,6 +44,13 @@ function formatCount(value) { return new Intl.NumberFormat('pt-BR').format(value
 function formatUtcTimestamp(value) {
   if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return '—';
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) + ' UTC';
+}
+function formatUtcSaleTimestamp(value) {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return 'Sem horário real';
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).format(new Date(value)) + ' UTC';
 }
 function trackLabel(row) { return row.productLabel || row.productKey || row.offerName || 'Produto não identificado'; }
 function currencyTotals(rows) {
@@ -62,28 +70,28 @@ export function mount({
   fetchTrafficReport = fetchTrackingClicksReport,
   readCache = readGuruMediaSalesSnapshot,
   saveCache = saveGuruMediaSalesSnapshot,
+  readCampaignAttributions = readGuruMediaCampaignAttributions,
   readTrafficCache = readTrackingClicksSnapshots,
   saveTrafficCache = appendTrackingClicksSnapshot,
   fetchDomains = fetchTrackingDomains,
+  saveDomainCache = saveTrackingDomainList,
+  readDomainAdminToken = readTrackingDomainAdminToken,
+  syncBilling = syncGuruMediaSalesToBilling,
   nowFn = () => new Date(),
   setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
   clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis),
   clipboard = globalThis.navigator?.clipboard,
   getAccountRows = () => [],
-  fetchConversionActions = fetchGoogleAdsConversionActions,
-  readActionSettings = readGuruMediaConversionActionSettings,
-  saveActionSetting = saveGuruMediaConversionActionSetting,
-  removeActionSetting = removeGuruMediaConversionActionSetting,
 } = {}) {
   if (!root) throw new Error('A área da sessão Tracking GuruMedia não foi encontrada.');
   const existing = mountedRoots.get(root);
   if (existing) { existing.render(); existing.activate(); return existing; }
   const tokenState = readTrackingHubToken();
-  const actionSettingsState = readActionSettings();
-  const initialRange = trackingClicksDefaultDateRange(nowFn());
+  const initialRange = trackingClicksDefaultDateRange(nowFn(), 'UTC');
   const state = {
     report: null,
     trafficReport: null,
+    trafficPage: 1,
     trafficSnapshots: [],
     trafficFeedback: '',
     trafficError: false,
@@ -93,6 +101,7 @@ export function mount({
     domainRows: [],
     apiToken: tokenState.token,
     tokenInvalid: tokenState.invalid,
+    googleAdsSaleActions: {},
     startDateInput: formatTrackingDatePtBr(initialRange.startDate),
     endDateInput: formatTrackingDatePtBr(initialRange.endDate),
     datePreset: 'today',
@@ -101,9 +110,14 @@ export function mount({
     pending: false,
     feedback: '',
     feedbackError: false,
+    campaignFeedback: '',
+    campaignError: false,
+    billingSyncFeedback: '',
+    billingSyncError: false,
     lastRefreshAtUtc: '',
     cacheSavedAtUtc: '',
     cacheWarning: '',
+    domainCacheWarning: '',
     postbackConfigExpanded: false,
     postbackToken: '',
     activePostbackUrl: '',
@@ -112,14 +126,6 @@ export function mount({
     },
     postbackMessage: '',
     postbackError: false,
-    conversionActionSettings: actionSettingsState.settings || [],
-    conversionActionsByMcc: {},
-    conversionActionSelections: {},
-    conversionActionBusy: {},
-    conversionActionMessages: {},
-    conversionActionErrors: {},
-    conversionActionSettingsInvalid: actionSettingsState.invalid === true,
-    conversionActionStorageAvailable: actionSettingsState.available !== false,
   };
   let active = false;
   let hasStarted = false;
@@ -188,72 +194,294 @@ export function mount({
       ${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-gurumedia-table"><thead><tr><th>Data UTC de recebimento</th><th>Track / oferta</th><th>Pre-sell</th><th>MCC Ads</th><th>Vendas</th><th>Payout</th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="tracking-empty"><p class="tracking-instruction">Não há vendas associadas às Tracks para estes filtros e período.</p></div>'}`;
   }
 
+  function filteredSaleDetails() {
+    const sales = state.report?.saleDetails;
+    if (!Array.isArray(sales)) return null;
+    return sales.filter(sale => (state.productFilter === 'all' || guruMediaTrackFilterKey(sale) === state.productFilter)
+      && (state.domainFilter === 'all' || sale.presellHost === state.domainFilter));
+  }
+
+  function saleDetailIdentity(sale) {
+    return JSON.stringify([
+      sale.receivedAtUtc, sale.conversionAtUtc, sale.productKey, sale.presellHost,
+      sale.offerName, sale.currency, sale.payoutAmount,
+    ]);
+  }
+
+  function takeByIdentity(rows) {
+    const matches = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const key = saleDetailIdentity(row);
+      const values = matches.get(key) || [];
+      values.push(row);
+      matches.set(key, values);
+    }
+    return matches;
+  }
+
+  function campaignStatusText(attribution) {
+    if (!attribution || attribution.status === 'not_checked') return 'Ainda não consultada';
+    if (attribution.status === 'matched') return `${attribution.campaignName} · ID ${attribution.campaignId}`;
+    const labels = {
+      no_match: 'GCLID sem correspondência no ClickView',
+      gclid_invalid: 'O identificador Google capturado não tem formato válido para ClickView',
+      gclid_missing: 'O clique não contém GCLID',
+      gclid_missing_braid_present: 'Clique sem GCLID; só há GBRAID/WBRAID',
+      click_ambiguous: 'O clique associado tem dados ambíguos',
+      ambiguous_campaign: 'O ClickView apontou mais de uma campanha',
+      lookup_error: `Consulta ClickView falhou${attribution.errorCode ? ` · ${attribution.errorCode}` : ''}`,
+      lookup_limit: 'Limite de consulta atingido; reduza o período',
+      outside_click_view_window: 'Clique fora da janela histórica do ClickView',
+      click_date_future: 'A data do clique ainda não está disponível no ClickView',
+      track_mapping_missing: 'Track sem associação a uma conta Google Ads',
+      click_missing: 'Não foi encontrado o clique associado à venda',
+      click_time_invalid: 'Horário do clique inválido',
+      mcc_ambiguous: 'MCC ambígua no manifesto',
+      mcc_unidentified: 'MCC não identificada no manifesto',
+      google_ads_account_unidentified: 'ID completo da conta Google Ads não identificado no manifesto',
+      google_ads_account_ambiguous: 'IDs de conta Google Ads conflitantes no manifesto',
+      google_ads_mcc_id_unidentified: 'ID numérico completo da MCC não identificado no manifesto',
+    };
+    return labels[attribution.status] || 'Campanha não identificada';
+  }
+
+  function campaignTrackAccounts(sales) {
+    const accountRows = safeAccountRows();
+    const tracks = new Map();
+    const saleStatuses = new Map();
+    for (const sale of sales) {
+      const identity = saleDetailIdentity(sale);
+      const mcc = resolveTrackMcc(accountRows, sale);
+      if (mcc.status !== 'identified' || !mcc.account) {
+        saleStatuses.set(identity, { status: mcc.status === 'ambiguous' ? 'mcc_ambiguous' : 'mcc_unidentified' });
+        continue;
+      }
+      if (!mcc.customerId) {
+        saleStatuses.set(identity, { status: mcc.customerIdAmbiguous ? 'google_ads_account_ambiguous' : 'google_ads_account_unidentified' });
+        continue;
+      }
+      if (!mcc.managerCustomerId) {
+        saleStatuses.set(identity, { status: 'google_ads_mcc_id_unidentified' });
+        continue;
+      }
+      const key = JSON.stringify([sale.productKey, sale.presellHost]);
+      if (!tracks.has(key)) tracks.set(key, {
+        product_key: sale.productKey,
+        presell_host: sale.presellHost,
+        customer_id: mcc.customerId,
+        manager_customer_id: mcc.managerCustomerId,
+      });
+      saleStatuses.set(identity, { status: 'not_checked' });
+    }
+    return { tracks: [...tracks.values()], saleStatuses };
+  }
+
+  function retainCampaignAttributions(report, previousReport) {
+    if (!Array.isArray(report?.saleDetails)) return report;
+    const previous = takeByIdentity(previousReport?.saleDetails);
+    return {
+      ...report,
+      saleDetails: report.saleDetails.map(sale => {
+        const old = previous.get(saleDetailIdentity(sale))?.shift();
+        return { ...sale, ...(old?.campaignAttribution ? { campaignAttribution: old.campaignAttribution } : {}) };
+      }),
+    };
+  }
+
+  function applyCampaignAttributions(report, resolution, fallbackStatuses) {
+    if (!Array.isArray(report?.saleDetails)) return report;
+    const resolved = takeByIdentity(resolution?.rows);
+    return {
+      ...report,
+      saleDetails: report.saleDetails.map(sale => {
+        const key = saleDetailIdentity(sale);
+        const match = resolved.get(key)?.shift();
+        const fallback = fallbackStatuses.get(key);
+        if (fallback && fallback.status !== 'not_checked') return { ...sale, campaignAttribution: fallback };
+        if (match?.campaignAttribution) return { ...sale, campaignAttribution: match.campaignAttribution };
+        return { ...sale, campaignAttribution: fallback || { status: 'lookup_limit' } };
+      }),
+    };
+  }
+
+  function campaignFeedbackText(result, fallbackStatuses = new Map()) {
+    const summary = result.summary;
+    const parts = [`ClickView: ${formatCount(summary.matched_count)} campanha(s) identificada(s)`];
+    if (summary.no_match_count) parts.push(`${formatCount(summary.no_match_count)} sem correspondência`);
+    if (summary.missing_gclid_count) parts.push(`${formatCount(summary.missing_gclid_count)} sem GCLID`);
+    if (summary.ambiguous_count) parts.push(`${formatCount(summary.ambiguous_count)} ambígua(s)`);
+    if (summary.lookup_error_count) parts.push(`${formatCount(summary.lookup_error_count)} com erro`);
+    if (summary.not_queried_count) parts.push(`${formatCount(summary.not_queried_count)} não consultada(s)`);
+    const fallbackCounts = {
+      mcc_ambiguous: 0,
+      mcc_unidentified: 0,
+      google_ads_account_unidentified: 0,
+      google_ads_account_ambiguous: 0,
+      google_ads_mcc_id_unidentified: 0,
+    };
+    for (const value of fallbackStatuses.values()) {
+      if (Object.hasOwn(fallbackCounts, value?.status)) fallbackCounts[value.status]++;
+    }
+    if (fallbackCounts.mcc_ambiguous) parts.push(`${formatCount(fallbackCounts.mcc_ambiguous)} MCC ambígua(s)`);
+    if (fallbackCounts.mcc_unidentified) parts.push(`${formatCount(fallbackCounts.mcc_unidentified)} MCC não identificada(s)`);
+    if (fallbackCounts.google_ads_account_unidentified) parts.push(`${formatCount(fallbackCounts.google_ads_account_unidentified)} sem ID completo da conta Google Ads`);
+    if (fallbackCounts.google_ads_account_ambiguous) parts.push(`${formatCount(fallbackCounts.google_ads_account_ambiguous)} com IDs de conta Google Ads conflitantes`);
+    if (fallbackCounts.google_ads_mcc_id_unidentified) parts.push(`${formatCount(fallbackCounts.google_ads_mcc_id_unidentified)} sem ID numérico completo da MCC`);
+    parts.push(`${formatCount(result.queryCount)} consulta(s) Google Ads (${formatCount(result.clickViewQueryCount)} ClickView + ${formatCount(result.accountTimeZoneQueryCount)} fuso de conta)`);
+    if (result.truncated) parts.push('limite de 500 vendas atingido; reduza o período');
+    return `${parts.join(' · ')}. Esta consulta ClickView é somente leitura.`;
+  }
+
+  function googleAdsSaleStatusLabel(status) {
+    return ({
+      not_sent: 'Ainda não enviada',
+      validated: 'Payload validado · não enviado',
+      pending: 'Na fila de envio',
+      processing: 'Envio em andamento',
+      accepted: 'API aceitou · aguardando processamento',
+      processed: 'Processada pelo Data Manager',
+      partial_success: 'Processamento parcial no Google',
+      rejected: 'Rejeitada pelo Google',
+      blocked: 'Bloqueada por dados ausentes ou ambíguos',
+      unknown: 'Resultado incerto · reenvio bloqueado',
+    })[status] || 'Estado ainda não consultado';
+  }
+
+  async function validateSaleWithGoogleAds(sale) {
+    const saleKey = sale?.saleKey;
+    if (!saleKey || !state.apiToken) return;
+    const adminToken = readTrackingDomainAdminToken().token;
+    if (!adminToken) {
+      state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { error: 'Configure o token administrativo em Configurações globais.' } };
+      render();
+      return;
+    }
+    state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { pending: true, message: 'Enviando validateOnly; a conversão não será registrada.' } };
+    render();
+    try {
+      const result = await validateGuruMediaGoogleAdsSale(state.apiToken, adminToken, saleKey);
+      const manualSendAvailable = result.manual_send_available === true;
+      state.googleAdsSaleActions = {
+        ...state.googleAdsSaleActions,
+        [saleKey]: {
+          status: result.validated && manualSendAvailable ? 'validated' : sale.googleAdsStatus,
+          validated: result.validated === true && manualSendAvailable,
+          manualSendAvailable,
+          fieldWarnings: Number(result.field_warnings || 0),
+          requestId: result.request_id || '',
+          message: result.validated && manualSendAvailable
+            ? `Validada sem enviar${result.field_warnings ? ` · ${Number(result.field_warnings)} aviso(s)` : ''}.`
+            : result.validated
+              ? 'Payload válido; esta venda já está em fila ou teve envio anterior. Não envie novamente por aqui.'
+            : `Google não validou o payload${result.error_code ? ` · ${result.error_code}` : ''}.`,
+        },
+      };
+    } catch (error) {
+      state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { error: error instanceof Error ? error.message : 'Não foi possível validar a venda.' } };
+    }
+    render();
+  }
+
+  async function sendSaleToGoogleAds(sale) {
+    const saleKey = sale?.saleKey;
+    const previous = state.googleAdsSaleActions[saleKey];
+    if (!saleKey || previous?.validated !== true) return;
+    const warningLine = previous.fieldWarnings > 0
+      ? `\nA validação retornou ${previous.fieldWarnings} aviso(s); confira o resultado antes de continuar.`
+      : '';
+    const confirmation = `Enviar esta venda real ao Google Ads agora?\n\nComissão: ${formatGuruMediaPayout(sale.payoutAmount, sale.currency)}\nVenda ocorrida: ${formatUtcSaleTimestamp(sale.conversionAtUtc)}${warningLine}\n\nConfirme antes que a Flow ou outro sistema não esteja enviando esta mesma venda para a mesma ação. Isso pode contar a compra duas vezes. O envio usa a ação configurada para a MCC e não pode ser desfeito por esta tela.`;
+    if (!globalThis.confirm?.(confirmation)) return;
+    const adminToken = readTrackingDomainAdminToken().token;
+    if (!adminToken) {
+      state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { ...previous, error: 'Configure o token administrativo em Configurações globais.' } };
+      render();
+      return;
+    }
+    state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { ...previous, pending: true, message: 'Enviando conversão real ao Data Manager…', error: '' } };
+    render();
+    try {
+      const result = await sendGuruMediaGoogleAdsSale(state.apiToken, adminToken, saleKey);
+      state.googleAdsSaleActions = {
+        ...state.googleAdsSaleActions,
+        [saleKey]: {
+          ...previous,
+          pending: false,
+          status: result.accepted ? 'accepted' : 'rejected',
+          accepted: result.accepted === true,
+          requestId: result.request_id || '',
+          message: result.accepted
+            ? `A API aceitou a solicitação${result.request_id ? ` · ${result.request_id}` : ''}; falta o processamento assíncrono.`
+            : `A API recusou o envio${result.error_code ? ` · ${result.error_code}` : ''}.`,
+          error: '',
+        },
+      };
+    } catch (error) {
+      state.googleAdsSaleActions = { ...state.googleAdsSaleActions, [saleKey]: { ...previous, pending: false, error: error instanceof Error ? error.message : 'Não foi possível enviar a conversão.' } };
+    }
+    render();
+  }
+
+  function renderSaleDetails(report, sales) {
+    if (!Array.isArray(report.saleDetails)) {
+      return `<section class="tracking-gurumedia-sale-details" aria-label="Horários individuais das vendas">
+        <h3>Horários individuais das vendas</h3>
+        <p class="tracking-instruction">O serviço do servidor ainda não inclui os horários de cada venda. Atualize <code>gurumedia-sales-service.php</code> para disponibilizar esses detalhes.</p>
+      </section>`;
+    }
+    if (!sales.length) {
+      return `<section class="tracking-gurumedia-sale-details" aria-label="Horários individuais das vendas">
+        <h3>Horários individuais das vendas</h3>
+        <p class="tracking-instruction">Não há vendas individuais para estes filtros e período.</p>
+      </section>`;
+    }
+    const body = sales.map(sale => {
+      const localAction = sale.saleKey ? state.googleAdsSaleActions[sale.saleKey] || {} : {};
+      const status = localAction.status || sale.googleAdsStatus;
+      const busy = localAction.pending === true;
+      const hasServerKey = typeof sale.saleKey === 'string';
+      const canValidate = ['not_sent', 'blocked', 'rejected'].includes(status)
+        || (status === 'validated' && localAction.manualSendAvailable !== false);
+      const validationButton = hasServerKey && sale.conversionAtUtc && !localAction.validated && canValidate
+        ? `<button type="button" class="btn" data-gurumedia-action="validate-google-ads-sale" data-sale-key="${escapeHtml(sale.saleKey)}"${busy ? ' disabled' : ''}>${busy ? 'Validando…' : status === 'validated' ? 'Verificar envio' : 'Validar sem enviar'}</button>`
+        : '';
+      const sendButton = hasServerKey && localAction.validated === true && localAction.manualSendAvailable === true && status === 'validated'
+        ? `<button type="button" class="btn primary" data-gurumedia-action="send-google-ads-sale" data-sale-key="${escapeHtml(sale.saleKey)}"${busy ? ' disabled' : ''}>${busy ? 'Enviando…' : 'Enviar conversão'}</button>`
+        : '';
+      const actionMessage = localAction.error || localAction.message || (localAction.fieldWarnings ? `${localAction.fieldWarnings} aviso(s) de validação.` : '');
+      const attribution = sale.campaignAttribution;
+      const clickDiagnostics = attribution?.clickAtUtc || attribution?.gclidMasked
+        ? `${attribution.clickAtUtc ? escapeHtml(formatUtcSaleTimestamp(attribution.clickAtUtc)) : '<span class="tracking-muted-value">Horário indisponível</span>'}${attribution.gclidMasked ? `<span class="tracking-muted-value" title="Identificador mascarado; seis caracteres finais">GCLID ${escapeHtml(attribution.gclidMasked)}</span>` : '<span class="tracking-muted-value">GCLID indisponível</span>'}`
+        : '<span class="tracking-muted-value">Diagnóstico indisponível</span>';
+      const adsCell = !hasServerKey
+        ? 'Atualize o serviço privado para habilitar as ações.'
+        : `${escapeHtml(googleAdsSaleStatusLabel(status))}${sale.googleAdsErrorCode ? `<span class="tracking-muted-value">${escapeHtml(sale.googleAdsErrorCode)}</span>` : ''}${validationButton || sendButton ? `<div class="tracking-conversion-action-buttons">${validationButton}${sendButton}</div>` : ''}${actionMessage ? `<span class="tracking-muted-value${localAction.error ? ' is-error' : ''}" role="status">${escapeHtml(actionMessage)}</span>` : ''}`;
+      return `<tr>
+        <td>${escapeHtml(formatUtcSaleTimestamp(sale.conversionAtUtc))}</td>
+        <td>${escapeHtml(formatUtcSaleTimestamp(sale.receivedAtUtc))}</td>
+        <td>${escapeHtml(trackLabel(sale))}${sale.offerName ? `<span class="tracking-muted-value">Oferta: ${escapeHtml(sale.offerName)}</span>` : ''}</td>
+        <td><a class="tracking-presell-link" href="https://${encodeURIComponent(sale.presellHost)}/" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(sale.presellHost)}</code></a></td>
+        <td>${clickDiagnostics}</td>
+        <td>${escapeHtml(campaignStatusText(sale.campaignAttribution))}</td>
+        <td class="tracking-number">${escapeHtml(formatGuruMediaPayout(sale.payoutAmount, sale.currency))}</td>
+        <td>${adsCell}</td>
+      </tr>`;
+    }).join('');
+    const truncationNote = report.saleDetailsTruncated
+      ? `<p class="tracking-connection-note">Mostrando as ${formatCount(GURUMEDIA_SALES_DETAILS_LIMIT)} vendas mais recentes no período. Reduza o período para consultar as demais.</p>`
+      : '';
+    return `<section class="tracking-gurumedia-sale-details" aria-label="Horários individuais das vendas">
+      <div class="tracking-table-heading"><div><h3>Horários individuais das vendas</h3><p>O período é definido pela data de recebimento do postback. O horário real pode ser anterior se o postback chegou depois.</p></div><span class="tracking-count">${formatCount(sales.length)} venda(s)</span></div>
+      ${truncationNote}
+      <div class="tracking-table-wrap"><table class="tracking-table tracking-gurumedia-table"><thead><tr><th>Venda ocorreu (UTC)</th><th>Postback recebido (UTC)</th><th>Track / oferta</th><th>Pre-sell</th><th>Clique Google (UTC) / GCLID mascarado</th><th>Campanha Google Ads · ClickView</th><th>Comissão</th><th>Envio ao Google Ads</th></tr></thead><tbody>${body}</tbody></table></div>
+    </section>`;
+  }
+
   function safeAccountRows() {
     try {
       const rows = getAccountRows?.();
       return Array.isArray(rows) ? rows : [];
     }
     catch { return []; }
-  }
-
-  function conversionMccRows() {
-    const byId = new Map();
-    for (const row of safeAccountRows()) {
-      const mccCustomerId = String(row?.mccId ?? '').replace(/\D/g, '');
-      if (!/^\d{10}$/.test(mccCustomerId)) continue;
-      const name = String(row?.mccName ?? '').replace(/\s+/g, ' ').trim() || `MCC ${mccCustomerId}`;
-      if (!byId.has(mccCustomerId)) byId.set(mccCustomerId, { mccCustomerId, name });
-    }
-    return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name) || left.mccCustomerId.localeCompare(right.mccCustomerId));
-  }
-
-  function savedActionForMcc(mccCustomerId) {
-    return state.conversionActionSettings.find(item => item.mccCustomerId === mccCustomerId) || null;
-  }
-
-  function renderConversionActions() {
-    const mccRows = conversionMccRows();
-    const body = mccRows.map(mcc => {
-      const saved = savedActionForMcc(mcc.mccCustomerId);
-      const actions = state.conversionActionsByMcc[mcc.mccCustomerId] || null;
-      const selection = Object.hasOwn(state.conversionActionSelections, mcc.mccCustomerId)
-        ? state.conversionActionSelections[mcc.mccCustomerId]
-        : saved?.resourceName || '';
-      const currentActionExists = actions?.some(action => action.resourceName === saved?.resourceName) === true;
-      const selectedAction = actions?.find(action => action.resourceName === selection) || null;
-      const busy = state.conversionActionBusy[mcc.mccCustomerId] === true;
-      const options = actions === null
-        ? '<option value="">Carregue as ações desta MCC</option>'
-        : `<option value="">Selecione uma ação</option>${saved && !currentActionExists && selection === saved.resourceName ? `<option value="${escapeHtml(saved.resourceName)}" selected disabled>${escapeHtml(saved.name)} · não consta na consulta atual</option>` : ''}${actions.map(action => {
-          const eligible = isGoogleAdsPurchaseUploadAction(action);
-          const selected = action.resourceName === selection ? ' selected' : '';
-          const disabled = eligible ? '' : ' disabled';
-          return `<option value="${escapeHtml(action.resourceName)}"${selected}${disabled}>${escapeHtml(action.name)} · ${escapeHtml(action.status)} · ${escapeHtml(action.type)} · ${escapeHtml(action.category)}${eligible ? '' : ' · incompatível'}</option>`;
-        }).join('')}`;
-      const detail = state.conversionActionMessages[mcc.mccCustomerId]
-        || (saved ? `Salva neste navegador em ${formatUtcTimestamp(saved.savedAtUtc)}.` : 'Nenhuma ação associada a esta MCC.');
-      const error = state.conversionActionErrors[mcc.mccCustomerId];
-      const selectId = `guruMediaConversionAction-${mcc.mccCustomerId}`;
-      return `<tr>
-        <td>${escapeHtml(mcc.name)}</td>
-        <td><code>${escapeHtml(mcc.mccCustomerId)}</code></td>
-        <td><label class="tracking-token-field tracking-gurumedia-action-field" for="${selectId}"><span>Ação de compra · importação de cliques</span><select id="${selectId}" data-gurumedia-conversion-mcc="${mcc.mccCustomerId}"${actions === null || busy ? ' disabled' : ''}>${options}</select>${saved && !currentActionExists ? `<small class="tracking-gurumedia-action-warning">A ação salva não apareceu no inventário atual. Consulte a lista antes de reutilizá-la.</small>` : ''}</label></td>
-        <td class="tracking-gurumedia-resource">${escapeHtml(selectedAction?.resourceName || saved?.resourceName || '—')}</td>
-        <td>${escapeHtml(selectedAction?.status || saved?.status || '—')}</td>
-        <td><div class="tracking-gurumedia-action-buttons"><button type="button" class="btn" data-gurumedia-action="load-conversion-actions" data-gurumedia-mcc="${mcc.mccCustomerId}"${busy ? ' disabled' : ''}>${busy ? 'Consultando…' : actions === null ? 'Carregar ações' : 'Atualizar ações'}</button><button type="button" class="btn primary" data-gurumedia-action="save-conversion-action" data-gurumedia-mcc="${mcc.mccCustomerId}"${!isGoogleAdsPurchaseUploadAction(selectedAction) || busy ? ' disabled' : ''}>Salvar</button>${saved ? `<button type="button" class="btn" data-gurumedia-action="remove-conversion-action" data-gurumedia-mcc="${mcc.mccCustomerId}"${busy ? ' disabled' : ''}>Remover</button>` : ''}</div><small class="tracking-gurumedia-action-message${error ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(error || detail)}</small></td>
-      </tr>`;
-    }).join('');
-    const storageMessage = state.conversionActionSettingsInvalid
-      ? '<p class="tracking-connection-note is-error">A configuração local salva não pôde ser lida. Ela foi preservada; não grave uma nova escolha até conferir o armazenamento do navegador.</p>'
-      : !state.conversionActionStorageAvailable
-        ? '<p class="tracking-connection-note is-error">O navegador não permite gravar a associação local nesta origem.</p>'
-        : '';
-    return `<section class="tracking-panel tracking-clicks-panel tracking-gurumedia-conversion-actions" aria-label="Ações de conversão Google Ads por MCC">
-      <div class="tracking-table-heading"><div><h2>Ação de conversão Google Ads por MCC</h2><p>As Tracks GuruMedia herdam a ação pela MCC identificada no manifesto. A escolha fica neste navegador; esta tela ainda não envia conversões ao Google Ads.</p></div></div>
-      ${storageMessage}
-      ${mccRows.length ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-gurumedia-action-table"><thead><tr><th>MCC do manifesto</th><th>ID da MCC</th><th>Ação selecionada</th><th>Resource name</th><th>Status</th><th>Ações</th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="tracking-empty"><p>Não há MCCs com ID completo no manifesto carregado. Carregue a base MCC antes de configurar uma ação.</p></div>'}
-      <p class="tracking-connection-note">A consulta lista ações existentes. Só ficam selecionáveis as ações ativas do tipo <code>UPLOAD_CLICKS</code> e categoria <code>PURCHASE</code>. A seleção não cria nem altera ações no Google Ads e não inicia envio.</p>
-    </section>`;
   }
 
   function mccDescription(mcc) {
@@ -265,22 +493,30 @@ export function mount({
   function trafficTrackLabel(row) { return row.productLabel || row.productKey || 'Produto não identificado'; }
 
   function renderTraffic() {
+    const pageSize = 20;
     const report = state.trafficReport;
     const rows = report?.rows || [];
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    state.trafficPage = Math.min(pageCount, Math.max(1, Number(state.trafficPage) || 1));
+    const firstRowIndex = (state.trafficPage - 1) * pageSize;
+    const visibleRows = rows.slice(firstRowIndex, firstRowIndex + pageSize);
     const summary = summarizeTrackingClicks(rows);
     const trackCount = new Set(rows.map(row => JSON.stringify([row.productKey, row.presellHost]))).size;
     const rate = trackingClicksRate(summary.outboundClicks, summary.pageViews);
     const last = state.trafficLastRefreshAtUtc ? formatUtcTimestamp(state.trafficLastRefreshAtUtc) : 'ainda não consultado';
     const autoStatus = `Métricas atualizadas ao abrir e a cada 5 minutos enquanto esta tela estiver ativa. Última consulta: ${last}.`;
     const accountRows = safeAccountRows();
-    const body = rows.map(row => {
+    const body = visibleRows.map(row => {
       const rowRate = trackingClicksRate(row.outboundClicks, row.pageViews);
       const mcc = resolveTrackMcc(accountRows,row);
       const hostCell = row.presellHost
         ? `<a class="tracking-presell-link" href="https://${encodeURIComponent(row.presellHost)}/" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(row.presellHost)}</code></a>`
         : '<span>Domínio não identificado</span>';
-      return `<tr><td>${escapeHtml(formatTrackingDatePtBr(row.dateUtc))}</td><td>${escapeHtml(trafficTrackLabel(row))}${row.productKey ? `<span class="tracking-muted-value">${escapeHtml(row.productKey)}</span>` : ''}</td><td>${hostCell}</td><td title="${escapeHtml(mccDescription(mcc))}">${escapeHtml(mcc.label)}</td><td class="tracking-number">${formatCount(row.pageViews)}</td><td class="tracking-number">${formatCount(row.outboundClicks)}</td><td class="tracking-number">${rowRate === null ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(rowRate)}%`}</td></tr>`;
+      return `<tr><td>${escapeHtml(formatTrackingDatePtBr(row.dateUtc))}</td><td>${escapeHtml(trafficTrackLabel(row))}${row.productKey ? `<span class="tracking-muted-value">${escapeHtml(row.productKey)}</span>` : ''}</td><td>${hostCell}</td><td title="${escapeHtml(mccDescription(mcc))}">${escapeHtml(mcc.label)}</td><td>${escapeHtml(row.trafficSource || 'Origem não informada')}</td><td class="tracking-number">${formatCount(row.pageViews)}</td><td class="tracking-number">${formatCount(row.outboundClicks)}</td><td class="tracking-number">${rowRate === null ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(rowRate)}%`}</td></tr>`;
     }).join('');
+    const pagination = rows.length > pageSize
+      ? `<nav class="tracking-pagination tracking-gurumedia-pagination" aria-label="Paginação das visitas e cliques GuruMedia"><span>Linhas ${formatCount(firstRowIndex + 1)}–${formatCount(Math.min(firstRowIndex + pageSize, rows.length))} de ${formatCount(rows.length)} · Página ${formatCount(state.trafficPage)} de ${formatCount(pageCount)}</span><div><button type="button" class="btn" data-gurumedia-traffic-page="${state.trafficPage - 1}"${state.trafficPage <= 1 ? ' disabled' : ''}>Anterior</button><button type="button" class="btn" data-gurumedia-traffic-page="${state.trafficPage + 1}"${state.trafficPage >= pageCount ? ' disabled' : ''}>Próxima</button></div></nav>`
+      : '';
     const feedback = state.trafficFeedback
       ? `<p class="tracking-message${state.trafficError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.trafficFeedback)}</p>` : '';
     return `<section class="tracking-panel tracking-clicks-panel tracking-gurumedia-results" aria-label="Visitas e cliques GuruMedia">
@@ -293,105 +529,9 @@ export function mount({
         <div class="tracking-kpi"><span>Cliques ÷ visitas</span><strong>${rate === null ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(rate)}%`}</strong></div>
         <div class="tracking-kpi"><span>Tracks no período</span><strong>${formatCount(trackCount)}</strong></div>
       </div>
-      ${report ? `<div class="tracking-file-details"><span><strong>Período UTC:</strong> ${escapeHtml(report.startDate)} a ${escapeHtml(report.endDate)}</span><span><strong>Relatório gerado UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span><span><strong>Cache local atualizado:</strong> ${escapeHtml(formatUtcTimestamp(state.trafficCacheSavedAtUtc))}</span></div>${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-gurumedia-table"><thead><tr><th>Data UTC</th><th>Track</th><th>Pre-sell</th><th>MCC Ads</th><th>Visitas · page_view</th><th>Cliques de saída · outbound_click</th><th>Taxa de eventos</th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="tracking-empty"><p class="tracking-instruction">Não há visitas ou cliques GuruMedia para este período e filtros.</p></div>'}` : '<div class="tracking-empty"><p class="tracking-instruction">A consulta de visitas e cliques ainda não foi executada.</p></div>'}
+      ${report ? `<div class="tracking-file-details"><span><strong>Período UTC:</strong> ${escapeHtml(report.startDate)} a ${escapeHtml(report.endDate)}</span><span><strong>Relatório gerado UTC:</strong> ${escapeHtml(report.generatedAtUtc)}</span><span><strong>Cache local atualizado:</strong> ${escapeHtml(formatUtcTimestamp(state.trafficCacheSavedAtUtc))}</span></div>${body ? `<div class="tracking-table-wrap"><table class="tracking-table tracking-gurumedia-table"><thead><tr><th>Data UTC</th><th>Track</th><th>Pre-sell</th><th>MCC Ads</th><th>Origem do tráfego</th><th>Visitas · page_view</th><th>Cliques de saída · outbound_click</th><th>Taxa de eventos</th></tr></thead><tbody>${body}</tbody></table></div>${pagination}` : '<div class="tracking-empty"><p class="tracking-instruction">Não há visitas ou cliques GuruMedia para este período e filtros.</p></div>'}` : '<div class="tracking-empty"><p class="tracking-instruction">A consulta de visitas e cliques ainda não foi executada.</p></div>'}
       ${feedback}${state.trafficCacheWarning ? `<p class="tracking-connection-note is-error">${escapeHtml(state.trafficCacheWarning)}</p>` : ''}
     </section>`;
-  }
-
-  async function loadConversionActions(mccCustomerId) {
-    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
-    if (!/^\d{10}$/.test(id)) return;
-    if (!state.apiToken) {
-      state.conversionActionErrors[id] = 'Configure o token do Hub em Configurações globais antes de consultar as ações.';
-      render();
-      return;
-    }
-    state.conversionActionBusy = { ...state.conversionActionBusy, [id]: true };
-    state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
-    state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Consultando ações de conversão na MCC…' };
-    render();
-    try {
-      const result = await fetchConversionActions({ managerCustomerId: id, customerId: id }, { token: state.apiToken });
-      state.conversionActionsByMcc = { ...state.conversionActionsByMcc, [id]: result.actions };
-      state.conversionActionMessages = {
-        ...state.conversionActionMessages,
-        [id]: `${formatCount(result.actions.length)} ação(ões) consultada(s) · ${formatUtcTimestamp(result.generatedAtUtc)}.`,
-      };
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
-    } catch (error) {
-      state.conversionActionErrors = {
-        ...state.conversionActionErrors,
-        [id]: error instanceof Error ? error.message : 'Não foi possível consultar as ações desta MCC.',
-      };
-    } finally {
-      state.conversionActionBusy = { ...state.conversionActionBusy, [id]: false };
-      render();
-    }
-  }
-
-  function saveConversionAction(mccCustomerId) {
-    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
-    if (!/^\d{10}$/.test(id)) return;
-    if (state.conversionActionSettingsInvalid || !state.conversionActionStorageAvailable) {
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O armazenamento local está indisponível ou inválido; nenhuma associação foi alterada.' };
-      render();
-      return;
-    }
-    const resourceName = state.conversionActionSelections[id]
-      ?? root.querySelector(`[data-gurumedia-conversion-mcc="${id}"]`)?.value
-      ?? '';
-    const selected = (state.conversionActionsByMcc[id] || []).find(action => action.resourceName === resourceName);
-    if (!isGoogleAdsPurchaseUploadAction(selected)) {
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'Escolha uma ação ativa de compra do tipo importação de cliques.' };
-      render();
-      return;
-    }
-    try {
-      const result = saveActionSetting({
-        mccCustomerId: id,
-        managerCustomerId: id,
-        customerId: id,
-        ...selected,
-      }, { now: nowFn });
-      if (!result?.saved) {
-        const message = result?.limitExceeded
-          ? 'O armazenamento local atingiu o limite; nenhuma associação foi alterada.'
-          : 'O navegador não conseguiu salvar a associação local.';
-        state.conversionActionErrors = { ...state.conversionActionErrors, [id]: message };
-      } else {
-        state.conversionActionSettings = result.settings;
-        state.conversionActionSelections = { ...state.conversionActionSelections, [id]: selected.resourceName };
-        state.conversionActionSettingsInvalid = false;
-        state.conversionActionStorageAvailable = true;
-        state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Associação salva neste navegador. O envio ao Google Ads continua desativado.' };
-        state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
-      }
-    } catch (error) {
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: error instanceof Error ? error.message : 'Não foi possível salvar a associação.' };
-    }
-    render();
-  }
-
-  function removeConversionAction(mccCustomerId) {
-    const id = String(mccCustomerId ?? '').replace(/\D/g, '');
-    if (!/^\d{10}$/.test(id)) return;
-    if (state.conversionActionSettingsInvalid || !state.conversionActionStorageAvailable) {
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O armazenamento local está indisponível ou inválido; nenhuma associação foi removida.' };
-      render();
-      return;
-    }
-    const result = removeActionSetting(id);
-    if (!result?.removed) {
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: 'O navegador não conseguiu remover a associação local.' };
-    } else {
-      state.conversionActionSettings = result.settings;
-      const selections = { ...state.conversionActionSelections };
-      delete selections[id];
-      state.conversionActionSelections = selections;
-      state.conversionActionMessages = { ...state.conversionActionMessages, [id]: 'Associação local removida. Nenhuma configuração do Google Ads foi alterada.' };
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
-    }
-    render();
   }
 
   function postbackUrl() {
@@ -513,12 +653,16 @@ export function mount({
     } catch {}
     const rows = filteredRows();
     const lastRefresh = state.lastRefreshAtUtc ? formatUtcTimestamp(state.lastRefreshAtUtc) : 'ainda não consultado';
+    const timeCoverage = state.report?.summary.conversionTimeCoverage;
+    const timeCoverageDetails = timeCoverage
+      ? `<span><strong>Cobertura do período:</strong> ${formatCount(timeCoverage.salesWithConversionTime)} de ${formatCount(timeCoverage.salesCount)} venda(s) com horário real · ${formatCount(timeCoverage.salesMissingConversionTime)} sem horário</span>`
+      : '';
     const tokenMessage = state.apiToken
       ? `Token do Hub compartilhado com Tracking ClickBank${state.tokenInvalid ? ' · há um valor lembrado inválido' : ''}.`
       : 'Configure o token de leitura compartilhado do Hub em Configurações globais para consultar vendas e métricas.';
     const autoStatus = `Visitas e cliques atualizam ao abrir e a cada 5 minutos; vendas atualizam ao abrir e a cada 30 minutos. Última consulta de vendas: ${lastRefresh}. Período: ${rangeLabel}.`;
     const reportDetails = state.report
-      ? `<div class="tracking-file-details"><span><strong>Período UTC:</strong> ${escapeHtml(state.report.startDate)} a ${escapeHtml(state.report.endDate)}</span><span><strong>Relatório gerado UTC:</strong> ${escapeHtml(state.report.generatedAtUtc)}</span><span><strong>Cache local atualizado:</strong> ${escapeHtml(formatUtcTimestamp(state.cacheSavedAtUtc))}</span><span><strong>Postbacks não associados:</strong> ${formatCount(state.report.summary.unmatchedCallbacks + state.report.summary.ambiguousCallbacks)}</span></div>`
+      ? `<div class="tracking-file-details"><span><strong>Período UTC:</strong> ${escapeHtml(state.report.startDate)} a ${escapeHtml(state.report.endDate)}</span><span><strong>Relatório gerado UTC:</strong> ${escapeHtml(state.report.generatedAtUtc)}</span>${timeCoverageDetails}<span><strong>Cache local atualizado:</strong> ${escapeHtml(formatUtcTimestamp(state.cacheSavedAtUtc))}</span><span><strong>Postbacks não associados:</strong> ${formatCount(state.report.summary.unmatchedCallbacks + state.report.summary.ambiguousCallbacks)}</span></div>`
       : '';
     const feedback = state.feedback
       ? `<p class="tracking-message${state.feedbackError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.feedback)}</p>` : '';
@@ -557,8 +701,9 @@ export function mount({
         </div>
       </section>
       <section class="tracking-panel tracking-clicks-panel" aria-label="Relatório de vendas GuruMedia">
-        <div class="tracking-intro-head tracking-clicks-head"><div class="tracking-intro-copy"><h2>Vendas GuruMedia</h2><p>Consulta postbacks de conversão associados a cliques de saída e Tracks cadastradas no Hub. Checkout e envio de conversões ao Google Ads não fazem parte desta tela.</p></div>
+        <div class="tracking-intro-head tracking-clicks-head"><div class="tracking-intro-copy"><h2>Vendas GuruMedia</h2><p>Consulta os postbacks de conversão associados às Tracks. O clique atualiza também o Faturamento local deste navegador; a conciliação com agregados MCC e o envio ao Google Ads ficam fora desta etapa.</p></div>
           <div class="tracking-connection-actions"><button type="button" class="btn primary" data-gurumedia-action="refresh"${state.pending ? ' disabled' : ''}>${state.pending ? 'Atualizando…' : 'Atualizar vendas e cliques'}</button></div></div>
+        <p class="tracking-connection-note">Ao clicar em atualizar, o Hub também tenta identificar a campanha de cada venda elegível usando o GCLID do clique e o ClickView da conta associada. A consulta é somente leitura e não envia conversões ao Google Ads.</p>
         <p class="tracking-auto-refresh-note">${escapeHtml(autoStatus)}</p>
         <p class="tracking-connection-note">${escapeHtml(tokenMessage)} A consulta automática atualiza esta tela; as vendas e as métricas de cliques são agregadas e armazenadas separadamente.</p>
         ${!state.apiToken ? '<p class="tracking-connection-note is-error"><a class="tracking-presell-link" href="/?view=tracking-settings">Abrir Configurações globais para informar o token</a></p>' : ''}
@@ -566,16 +711,18 @@ export function mount({
           <label class="tracking-token-field" for="guruMediaStartDate"><span>De · data UTC</span><input id="guruMediaStartDate" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="10" placeholder="dd/mm/aaaa" value="${escapeHtml(state.startDateInput)}"${state.pending ? ' disabled' : ''}></label>
           <label class="tracking-token-field" for="guruMediaEndDate"><span>Até · data UTC</span><input id="guruMediaEndDate" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="10" placeholder="dd/mm/aaaa" value="${escapeHtml(state.endDateInput)}"${state.pending ? ' disabled' : ''}></label>
           <label class="tracking-token-field" for="guruMediaDatePreset"><span>Período rápido</span><select id="guruMediaDatePreset"${state.pending ? ' disabled' : ''}>
-            <option value="today"${state.datePreset === 'today' ? ' selected' : ''}>Hoje</option><option value="yesterday"${state.datePreset === 'yesterday' ? ' selected' : ''}>Ontem</option><option value="7-days"${state.datePreset === '7-days' ? ' selected' : ''}>7 Dias</option><option value="30-days"${state.datePreset === '30-days' ? ' selected' : ''}>30 Dias</option><option value="this-month"${state.datePreset === 'this-month' ? ' selected' : ''}>Este Mês</option><option value="last-month"${state.datePreset === 'last-month' ? ' selected' : ''}>Mês Passado</option>
+            <option value="today"${state.datePreset === 'today' ? ' selected' : ''}>Hoje UTC</option><option value="yesterday"${state.datePreset === 'yesterday' ? ' selected' : ''}>Ontem UTC</option><option value="7-days"${state.datePreset === '7-days' ? ' selected' : ''}>7 Dias UTC</option><option value="30-days"${state.datePreset === '30-days' ? ' selected' : ''}>30 Dias UTC</option><option value="this-month"${state.datePreset === 'this-month' ? ' selected' : ''}>Este Mês UTC</option><option value="last-month"${state.datePreset === 'last-month' ? ' selected' : ''}>Mês Passado UTC</option>
           </select></label>
         </div>
-        <p class="tracking-date-format-note tracking-instruction">Formato brasileiro: <strong>dd/mm/aaaa</strong>. “Hoje” segue o calendário local do navegador; os relatórios continuam agrupados por data UTC.</p>
+        <p class="tracking-date-format-note tracking-instruction">Formato brasileiro: <strong>dd/mm/aaaa</strong>. O período inicial, as opções rápidas e as datas informadas usam o calendário UTC. No horário de Brasília, a data UTC pode avançar no começo da noite.</p>
         ${feedback}
+        ${state.campaignFeedback ? `<p class="tracking-connection-note${state.campaignError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.campaignFeedback)}</p>` : ''}
+        ${state.billingSyncFeedback ? `<p class="tracking-connection-note${state.billingSyncError ? ' is-error' : ''}" role="status" aria-live="polite">${escapeHtml(state.billingSyncFeedback)}</p>` : ''}
+        ${state.domainCacheWarning ? `<p class="tracking-connection-note${state.domainCacheWarning.startsWith('Lista de Tracks atualizada') ? '' : ' is-error'}" role="status" aria-live="polite">${escapeHtml(state.domainCacheWarning)}</p>` : ''}
       </section>
       ${renderTraffic()}
-      ${renderConversionActions()}
       <section class="tracking-panel tracking-clicks-panel tracking-gurumedia-results" aria-label="Vendas registradas">
-        ${state.report ? `${renderSummary(rows)}${reportDetails}${renderFilterOptions(state.report.rows)}${renderTable(rows)}` : '<div class="tracking-empty"><h2>Relatório ainda não consultado</h2><p class="tracking-instruction">Abra esta tela com o token do Hub configurado para carregar as vendas associadas às Tracks.</p></div>'}
+        ${state.report ? `${renderSummary(rows)}${reportDetails}${renderFilterOptions(state.report.rows)}${renderTable(rows)}${renderSaleDetails(state.report, filteredSaleDetails())}` : '<div class="tracking-empty"><h2>Relatório ainda não consultado</h2><p class="tracking-instruction">Abra esta tela com o token do Hub configurado para carregar as vendas associadas às Tracks.</p></div>'}
         ${state.cacheWarning ? `<p class="tracking-connection-note is-error">${escapeHtml(state.cacheWarning)}</p>` : ''}
       </section>
     </div>`;
@@ -608,7 +755,50 @@ export function mount({
     render();
   }
 
-  async function refresh({ automatic = false } = {}) {
+  async function refreshCampaignAttribution(report, range) {
+    if (!Array.isArray(report?.saleDetails)) {
+      state.campaignFeedback = 'Campanhas não consultadas: publique o serviço GuruMedia atualizado para habilitar ClickView.';
+      state.campaignError = true;
+      return report;
+    }
+    if (!report.saleDetails.length) {
+      state.campaignFeedback = 'ClickView: não há vendas individuais no período para associar a campanhas.';
+      state.campaignError = false;
+      return report;
+    }
+    const { tracks, saleStatuses } = campaignTrackAccounts(report.saleDetails);
+    if (!tracks.length) {
+      state.campaignFeedback = 'ClickView não consultado: nenhuma venda tem IDs completos e únicos de conta Google Ads e MCC no manifesto. Confira os IDs numéricos de 10 dígitos em Contas ou no Mapa por Conta.';
+      state.campaignError = false;
+      return applyCampaignAttributions(report, { rows: [] }, saleStatuses);
+    }
+    try {
+      const result = await fetchGuruMediaCampaignAttribution(state.apiToken, range, tracks);
+      state.campaignFeedback = campaignFeedbackText(result, saleStatuses);
+      state.campaignError = result.summary.lookup_error_count > 0;
+      return applyCampaignAttributions(report, result, saleStatuses);
+    } catch (error) {
+      state.campaignFeedback = `Vendas atualizadas, mas a consulta ClickView falhou: ${error instanceof Error ? error.message : 'erro inesperado'}`;
+      state.campaignError = true;
+      const errorStatuses = new Map(saleStatuses);
+      for (const sale of report.saleDetails) {
+        const key = saleDetailIdentity(sale);
+        if (saleStatuses.get(key)?.status === 'not_checked') errorStatuses.set(key, { status: 'lookup_error' });
+      }
+      const previous = takeByIdentity(state.report?.saleDetails);
+      const merged = {
+        ...report,
+        saleDetails: report.saleDetails.map(sale => {
+          const key = saleDetailIdentity(sale);
+          const old = previous.get(key)?.shift();
+          return { ...sale, campaignAttribution: old?.campaignAttribution || errorStatuses.get(key) || { status: 'lookup_error' } };
+        }),
+      };
+      return merged;
+    }
+  }
+
+  async function refresh({ automatic = false, syncBilling: requestBillingSync = false, resolveCampaigns = false } = {}) {
     if (state.pending) return;
     let range;
     try { range = dateRangeFromInputs(); }
@@ -620,22 +810,62 @@ export function mount({
       return;
     }
     state.pending = true;
+    if (resolveCampaigns) {
+      state.campaignFeedback = '';
+      state.campaignError = false;
+    }
     const shouldRefreshSales = !automatic || !state.lastRefreshAtUtc
       || nowFn().getTime() - Date.parse(state.lastRefreshAtUtc) >= 30 * 60 * 1000;
+    const shouldSyncBilling = requestBillingSync || (automatic && shouldRefreshSales);
+    if (shouldSyncBilling) {
+      state.billingSyncFeedback = '';
+      state.billingSyncError = false;
+    }
     state.feedback = automatic
       ? shouldRefreshSales ? 'Atualizando vendas e métricas GuruMedia automaticamente…' : 'Atualizando métricas GuruMedia automaticamente…'
       : 'Consultando vendas e métricas GuruMedia no servidor…';
     state.feedbackError = false;
     render();
-    const [salesResult, trafficResult] = await Promise.all([
+    const domainAdminToken = !automatic ? readDomainAdminToken().token : '';
+    const domainRequest = automatic
+      ? Promise.resolve(null)
+      : domainAdminToken
+        ? fetchDomains(domainAdminToken).then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }))
+        : Promise.resolve({ status: 'skipped', reason: 'Configure o token administrativo em Integrações → Configurações globais.' });
+    const [salesResult, trafficResult, domainsResult] = await Promise.all([
       shouldRefreshSales
         ? fetchReport(state.apiToken, range).then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }))
         : Promise.resolve(null),
-      fetchTrafficReport(state.apiToken, range, { platform: 'gurumedia' })
+      fetchTrafficReport(state.apiToken, range, { platform: 'gurumedia', includeTrafficSource: true })
         .then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason })),
+      domainRequest,
     ]);
+    if (domainsResult) {
+      if (domainsResult.status === 'fulfilled') {
+        try {
+          const saved = saveDomainCache(domainsResult.value);
+          state.domainCacheWarning = saved?.saved
+            ? `Lista de Tracks atualizada para a Curadoria em ${formatUtcTimestamp(saved.updatedAtUtc)}.`
+            : 'Lista de Tracks consultada, mas não foi possível atualizar o cache local usado pela Curadoria.';
+        } catch (error) {
+          state.domainCacheWarning = `Lista de Tracks consultada, mas não foi possível atualizar o cache local usado pela Curadoria: ${error instanceof Error ? error.message : 'erro de armazenamento'}.`;
+        }
+      } else if (domainsResult.status === 'skipped') {
+        state.domainCacheWarning = `Lista de Tracks não atualizada para a Curadoria: ${domainsResult.reason}`;
+      } else {
+        const reason = domainsResult.reason;
+        state.domainCacheWarning = `Lista de Tracks não atualizada para a Curadoria: ${reason instanceof Error ? reason.message : 'falha na consulta administrativa'}. O último cache local foi preservado.`;
+      }
+    }
     if (salesResult?.status === 'fulfilled') {
-      state.report = salesResult.value;
+      state.report = retainCampaignAttributions(salesResult.value, state.report);
+      try {
+        state.report = mergeGuruMediaCampaignAttributions(state.report, await readCampaignAttributions());
+      } catch (error) {
+        state.campaignFeedback = `Atribuições ClickView já salvas não puderam ser carregadas: ${error instanceof Error ? error.message : 'erro de armazenamento local'}.`;
+        state.campaignError = true;
+      }
+      if (resolveCampaigns) state.report = await refreshCampaignAttribution(state.report, range);
       const refreshedAt = nowFn();
       state.lastRefreshAtUtc = refreshedAt.toISOString();
       state.feedback = `Consulta concluída: ${formatCount(state.report.summary.salesCount)} venda(s) associada(s) no período.`;
@@ -649,10 +879,33 @@ export function mount({
           state.cacheWarning = error instanceof Error ? `Consulta concluída, mas não foi possível salvar o cache local de vendas: ${error.message}` : 'Consulta concluída, mas não foi possível salvar o cache local de vendas.';
         }
       }
+      if (shouldSyncBilling) {
+        try {
+          const billing = await syncBilling(state.apiToken, { nowFn, scope:automatic ? 'incremental' : 'full' });
+          const prefix = automatic ? 'Faturamento local sincronizado automaticamente' : 'Faturamento local';
+          const pieces = [`${prefix}: ${formatCount(billing.inserted)} nova(s), ${formatCount(billing.updated)} atualizada(s), ${formatCount(billing.unchanged)} sem alteração.`];
+          if (billing.receivedTimeFallback) pieces.push(`${formatCount(billing.receivedTimeFallback)} venda(s) ficaram com data do recebimento porque não tinham horário real de conversão.`);
+          if (billing.missingCommission) pieces.push(`${formatCount(billing.missingCommission)} venda(s) sem comissão válida foram ignoradas.`);
+          if (billing.unsupportedCurrency) pieces.push(`${formatCount(billing.unsupportedCurrency)} venda(s) em moeda não suportada foram ignoradas, sem conversão cambial.`);
+          if (billing.missingTime) pieces.push(`${formatCount(billing.missingTime)} venda(s) sem horário utilizável foram ignoradas.`);
+          if (billing.conflicts) pieces.push(`${formatCount(billing.conflicts)} conflito(s) de origem/ID precisam de revisão.`);
+          if (billing.mccReconciliationPending) pieces.push('Possíveis sobreposições com agregados MCC ficam para a Fase 3 de conciliação.');
+          state.billingSyncFeedback = pieces.join(' ');
+          state.billingSyncError = Boolean(billing.missingCommission || billing.unsupportedCurrency || billing.missingTime || billing.conflicts);
+        } catch (error) {
+          const retry = automatic ? 'A próxima atualização automática tentará novamente.' : 'Clique novamente para repetir com segurança.';
+          state.billingSyncFeedback = `Tracking atualizado, mas a sincronização do Faturamento local falhou: ${error instanceof Error ? error.message : 'erro de armazenamento'}. ${retry}`;
+          state.billingSyncError = true;
+        }
+      }
     } else if (salesResult?.status === 'rejected') {
       const error = salesResult.reason;
       state.feedback = error instanceof Error ? error.message : 'Não foi possível consultar as vendas GuruMedia.';
       state.feedbackError = true;
+      if (resolveCampaigns) {
+        state.campaignFeedback = 'ClickView não foi consultado porque a atualização de vendas falhou.';
+        state.campaignError = true;
+      }
     }
     if (trafficResult.status === 'fulfilled') {
       const trafficReport = trafficResult.value;
@@ -691,7 +944,7 @@ export function mount({
     }
   }
 
-  async function loadCurrentRange() {
+  async function loadCurrentRange({ syncBilling = false } = {}) {
     state.report = null;
     state.trafficReport = null;
     state.cacheSavedAtUtc = '';
@@ -704,7 +957,7 @@ export function mount({
     render();
     try { await loadCacheForRange(dateRangeFromInputs()); }
     catch (error) { state.feedback = error.message; state.feedbackError = true; render(); return; }
-    await refresh();
+    await refresh({ syncBilling });
   }
 
   function clearTimer() {
@@ -725,7 +978,7 @@ export function mount({
     state.tokenInvalid = latestToken.invalid;
     if (!hasStarted) {
       hasStarted = true;
-      void loadCurrentRange();
+      void loadCurrentRange({ syncBilling: true });
       return;
     }
     if (isVisible() && !state.lastRefreshAtUtc) void refresh();
@@ -741,14 +994,25 @@ export function mount({
   }
 
   root.addEventListener('click', event => {
+    const trafficPageButton = event.target.closest?.('[data-gurumedia-traffic-page]');
+    if (trafficPageButton) {
+      const requestedPage = Number(trafficPageButton.dataset.gurumediaTrafficPage);
+      if (Number.isSafeInteger(requestedPage) && requestedPage >= 1) {
+        state.trafficPage = requestedPage;
+        render();
+      }
+      return;
+    }
     const action = event.target.closest?.('[data-gurumedia-action]')?.dataset.gurumediaAction;
     if (action === 'toggle-postback-config') {
       state.postbackConfigExpanded = !state.postbackConfigExpanded;
       render();
-    } else if (action === 'refresh') void refresh();
-    else if (action === 'load-conversion-actions') void loadConversionActions(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
-    else if (action === 'save-conversion-action') saveConversionAction(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
-    else if (action === 'remove-conversion-action') removeConversionAction(event.target.closest('[data-gurumedia-action]')?.dataset.gurumediaMcc);
+    } else if (action === 'validate-google-ads-sale' || action === 'send-google-ads-sale') {
+      const saleKey = event.target.closest?.('[data-gurumedia-action]')?.dataset.saleKey;
+      const sale = state.report?.saleDetails?.find(item => item.saleKey === saleKey);
+      if (action === 'validate-google-ads-sale') void validateSaleWithGoogleAds(sale);
+      else void sendSaleToGoogleAds(sale);
+    } else if (action === 'refresh') void refresh({ syncBilling: true, resolveCampaigns: true });
     else if (action) handlePostbackAction(action);
   });
   root.addEventListener('input', event => {
@@ -773,14 +1037,9 @@ export function mount({
     }
   });
   root.addEventListener('change', event => {
-    if (event.target?.matches?.('[data-gurumedia-conversion-mcc]')) {
-      const id = event.target.dataset.gurumediaConversionMcc;
-      state.conversionActionSelections = { ...state.conversionActionSelections, [id]: event.target.value };
-      state.conversionActionErrors = { ...state.conversionActionErrors, [id]: '' };
-      render();
-    } else if (event.target.id === 'guruMediaDatePreset') {
+    if (event.target.id === 'guruMediaDatePreset') {
       state.datePreset = event.target.value;
-      const range = trackingClicksDateRangeForPreset(state.datePreset, nowFn());
+      const range = trackingClicksDateRangeForPreset(state.datePreset, nowFn(), 'UTC');
       state.startDateInput = formatTrackingDatePtBr(range.startDate);
       state.endDateInput = formatTrackingDatePtBr(range.endDate);
       void loadCurrentRange();

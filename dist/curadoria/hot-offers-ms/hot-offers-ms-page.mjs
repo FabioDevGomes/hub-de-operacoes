@@ -1,7 +1,7 @@
 import * as Domain from './hot-offers-ms-domain.mjs';
 import * as Storage from './hot-offers-ms-storage.mjs';
-import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261014-decision-notes';
-import * as Trends from '../trends-domain.mjs';
+import {mountHotOffersMsView} from './hot-offers-ms-view.mjs?v=20261108-country-labels';
+import * as Trends from '../trends-domain.mjs?v=5';
 import * as Images from '../image-search-domain.mjs';
 import * as Decisions from '../decision-ui.mjs?v=curation-decision-notes-2';
 import * as GlimpseStorage from '../glimpse-storage.mjs';

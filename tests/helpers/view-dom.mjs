@@ -4,14 +4,18 @@ export function createRoot(){
   function node(dataset={}){
     const classes=new Set(),attributes=new Map(),children=new Map();
     return {dataset,value:'',textContent:'',innerHTML:'',onclick:null,onchange:null,disabled:false,open:false,
+      addEventListener(type,listener){this['on'+type]=listener},
+      replaceChildren(...items){this.replacedChildren=items;this.innerHTML='';this.textContent=''},
+      append(...items){this.appendedChildren=[...(this.appendedChildren||[]),...items]},
       classList:{toggle(name,enabled){enabled?classes.add(name):classes.delete(name)},contains:name=>classes.has(name),add:name=>classes.add(name),remove:name=>classes.delete(name)},
       setAttribute:(name,value)=>attributes.set(name,String(value)),getAttribute:name=>attributes.get(name)??null,
       querySelector(selector){if(!children.has(selector))children.set(selector,node());return children.get(selector)},
+      querySelectorAll(){return []},
       showModal(){this.open=true},close(){this.open=false},focus(){this.focused=true}
     };
   }
   function get(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}
-  const root={querySelector:get,querySelectorAll:selector=>lists.get(selector)||[]};
+  const root={querySelector:get,querySelectorAll:selector=>lists.get(selector)||[],ownerDocument:{querySelector:get,createElement:()=>node(),activeElement:null,addEventListener(){},removeEventListener(){}}};
   return {root,get,setList:(selector,items)=>lists.set(selector,items.map(node)),nodes};
 }
 

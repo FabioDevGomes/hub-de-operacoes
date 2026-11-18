@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {test} from 'node:test';
+import {addGuruMediaConversionsToOverviewRow} from '../src/overview/gurumedia-sales-projection.mjs';
 const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
 function block(start,end){const a=template.indexOf(start),b=template.indexOf(end,a);assert.ok(a>=0&&b>a);return template.slice(a,b)}
 const overviewAdapter=block('    function overviewRowsForMode(){','    let overviewController=');
@@ -11,11 +12,11 @@ test('overview adapter retains temporal financial projection, manual adjustments
   const campaign={nome_campanha_exato:'MCC nome completo',_status:'ativa'},stored={id:'stable-001',roi_minimo_pct:20},
     sales={pendingConversions:3,commissionAdjustment:110,manualSales:3,byDate:{
       '2026-09-29':{pendingConversions:2,commissionAdjustment:60},'2026-09-30':{pendingConversions:1,commissionAdjustment:50}}},
-    cache={historyTotals:new Map(),salesAdjustments:new Map([[stored.id,sales]]),totalsRowsByMode:new Map()};
+    cache={historyTotals:new Map(),salesAdjustments:new Map([[stored.id,sales]]),salesByCampaignId:new Map(),totalsRowsByMode:new Map()};
   const base={consolidated:{investment:100,commission:200,conversions:2},d1:{investment:10,commission:20,conversions:0},d0:{investment:30,commission:0,conversions:0}};
   let calculations=0;
   vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
-  Object.assign(context,{OverviewDomain:context.window.OverviewDomain,SaleRoiDomain:context.window.SaleRoiDomain,state:{totalsMode:'consolidated',rate:5},
+  Object.assign(context,{OverviewDomain:context.window.OverviewDomain,SaleRoiDomain:context.window.SaleRoiDomain,ProductCatalog:{normalize:value=>value||{aliases:{}}},accountProductIdentity:()=>({key:'produto',label:'Produto'}),overviewGoogleAdsCampaignActionInventory:()=>new Map(),currentGuruMediaCampaignProjection:()=>({}),guruMediaCampaignProjectionModule:{guruMediaSalesCount:(_projection,campaignId,{mode})=>campaignId==='stable-001'?({consolidated:3,d1:2,d0:1}[mode]||0):0,addGuruMediaConversionsToOverviewRow},state:{totalsMode:'consolidated',rate:5},
     campaignRows:()=>[campaign],activeCampaignRows:()=>[campaign],derivedContext:()=>cache,
     workbookTotalsMap:()=>new Map(),databaseCampaign:()=>stored,manifestDates:()=>({d0:'2026-09-30',d1:'2026-09-29'}),
     campaignHistoricalTotals:()=>({}),totalsForMode:(_c,_h,mode=context.state.totalsMode)=>{calculations++;return base[mode]},
@@ -24,7 +25,7 @@ test('overview adapter retains temporal financial projection, manual adjustments
     campaignZeroImpressionDays:()=>0,roiForTotals:t=>t?(t.commission-t.investment)/t.investment*100:null,
     campaignAccount:()=> '7441',campaignRejected:()=>false,campaignNumberReuse:()=>null,campaignPolicyLimitation:()=>null});
   const before=JSON.stringify({campaign,stored,sales,base});vm.runInContext(overviewAdapter,context);
-  for(const [mode,conversions,commission,profit] of [['consolidated',5,310,210],['d1',2,80,70],['d0',1,50,20]]){
+  for(const [mode,conversions,commission,profit] of [['consolidated',8,310,210],['d1',4,80,70],['d0',2,50,20]]){
     context.state.totalsMode=mode;const snapshot=context.overviewSnapshot(),row=snapshot.rows[0];
     assert.equal(row.totals.conversions,conversions);assert.equal(row.totals.commission,commission);assert.equal(row.profit,profit);
     assert.equal(row.d0ProfitTotals.commission,50,'lucro D0 inclui o ajuste provisório da data D0 independentemente do modo da tabela');assert.equal(row.d0ProfitTotals.investment,30);assert.equal(row.d0Totals.commission,0,'o snapshot MCC original permanece inalterado');
@@ -45,9 +46,10 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
     rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc})),
     database={campanhas:campaigns,diario},calls=[];
   vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
-  Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},operationalDatabase:()=>database,campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',
-    CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)}},
+  Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},operationalDatabase:()=>database,campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',cpaTitleInfo:()=>({payout:null,payoutCurrency:''}),cpaDesired:()=>({value:null,currency:null}),
+    CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)},campaignDiaryStatusWindow:()=>({pauseConfirmedAt:null,reactivatedAt:null})},ProductCatalog:{normalize:value=>value||{aliases:{}}},overviewGoogleAdsCampaignActionInventory:()=>new Map(),accountProductIdentity:()=>({key:'produto',label:'Produto'}),campaignAccount:()=>null,
     ProductDiaryDomain:context.window.ProductDiaryDomain,sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
+    currentGuruMediaCampaignProjection:()=>null,guruMediaCampaignProjectionModule:{},
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),
     d0Totals:()=>{throw Error('diary totals must not use only D0')}});
   const before=JSON.stringify(database);vm.runInContext(diaryAdapter,context);
@@ -60,8 +62,8 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
 test('legacy adapter returns only preserved summary, does not synthesize daily history or provisional sales',()=>{
   const stored={id:'legacy-id',nome_mcc:'MCC legado',nome_exibicao:'Legado',legacy_totais:{metrics:{investment_brl:{state:'observed',value:50}}}},
     database={campanhas:[stored],diario:[]},before=JSON.stringify(database),context=vm.createContext({state:{database},Map});
-  Object.assign(context,{operationalDatabase:()=>database,campaignRows:()=>{throw Error('legacy must not read operational rows')},
-    CampaignDatabase:{dailyRows:()=>{throw Error('legacy must not read native diary')}},
+  Object.assign(context,{operationalDatabase:()=>database,campaignRows:()=>{throw Error('legacy must not read operational rows')},cpaTitleInfo:()=>({payout:null,payoutCurrency:''}),cpaDesired:()=>({value:null,currency:null}),
+    CampaignDatabase:{dailyRows:()=>{throw Error('legacy must not read native diary')},campaignDiaryStatusWindow:()=>({pauseConfirmedAt:null,reactivatedAt:null})},ProductCatalog:{normalize:value=>value||{aliases:{}}},overviewGoogleAdsCampaignActionInventory:()=>new Map(),accountProductIdentity:()=>({key:'produto',label:'Produto'}),currentGuruMediaCampaignProjection:()=>null,guruMediaCampaignProjectionModule:{},
     derivedContext:()=>{throw Error('legacy must not mix manual sales')}});
   vm.runInContext(diaryAdapter,context);
   const snapshot=context.productDiarySnapshot('Legado','legacy','legacy-id');

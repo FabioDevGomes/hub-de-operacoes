@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hub v1.188.0 · Presell Asset Studio</title>
+  <title>Hub v1.378.9 · Presell Asset Studio</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=1.133.1">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=10">
   <style>
     .sidebar-nav-body{overflow:hidden}.sidebar-nav-group.collapsed>.sidebar-nav-body{display:grid!important;height:0;opacity:0;transform:translateY(-4px);pointer-events:none}.sidebar-nav-group:not(.collapsed)>.sidebar-nav-body{opacity:1;transform:translateY(0)}
     @media(prefers-reduced-motion:reduce){.sidebar-nav-chevron{transition:none!important}}
   </style>
-  <link rel="stylesheet" href="/sidebar-component.css?v=23">
+  <link rel="stylesheet" href="/sidebar-component.css?v=26">
   <link rel="stylesheet" href="/table-headers.css?v=9">
-<link rel="stylesheet" href="/input-standard.css?v=1"><!-- hub-system-version:start -->
-<meta name="hub-system-version" content="1.188.0">
-<link rel="stylesheet" href="/system-version.css?v=1.188.0">
-<script defer src="/system-version.js?v=1.188.0"></script>
+<link rel="stylesheet" href="/input-standard.css?v=1">  <link rel="stylesheet" href="/hub-scrollbars.css?v=1">
+<!-- hub-system-version:start -->
+<meta name="hub-system-version" content="1.378.9">
+<link rel="stylesheet" href="/system-version.css?v=1.378.9">
+<script defer src="/system-version.js?v=1.378.9"></script>
 <!-- hub-system-version:end -->
 </head>
 <body>
@@ -36,15 +37,17 @@
       <div class="privacy"><span></span>Processamento local</div>
     </header>
 
-    <nav class="paste-guide" aria-label="Destino da próxima imagem colada">
+    <nav class="paste-guide" aria-label="Destinos de colagem e etapa do Asset Studio">
       <div>
         <span class="target-label">PRÓXIMO CTRL+V</span>
         <strong id="activeTargetText">01.png · Desktop</strong>
       </div>
       <div class="target-buttons">
         <button class="target-button active" type="button" data-target="desktop" aria-pressed="true"><b>01</b><span>Desktop</span></button>
+        <button id="capturePageImages" class="target-button capture-action-button" type="button" aria-describedby="assetCaptureCacheStatus" disabled><b aria-hidden="true">↻</b><span>Capturar imagens</span></button>
         <button class="target-button" type="button" data-target="mobile" aria-pressed="false"><b>02</b><span>Mobile</span></button>
         <button class="target-button" type="button" data-target="favicon" aria-pressed="false"><b>03</b><span>Favicon</span></button>
+        <a class="target-button product-image-step" href="#productImagesPanel" aria-label="Ir para o passo 4: imagem do produto" aria-current="step"><b>04</b><span>Imagem do produto</span></a>
       </div>
     </nav>
 
@@ -53,8 +56,9 @@
         <div class="step">01</div>
         <div>
           <h2>Imagens da página</h2>
-          <p>Cole ou escolha o print para Desktop e Mobile e, se houver, o favicon.</p>
+          <p>Cole ou escolha o print para Desktop e Mobile e, se houver, o favicon. As imagens ficam no cache local até uma nova captura.</p>
         </div>
+        <a id="assetAffiliateLink" class="asset-affiliate-link" target="_blank" rel="sponsored nofollow noopener noreferrer" hidden>Abrir link de afiliado</a>
       </div>
 
       <div class="asset-grid">
@@ -74,7 +78,7 @@
 
         <article class="asset-card" data-slot="mobile">
           <div class="card-top">
-            <div><strong>02.png</strong><span>Mobile · 373 × 819</span></div>
+            <div><strong>02.png</strong><span>Mobile · 393 × 852</span></div>
             <div class="card-actions"><span class="badge">72% · equilibrado</span><button class="trash" type="button" data-clear="mobile" aria-label="Remover imagem mobile" title="Remover imagem">🗑</button></div>
           </div>
           <button class="drop-zone mobile" type="button" data-pick="mobile">
@@ -84,6 +88,7 @@
             <img data-preview="mobile" alt="Prévia mobile">
           </button>
           <div class="file-meta" data-meta="mobile">Nenhuma imagem selecionada</div>
+          <div class="mobile-dimension-warning" data-mobile-dimension-warning role="alert" aria-live="assertive" hidden></div>
         </article>
         <article class="asset-card favicon-row" data-slot="favicon">
           <div class="card-top">
@@ -104,15 +109,21 @@
           </div>
         </article>
       </div>
+      <p id="assetCaptureCacheStatus" class="hint" role="status" aria-live="polite"></p>
     </section>
 
     <section class="panel compact output-panel">
       <div class="section-heading">
         <div class="step">02</div>
         <div>
-          <h2>Destino e geração</h2>
-          <p>Escolha a pasta raiz uma vez e informe o produto. O Hub cria somente a página inicial e os assets.</p>
+          <h2>Destino e envio das imagens</h2>
+          <p>Escolha a pasta raiz e informe o produto. Ao clicar em Enviar Imagens, o Hub salva na pasta local produto/pag01/assets: Desktop (01.png), Mobile (02.png), favicon (03.png, se selecionado) e as imagens de produto escolhidas (imagem-produto-01 e imagem-produto-02).</p>
         </div>
+      </div>
+      <div class="delivery-work-context">
+        <label for="assetDeliveryPicker">Entrega em andamento</label>
+        <select id="assetDeliveryPicker" class="control" aria-describedby="assetDeliveryStatus" disabled><option value="">Carregando entregas salvas…</option></select>
+        <small id="assetDeliveryStatus" role="status" aria-live="polite">O produto, a imagem escolhida e as confirmações ficam associados à entrega selecionada neste navegador.</small>
       </div>
       <div class="product-name-field">
         <label for="productName">Nome do produto</label>
@@ -126,25 +137,51 @@
         </div>
         <div><strong id="folderName">Nenhuma pasta de produtos selecionada</strong><small id="folderHelp">Selecione a pasta raiz uma vez; a escolha será lembrada neste navegador.</small></div>
         <button id="openFolder" class="secondary folder" type="button" hidden>Abrir pasta</button>
-        <button id="processAll" class="primary" type="button" disabled>Gerar 01, 02 e 03</button>
+        <button id="processAll" class="primary" type="button" disabled>Enviar Imagens</button>
       </div>
       <div id="results" class="results" aria-live="polite"></div>
     </section>
 
-    <section class="panel coming-soon">
+    <section id="productImagesPanel" class="panel product-image-panel" aria-labelledby="productImagesTitle">
       <div class="section-heading">
-        <div class="step muted">03</div>
+        <div class="step">04</div>
         <div>
-          <p class="eyebrow">PRÓXIMA ETAPA</p>
-          <h2>Imagens do produto</h2>
-          <p>Extração e preparação de 04.png e 05.png serão adicionadas depois da validação deste fluxo.</p>
+          <p class="eyebrow">PASSO 04 · IMAGEM DO PRODUTO</p>
+          <h2 id="productImagesTitle">Imagens do produto</h2>
+          <p>Encontre imagens na página aberta pela extensão e escolha até duas. Ao clicar em Gerar, elas também serão salvas em <code>produto/pag01/assets</code> como <code>imagem-produto-01</code> e <code>imagem-produto-02</code>.</p>
         </div>
+      </div>
+      <div id="productImageEmpty" class="product-image-empty">Abra a página do produto, clique em “Selecionar imagens do produto” na extensão e a galeria aparecerá aqui.</div>
+      <div id="productImageGallery" class="product-image-gallery" hidden>
+        <div class="product-image-toolbar">
+          <div>
+            <strong id="productImageScanSummary">Nenhuma imagem carregada</strong>
+            <p id="productImageSource" class="hint"></p>
+          </div>
+          <div class="product-image-toolbar-actions">
+            <button id="saveProductImages" class="primary" type="button" disabled>Salvar imagens selecionadas</button>
+            <button id="clearProductImageGallery" class="secondary" type="button">Limpar galeria</button>
+          </div>
+        </div>
+        <div id="productImageCards" class="product-image-grid" aria-label="Imagens encontradas na página"></div>
+        <div class="product-image-save-row">
+          <span id="productImageStatus" class="hint" role="status" aria-live="polite"></span>
+        </div>
+        <div id="productImageResults" class="results" aria-live="polite"></div>
+        <p class="hint">As imagens escolhidas são convertidas para PNG ou JPG, até 5 MB cada, e ficam somente na pasta local. Esta etapa não envia arquivos ao Google Ads.</p>
+      </div>
+      <div id="assetDeliveryNextStep" class="asset-delivery-next-step" hidden>
+        <div>
+          <strong id="assetDeliveryChecklist">Etapas desta entrega</strong>
+          <p id="assetDeliveryHandoffStatus" role="status" aria-live="polite"></p>
+        </div>
+        <button id="continueToPresell" class="primary" type="button" hidden>Continuar para Ficha e Pre-Sell</button>
       </div>
     </section>
     </main>
   </div>
-  <script src="app.js?v=4"></script>
-  <script src="/google-ads/google-ads-source-preference.js?v=1"></script>
-  <script src="/sidebar-component.js?v=20261029-frequent-screen-shortcuts-tab-activation"></script>
+  <script src="app.js?v=17"></script>
+  <script src="/google-ads/google-ads-source-preference.js?v=2"></script>
+  <script src="/sidebar-component.js?v=20261101-quick-access-pins"></script>
 </body>
 </html>

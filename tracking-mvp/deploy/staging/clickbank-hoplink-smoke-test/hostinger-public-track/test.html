@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Teste de captura de cliques</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #091323; color: #e5edf8; }
+    body { max-width: 760px; margin: 7vh auto; padding: 24px; }
+    main { background: #102039; border: 1px solid #29415f; border-radius: 16px; padding: 28px; }
+    h1 { margin-top: 0; font-size: 1.6rem; }
+    p { line-height: 1.55; color: #b7c8df; }
+    .status { border-radius: 10px; padding: 12px 14px; background: #0a1729; color: #f8c86b; }
+    button { border: 0; border-radius: 9px; padding: 12px 16px; font-weight: 700; color: #061526; background: #39d5a4; cursor: pointer; }
+    code { color: #83c6ff; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Teste local da captura</h1>
+    <p>Esta página registra somente um evento de visita. Use parâmetros fictícios para validar o caminho até o banco.</p>
+    <p id="query-status">Verificando parâmetros de teste…</p>
+    <p id="capture-status" class="status" aria-live="polite">Enviando visita ao endpoint…</p>
+    <p><button id="outbound-test" type="button">Registrar HopLink ClickBank sintético</button></p>
+    <p id="outbound-status" class="status" aria-live="polite">O evento do botão aparecerá aqui.</p>
+    <p>O botão usa um HopLink fictício e cancela a navegação. Nenhuma oferta ou checkout é aberto. Confirme os registros no MySQL para validar a gravação.</p>
+  </main>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var hasClickId = ["gclid", "gbraid", "wbraid"].some(function (key) { return Boolean(params.get(key)); });
+      document.getElementById("query-status").textContent = hasClickId
+        ? "Identificador de clique de teste encontrado na URL."
+        : "Nenhum identificador de clique na URL. Adicione ?gclid=TEST-GCLID-123 para testar.";
+
+      window.addEventListener("tracking-mvp:page-view-result", function (event) {
+        var detail = event.detail || {};
+        document.getElementById("capture-status").textContent = detail.ok
+          ? "Visita recebida pelo endpoint. Consulte o banco para confirmar a linha."
+          : "A visita não foi confirmada. Verifique o endpoint e a configuração privada.";
+      });
+      window.addEventListener("tracking-mvp:outbound-queued", function (event) {
+        var detail = event.detail || {};
+        var extclid = detail.clickId || "não capturado";
+        document.getElementById("outbound-status").textContent = detail.queued
+          ? "O navegador enfileirou o outbound_click. extclid sintético: " + extclid + ". Confirme a linha no banco."
+          : "Solicitação de outbound_click enviada como alternativa. extclid sintético: " + extclid + ". Confirme a linha no banco.";
+      });
+      document.getElementById("outbound-test").addEventListener("click", function () {
+        var link = document.createElement("a");
+        link.href = "https://hop.clickbank.net/?affiliate=qa_test&vendor=qa_test&tid=qa_phase1";
+        link.dataset.trackClickbank = "";
+        document.addEventListener("click", function preventTestNavigation(event) {
+          if (event.target === link) {
+            event.preventDefault();
+            document.removeEventListener("click", preventTestNavigation, false);
+          }
+        }, false);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      });
+    })();
+  </script>
+  <script src="./track.js" data-endpoint="./collect.php" data-status-selector="#capture-status" defer></script>
+</body>
+</html>

@@ -1,0 +1,1073 @@
+<?php
+declare(strict_types=1);
+
+const HUB_GOOGLE_ADS_API_VERSION = 'v26';
+const HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS = 1000;
+const HUB_GOOGLE_ADS_MAX_CONVERSION_ACTION_ROWS = 500;
+const HUB_GOOGLE_ADS_DAILY_MAX_DAYS = 14;
+const HUB_GOOGLE_ADS_MAX_DAILY_ROWS = 10000;
+const HUB_GOOGLE_ADS_SEARCH_TERMS_MAX_DAYS = 31;
+const HUB_GOOGLE_ADS_SEARCH_TERMS_MAX_ROWS = 1000;
+const HUB_GOOGLE_ADS_SEARCH_TERM_CAMPAIGNS_MAX_ROWS = 1000;
+const HUB_GOOGLE_ADS_MAX_ACCOUNTS = 1000;
+const HUB_GOOGLE_ADS_MAX_BODY_BYTES = 8192;
+const HUB_GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
+const HUB_GOOGLE_ADS_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
+final class HubGoogleAdsApiException extends RuntimeException
+{
+    public function __construct(public readonly string $apiCode, public readonly int $httpStatus = 502)
+    {
+        parent::__construct($apiCode);
+    }
+}
+
+function hub_google_ads_json(int $status, array $body): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function hub_google_ads_authorization_header(): ?string
+{
+    $value = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
+    if (is_string($value)) return $value;
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $name => $headerValue) {
+            if (strcasecmp((string)$name, 'Authorization') === 0 && is_string($headerValue)) return $headerValue;
+        }
+    }
+    return null;
+}
+
+function hub_google_ads_load_tracking_config(): array
+{
+    $candidates = [
+        dirname(__DIR__) . DIRECTORY_SEPARATOR . 'tracking-config.php',
+        dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'tracking-config.php',
+    ];
+    foreach ($candidates as $candidate) {
+        if (!is_file($candidate)) continue;
+        try { $config = require $candidate; } catch (Throwable $error) { continue; }
+        if (is_array($config)) return $config;
+    }
+    throw new HubGoogleAdsApiException('api_not_configured', 503);
+}
+
+function hub_google_ads_authorize(array $config): array
+{
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+    $allowedOrigins = $config['tracking_hub_allowed_origins'] ?? null;
+    if (!is_array($allowedOrigins) || !is_string($origin) || !in_array($origin, $allowedOrigins, true)) {
+        return ['status' => 403, 'error' => 'origin_not_allowed', 'origin' => null];
+    }
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if ($method === 'OPTIONS') return ['status' => 204, 'error' => null, 'origin' => $origin];
+    if ($method !== 'POST') return ['status' => 405, 'error' => 'method_not_allowed', 'origin' => $origin];
+
+    $expectedToken = $config['tracking_hub_api_token'] ?? null;
+    $authorization = hub_google_ads_authorization_header();
+    if (!is_string($expectedToken) || preg_match('/^[a-f0-9]{64}$/iD', $expectedToken) !== 1) {
+        return ['status' => 503, 'error' => 'api_not_configured', 'origin' => $origin];
+    }
+    if (!is_string($authorization) || preg_match('/^Bearer ([a-f0-9]{64})$/iD', $authorization, $matches) !== 1
+        || !hash_equals($expectedToken, $matches[1])) {
+        return ['status' => 401, 'error' => 'not_authorized', 'origin' => $origin];
+    }
+    return ['status' => 200, 'error' => null, 'origin' => $origin];
+}
+
+function hub_google_ads_base64url(string $value): string
+{
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+}
+
+function hub_google_ads_credentials(): array
+{
+    $directory = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'google-ads-credentials');
+    $path = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'google-ads-credentials' . DIRECTORY_SEPARATOR . 'service-account.json');
+    $privatePrefix = realpath(__DIR__);
+    if ($directory === false || $path === false || $privatePrefix === false
+        || !str_starts_with($path, $directory . DIRECTORY_SEPARATOR)
+        || !str_starts_with($directory . DIRECTORY_SEPARATOR, $privatePrefix . DIRECTORY_SEPARATOR)) {
+        throw new HubGoogleAdsApiException('credentials_missing', 503);
+    }
+    $json = file_get_contents($path);
+    $credentials = is_string($json) ? json_decode($json, true) : null;
+    if (!is_array($credentials) || !is_string($credentials['client_email'] ?? null)
+        || !is_string($credentials['private_key'] ?? null) || !str_contains($credentials['private_key'], 'PRIVATE KEY')) {
+        throw new HubGoogleAdsApiException('credentials_missing', 503);
+    }
+    return $credentials;
+}
+
+function hub_google_ads_http(string $url, string $method, array $headers, ?string $body = null): array
+{
+    if (!function_exists('curl_init')) throw new HubGoogleAdsApiException('google_ads_unavailable', 502);
+    $handle = curl_init($url);
+    if ($handle === false) throw new HubGoogleAdsApiException('google_ads_unavailable', 502);
+    $options = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_CUSTOMREQUEST => $method,
+    ];
+    if ($body !== null) $options[CURLOPT_POSTFIELDS] = $body;
+    curl_setopt_array($handle, $options);
+    $response = curl_exec($handle);
+    $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+    $headerSize = (int)curl_getinfo($handle, CURLINFO_HEADER_SIZE);
+    $curlError = curl_errno($handle);
+    curl_close($handle);
+    if (!is_string($response) || $curlError !== 0) throw new HubGoogleAdsApiException('google_ads_unavailable', 502);
+    return ['status' => $status, 'body' => substr($response, $headerSize)];
+}
+
+function hub_google_ads_access_token(array $credentials): string
+{
+    if (!function_exists('openssl_sign')) throw new HubGoogleAdsApiException('google_ads_auth_failed', 502);
+    $issuedAt = time();
+    $header = hub_google_ads_base64url(json_encode(['alg' => 'RS256', 'typ' => 'JWT'], JSON_UNESCAPED_SLASHES));
+    $claims = hub_google_ads_base64url(json_encode([
+        'iss' => $credentials['client_email'],
+        'scope' => HUB_GOOGLE_ADS_SCOPE,
+        'aud' => HUB_GOOGLE_ADS_TOKEN_URL,
+        'iat' => $issuedAt,
+        'exp' => $issuedAt + 3600,
+    ], JSON_UNESCAPED_SLASHES));
+    $unsigned = $header . '.' . $claims;
+    $privateKey = openssl_pkey_get_private($credentials['private_key']);
+    if ($privateKey === false || !openssl_sign($unsigned, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        throw new HubGoogleAdsApiException('google_ads_auth_failed', 502);
+    }
+    $assertion = $unsigned . '.' . hub_google_ads_base64url($signature);
+    $tokenResponse = hub_google_ads_http(HUB_GOOGLE_ADS_TOKEN_URL, 'POST', [
+        'Content-Type: application/x-www-form-urlencoded',
+        'Accept: application/json',
+    ], http_build_query([
+        'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        'assertion' => $assertion,
+    ]));
+    $payload = json_decode($tokenResponse['body'], true);
+    if ($tokenResponse['status'] < 200 || $tokenResponse['status'] >= 300
+        || !is_array($payload) || !is_string($payload['access_token'] ?? null) || $payload['access_token'] === '') {
+        throw new HubGoogleAdsApiException('google_ads_auth_failed', 502);
+    }
+    return $payload['access_token'];
+}
+
+function hub_google_ads_api_request(string $method, string $path, string $accessToken, ?string $body = null, ?string $loginCustomerId = null): array
+{
+    $headers = [
+        'Authorization: Bearer ' . $accessToken,
+        'Accept: application/json',
+    ];
+    if ($body !== null) $headers[] = 'Content-Type: application/json';
+    if (is_string($loginCustomerId) && $loginCustomerId !== '') $headers[] = 'login-customer-id: ' . $loginCustomerId;
+    $response = hub_google_ads_http('https://googleads.googleapis.com/' . HUB_GOOGLE_ADS_API_VERSION . '/' . ltrim($path, '/'), $method, $headers, $body);
+    $payload = json_decode($response['body'], true);
+    if ($response['status'] < 200 || $response['status'] >= 300 || !is_array($payload)) {
+        $code = match ($response['status']) {
+            401 => 'google_ads_auth_failed',
+            403 => 'google_ads_access_denied',
+            429 => 'google_ads_quota_exceeded',
+            400 => 'google_ads_request_rejected',
+            default => 'google_ads_unavailable',
+        };
+        throw new HubGoogleAdsApiException($code, 502);
+    }
+    return $payload;
+}
+
+function hub_google_ads_search(string $customerId, string $query, string $accessToken, ?string $loginCustomerId = null): array
+{
+    $payload = hub_google_ads_api_request(
+        'POST',
+        'customers/' . $customerId . '/googleAds:searchStream',
+        $accessToken,
+        json_encode(['query' => $query], JSON_UNESCAPED_SLASHES),
+        $loginCustomerId
+    );
+    $rows = [];
+    foreach ($payload as $chunk) {
+        if (!is_array($chunk) || !is_array($chunk['results'] ?? null)) continue;
+        foreach ($chunk['results'] as $row) if (is_array($row)) $rows[] = $row;
+    }
+    return $rows;
+}
+
+function hub_google_ads_direct_customer_details(string $customerId, string $accessToken): array
+{
+    $query = 'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager FROM customer LIMIT 1';
+    try {
+        $rows = hub_google_ads_search($customerId, $query, $accessToken);
+    } catch (HubGoogleAdsApiException $firstError) {
+        // A directly accessible manager can require its own ID as login-customer-id.
+        $rows = hub_google_ads_search($customerId, $query, $accessToken, $customerId);
+    }
+    $customer = $rows[0]['customer'] ?? null;
+    if (!is_array($customer)) throw new HubGoogleAdsApiException('google_ads_access_denied', 502);
+    return $customer;
+}
+
+function hub_google_ads_valid_customer_id(mixed $value): ?string
+{
+    return is_string($value) && preg_match('/^[1-9][0-9]{9}$/D', $value) === 1 ? $value : null;
+}
+
+function hub_google_ads_accessible_accounts(string $accessToken): array
+{
+    $payload = hub_google_ads_api_request('GET', 'customers:listAccessibleCustomers', $accessToken);
+    $resourceNames = $payload['resourceNames'] ?? null;
+    if (!is_array($resourceNames)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+    $managers = [];
+    $accounts = [];
+    $warningCount = 0;
+    $directAccountsFound = false;
+    $accessibleIds = [];
+    foreach ($resourceNames as $resourceName) {
+        if (!is_string($resourceName) || preg_match('#^customers/([1-9][0-9]{9})$#D', $resourceName, $matches) !== 1) continue;
+        $accessibleIds[$matches[1]] = $matches[1];
+    }
+    foreach (array_values($accessibleIds) as $rootId) {
+        try {
+            $customer = hub_google_ads_direct_customer_details($rootId, $accessToken);
+            $rootName = trim((string)($customer['descriptiveName'] ?? '')) ?: 'Conta ' . $rootId;
+            if (($customer['manager'] ?? false) === true) {
+                $managers[$rootId] = [
+                    'customer_id' => $rootId,
+                    'name' => $rootName,
+                    'currency_code' => (string)($customer['currencyCode'] ?? ''),
+                    'time_zone' => (string)($customer['timeZone'] ?? ''),
+                ];
+                try {
+                    $clientRows = hub_google_ads_search($rootId,
+                        'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.level, customer_client.status FROM customer_client WHERE customer_client.level <= 5 LIMIT 1001',
+                        $accessToken,
+                        $rootId
+                    );
+                    foreach ($clientRows as $row) {
+                        if (count($accounts) >= HUB_GOOGLE_ADS_MAX_ACCOUNTS) { $warningCount++; break; }
+                        $client = $row['customerClient'] ?? null;
+                        if (!is_array($client)) continue;
+                        $clientId = hub_google_ads_valid_customer_id((string)($client['id'] ?? ''));
+                        if ($clientId === null || $clientId === $rootId || ($client['manager'] ?? false) === true) continue;
+                        $accounts[$rootId . ':' . $clientId] = [
+                            'manager_customer_id' => $rootId,
+                            'manager_name' => $rootName,
+                            'customer_id' => $clientId,
+                            'name' => trim((string)($client['descriptiveName'] ?? '')) ?: 'Conta ' . $clientId,
+                            'currency_code' => (string)($client['currencyCode'] ?? ''),
+                            'time_zone' => (string)($client['timeZone'] ?? ''),
+                            'status' => (string)($client['status'] ?? ''),
+                            'manager' => false,
+                        ];
+                    }
+                } catch (HubGoogleAdsApiException $error) {
+                    $warningCount++;
+                }
+            } else {
+                $directAccountsFound = true;
+                $accounts['direct:' . $rootId] = [
+                    'manager_customer_id' => null,
+                    'manager_name' => 'Contas com acesso direto',
+                    'customer_id' => $rootId,
+                    'name' => $rootName,
+                    'currency_code' => (string)($customer['currencyCode'] ?? ''),
+                    'time_zone' => (string)($customer['timeZone'] ?? ''),
+                    'status' => '',
+                    'manager' => false,
+                ];
+            }
+        } catch (HubGoogleAdsApiException $error) {
+            $warningCount++;
+        }
+    }
+    if ($directAccountsFound) $managers['direct'] = ['customer_id' => null, 'name' => 'Contas com acesso direto', 'currency_code' => '', 'time_zone' => ''];
+    $managerList = array_values($managers);
+    usort($managerList, static fn(array $left, array $right): int => strcasecmp((string)$left['name'], (string)$right['name']));
+    $accountList = array_values($accounts);
+    usort($accountList, static fn(array $left, array $right): int => strcasecmp((string)$left['name'], (string)$right['name']));
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'warning_count' => $warningCount,
+        'managers' => $managerList,
+        'accounts' => $accountList,
+    ];
+}
+
+function hub_google_ads_parse_date(string $value): ?DateTimeImmutable
+{
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) return null;
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone('UTC'));
+    $errors = DateTimeImmutable::getLastErrors();
+    if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) || $date->format('Y-m-d') !== $value) return null;
+    return $date;
+}
+
+function hub_google_ads_validate_report_request(array $payload): array
+{
+    $managerId = $payload['manager_customer_id'] ?? null;
+    if ($managerId !== null) $managerId = hub_google_ads_valid_customer_id($managerId);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+    $dateFrom = is_string($payload['date_from'] ?? null) ? $payload['date_from'] : '';
+    $dateTo = is_string($payload['date_to'] ?? null) ? $payload['date_to'] : '';
+    $from = hub_google_ads_parse_date($dateFrom);
+    $to = hub_google_ads_parse_date($dateTo);
+    if (($payload['manager_customer_id'] ?? null) !== null && $managerId === null) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    if ($customerId === null || $from === null || $to === null || $from > $to) throw new HubGoogleAdsApiException('invalid_date_range', 400);
+    $days = (int)$from->diff($to)->days + 1;
+    if ($days > 366) throw new HubGoogleAdsApiException('date_range_too_large', 400);
+    return [$managerId, $customerId, $dateFrom, $dateTo];
+}
+
+function hub_google_ads_validate_daily_report_request(array $payload): array
+{
+    [$managerId, $customerId, $dateFrom, $dateTo] = hub_google_ads_validate_report_request($payload);
+    $from = hub_google_ads_parse_date($dateFrom);
+    $to = hub_google_ads_parse_date($dateTo);
+    if ($from === null || $to === null || (int)$from->diff($to)->days + 1 > HUB_GOOGLE_ADS_DAILY_MAX_DAYS) {
+        throw new HubGoogleAdsApiException('daily_date_range_too_large', 400);
+    }
+    return [$managerId, $customerId, $dateFrom, $dateTo];
+}
+
+function hub_google_ads_validate_search_terms_request(array $payload): array
+{
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    $baseKeys = ['customer_id', 'date_from', 'date_to', 'manager_customer_id', 'operation'];
+    $filteredKeys = [...$baseKeys, 'campaign_id'];
+    sort($baseKeys, SORT_STRING);
+    sort($filteredKeys, SORT_STRING);
+    if (($keys !== $baseKeys && $keys !== $filteredKeys) || ($payload['operation'] ?? null) !== 'search_terms') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+
+    [$managerId, $customerId, $dateFrom, $dateTo] = hub_google_ads_validate_report_request($payload);
+    $from = hub_google_ads_parse_date($dateFrom);
+    $to = hub_google_ads_parse_date($dateTo);
+    if ($from === null || $to === null || (int)$from->diff($to)->days + 1 > HUB_GOOGLE_ADS_SEARCH_TERMS_MAX_DAYS) {
+        throw new HubGoogleAdsApiException('search_terms_date_range_too_large', 400);
+    }
+    $campaignId = null;
+    if (array_key_exists('campaign_id', $payload)) {
+        if (!is_string($payload['campaign_id']) || preg_match('/^[1-9][0-9]{0,19}$/D', $payload['campaign_id']) !== 1) {
+            throw new HubGoogleAdsApiException('invalid_payload', 400);
+        }
+        $campaignId = $payload['campaign_id'];
+    }
+    return [$managerId, $customerId, $dateFrom, $dateTo, $campaignId];
+}
+
+function hub_google_ads_validate_search_term_campaigns_request(array $payload): array
+{
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    if ($keys !== ['customer_id', 'manager_customer_id', 'operation'] || ($payload['operation'] ?? null) !== 'search_term_campaigns') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+    $managerId = $payload['manager_customer_id'] === null ? null : hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+    if ($customerId === null || ($payload['manager_customer_id'] !== null && $managerId === null)) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    return [$managerId, $customerId];
+}
+
+function hub_google_ads_validate_sao_paulo_day_report_request(array $payload): array
+{
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    $baseKeys = ['business_date', 'customer_id', 'manager_customer_id', 'operation'];
+    $activeKeys = ['business_date', 'campaign_status_filter', 'customer_id', 'manager_customer_id', 'operation'];
+    $campaignStatusFilter = 'ALL';
+    if ($keys === $activeKeys) {
+        if (($payload['campaign_status_filter'] ?? null) !== 'ENABLED') throw new HubGoogleAdsApiException('invalid_payload', 400);
+        $campaignStatusFilter = 'ENABLED';
+    }
+    if (($keys !== $baseKeys && $keys !== $activeKeys)
+        || ($payload['operation'] ?? null) !== 'sao_paulo_day_report') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $managerRaw = $payload['manager_customer_id'];
+    $managerId = $managerRaw === null ? null : hub_google_ads_valid_customer_id($managerRaw);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+    $businessDate = is_string($payload['business_date']) ? $payload['business_date'] : '';
+    if (($managerRaw !== null && $managerId === null) || $customerId === null || hub_google_ads_parse_date($businessDate) === null) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $saoPaulo = new DateTimeZone('America/Sao_Paulo');
+    $expectedYesterday = (new DateTimeImmutable('now', $saoPaulo))->setTime(0, 0)->modify('-1 day')->format('Y-m-d');
+    if ($businessDate !== $expectedYesterday) throw new HubGoogleAdsApiException('sao_paulo_day_not_yesterday', 400);
+    return [$managerId, $customerId, $businessDate, $campaignStatusFilter];
+}
+
+function hub_google_ads_report(string $accessToken, ?string $managerId, string $customerId, string $dateFrom, string $dateTo): array
+{
+    $coreQuery = "SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.cost_micros, metrics.conversions, metrics.cost_per_conversion, metrics.conversions_value FROM campaign WHERE segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}' ORDER BY metrics.cost_micros DESC LIMIT " . (HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS + 1);
+    $coreRows = hub_google_ads_search($customerId, $coreQuery, $accessToken, $managerId);
+    if (count($coreRows) > HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS) throw new HubGoogleAdsApiException('report_limit_exceeded', 413);
+
+    $shareMap = [];
+    $shareMetricsAvailable = false;
+    try {
+        $shareQuery = "SELECT campaign.id, metrics.search_impression_share, metrics.search_top_impression_share, metrics.search_absolute_top_impression_share FROM campaign WHERE segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}' LIMIT " . (HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS + 1);
+        $shareRows = hub_google_ads_search($customerId, $shareQuery, $accessToken, $managerId);
+        foreach ($shareRows as $row) {
+            $id = (string)($row['campaign']['id'] ?? '');
+            if ($id === '') continue;
+            $metrics = is_array($row['metrics'] ?? null) ? $row['metrics'] : [];
+            $shareMap[$id] = [
+                'search_impression_share' => $metrics['searchImpressionShare'] ?? null,
+                'search_top_impression_share' => $metrics['searchTopImpressionShare'] ?? null,
+                'search_absolute_top_impression_share' => $metrics['searchAbsoluteTopImpressionShare'] ?? null,
+            ];
+        }
+        $shareMetricsAvailable = true;
+    } catch (HubGoogleAdsApiException $error) {
+        // Share metrics are optional in this first view; retain the core report if their field combination is unavailable.
+    }
+
+    $currencyCode = '';
+    $timeZone = '';
+    try {
+        $accountRows = hub_google_ads_search($customerId,
+            'SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1',
+            $accessToken,
+            $managerId
+        );
+        $customer = $accountRows[0]['customer'] ?? [];
+        if (is_array($customer)) {
+            $currencyCode = (string)($customer['currencyCode'] ?? '');
+            $timeZone = (string)($customer['timeZone'] ?? '');
+        }
+    } catch (HubGoogleAdsApiException $error) {
+        // The selected account metadata is also available in the already loaded account list.
+    }
+
+    $rows = [];
+    foreach ($coreRows as $row) {
+        $campaign = is_array($row['campaign'] ?? null) ? $row['campaign'] : [];
+        $metrics = is_array($row['metrics'] ?? null) ? $row['metrics'] : [];
+        $campaignId = (string)($campaign['id'] ?? '');
+        $share = $shareMap[$campaignId] ?? [];
+        if ($campaignId === '') continue;
+        $rows[] = [
+            'campaign_id' => $campaignId,
+            'campaign_name' => (string)($campaign['name'] ?? ''),
+            'campaign_status' => (string)($campaign['status'] ?? ''),
+            'channel_type' => (string)($campaign['advertisingChannelType'] ?? ''),
+            'impressions' => $metrics['impressions'] ?? '0',
+            'clicks' => $metrics['clicks'] ?? '0',
+            'ctr' => $metrics['ctr'] ?? null,
+            'average_cpc_micros' => $metrics['averageCpc'] ?? null,
+            'cost_micros' => $metrics['costMicros'] ?? '0',
+            'conversions' => $metrics['conversions'] ?? '0',
+            'cost_per_conversion_micros' => $metrics['costPerConversion'] ?? null,
+            'conversions_value' => $metrics['conversionsValue'] ?? '0',
+            'search_impression_share' => $share['search_impression_share'] ?? null,
+            'search_top_impression_share' => $share['search_top_impression_share'] ?? null,
+            'search_absolute_top_impression_share' => $share['search_absolute_top_impression_share'] ?? null,
+        ];
+    }
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'customer_id' => $customerId,
+        'manager_customer_id' => $managerId,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'currency_code' => $currencyCode,
+        'time_zone' => $timeZone,
+        'share_metrics_available' => $shareMetricsAvailable,
+        'rows' => $rows,
+    ];
+}
+
+function hub_google_ads_daily_report(string $accessToken, ?string $managerId, string $customerId, string $dateFrom, string $dateTo): array
+{
+    $coreQuery = "SELECT segments.date, campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.cost_micros, metrics.conversions, metrics.cost_per_conversion, metrics.conversions_value FROM campaign WHERE segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}' ORDER BY segments.date DESC, metrics.cost_micros DESC LIMIT " . (HUB_GOOGLE_ADS_MAX_DAILY_ROWS + 1);
+    $coreRows = hub_google_ads_search($customerId, $coreQuery, $accessToken, $managerId);
+    if (count($coreRows) > HUB_GOOGLE_ADS_MAX_DAILY_ROWS) throw new HubGoogleAdsApiException('daily_report_limit_exceeded', 413);
+
+    $shareMap = [];
+    $shareMetricsAvailable = false;
+    try {
+        $shareQuery = "SELECT segments.date, campaign.id, metrics.search_impression_share, metrics.search_top_impression_share, metrics.search_absolute_top_impression_share FROM campaign WHERE segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}' LIMIT " . (HUB_GOOGLE_ADS_MAX_DAILY_ROWS + 1);
+        $shareRows = hub_google_ads_search($customerId, $shareQuery, $accessToken, $managerId);
+        if (count($shareRows) <= HUB_GOOGLE_ADS_MAX_DAILY_ROWS) {
+            foreach ($shareRows as $row) {
+                $date = (string)($row['segments']['date'] ?? '');
+                $id = (string)($row['campaign']['id'] ?? '');
+                if ($date === '' || $id === '') continue;
+                $metrics = is_array($row['metrics'] ?? null) ? $row['metrics'] : [];
+                $shareMap[$date . ':' . $id] = [
+                    'search_impression_share' => $metrics['searchImpressionShare'] ?? null,
+                    'search_top_impression_share' => $metrics['searchTopImpressionShare'] ?? null,
+                    'search_absolute_top_impression_share' => $metrics['searchAbsoluteTopImpressionShare'] ?? null,
+                ];
+            }
+            $shareMetricsAvailable = true;
+        }
+    } catch (HubGoogleAdsApiException $error) {
+        // Impression-share metrics are optional in the first daily comparison preview.
+    }
+
+    $currencyCode = '';
+    $timeZone = '';
+    try {
+        $accountRows = hub_google_ads_search($customerId,
+            'SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1',
+            $accessToken,
+            $managerId
+        );
+        $customer = $accountRows[0]['customer'] ?? [];
+        if (is_array($customer)) {
+            $currencyCode = (string)($customer['currencyCode'] ?? '');
+            $timeZone = (string)($customer['timeZone'] ?? '');
+        }
+    } catch (HubGoogleAdsApiException $error) {
+        // The selected account metadata is also available in the already loaded account list.
+    }
+
+    $rows = [];
+    foreach ($coreRows as $row) {
+        $segments = is_array($row['segments'] ?? null) ? $row['segments'] : [];
+        $campaign = is_array($row['campaign'] ?? null) ? $row['campaign'] : [];
+        $metrics = is_array($row['metrics'] ?? null) ? $row['metrics'] : [];
+        $date = (string)($segments['date'] ?? '');
+        $campaignId = (string)($campaign['id'] ?? '');
+        if ($date === '' || $campaignId === '') continue;
+        $share = $shareMap[$date . ':' . $campaignId] ?? [];
+        $rows[] = [
+            'date' => $date,
+            'campaign_id' => $campaignId,
+            'campaign_name' => (string)($campaign['name'] ?? ''),
+            'campaign_status' => (string)($campaign['status'] ?? ''),
+            'channel_type' => (string)($campaign['advertisingChannelType'] ?? ''),
+            'impressions' => $metrics['impressions'] ?? '0',
+            'clicks' => $metrics['clicks'] ?? '0',
+            'ctr' => $metrics['ctr'] ?? null,
+            'average_cpc_micros' => $metrics['averageCpc'] ?? null,
+            'cost_micros' => $metrics['costMicros'] ?? '0',
+            'conversions' => $metrics['conversions'] ?? '0',
+            'cost_per_conversion_micros' => $metrics['costPerConversion'] ?? null,
+            'conversions_value' => $metrics['conversionsValue'] ?? '0',
+            'search_impression_share' => $share['search_impression_share'] ?? null,
+            'search_top_impression_share' => $share['search_top_impression_share'] ?? null,
+            'search_absolute_top_impression_share' => $share['search_absolute_top_impression_share'] ?? null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'report_granularity' => 'daily',
+        'query_complete' => true,
+        'customer_id' => $customerId,
+        'manager_customer_id' => $managerId,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'currency_code' => $currencyCode,
+        'time_zone' => $timeZone,
+        'share_metrics_available' => $shareMetricsAvailable,
+        'rows' => $rows,
+    ];
+}
+
+function hub_google_ads_search_term_campaigns(string $accessToken, ?string $managerId, string $customerId, ?callable $search = null): array
+{
+    $search ??= static fn(string $query): array => hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    $query = "SELECT campaign.id, campaign.name FROM campaign WHERE campaign.advertising_channel_type = 'SEARCH' ORDER BY campaign.name LIMIT " . (HUB_GOOGLE_ADS_SEARCH_TERM_CAMPAIGNS_MAX_ROWS + 1);
+    $sourceRows = $search($query);
+    if (count($sourceRows) > HUB_GOOGLE_ADS_SEARCH_TERM_CAMPAIGNS_MAX_ROWS) {
+        throw new HubGoogleAdsApiException('search_term_campaigns_limit_exceeded', 413);
+    }
+
+    $campaigns = [];
+    $seenIds = [];
+    foreach ($sourceRows as $sourceRow) {
+        $campaign = is_array($sourceRow['campaign'] ?? null) ? $sourceRow['campaign'] : [];
+        $campaignId = (string)($campaign['id'] ?? '');
+        $campaignName = trim((string)($campaign['name'] ?? ''));
+        if (preg_match('/^[1-9][0-9]{0,19}$/D', $campaignId) !== 1 || $campaignName === '' || isset($seenIds[$campaignId])) {
+            throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+        }
+        $seenIds[$campaignId] = true;
+        $campaigns[] = ['campaign_id' => $campaignId, 'campaign_name' => $campaignName];
+    }
+
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'customer_id' => $customerId,
+        'manager_customer_id' => $managerId,
+        'campaign_scope' => 'SEARCH',
+        'generated_at_utc' => gmdate('Y-m-d\\TH:i:s\\Z'),
+        'query_complete' => true,
+        'campaign_count' => count($campaigns),
+        'campaigns' => $campaigns,
+    ];
+}
+
+function hub_google_ads_search_terms(string $accessToken, ?string $managerId, string $customerId, string $dateFrom, string $dateTo, ?string $campaignId = null): array
+{
+    $limit = HUB_GOOGLE_ADS_SEARCH_TERMS_MAX_ROWS + 1;
+    $campaignFilter = $campaignId === null ? '' : " AND campaign.id = {$campaignId}";
+    $query = "SELECT segments.date, campaign.id, campaign.name, campaign.advertising_channel_type, ad_group.id, ad_group.name, search_term_view.search_term, segments.keyword.info.text, segments.keyword.info.match_type, segments.search_term_match_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM search_term_view WHERE segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}' AND campaign.advertising_channel_type = 'SEARCH'{$campaignFilter} AND metrics.impressions > 0 ORDER BY metrics.clicks DESC, metrics.impressions DESC, metrics.cost_micros DESC LIMIT {$limit}";
+    $sourceRows = hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    if (count($sourceRows) > HUB_GOOGLE_ADS_SEARCH_TERMS_MAX_ROWS) {
+        throw new HubGoogleAdsApiException('search_terms_limit_exceeded', 413);
+    }
+
+    $rows = [];
+    $rowsWithoutKeyword = 0;
+    $metricString = static function (mixed $value, bool $allowDecimal = false): ?string {
+        if (!is_string($value) && !is_int($value) && !is_float($value)) return null;
+        $text = (string)$value;
+        $pattern = $allowDecimal ? '/^\d+(?:\.\d+)?$/D' : '/^\d+$/D';
+        return preg_match($pattern, $text) === 1 ? $text : null;
+    };
+
+    foreach ($sourceRows as $sourceRow) {
+        $campaign = is_array($sourceRow['campaign'] ?? null) ? $sourceRow['campaign'] : [];
+        $adGroup = is_array($sourceRow['adGroup'] ?? null) ? $sourceRow['adGroup'] : [];
+        $searchTermView = is_array($sourceRow['searchTermView'] ?? null) ? $sourceRow['searchTermView'] : [];
+        $segments = is_array($sourceRow['segments'] ?? null) ? $sourceRow['segments'] : [];
+        $keyword = is_array($segments['keyword'] ?? null) ? $segments['keyword'] : [];
+        $keywordInfo = is_array($keyword['info'] ?? null) ? $keyword['info'] : [];
+        $metrics = is_array($sourceRow['metrics'] ?? null) ? $sourceRow['metrics'] : [];
+
+        $date = $segments['date'] ?? null;
+        $campaignId = (string)($campaign['id'] ?? '');
+        $campaignName = trim((string)($campaign['name'] ?? ''));
+        $adGroupId = (string)($adGroup['id'] ?? '');
+        $adGroupName = trim((string)($adGroup['name'] ?? ''));
+        $searchTerm = trim((string)($searchTermView['searchTerm'] ?? ''));
+        if (!is_string($date) || hub_google_ads_parse_date($date) === null || $date < $dateFrom || $date > $dateTo
+            || $campaignId === '' || $campaignName === '' || ($campaign['advertisingChannelType'] ?? null) !== 'SEARCH'
+            || $adGroupId === '' || $adGroupName === '' || $searchTerm === '') {
+            throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+        }
+
+        $keywordText = trim((string)($keywordInfo['text'] ?? ''));
+        if ($keywordText === '') {
+            $rowsWithoutKeyword++;
+            continue;
+        }
+
+        $impressions = $metricString($metrics['impressions'] ?? null);
+        $clicks = $metricString($metrics['clicks'] ?? null);
+        $costMicros = $metricString($metrics['costMicros'] ?? null);
+        $conversions = $metricString($metrics['conversions'] ?? null, true);
+        if ($impressions === null || $clicks === null || $costMicros === null || $conversions === null) {
+            throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+        }
+
+        $rows[] = [
+            'date' => $date,
+            'campaign_id' => $campaignId,
+            'campaign_name' => $campaignName,
+            'ad_group_id' => $adGroupId,
+            'ad_group_name' => $adGroupName,
+            'search_term' => $searchTerm,
+            'keyword_text' => $keywordText,
+            'keyword_match_type' => (string)($keywordInfo['matchType'] ?? ''),
+            'search_term_match_type' => (string)($segments['searchTermMatchType'] ?? ''),
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'cost_micros' => $costMicros,
+            'conversions' => $conversions,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'customer_id' => $customerId,
+        'manager_customer_id' => $managerId,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'campaign_scope' => 'SEARCH',
+        'campaign_id_filter' => $campaignId,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'query_complete' => true,
+        'row_count' => count($sourceRows),
+        'rows_without_keyword' => $rowsWithoutKeyword,
+        'rows' => $rows,
+    ];
+}
+
+/** Aggregates hourly Google Ads metrics that fall inside yesterday's São Paulo civil day. */
+function hub_google_ads_sao_paulo_day_report(string $accessToken, ?string $managerId, string $customerId, string $businessDate, string $campaignStatusFilter = 'ALL'): array
+{
+    $saoPaulo = new DateTimeZone('America/Sao_Paulo');
+    $businessStart = new DateTimeImmutable($businessDate . ' 00:00:00', $saoPaulo);
+    $businessEnd = $businessStart->modify('+1 day');
+    $businessStartTimestamp = $businessStart->getTimestamp();
+    $businessEndTimestamp = $businessEnd->getTimestamp();
+
+    // Google Ads date/hour segments use the customer's timezone. Require hour-aligned
+    // boundaries and no DST transition so every selected hourly bucket is exact.
+    try {
+        $accountRows = hub_google_ads_search($customerId,
+            'SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1',
+            $accessToken,
+            $managerId
+        );
+        $customer = $accountRows[0]['customer'] ?? null;
+        $currencyCode = is_array($customer) ? (string)($customer['currencyCode'] ?? '') : '';
+        $timeZone = is_array($customer) ? (string)($customer['timeZone'] ?? '') : '';
+        if ($currencyCode === '' || $timeZone === '') throw new HubGoogleAdsApiException('google_ads_timezone_unavailable', 422);
+        $accountZone = new DateTimeZone($timeZone);
+    } catch (HubGoogleAdsApiException $error) {
+        throw $error;
+    } catch (Throwable $error) {
+        throw new HubGoogleAdsApiException('google_ads_timezone_unavailable', 422);
+    }
+
+    $accountStart = $businessStart->setTimezone($accountZone);
+    $accountEnd = $businessEnd->setTimezone($accountZone);
+    if ($accountStart->format('i:s') !== '00:00' || $accountEnd->format('i:s') !== '00:00'
+        || $accountEnd->getTimestamp() - $accountStart->getTimestamp() !== 86400) {
+        throw new HubGoogleAdsApiException('sao_paulo_day_timezone_unsupported', 422);
+    }
+    $transitions = $accountZone->getTransitions($businessStartTimestamp - 1, $businessEndTimestamp + 1);
+    if (is_array($transitions)) {
+        $previousOffset = $transitions[0]['offset'] ?? null;
+        foreach (array_slice($transitions, 1) as $transition) {
+            $transitionTimestamp = (int)($transition['ts'] ?? 0);
+            $offset = $transition['offset'] ?? null;
+            if ($transitionTimestamp > $businessStartTimestamp && $transitionTimestamp < $businessEndTimestamp
+                && $offset !== $previousOffset) {
+                throw new HubGoogleAdsApiException('sao_paulo_day_timezone_unsupported', 422);
+            }
+            $previousOffset = $offset;
+        }
+    }
+
+    $sourceDateFrom = $accountStart->format('Y-m-d');
+    $sourceDateTo = $accountEnd->modify('-1 second')->format('Y-m-d');
+    $statusCondition = $campaignStatusFilter === 'ENABLED' ? " AND campaign.status = 'ENABLED'" : '';
+    $query = "SELECT segments.date, segments.hour, campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value FROM campaign WHERE segments.date BETWEEN '{$sourceDateFrom}' AND '{$sourceDateTo}'{$statusCondition} ORDER BY segments.date ASC, segments.hour ASC LIMIT " . (HUB_GOOGLE_ADS_MAX_DAILY_ROWS + 1);
+    $hourlyRows = hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    if (count($hourlyRows) > HUB_GOOGLE_ADS_MAX_DAILY_ROWS) throw new HubGoogleAdsApiException('daily_report_limit_exceeded', 413);
+
+    $aggregates = [];
+    foreach ($hourlyRows as $row) {
+        $segments = is_array($row['segments'] ?? null) ? $row['segments'] : [];
+        $campaign = is_array($row['campaign'] ?? null) ? $row['campaign'] : [];
+        $date = (string)($segments['date'] ?? '');
+        $hourValue = $segments['hour'] ?? null;
+        $campaignId = (string)($campaign['id'] ?? '');
+        if (hub_google_ads_parse_date($date) === null || (!is_string($hourValue) && !is_int($hourValue))
+            || preg_match('/^(?:[0-9]|1[0-9]|2[0-3])$/D', (string)$hourValue) !== 1
+            || preg_match('/^[1-9][0-9]{0,19}$/D', $campaignId) !== 1) {
+            throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        }
+        $hour = str_pad((string)$hourValue, 2, '0', STR_PAD_LEFT);
+        $bucketStart = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date . ' ' . $hour . ':00:00', $accountZone);
+        $bucketErrors = DateTimeImmutable::getLastErrors();
+        if ($bucketStart === false || ($bucketErrors !== false && ($bucketErrors['warning_count'] > 0 || $bucketErrors['error_count'] > 0))
+            || $bucketStart->format('Y-m-d H:i:s') !== $date . ' ' . $hour . ':00:00') {
+            throw new HubGoogleAdsApiException('sao_paulo_day_timezone_unsupported', 422);
+        }
+        $bucketTimestamp = $bucketStart->getTimestamp();
+        if ($bucketTimestamp < $businessStartTimestamp || $bucketTimestamp + 3600 > $businessEndTimestamp) continue;
+
+        $metrics = is_array($row['metrics'] ?? null) ? $row['metrics'] : [];
+        if (!isset($aggregates[$campaignId])) {
+            $aggregates[$campaignId] = [
+                'campaign_id' => $campaignId,
+                'campaign_name' => (string)($campaign['name'] ?? ''),
+                'campaign_status' => (string)($campaign['status'] ?? ''),
+                'channel_type' => (string)($campaign['advertisingChannelType'] ?? ''),
+                'impressions' => 0,
+                'clicks' => 0,
+                'cost_micros' => 0,
+                'conversions' => 0.0,
+                'conversions_value' => 0.0,
+            ];
+        }
+        $aggregates[$campaignId]['impressions'] += max(0, (int)($metrics['impressions'] ?? 0));
+        $aggregates[$campaignId]['clicks'] += max(0, (int)($metrics['clicks'] ?? 0));
+        $aggregates[$campaignId]['cost_micros'] += max(0, (int)($metrics['costMicros'] ?? 0));
+        $aggregates[$campaignId]['conversions'] += max(0.0, (float)($metrics['conversions'] ?? 0));
+        $aggregates[$campaignId]['conversions_value'] += max(0.0, (float)($metrics['conversionsValue'] ?? 0));
+    }
+
+    $rows = [];
+    foreach ($aggregates as $aggregate) {
+        $impressions = $aggregate['impressions'];
+        $clicks = $aggregate['clicks'];
+        $costMicros = $aggregate['cost_micros'];
+        $conversions = $aggregate['conversions'];
+        $rows[] = [
+            'date' => $businessDate,
+            'campaign_id' => $aggregate['campaign_id'],
+            'campaign_name' => $aggregate['campaign_name'],
+            'campaign_status' => $aggregate['campaign_status'],
+            'channel_type' => $aggregate['channel_type'],
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'ctr' => $impressions > 0 ? $clicks / $impressions : null,
+            'average_cpc_micros' => $clicks > 0 ? $costMicros / $clicks : null,
+            'cost_micros' => $costMicros,
+            'conversions' => $conversions,
+            'cost_per_conversion_micros' => $conversions > 0 ? $costMicros / $conversions : null,
+            'conversions_value' => $aggregate['conversions_value'],
+            'search_impression_share' => null,
+            'search_top_impression_share' => null,
+            'search_absolute_top_impression_share' => null,
+        ];
+    }
+    usort($rows, static fn(array $left, array $right): int => strcasecmp($left['campaign_name'], $right['campaign_name']));
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'report_granularity' => 'business_day_hourly_aggregate',
+        'query_complete' => true,
+        'customer_id' => $customerId,
+        'manager_customer_id' => $managerId,
+        'date_from' => $businessDate,
+        'date_to' => $businessDate,
+        'business_date' => $businessDate,
+        'business_time_zone' => 'America/Sao_Paulo',
+        'campaign_status_filter' => $campaignStatusFilter,
+        'source_date_from' => $sourceDateFrom,
+        'source_date_to' => $sourceDateTo,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'currency_code' => $currencyCode,
+        'time_zone' => $timeZone,
+        'share_metrics_available' => false,
+        'rows' => $rows,
+    ];
+}
+
+/** Current configuration snapshot; no date segment and no metric-driven omissions. */
+function hub_google_ads_campaign_config(string $accessToken, ?string $managerId, string $customerId, ?callable $search = null): array
+{
+    $search ??= static fn(string $query): array => hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    $rows = $search('SELECT campaign.id, campaign.name, campaign.status, campaign.primary_status, campaign.primary_status_reasons, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.bidding_strategy, campaign.target_cpa.target_cpa_micros, campaign.maximize_conversions.target_cpa_micros, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.total_amount_micros, campaign_budget.period, campaign_budget.explicitly_shared FROM campaign LIMIT ' . (HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS + 1));
+    if (count($rows) > HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS) throw new HubGoogleAdsApiException('configuration_limit_exceeded', 422);
+    $strategies = [];
+    if (array_filter($rows, static fn(array $row): bool => !empty($row['campaign']['biddingStrategy']))) {
+        $strategyRows = $search('SELECT accessible_bidding_strategy.id, accessible_bidding_strategy.owner_customer_id, accessible_bidding_strategy.target_cpa.target_cpa_micros, accessible_bidding_strategy.maximize_conversions.target_cpa_micros FROM accessible_bidding_strategy LIMIT ' . (HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS + 1));
+        if (count($strategyRows) > HUB_GOOGLE_ADS_MAX_CAMPAIGN_ROWS) throw new HubGoogleAdsApiException('configuration_limit_exceeded', 422);
+        foreach ($strategyRows as $row) {
+            $strategy = $row['accessibleBiddingStrategy'] ?? [];
+            $strategies['customers/' . ($strategy['ownerCustomerId'] ?? '') . '/biddingStrategies/' . ($strategy['id'] ?? '')] = $strategy;
+        }
+    }
+    $accountRows = $search('SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1');
+    $account = $accountRows[0]['customer'] ?? [];
+    if (empty($account['currencyCode']) || empty($account['timeZone'])) throw new HubGoogleAdsApiException('google_ads_request_rejected');
+    $campaigns = [];
+    foreach ($rows as $row) {
+        $campaign = $row['campaign'] ?? [];
+        $id = (string)($campaign['id'] ?? '');
+        if (preg_match('/^\d{1,20}$/D', $id) !== 1) throw new HubGoogleAdsApiException('google_ads_request_rejected');
+        $budget = $row['campaignBudget'] ?? [];
+        $portfolio = (string)($campaign['biddingStrategy'] ?? '');
+        $scheme = $portfolio !== '' ? ($strategies[$portfolio] ?? []) : $campaign;
+        $target = $scheme['targetCpa']['targetCpaMicros'] ?? $scheme['maximizeConversions']['targetCpaMicros'] ?? null;
+        $campaigns[] = [
+            'campaign_id' => $id, 'campaign_name' => (string)($campaign['name'] ?? ''),
+            'campaign_status' => (string)($campaign['status'] ?? ''),
+            'primary_status' => (string)($campaign['primaryStatus'] ?? ''),
+            'primary_status_reasons' => array_values($campaign['primaryStatusReasons'] ?? []),
+            'channel_type' => (string)($campaign['advertisingChannelType'] ?? ''),
+            'bidding_strategy_type' => (string)($campaign['biddingStrategyType'] ?? ''),
+            'bidding_strategy_resource' => $portfolio ?: null,
+            'target_cpa_micros' => $target,
+            'target_cpa_resolution' => $portfolio !== '' && !isset($strategies[$portfolio]) ? 'unresolved_portfolio' : ($target === null ? (($campaign['biddingStrategyType'] ?? '') === 'TARGET_CPA' ? 'unavailable' : 'not_set') : 'observed'),
+            'budget_resource' => $budget['resourceName'] ?? null,
+            'budget_period' => $budget['period'] ?? null,
+            'budget_amount_micros' => $budget['amountMicros'] ?? null,
+            'budget_total_amount_micros' => $budget['totalAmountMicros'] ?? null,
+            'budget_shared' => (bool)($budget['explicitlyShared'] ?? false),
+        ];
+    }
+    return ['ok' => true, 'schema_version' => 1, 'configuration_complete' => true,
+        'customer_id' => $customerId, 'manager_customer_id' => $managerId,
+        'currency_code' => $account['currencyCode'], 'time_zone' => $account['timeZone'],
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'), 'campaigns' => $campaigns];
+}
+
+function hub_google_ads_validate_conversion_actions_request(array $payload): array
+{
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    if ($keys !== ['customer_id', 'manager_customer_id', 'operation'] || ($payload['operation'] ?? null) !== 'conversion_actions') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id']);
+    if ($managerId === null || $customerId === null) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    return [$managerId, $customerId];
+}
+
+/** Lists conversion actions visible to the requested customer. This operation never mutates Google Ads. */
+function hub_google_ads_conversion_actions(string $accessToken, string $managerId, string $customerId, ?callable $search = null): array
+{
+    $search ??= static fn(string $query): array => hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    $query = 'SELECT conversion_action.id, conversion_action.resource_name, conversion_action.name, conversion_action.status, conversion_action.type, conversion_action.category, conversion_action.origin, conversion_action.owner_customer, conversion_action.primary_for_goal, conversion_action.include_in_conversions_metric, conversion_action.value_settings.default_currency_code FROM conversion_action ORDER BY conversion_action.name LIMIT ' . (HUB_GOOGLE_ADS_MAX_CONVERSION_ACTION_ROWS + 1);
+    $rows = $search($query);
+    if (count($rows) > HUB_GOOGLE_ADS_MAX_CONVERSION_ACTION_ROWS) {
+        throw new HubGoogleAdsApiException('conversion_actions_limit_exceeded', 413);
+    }
+
+    $actions = [];
+    foreach ($rows as $row) {
+        $action = $row['conversionAction'] ?? null;
+        if (!is_array($action)) throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        $id = $action['id'] ?? null;
+        $resourceName = $action['resourceName'] ?? null;
+        $status = $action['status'] ?? null;
+        if ((!is_string($id) && !is_int($id)) || preg_match('/^[1-9][0-9]{0,19}$/D', (string)$id) !== 1
+            || !is_string($resourceName) || preg_match('#^customers/[1-9][0-9]{9}/conversionActions/' . preg_quote((string)$id, '#') . '$#D', $resourceName) !== 1
+            || !is_string($status) || $status === '') {
+            throw new HubGoogleAdsApiException('google_ads_request_rejected', 502);
+        }
+        $settings = is_array($action['valueSettings'] ?? null) ? $action['valueSettings'] : [];
+        $ownerCustomer = $action['ownerCustomer'] ?? null;
+        $actions[] = [
+            'id' => (string)$id,
+            'resource_name' => $resourceName,
+            'name' => is_string($action['name'] ?? null) ? $action['name'] : '',
+            // Keep the API status verbatim; HIDDEN and REMOVED are not promoted to active.
+            'status' => $status,
+            'type' => is_string($action['type'] ?? null) ? $action['type'] : null,
+            'category' => is_string($action['category'] ?? null) ? $action['category'] : null,
+            'origin' => is_string($action['origin'] ?? null) ? $action['origin'] : null,
+            'owner_customer' => is_string($ownerCustomer) ? $ownerCustomer : null,
+            'primary_for_goal' => is_bool($action['primaryForGoal'] ?? null) ? $action['primaryForGoal'] : null,
+            'include_in_conversions_metric' => is_bool($action['includeInConversionsMetric'] ?? null) ? $action['includeInConversionsMetric'] : null,
+            'default_currency_code' => is_string($settings['defaultCurrencyCode'] ?? null) ? $settings['defaultCurrencyCode'] : null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'manager_customer_id' => $managerId,
+        'customer_id' => $customerId,
+        'generated_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+        'action_count' => count($actions),
+        'actions' => $actions,
+    ];
+}
+
+function hub_google_ads_parse_request(): array
+{
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
+    if (!is_string($contentType) || preg_match('/^application\/json(?:\s*;|$)/i', trim($contentType)) !== 1) {
+        throw new HubGoogleAdsApiException('invalid_payload', 415);
+    }
+    $length = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($length > HUB_GOOGLE_ADS_MAX_BODY_BYTES) throw new HubGoogleAdsApiException('invalid_payload', 413);
+    $body = file_get_contents('php://input', false, null, 0, HUB_GOOGLE_ADS_MAX_BODY_BYTES + 1);
+    if (!is_string($body) || strlen($body) > HUB_GOOGLE_ADS_MAX_BODY_BYTES) throw new HubGoogleAdsApiException('invalid_payload', 413);
+    $payload = json_decode($body, true);
+    if (!is_array($payload) || array_is_list($payload)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    return $payload;
+}
+
+function hub_google_ads_dispatch(): never
+{
+    header('Cache-Control: no-store, private');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    try {
+        $config = hub_google_ads_load_tracking_config();
+        $authorization = hub_google_ads_authorize($config);
+        if (is_string($authorization['origin'])) {
+            header('Access-Control-Allow-Origin: ' . $authorization['origin']);
+            header('Vary: Origin');
+            header('Access-Control-Allow-Methods: POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Authorization, Content-Type');
+            header('Access-Control-Max-Age: 300');
+        }
+        if ($authorization['status'] === 204) { http_response_code(204); exit; }
+        if ($authorization['status'] !== 200) {
+            hub_google_ads_json($authorization['status'], ['ok' => false, 'error' => $authorization['error']]);
+        }
+        if (($_SERVER['QUERY_STRING'] ?? '') !== '') hub_google_ads_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+
+        $payload = hub_google_ads_parse_request();
+        $operation = $payload['operation'] ?? null;
+        if ($operation === 'conversion_actions') {
+            [$managerId, $customerId] = hub_google_ads_validate_conversion_actions_request($payload);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_json(200, hub_google_ads_conversion_actions($accessToken, $managerId, $customerId));
+        }
+        if ($operation === 'campaign_config' && count($payload) === 3 && array_key_exists('manager_customer_id', $payload)) {
+            $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+            $managerId = $payload['manager_customer_id'] === null ? null : hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+            if ($customerId === null || ($payload['manager_customer_id'] !== null && $managerId === null)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_json(200, hub_google_ads_campaign_config($accessToken, $managerId, $customerId));
+        }
+        if ($operation === 'search_term_campaigns') {
+            [$managerId, $customerId] = hub_google_ads_validate_search_term_campaigns_request($payload);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_json(200, hub_google_ads_search_term_campaigns($accessToken, $managerId, $customerId));
+        }
+        if ($operation === 'accounts' && array_keys($payload) === ['operation']) {
+            $credentials = hub_google_ads_credentials();
+            $accessToken = hub_google_ads_access_token($credentials);
+            hub_google_ads_json(200, hub_google_ads_accessible_accounts($accessToken));
+        }
+        if ($operation === 'report' && count($payload) === 5
+            && isset($payload['customer_id'], $payload['date_from'], $payload['date_to'])
+            && array_key_exists('manager_customer_id', $payload)) {
+            [$managerId, $customerId, $dateFrom, $dateTo] = hub_google_ads_validate_report_request($payload);
+            $credentials = hub_google_ads_credentials();
+            $accessToken = hub_google_ads_access_token($credentials);
+            $report = hub_google_ads_report($accessToken, $managerId, $customerId, $dateFrom, $dateTo);
+            hub_google_ads_json(200, $report);
+        }
+        if ($operation === 'daily_report' && count($payload) === 5
+            && isset($payload['customer_id'], $payload['date_from'], $payload['date_to'])
+            && array_key_exists('manager_customer_id', $payload)) {
+            [$managerId, $customerId, $dateFrom, $dateTo] = hub_google_ads_validate_daily_report_request($payload);
+            $credentials = hub_google_ads_credentials();
+            $accessToken = hub_google_ads_access_token($credentials);
+            $report = hub_google_ads_daily_report($accessToken, $managerId, $customerId, $dateFrom, $dateTo);
+            hub_google_ads_json(200, $report);
+        }
+        if ($operation === 'search_terms' && (count($payload) === 5 || count($payload) === 6)
+            && isset($payload['customer_id'], $payload['date_from'], $payload['date_to'])
+            && array_key_exists('manager_customer_id', $payload)) {
+            [$managerId, $customerId, $dateFrom, $dateTo, $campaignId] = hub_google_ads_validate_search_terms_request($payload);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            $report = hub_google_ads_search_terms($accessToken, $managerId, $customerId, $dateFrom, $dateTo, $campaignId);
+            hub_google_ads_json(200, $report);
+        }
+        if ($operation === 'sao_paulo_day_report') {
+            [$managerId, $customerId, $businessDate, $campaignStatusFilter] = hub_google_ads_validate_sao_paulo_day_report_request($payload);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            $report = hub_google_ads_sao_paulo_day_report($accessToken, $managerId, $customerId, $businessDate, $campaignStatusFilter);
+            hub_google_ads_json(200, $report);
+        }
+        hub_google_ads_json(400, ['ok' => false, 'error' => 'invalid_payload']);
+    } catch (HubGoogleAdsApiException $error) {
+        hub_google_ads_json($error->httpStatus, ['ok' => false, 'error' => $error->apiCode]);
+    } catch (Throwable $error) {
+        error_log('Google Ads read-only API request failed.');
+        hub_google_ads_json(500, ['ok' => false, 'error' => 'server_error']);
+    }
+}

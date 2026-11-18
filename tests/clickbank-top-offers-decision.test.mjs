@@ -5,7 +5,7 @@ import * as TopOffersDecision from '../src/curadoria/clickbank-top-offers/clickb
 
 assert.equal(TopOffersDecision.DEFAULT_DECISION,DEFAULT_DECISION);
 assert.deepEqual(DECISION_OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Ocultar']);
-assert.deepEqual(TopOffersDecision.OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Solicitação Enviada','Precisa de aprovação','Ocultar']);
+assert.deepEqual(TopOffersDecision.OPTIONS.map(option=>option.value),['Não definido','Subir campanha','Campanha no ar','Revisar','Solicitação Enviada','Precisa de aprovação','VSL','Ocultar']);
 assert.equal(TopOffersDecision.normalizeDecision('Solicitação Enviada'),'Solicitação Enviada');
 assert.equal(TopOffersDecision.normalizeDecision('valor desconhecido'),DEFAULT_DECISION);
 assert.equal(TopOffersDecision.normalizePageClassification('cookies'),'cookies');
@@ -13,7 +13,7 @@ assert.equal(TopOffersDecision.normalizePageClassification('review'),'review');
 assert.equal(TopOffersDecision.normalizePageClassification('dtc'),null,'classificações desconhecidas não são persistidas');
 assert.equal(TopOffersDecision.pageClassificationLabel('cookies'),'cookies');
 assert.equal(TopOffersDecision.pageClassificationLabel('review'),'review');
-assert.equal(TopOffersDecision.rowClass('Solicitação Enviada'),'');
+for(const status of ['Solicitação Enviada','Precisa de aprovação'])assert.equal(TopOffersDecision.rowClass(status),'decision-row-request');
 assert.equal(TopOffersDecision.OPTIONS.find(option=>option.value==='Solicitação Enviada')?.tone,decisionTone('Revisar'));
 assert.equal(TopOffersDecision.normalizeDecision('Precisa de aprovação'),'Precisa de aprovação');
 assert.equal(TopOffersDecision.OPTIONS.find(option=>option.value==='Precisa de aprovação')?.tone,decisionTone('Revisar'));

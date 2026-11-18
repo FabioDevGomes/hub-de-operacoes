@@ -16,7 +16,7 @@ test('pre-sell normalizes legacy technical identifiers without changing offer co
   try {
     const ficha={
       htmlLanguage:'en-US',countryCode:'US',pageTitle:'ExampleBoard offer',
-      affiliateUrl:'https://example.com/offer',assetFolder:'background',
+      affiliateUrl:'https://example.com/offer',assetFolder:'background',skipFavicon:false,
       cookieTitle:'Offer',cookieText:'Read the offer details.',acceptLabel:'Accept',declineLabel:'Decline',
       closeAriaLabel:'Close',detailsLabel:'View Offer Details',faqTitle:'Frequently Asked Questions',
       offerMainTitle:'ExampleBoard',offerIntro:'Confirmed offer text stays unchanged.',
@@ -36,18 +36,20 @@ test('pre-sell normalizes legacy technical identifiers without changing offer co
     function run(script,args){
       return execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(engine,'tools',script),...args],{encoding:'utf8'}).trim();
     }
-    function generate(name,neutral=false){
+    function generate(name,neutral=false,skipFavicon=false,assetStudioValidated=false){
+      ficha.skipFavicon=skipFavicon;
+      writeFileSync(fichaPath,JSON.stringify(ficha));
       const template=join(root,`${name}-template`),destination=join(root,name);
       mkdirSync(template);mkdirSync(join(destination,'background'),{recursive:true});
       const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
-      for(const asset of ['01.png','02.png','03.png'])writeFileSync(join(destination,'background',asset),png);
+      for(const asset of (skipFavicon||assetStudioValidated?['01.png','02.png']:['01.png','02.png','03.png']))writeFileSync(join(destination,'background',asset),png);
       for(const [file,content] of Object.entries(templates))writeFileSync(join(template,file),neutral?content.replaceAll('glp-faq','offer-details'):content);
       // An empty destination is expected to fail initial structural validation.
       let initial;
       try { run('Test-PresellStructure.ps1',['-Destination',destination,'-Json']); }
       catch(error){ initial=JSON.parse(error.stdout); }
       assert.equal(initial?.overall,'BLOCKED');
-      run('New-PresellFromFicha.ps1',['-Destination',destination,'-FichaPath',fichaPath,'-TemplateRoot',template]);
+      run('New-PresellFromFicha.ps1',['-Destination',destination,'-FichaPath',fichaPath,'-TemplateRoot',template,...(assetStudioValidated?['-AssetStudioValidated']:[])]);
       return destination;
     }
     const legacy=generate('legacy'),neutral=generate('neutral',true);
@@ -97,6 +99,26 @@ test('pre-sell normalizes legacy technical identifiers without changing offer co
       ['Test-PresellStructure.ps1',[]],
       ['Test-PresellAgainstFicha.ps1',['-FichaPath',fichaPath]]
     ])assert.equal(JSON.parse(run(script,['-Destination',three,...args,'-Json'])).overall,'PASS');
+    const noFavicon=generate('without-favicon',false,true);
+    const noFaviconHtml=readFileSync(join(noFavicon,'index.html'),'utf8');
+    assert.doesNotMatch(noFaviconHtml,/href=["']\.\/background\/03\.png["']/i,'a página não pode referenciar o favicon omitido');
+    const noFaviconReport=JSON.parse(run('Invoke-PresellWorkflow.ps1',['-Destination',noFavicon,'-Mode','Validate','-FichaPath',fichaPath,'-AssetFolder','background','-Json']));
+    assert.equal(noFaviconReport.overall,'PASS',JSON.stringify(noFaviconReport));
+    let strictReport;
+    try{run('Test-PresellStructure.ps1',['-Destination',noFavicon,'-AssetFolder','background','-Json'])}
+    catch(error){strictReport=JSON.parse(error.stdout)}
+    assert.equal(strictReport?.overall,'BLOCKED','sem decisão explícita, 03.png continua obrigatório');
+    ficha.skipFavicon=false;
+    writeFileSync(fichaPath,JSON.stringify(ficha));
+    const trustedFavicon=generate('asset-studio-validated',false,false,true);
+    const trustedHtml=readFileSync(join(trustedFavicon,'index.html'),'utf8');
+    assert.match(trustedHtml,/href="\.\/background\/03\.png"/,'com a confirmação do Asset Studio, a página mantém o link existente do favicon');
+    const trustedReport=JSON.parse(run('Invoke-PresellWorkflow.ps1',['-Destination',trustedFavicon,'-Mode','Validate','-FichaPath',fichaPath,'-AssetFolder','background','-AssetStudioValidated','-Json']));
+    assert.equal(trustedReport.overall,'PASS',JSON.stringify(trustedReport));
+    let standaloneStrictReport;
+    try{run('Invoke-PresellWorkflow.ps1',['-Destination',trustedFavicon,'-Mode','Validate','-FichaPath',fichaPath,'-AssetFolder','background','-Json'])}
+    catch(error){standaloneStrictReport=JSON.parse(error.stdout)}
+    assert.equal(standaloneStrictReport?.overall,'BLOCKED','fora da rota confiável do Hub, o workflow independente continua exigindo 03.png');
   } finally {
     assert.equal(resolve(root).startsWith(resolve(tmpdir())+'\\'),true);
     assert.match(root,/presell-identifiers-test-[^\\/]+$/);

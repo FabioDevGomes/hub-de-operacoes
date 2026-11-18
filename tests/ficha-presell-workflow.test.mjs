@@ -4,8 +4,8 @@ import {readFile} from 'node:fs/promises';
 import {readDraft,writeDraft,clearDraft,STORAGE_KEY} from '../src/copy-ficha/copy-ficha-draft.mjs';
 import {renderTemplate} from '../src/copy-ficha/copy-ficha-template.mjs';
 import {createFromStructuredContent} from '../src/copy-ficha/copy-ficha-workflow.mjs';
-import {buildStructuredFicha,structuredFichaFormat} from '../src/copy-ficha/copy-ficha-structured.mjs';
-import {createPresellFromFicha,parseFicha} from '../src/presell/presell-service.mjs?v=1';
+import {buildStructuredFicha} from '../src/copy-ficha/copy-ficha-structured.mjs';
+import {createPresellFromFicha,parseFicha} from '../src/presell/presell-service.mjs?v=8';
 import {reportHtml} from '../src/presell/presell-report.mjs?v=3';
 import {parseFicha as legacyParse,createPresellFromFicha as legacyCreate,reportHtml as legacyReport} from '../src/presell/presell-view.mjs';
 
@@ -17,6 +17,13 @@ test('invalid structured fields block before the production boundary and retain 
   await assert.rejects(createFromStructuredContent('[PRODUTO] Synthetic',data,{create:()=>{calls++}}),error=>error.fields.includes('fichaSource')&&error.blockers.length>0);
   await assert.rejects(createFromStructuredContent(source(),{...data,affiliateUrl:''},{create:()=>{calls++}}),error=>error.fields.includes('affiliateUrl'));
   assert.equal(calls,0);
+});
+test('the delivery favicon decision survives structured ficha construction and service parsing',()=>{
+  const skipped=buildStructuredFicha(source(),{...data,skipFavicon:true}).ficha;
+  const required=buildStructuredFicha(source(),data).ficha;
+  assert.equal(skipped.skipFavicon,true);
+  assert.equal(required.skipFavicon,false);
+  assert.equal(parseFicha(JSON.stringify(skipped)).skipFavicon,true);
 });
 test('three or four supplied FAQs reach production without rewording or recalculation',async()=>{
   for(const count of [3,4]){
@@ -75,7 +82,7 @@ test('presentation keeps creation separate from restored questions and safely es
   assert.match(html,/<button id="copyAnalyze"[^>]*>Analisar oferta<\/button>/,'a ação principal substitui a caixa de texto e mantém o rótulo Analisar oferta');
   assert.match(html,/id="copyManualPastePanel"[^>]*hidden/,'a colagem manual fica oculta até ser necessária como fallback');
   assert.equal((html.match(/id="copyGenerateFicha"/g)||[]).length,1);
-  assert.ok(html.includes(structuredFichaFormat));assert.ok(!html.includes('Gerar copy')&&!html.includes('copyPackages'));
+  assert.ok(html.includes('id="copyFichaSource"')&&html.includes('Copie a resposta estruturada padrão da IA Gemini'));assert.ok(!html.includes('Gerar copy')&&!html.includes('copyPackages'));
   for(const id of ['copyGenerateQuestions','copyOfferQuestions','copyQuestionsCopy'])assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   const report=reportHtml({overall:'BLOCKED',phases:[{name:'<unsafe>',report:{checks:[{status:'BLOCK',name:'field',message:'<img onerror=bad>'}]}}]});
   assert.ok(report.includes('&lt;img onerror=bad&gt;')&&!report.includes('<img'));
@@ -91,9 +98,11 @@ test('presentation keeps creation separate from restored questions and safely es
 });
 test('view delegates layout, drafts and workflow without importing another view or producing at mount time',async()=>{
   const view=await readFile(new URL('../src/copy-ficha/copy-ficha-view.mjs',import.meta.url),'utf8');
-  assert.ok(view.includes('root.innerHTML=renderTemplate()')&&view.includes('const draft=readDraft()')&&view.includes('writeDraft({...payload(root)'));
-  assert.ok(!view.includes('localStorage')&&!view.includes('presell-view.mjs')&&!view.includes('buildStructuredFicha('));
-  assert.ok(view.includes("createFromStructuredContent(inputValue(root,'copyFichaSource'),payload(root))"));
+  assert.ok(view.includes('root.innerHTML=renderTemplate()')&&view.includes('const draft=readFichaDraft()')&&view.includes('writeFichaDraft({...payload(root)'));
+  assert.ok(!view.includes('presell-view.mjs')&&!view.includes('buildStructuredFicha('));
+  assert.ok(view.includes("createFromStructuredContent(inputValue(root,'copyFichaSource'),payload(root),"));
+  const workflow=await readFile(new URL('../src/copy-ficha/copy-ficha-workflow.mjs',import.meta.url),'utf8');
+  assert.ok(workflow.includes('buildStructuredFicha(source,data)')&&workflow.includes('await create(ficha)'),'a fronteira estrutura a ficha antes da criação');
   assert.ok(view.includes('você não precisa alterar os campos para tentar corrigir. Não crie novamente nem publique'));
   const mounting=view.slice(view.indexOf('export async function mount'));
   assert.ok(mounting.includes('by(root,\'copyGenerateFicha\').onclick=async()=>')&&mounting.includes('if(creatingPresell)return')&&mounting.includes('finally{creatingPresell=false;button.disabled=false;'));

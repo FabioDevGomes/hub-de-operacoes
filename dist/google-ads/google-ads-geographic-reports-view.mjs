@@ -4,7 +4,7 @@ import { googleAdsGeographicReportDateRange } from './google-ads-geographic-doma
 import { buildGoogleAdsCampaignGeoTargetingIndex, googleAdsGeographicCountryTargetStatus } from './google-ads-campaign-geo-targeting.mjs?v=1';
 import { GOOGLE_ADS_CAMPAIGN_BATCHES_STORAGE_KEY } from './google-ads-campaign-batches-storage.mjs?v=12';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 20;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 function timestamp(value) {
@@ -65,16 +65,18 @@ export function mountGoogleAdsGeographicReportsView({ root, getSourceMode = () =
       <div class="google-ads-geographic-table-wrap">
         <table class="google-ads-geographic-table"><thead><tr><th>Data</th><th>Conta</th><th>Campanha</th><th>País</th><th>GEO salvo no lote</th><th>Cliques</th><th>Impressões</th><th>Custo</th><th>Custo médio por clique</th></tr></thead><tbody id="googleAdsGeographicRows"><tr><td colspan="9">Carregando…</td></tr></tbody></table>
       </div>
-      <div class="google-ads-geographic-footer"><span id="googleAdsGeographicCount"></span><button id="googleAdsGeographicMore" class="btn" type="button" hidden>Carregar mais</button></div>
+      <div class="google-ads-geographic-footer"><span id="googleAdsGeographicCount" aria-live="polite"></span><div class="google-ads-geographic-pagination"><button id="googleAdsGeographicPrevious" class="btn" type="button">Anterior</button><span id="googleAdsGeographicPage"></span><button id="googleAdsGeographicNext" class="btn" type="button">Próxima</button></div></div>
     </section>`;
   const statusArea = root.querySelector('#googleAdsGeographicStatus');
   const outcomeArea = root.querySelector('#googleAdsGeographicOutcome');
   const rowsArea = root.querySelector('#googleAdsGeographicRows');
   const countArea = root.querySelector('#googleAdsGeographicCount');
-  const moreButton = root.querySelector('#googleAdsGeographicMore');
+  const previousButton = root.querySelector('#googleAdsGeographicPrevious');
+  const nextButton = root.querySelector('#googleAdsGeographicNext');
+  const pageArea = root.querySelector('#googleAdsGeographicPage');
   let rows = [];
   let records = [];
-  let visibleCount = PAGE_SIZE;
+  let currentPage = 0;
   let errorMessage = '';
   let campaignGeoIndex = new Map();
 
@@ -93,7 +95,10 @@ export function mountGoogleAdsGeographicReportsView({ root, getSourceMode = () =
       ? `<p class="google-ads-geographic-warning">${escapeHtml(errorMessage)}</p>`
       : [failures ? `<p class="google-ads-geographic-warning">${failures} combinação(ões) de conta/data tiveram falha na última tentativa; os dados anteriores foram mantidos.</p>` : '',
         empty ? `<p class="google-ads-geographic-muted">${empty} combinação(ões) de conta/data tiveram resposta completa sem linhas de localização. Isso não confirma zero cliques.</p>` : ''].filter(Boolean).join('');
-    const shown = rows.slice(0, visibleCount);
+    const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+    currentPage = Math.min(currentPage, Math.max(0, totalPages - 1));
+    const start = currentPage * PAGE_SIZE;
+    const shown = rows.slice(start, start + PAGE_SIZE);
     rowsArea.innerHTML = shown.length ? shown.map(row => {
       const targetStatus = googleAdsGeographicCountryTargetStatus(campaignGeoIndex, row);
       return `<tr>
@@ -106,8 +111,11 @@ export function mountGoogleAdsGeographicReportsView({ root, getSourceMode = () =
       <td>${escapeHtml(averageCostPerClick(row.costMicros, row.clicks, row.currencyCode))}</td></tr>`;
     }).join('')
       : `<tr><td colspan="9">${errorMessage ? 'Os relatórios salvos não puderam ser lidos.' : 'Nenhum resultado geográfico com cliques no período carregado. Isso não confirma zero.'}</td></tr>`;
-    countArea.textContent = rows.length ? `Exibindo ${Math.min(visibleCount, rows.length)} de ${rows.length} linha(s) · últimos 20 dias` : '';
-    moreButton.hidden = visibleCount >= rows.length;
+    countArea.textContent = rows.length ? `Exibindo ${start + 1}–${start + shown.length} de ${rows.length} linha(s) · últimos 20 dias` : '';
+    pageArea.textContent = totalPages ? `Página ${currentPage + 1} de ${totalPages}` : '';
+    previousButton.hidden = nextButton.hidden = !totalPages;
+    previousButton.disabled = currentPage === 0;
+    nextButton.disabled = currentPage >= totalPages - 1;
   }
 
   async function refresh() {
@@ -126,7 +134,8 @@ export function mountGoogleAdsGeographicReportsView({ root, getSourceMode = () =
     render();
   }
 
-  moreButton.addEventListener('click', () => { visibleCount += PAGE_SIZE; render(); });
+  previousButton.addEventListener('click', () => { if (currentPage > 0) { currentPage--; render(); } });
+  nextButton.addEventListener('click', () => { if ((currentPage + 1) * PAGE_SIZE < rows.length) { currentPage++; render(); } });
   const onUpdated = () => { void refresh(); };
   document.addEventListener('google-ads-geographic-reports-updated', onUpdated);
   document.addEventListener('google-ads-geographic-auto-update-status', onUpdated);

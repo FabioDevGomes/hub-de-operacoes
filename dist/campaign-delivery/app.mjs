@@ -4,13 +4,43 @@ import { deliveryProgress, DELIVERY_SHARED_STEPS } from './progress-domain.mjs?v
 import { loadGoogleAdsCampaignBatches } from '../google-ads/google-ads-campaign-batches-storage.mjs?v=10';
 import { loadGoogleAdsCampaignDrafts } from '../google-ads/google-ads-campaign-drafts-storage.mjs?v=1';
 import { readCpaExpansion, cpaExpansionBlocksSharedSteps } from '../google-ads/google-ads-cpa-expansion-store.mjs?v=2';
+import { createCentralDeliveryClient } from './central-delivery-client.mjs';
+import { prepareCampaignSnapshotClient } from '../google-ads/campanha-copia-central-start.mjs';
+import { progressWithCentralConfirmations } from '../google-ads/campanha-confirmacoes-central.mjs';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[char]));
 const labels = { curadoria:'Curadoria', assets:'Asset Studio', presell:'Ficha e Pre-Sell', campaign:'Criação de campanha' };
 const query = new URLSearchParams(location.search);
-let deliveries = listCampaignDeliveries();
-let active = getCampaignDelivery(query.get('delivery_id')) || deliveries[0] || null;
+let deliveries = [];
+let active = null;
+let central = null, centralRevision = null, centralProgress = null, centralCampaigns = null;
+async function refreshCentral(id = active?.id || query.get('delivery_id') || '') {
+  centralRevision = null; centralProgress = null; centralCampaigns = null;
+  const snapshot = await central.list();
+  deliveries = snapshot.deliveries;
+  active = deliveries.find(item => item.id === id) || (!id ? deliveries[0] : null) || null;
+  if (active) centralProgress = await central.progress(active.id, snapshot.revision);
+  if (active) {
+    try {
+      const copies = await prepareCampaignSnapshotClient().list();
+      if (copies.revision === snapshot.revision) {
+        const linked = copies.snapshots.filter(copy => copy.data?.deliveryId === active.id);
+        centralCampaigns = linked.flatMap(copy => Array.isArray(copy.data.createdCampaigns) ? copy.data.createdCampaigns : []);
+        if (linked.length === 1) centralProgress = progressWithCentralConfirmations(centralProgress, linked[0]);
+      }
+    } catch { /* O andamento existente permanece disponível; a cópia não foi confirmada. */ }
+  }
+  centralRevision = snapshot.revision;
+  render();
+  $('#deliveryMessage').textContent = id && !active ? 'Entrega central não encontrada.' : '';
+}
+async function updateCentral(operation, args) {
+  if (centralRevision === null || !active) throw new Error('Entrega central indisponível.');
+  const id = active.id;
+  await central.update(centralRevision, operation, args);
+  await refreshCentral(id);
+}
 
 function platformCode(delivery) {
   return String(delivery?.platformCode || 'CB').trim().toUpperCase() === 'GM' ? 'GM' : 'CB';
@@ -65,6 +95,7 @@ function stageUrl(stage) {
 }
 
 function currentProgress(delivery) {
+  if (central) return centralProgress;
   try {
     const jobs = JSON.parse(localStorage.getItem('hub:presell-deploy-jobs:v1') || '[]');
     if (!Array.isArray(jobs)) throw new Error('Páginas inválidas');
@@ -192,6 +223,8 @@ function render() {
         ? 'Campanhas no lote; pendência: aplicar sitelinks a todas as ' + progress.batch.campaigns.length + ' campanhas.'
         : 'Campanhas no lote; etapas compartilhadas pendentes: ' + names.join(', ') + '.';
       setStageStatus(node, 'is-pending', message);
+    } else if (!progress.campaign && centralCampaigns?.length) {
+      setStageStatus(node, 'is-warning', `${centralCampaigns.length} campanha(s) registradas na base central; confira as etapas compartilhadas na criação de campanha.`);
     } else if (!progress.campaign) {
       setStageStatus(node, 'is-pending', 'Pendência: criar e salvar as campanhas em um lote.');
     } else {
@@ -206,11 +239,11 @@ function render() {
   });
 }
 
-$('#deliveryExistingLocalPage').addEventListener('change', event => {
+$('#deliveryExistingLocalPage').addEventListener('change', async event => {
   if (!active) return;
   try {
-    active = updateCampaignDeliveryAssetStudioRoute(active.id, event.currentTarget.checked);
-    deliveries = listCampaignDeliveries();
+    if (central) await updateCentral('updateAssetRoute', [active.id, event.currentTarget.checked]);
+    else { active = updateCampaignDeliveryAssetStudioRoute(active.id, event.currentTarget.checked); deliveries = listCampaignDeliveries(); }
     $('#deliveryMessage').textContent = '';
     $('#deliveryMessage').classList.remove('error');
     render();
@@ -221,13 +254,15 @@ $('#deliveryExistingLocalPage').addEventListener('change', event => {
   }
 });
 
-$('#deliveryPicker').addEventListener('change', event => {
-  active = getCampaignDelivery(event.target.value);
+$('#deliveryPicker').addEventListener('change', async event => {
+  if (central) { try { await refreshCentral(event.target.value); } catch (error) { $('#deliveryMessage').textContent = error.message; } }
+  else active = getCampaignDelivery(event.target.value);
   render();
   history.replaceState(null, '', `?delivery_id=${encodeURIComponent(active?.id || '')}`);
 });
 
 window.addEventListener('storage', event => {
+  if (central) return;
   if (event.key !== CAMPAIGN_DELIVERY_STORAGE_KEY && event.key !== 'hub.google-ads.campaign-creation.batches:v1'
       && event.key !== 'hub:presell-deploy-jobs:v1' && !String(event.key || '').startsWith('hub:google-ads:cpa-expansion:v1:')) return;
   const activeId = active?.id || query.get('delivery_id') || '';
@@ -236,9 +271,16 @@ window.addEventListener('storage', event => {
   render();
 });
 
-document.querySelectorAll('[data-stage-link]').forEach(link => link.addEventListener('click', event => {
+document.querySelectorAll('[data-stage-link]').forEach(link => link.addEventListener('click', async event => {
   if (!active) { event.preventDefault(); return; }
   const stage = link.dataset.stageLink;
+  if (central) {
+    event.preventDefault();
+    const destination = link.href;
+    try { await updateCentral('markOpened', [active.id, stage]); location.assign(destination); }
+    catch (error) { $('#deliveryMessage').textContent = error.message; $('#deliveryMessage').classList.add('error'); }
+    return;
+  }
   try {
     active = markCampaignDeliveryOpened(active.id, stage) || active;
     deliveries = listCampaignDeliveries();
@@ -250,4 +292,21 @@ document.querySelectorAll('[data-stage-link]').forEach(link => link.addEventList
   }
 }));
 
-render();
+try {
+  const healthResponse = await fetch('/api/presell/health', { cache: 'no-store' });
+  if (!healthResponse.ok) throw new Error('Não foi possível identificar o modo do Hub.');
+  const health = await healthResponse.json();
+  if (health.centralWriteProxy === true) {
+    central = createCentralDeliveryClient();
+    const note = document.querySelector('.delivery-local-note');
+    if (note) note.textContent = '● Base central · Entregas compartilhadas';
+    const label = document.querySelector('.delivery-picker-label');
+    if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = 'Entregas na base central';
+    await refreshCentral();
+  }
+  else { deliveries = listCampaignDeliveries(); active = getCampaignDelivery(query.get('delivery_id')) || deliveries[0] || null; render(); }
+} catch (error) {
+  deliveries = []; active = null; render();
+  $('#deliveryMessage').textContent = error.message || 'Não foi possível carregar as entregas.';
+  $('#deliveryMessage').classList.add('error');
+}

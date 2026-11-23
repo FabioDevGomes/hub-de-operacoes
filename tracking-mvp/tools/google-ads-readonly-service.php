@@ -796,6 +796,54 @@ function hub_google_ads_validate_geographic_report_request(array $payload): arra
     return [$managerId, $customerId, $dateFrom, $dateTo];
 }
 
+function hub_google_ads_validate_geographic_detail_request(array $payload): array
+{
+    $keys = array_keys($payload); sort($keys, SORT_STRING);
+    $expected = ['campaign_id', 'customer_id', 'date_from', 'date_to', 'manager_customer_id', 'operation']; sort($expected, SORT_STRING);
+    if ($keys !== $expected || ($payload['operation'] ?? '') !== 'geographic_detail_test' || !is_string($payload['campaign_id']) || preg_match('/^[1-9][0-9]{0,19}$/D', $payload['campaign_id']) !== 1) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    $base = $payload; unset($base['campaign_id']); $base['operation'] = 'geographic_report';
+    return [...hub_google_ads_validate_geographic_report_request($base), $payload['campaign_id']];
+}
+
+function hub_google_ads_geographic_detail_test(string $token, ?string $manager, string $customer, string $from, string $to, string $campaignId): array
+{
+    $filter = " FROM user_location_view WHERE segments.date BETWEEN '{$from}' AND '{$to}' AND campaign.id = {$campaignId} AND metrics.clicks > 0 LIMIT " . (HUB_GOOGLE_ADS_GEOGRAPHIC_MAX_ROWS + 1);
+    $fields = 'SELECT segments.date, campaign.id, user_location_view.country_criterion_id, metrics.clicks, metrics.impressions, metrics.cost_micros';
+    $base = hub_google_ads_search($customer, $fields . $filter, $token, $manager);
+    $detail = hub_google_ads_search($customer, $fields . ', segments.geo_target_region, segments.geo_target_city' . $filter, $token, $manager);
+    if (count($base) > HUB_GOOGLE_ADS_GEOGRAPHIC_MAX_ROWS || count($detail) > HUB_GOOGLE_ADS_GEOGRAPHIC_MAX_ROWS) throw new HubGoogleAdsApiException('geographic_report_limit_exceeded', 413);
+    foreach ([$base, $detail] as $rows) foreach ($rows as $row) {
+        $date = $row['segments']['date'] ?? null;
+        $country = (string)($row['userLocationView']['countryCriterionId'] ?? '');
+        $metrics = $row['metrics'] ?? [];
+        if (!is_string($date) || hub_google_ads_parse_date($date) === null || $date < $from || $date > $to || (string)($row['campaign']['id'] ?? '') !== $campaignId || preg_match('/^[1-9][0-9]{0,19}$/D', $country) !== 1) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+        foreach (['clicks', 'impressions', 'costMicros'] as $key) if (!isset($metrics[$key]) || preg_match('/^(0|[1-9][0-9]{0,15})$/D', (string)$metrics[$key]) !== 1) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+    }
+    $ids = [];
+    foreach ($detail as $row) {
+        $ids[(string)$row['userLocationView']['countryCriterionId']] = true;
+        foreach (['geoTargetRegion', 'geoTargetCity'] as $field) {
+            $resource = $row['segments'][$field] ?? null;
+            if ($resource === null || $resource === '') continue;
+            if (!is_string($resource) || preg_match('/^geoTargetConstants\/([1-9][0-9]{0,19})$/D', $resource, $match) !== 1) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 502);
+            $ids[$match[1]] = true;
+        }
+    }
+    $names = [];
+    if ($ids !== []) {
+        foreach (array_chunk(array_keys($ids), 500) as $chunk) {
+            $locationRows = hub_google_ads_search($customer, 'SELECT geo_target_constant.id, geo_target_constant.name, geo_target_constant.country_code, geo_target_constant.target_type FROM geo_target_constant WHERE geo_target_constant.id IN (' . implode(',', $chunk) . ')', $token, $manager);
+            foreach ($locationRows as $locationRow) {
+                $location = $locationRow['geoTargetConstant'] ?? [];
+                $id = (string)($location['id'] ?? ''); $name = trim((string)($location['name'] ?? ''));
+                if (isset($ids[$id]) && $name !== '') $names[$id] = $name;
+            }
+        }
+        if (count($names) !== count($ids)) throw new HubGoogleAdsApiException('geographic_country_lookup_incomplete', 502);
+    }
+    return ['ok'=>true, 'schema_version'=>1, 'operation'=>'geographic_detail_test', 'customer_id'=>$customer, 'manager_customer_id'=>$manager, 'campaign_id'=>$campaignId, 'date_from'=>$from, 'date_to'=>$to, 'generated_at_utc'=>gmdate('Y-m-d\\TH:i:s\\Z'), 'query_complete'=>true, 'baseline'=>$base, 'details'=>$detail, 'location_names'=>$names, 'google_ads_search_operations'=>2 + (int)ceil(count($ids)/500)];
+}
+
 function hub_google_ads_validate_search_terms_request(array $payload): array
 {
     $keys = array_keys($payload);
@@ -1517,6 +1565,31 @@ function hub_google_ads_sao_paulo_day_report(string $accessToken, ?string $manag
     ];
 }
 
+/** Read-only policy findings for a bounded set of campaigns in one account. */
+function hub_google_ads_campaign_policy_findings(string $accessToken, ?string $managerId, string $customerId, array $campaignIds, ?callable $search = null): array
+{
+    if (!$campaignIds || count($campaignIds) > 1000 || count(array_unique($campaignIds)) !== count($campaignIds)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    foreach ($campaignIds as $id) if (!is_string($id) || preg_match('/^[1-9][0-9]{0,19}$/D', $id) !== 1) throw new HubGoogleAdsApiException('invalid_payload', 400);
+    $search ??= static fn(string $query): array => hub_google_ads_search($customerId, $query, $accessToken, $managerId);
+    $rows = $search('SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.policy_topic_entries FROM ad_group_ad WHERE campaign.id IN (' . implode(',', $campaignIds) . ') AND ad_group_ad.status != REMOVED LIMIT 10001');
+    if (count($rows) > 10000) throw new HubGoogleAdsApiException('policy_findings_limit_exceeded', 422);
+    $allowed = array_fill_keys($campaignIds, true); $findings = [];
+    foreach ($rows as $row) {
+        $campaign = (string)($row['campaign']['id'] ?? ''); $group = (string)($row['adGroup']['id'] ?? ''); $ad = (string)($row['adGroupAd']['ad']['id'] ?? '');
+        if (!isset($allowed[$campaign]) || preg_match('/^[1-9][0-9]{0,19}$/D', $group) !== 1 || preg_match('/^[1-9][0-9]{0,19}$/D', $ad) !== 1) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 422);
+        $summary = $row['adGroupAd']['policySummary'] ?? []; $topics = $summary['policyTopicEntries'] ?? [];
+        if (!is_array($topics)) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 422);
+        $entries = [];
+        foreach ($topics as $topic) {
+            $code = $topic['topic'] ?? null; $type = $topic['type'] ?? null;
+            if (!is_string($code) || $code === '' || strlen($code) > 200 || !is_string($type) || strlen($type) > 80) throw new HubGoogleAdsApiException('google_ads_report_incomplete', 422);
+            $entries[] = ['topic' => $code, 'type' => $type];
+        }
+        $findings[] = ['campaign_id' => $campaign, 'ad_group_id' => $group, 'ad_id' => $ad, 'ad_status' => (string)($row['adGroupAd']['status'] ?? ''), 'approval_status' => (string)($summary['approvalStatus'] ?? ''), 'topics' => $entries];
+    }
+    return ['ok' => true, 'schema_version' => 1, 'complete' => true, 'manager_customer_id' => $managerId, 'customer_id' => $customerId, 'campaign_ids' => $campaignIds, 'read_at_utc' => gmdate('Y-m-d\TH:i:s\Z'), 'ads' => $findings];
+}
+
 /** Current configuration snapshot; no date segment and no metric-driven omissions. */
 function hub_google_ads_campaign_config(string $accessToken, ?string $managerId, string $customerId, ?callable $search = null, ?string $contextDate = null, mixed $contextToken = null, string $privateKey = ''): array
 {
@@ -1950,6 +2023,15 @@ function hub_google_ads_dispatch(): never
 
         $payload = hub_google_ads_parse_request();
         $operation = $payload['operation'] ?? null;
+        if ($operation === 'campaign_policy_findings') {
+            $keys = array_keys($payload); sort($keys, SORT_STRING);
+            if ($keys !== ['campaign_ids', 'customer_id', 'manager_customer_id', 'operation'] || !is_array($payload['campaign_ids']) || !array_is_list($payload['campaign_ids'])) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+            $managerId = $payload['manager_customer_id'] === null ? null : hub_google_ads_valid_customer_id($payload['manager_customer_id']);
+            if ($customerId === null || ($payload['manager_customer_id'] !== null && $managerId === null)) throw new HubGoogleAdsApiException('invalid_payload', 400);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_json(200, hub_google_ads_campaign_policy_findings($accessToken, $managerId, $customerId, $payload['campaign_ids']));
+        }
         if ($operation === 'conversion_actions') {
             [$managerId, $customerId] = hub_google_ads_validate_conversion_actions_request($payload);
             $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
@@ -2035,6 +2117,11 @@ function hub_google_ads_dispatch(): never
             $accessToken = hub_google_ads_access_token($credentials);
             $report = hub_google_ads_daily_report($accessToken, $managerId, $customerId, $dateFrom, $dateTo, $contextDate, $contextToken, (string)($credentials['private_key'] ?? ''));
             hub_google_ads_json(200, $report);
+        }
+        if ($operation === 'geographic_detail_test') {
+            [$managerId, $customerId, $dateFrom, $dateTo, $campaignId] = hub_google_ads_validate_geographic_detail_request($payload);
+            $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+            hub_google_ads_json(200, hub_google_ads_geographic_detail_test($accessToken, $managerId, $customerId, $dateFrom, $dateTo, $campaignId));
         }
         if ($operation === 'geographic_report'
             && isset($payload['customer_id'], $payload['date_from'], $payload['date_to'])

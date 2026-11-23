@@ -58,3 +58,15 @@ test('records confirmed negatives against their resolved local campaigns', async
   assert.equal(saved.recorded, true);
   assert.deepEqual(savedInput.inputs, [{ campaignId: 'internal-1', term: 'pesquisa teste', matchType: 'PHRASE', kind: 'negative', source: 'search_terms', occurredAtUtc: '2026-11-14T15:00:00.000Z' }]);
 });
+
+
+test('verified existing negatives are recorded as observations, not attributed as newly added', async () => {
+  let inputs;
+  const saved = await recordGoogleAdsSearchTermsKeywordAdditions({
+    database: { campanhas: [] }, inventory: new Map([['internal-1', { mappingStatus: 'mapped', managerCustomerId, customerId: result.customer_id, campaignId: result.campaign_id }]]),
+    managerCustomerId, term: 'pesquisa teste', matchType: 'PHRASE', occurredAtUtc: '2026-11-14T15:00:00.000Z', results: [result], observed: true,
+    openDatabase: async () => {}, domain: {}, storage: { appendCampaignKeywordAddedEvents: async input => { inputs = input.inputs; return { base: {}, changed: true }; } },
+  });
+  assert.equal(saved.recorded, true);
+  assert.equal(inputs[0].source, 'search_terms_observed');
+});

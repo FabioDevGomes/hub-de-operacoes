@@ -4,10 +4,13 @@ import vm from 'node:vm';
 import {test} from 'node:test';
 import {createRoot,format} from './helpers/view-dom.mjs';
 const context=vm.createContext({window:{},setTimeout,clearTimeout,setInterval,clearInterval});
+vm.runInContext(await readFile(new URL('../src/overview/campaign-status-domain.js',import.meta.url),'utf8'),context);
+context.window.CampaignStatusDomain=context.CampaignStatusDomain;
 vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
 vm.runInContext(await readFile(new URL('../src/overview/view.js',import.meta.url),'utf8'),context);
 const domain=context.window.OverviewDomain,view=context.window.OverviewView;
 const overviewTemplate=await readFile(new URL('../src/overview/template.html',import.meta.url),'utf8');
+test('campaign adjustment error X is shifted upward by exactly two pixels',async()=>{const css=await readFile(new URL('../src/overview/overview.css',import.meta.url),'utf8');assert.match(css,/\.totals-table \.overview-campaign-analysis-error\{[^}]*position:relative;top:-2px/)});
 const [overviewDomainSource,overviewViewSource]=await Promise.all(['overview-domain.js','overview/view.js'].map(file=>readFile(new URL('../src/'+file,import.meta.url),'utf8')));
 const row=(name,status,investment,extra={})=>({
   c:{nome_campanha_exato:name,_status:status,_pausedAt:'2026-09-29',_lastSeen:'2026-09-28'},
@@ -16,7 +19,8 @@ const row=(name,status,investment,extra={})=>({
   roi:null,profit:null,zeroDays:0,...extra
 });
 function setup(rows,preferences,actionOverrides={},viewToUse=view,domainToUse=domain){
-  const dom=createRoot(),state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active',rate:5.1234,exchangeRateQuote:{rate:5.1234,status:'ok',isStale:false,isFallback:false,quoteDate:'2026-10-13'}};
+  const dom=createRoot();dom.root.classList=dom.get('__root__').classList;
+  const state={totalsMode:'consolidated',sortKey:'current',sortDir:'desc',campaignStatusFilter:'active',rate:5.1234,exchangeRateQuote:{rate:5.1234,status:'ok',isStale:false,isFallback:false,quoteDate:'2026-10-13'}};
   const calls=[],snapshot={rows,activeCount:rows.filter(r=>r.c._status!=='pausada').length,
     pausedCount:rows.filter(r=>r.c._status==='pausada').length,pausedTodayCampaigns:[],pausedTodayDate:'2026-09-30',referenceDate:'2026-09-30',
     manifestCampaignCount:54,manifestCaptureInfo:{timestamp:'2026-09-30T13:25:00Z',source:'capture'},baseRecordCount:4427,baseUpdatedLabel:'05/10/2026, 14:57',mccImportUpdates:[{id:'111-111-1111',name:'MCC E-com',timestamp:'2026-10-05T17:57:00Z',source:'import'},{id:'222-222-2222',name:'MCC Nutra',timestamp:'2026-10-05T18:40:00Z',source:'import'}],pendingSaleCount:1,fractionalSaleCount:0,fractionalValuePendingItems:[],
@@ -38,6 +42,11 @@ test('campaign analysis check is the final marker after the existing campaign do
     assert.deepEqual(markers,[...markers].sort((a,b)=>a-b),'o check de análise fica por último, à direita dos outros indicadores');
     assert.match(markup,/aria-label="Análise de campanha registrada: CPA aumentado em 2%/);
   }finally{delete context.__hubGetCampaignImpressionNotificationForToday}
+});
+test('confirmed analysis survives a subsequent table render',()=>{
+  const s=setup([row('Campanha A','ativa',10)]);s.controller.render();
+  s.controller.recordCampaignAnalysisIndicator({campaignId:'id-Campanha A',occurredAtUtc:new Date().toISOString(),action:'Avaliação de termos de pesquisa'});
+  s.controller.render();assert.match(s.get('#totalsBody').innerHTML,/overview-campaign-analysis-check/);
 });
 test('campaign rows do not show the situation hint when the status column is hidden',()=>{
   const columns=domain.totalsColumns('consolidated').map(([key])=>key).filter(key=>key!=='status');
@@ -175,6 +184,27 @@ test('campaign date options follow selected status and clear stale selections',(
   assert.doesNotMatch(s.get('#campaignStartDate').innerHTML,/2026-09-20/);
   assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-21/);
   assert.match(s.get('#totalsBody').innerHTML,/data-campaign="Pausada"/);
+});
+test('campaign date options follow the campaign search and clear dates outside its results',()=>{
+  const s=setup([
+    row('Solar Campaign','ativa',10,{identity:{name:'Solar Campaign',dateSort:'2026-09-20'}}),
+    row('Solar Campaign paused','pausada',0,{identity:{name:'Solar Campaign paused',dateSort:'2026-09-21'}}),
+    row('Other Campaign','ativa',5,{identity:{name:'Other Campaign',dateSort:'2026-09-22'}})
+  ]);
+  s.state.campaignStatusFilter='all';s.controller.render();
+  s.get('#search').value='Solar';s.get('#search').oninput();
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-20/);
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-21/);
+  assert.doesNotMatch(s.get('#campaignStartDate').innerHTML,/2026-09-22/);
+  assert.match(s.get('#campaignStartDate').title,/filtros de status e busca/);
+  s.get('#campaignStartDate').onchange({target:{value:'2026-09-21'}});
+  assert.match(s.get('#totalsBody').innerHTML,/Solar Campaign paused/);
+  s.get('#search').value='Other';s.get('#search').oninput();
+  assert.doesNotMatch(s.get('#campaignStartDate').innerHTML,/2026-09-20|2026-09-21/);
+  assert.match(s.get('#campaignStartDate').innerHTML,/2026-09-22/);
+  assert.equal(s.get('#campaignStartDate').value,'','a seleção é limpa quando a data não corresponde mais à busca');
+  assert.match(s.get('#totalsBody').innerHTML,/Other Campaign/);
+  assert.doesNotMatch(s.get('#totalsBody').innerHTML,/Solar Campaign/);
 });
 test('date component filters only campaign rows, composes search/status and keeps all KPIs and period metrics',()=>{
   const s=setup([

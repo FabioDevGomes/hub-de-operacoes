@@ -4,10 +4,11 @@ import vm from 'node:vm';
 import {test} from 'node:test';
 import {createRoot,format} from './helpers/view-dom.mjs';
 
-const context=vm.createContext({window:{},structuredClone});
-for(const file of ['database.js','overview-domain.js','overview/view.js'])vm.runInContext(await readFile(new URL(`../src/${file}`,import.meta.url),'utf8'),context);
+const context=vm.createContext({window:{},structuredClone,setTimeout,clearTimeout});
+for(const file of ['database.js','overview-domain.js','overview/campaign-status-domain.js','overview/view.js'])vm.runInContext(await readFile(new URL(`../src/${file}`,import.meta.url),'utf8'),context);
+context.window.CampaignStatusDomain=context.CampaignStatusDomain;
 const database=context.window.CampaignDatabase,domain=context.window.OverviewDomain,template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
-const adapter=template.split('\n').filter(line=>/function (manifestDates|d0Totals|d1Totals)\(/.test(line)).join('\n');
+const adapter=template.split('\n').filter(line=>/function (manifestDates|periodTotalsKey|d0Totals|d1Totals)\(/.test(line)).join('\n');
 const ids=['111-111-1111','222-222-2222'],closed='2026-10-07',today='2026-10-08',field=valor=>({valor,estado:valor==null?'ausente':'confirmado'});
 const capture=(index,period,date,cost=10)=>({identificacao_mcc:{id:ids[index],nome:index?'MCC Nutra':'MCC E-com'},separacao_temporal:{D_zero:{datas_detectadas:period==='d0'?[date]:[],estado:period==='d0'?'fornecido':'nao_fornecido'},D_menos_1:{datas_detectadas:period==='d1'?[date]:[],estado:period==='d1'?'fornecido':'nao_fornecido'}},[period==='d0'?'captura_D_zero':'captura_D_menos_1']:{escopo:'all_campaigns',capturada_em:'2026-10-08T15:00:00Z'},campanhas:[{nome_campanha_exato:`Synthetic ${index}`,mcc_id:ids[index],[period==='d0'?'metricas_D_zero':'metricas_D_menos_1']:{presente:true,data:field(date),moeda:field('BRL'),custo_total:field(cost),impressoes:field(cost*2),cliques_google:field(1),conversoes:field(0),valor_conversao:field(0),estado_campanha:field('Ativada')},[period==='d0'?'metricas_D_menos_1':'metricas_D_zero']:{presente:false,data:field(null)}}]});
 const factory=source=>['d0','d1'].flatMap(period=>{const m=source[period==='d0'?'metricas_D_zero':'metricas_D_menos_1'];return m?.presente===true?[{date:m.data.valor,period,cells:{B:{value:m.impressoes.valor},C:{value:1},F:{value:0},O:{value:m.custo_total.valor},P:{value:0}}}]:[]});
@@ -16,7 +17,8 @@ function setup(db){
   const manifest=db.manifesto_atual,snapshots=domain.authoritativeMccSnapshots(manifest),byName=new Map(),dailyByCampaign=new Map();
   for(const item of snapshots.rows){const key=item.campaignName.toLowerCase();if(!byName.has(key))byName.set(key,[]);byName.get(key).push(item)}
   for(const row of db.diario){if(!dailyByCampaign.has(row.campanha_id))dailyByCampaign.set(row.campanha_id,[]);dailyByCampaign.get(row.campanha_id).push(row)}
-  const sandbox=vm.createContext({OverviewDomain:domain,state:{database:db,manifest,rate:1},derivedContext:()=>({dailyByCampaign,snapshotsByCampaignName:byName,latestSnapshots:snapshots}),databaseCampaign:name=>db.campanhas.find(c=>c.nome_mcc===name),valueOf:value=>value?.valor??null,currentCost:()=>null});
+  const derived={dailyByCampaign,snapshotsByCampaignName:byName,latestSnapshots:snapshots,periodTotalsByCampaignKey:new Map()};
+  const sandbox=vm.createContext({OverviewDomain:domain,state:{database:db,manifest,rate:1},derivedContext:()=>derived,databaseCampaign:source=>db.campanhas.find(c=>c.nome_mcc===(typeof source==='string'?source:source?.nome_campanha_exato)),valueOf:value=>value?.valor??null,currentCost:()=>null});
   vm.runInContext(adapter,sandbox);return sandbox;
 }
 

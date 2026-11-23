@@ -42,3 +42,21 @@ export function googleAdsCampaignBatchFinalUrlIndex(snapshot) {
   }
   return new Map([...latest].flatMap(([key, item]) => item.url && !item.ambiguous ? [[key, item.url]] : []));
 }
+
+// Cópias centrais são usadas apenas quando não há URL no lote deste navegador.
+export async function googleAdsCentralFinalUrlIndex({fetchImpl = globalThis.fetch} = {}) {
+  const {prepareCampaignSnapshotClient} = await import('./campanha-copia-central-start.mjs');
+  const {snapshots} = await prepareCampaignSnapshotClient({fetchImpl}).list();
+  const urls = new Map(), conflicts = new Set();
+  for (const snapshot of snapshots) for (const campaign of Array.isArray(snapshot?.data?.createdCampaigns) ? snapshot.data.createdCampaigns : []) {
+    const customer = String(campaign?.customerId || '');
+    const id = String(campaign?.campaignId || '');
+    const url = validFinalUrl(campaign?.finalUrl);
+    if (!/^\d{10}$/.test(customer) || !campaignIdPattern.test(id) || !url) continue;
+    const key = `${customer}:${id}`;
+    if (urls.has(key) && urls.get(key) !== url) conflicts.add(key);
+    else urls.set(key, url);
+  }
+  for (const key of conflicts) urls.delete(key);
+  return urls;
+}

@@ -1,0 +1,9 @@
+# Exportação de migração, fase 1
+
+O botão da Visão Geral baixa um ZIP privado no client sem selecionar a pasta de produtos. Os arquivos locais de produtos, páginas e assets ficam fora do escopo; imagens e capturas armazenadas nas fontes IndexedDB cobertas continuam incluídas. A leitura dos bancos é somente leitura; bancos ausentes não são criados. O arquivo não é enviado ao servidor e não existe importador neste recurso.
+
+O ZIP contém `manifesto.json`, documentos em `dados/` e binários de nomes opacos em `arquivos/`. O manifesto usa `format: hub-migracao-fase1`, `version: 1`, descreve cada fonte, contagens, hash SHA-256 e tamanho das entradas. Registros IndexedDB usam serialização marcada `$hubType`; o objeto `stores` inclui chaves, valores, keyPath e autoIncrement. `dados/local-storage.json` tem somente chaves explicitamente permitidas e seus valores originais como strings. Os links de arquivos locais ficam em `dados/arquivos-produtos.json`, com caminho relativo, hash e referência opaca.
+
+O arquivo é sempre marcado `parcial`: não existe bloqueio transacional conjunto sobre os bancos e localStorage. As fontes inacessíveis e registros que não possam ser serializados são apontados nas pendências. O exportador relê os bancos e compara os seus conteúdos e confere mudanças nas chaves selecionadas do localStorage. Isso detecta algumas alterações concorrentes, mas não garante um snapshot atômico, não detecta todas as alterações transitórias e não verifica mudanças posteriores. O manifesto marca `arquivos_produtos` como `nao_incluido_por_escopo`; o pacote não é backup geral de todos os módulos do Hub.
+
+O futuro importador deverá validar caminhos e hashes, reconhecer os tipos, recusar operações destrutivas e apresentar uma prévia. Até implementar e testar o importador com o pacote, não se deve assumir compatibilidade de migração.

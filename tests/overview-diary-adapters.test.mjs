@@ -5,7 +5,7 @@ import {test} from 'node:test';
 import {addGuruMediaConversionsToOverviewRow} from '../src/overview/gurumedia-sales-projection.mjs';
 const template=await readFile(new URL('../src/index.template.html',import.meta.url),'utf8');
 function block(start,end){const a=template.indexOf(start),b=template.indexOf(end,a);assert.ok(a>=0&&b>a);return template.slice(a,b)}
-const overviewAdapter=block('    function overviewRowsForMode(){','    let overviewController=');
+const overviewAdapter=block('    function overviewStaticRow(','    let overviewController=');
 const diaryAdapter=block("    function productDiarySnapshot(","    let productDiaryController=");
 test('overview adapter retains temporal financial projection, manual adjustments and immutable cache',async()=>{
   const context=vm.createContext({window:{}});vm.runInContext(await readFile(new URL('../src/overview-domain.js',import.meta.url),'utf8'),context);
@@ -20,7 +20,7 @@ test('overview adapter retains temporal financial projection, manual adjustments
     campaignRows:()=>[campaign],activeCampaignRows:()=>[campaign],derivedContext:()=>cache,
     workbookTotalsMap:()=>new Map(),databaseCampaign:()=>stored,manifestDates:()=>({d0:'2026-09-30',d1:'2026-09-29'}),
     campaignHistoricalTotals:()=>({}),totalsForMode:(_c,_h,mode=context.state.totalsMode)=>{calculations++;return base[mode]},
-    d0Totals:()=>base.d0,d1Totals:()=>base.d1,cpaTitleInfo:()=>({payout:50,payoutCurrency:'BRL'}),
+    d0Totals:()=>base.d0,d1Totals:()=>base.d1,cpaTitleInfo:()=>({payout:50,payoutCurrency:'BRL'}),cpaDesired:()=>({value:null,currency:null}),
     fmtMoney:String,sortCell:c=>c?.value??null,campaignIdentity:name=>({name,dateLabel:'',dateSort:''}),
     campaignZeroImpressionDays:()=>0,roiForTotals:t=>t?(t.commission-t.investment)/t.investment*100:null,
     campaignAccount:()=> '7441',campaignRejected:()=>false,campaignNumberReuse:()=>null,campaignPolicyLimitation:()=>null});
@@ -38,17 +38,17 @@ test('overview adapter retains temporal financial projection, manual adjustments
   assert.equal(JSON.stringify({campaign,stored,sales,base}),before);
 });
 test('diary adapter disambiguates same display names by stable ID, never writes or mutates history',async()=>{
-  const context=vm.createContext({window:{}});vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);
+  const context=vm.createContext({window:{}});vm.runInContext(await readFile(new URL('../src/product-diary/domain.js',import.meta.url),'utf8'),context);vm.runInContext(await readFile(new URL('../src/product-diary/observation-domain.js',import.meta.url),'utf8'),context);
   const campaigns=[{id:'id-a',nome_mcc:'MCC A',nome_exibicao:'Mesmo produto'},{id:'id-b',nome_mcc:'MCC B',nome_exibicao:'Mesmo produto'}],
     diario=[{campanha_id:'id-a',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:10},O:{value:999},F:{value:99}}},
       {campanha_id:'id-b',date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:20},O:{value:12.35},F:{value:2}}},
       {campanha_id:'id-b',date:'2026-09-30',cells:{A:{value:'2026-09-30'},C:{value:0},O:{value:0},F:{value:0}}}],
-    rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc})),
-    database={campanhas:campaigns,diario},calls=[];
+    rows=campaigns.map(c=>({nome_campanha_exato:c.nome_mcc,...(c.id==='id-b'?{google_ads_current_configuration:{budgetAmountMicros:'19170000',currencyCode:'USD',budgetPeriod:'DAILY',budgetResource:'customers/1234567890/campaignBudgets/10',budgetShared:false,campaignStatus:'ENABLED',observedAtUtc:'2026-11-20T12:00:00.000Z'}}:{})})),
+    database={campanhas:campaigns,diario,observacoes_diario:[{campanha_id:'id-b',data:'2026-11-20',eventos:[{tipo:'google_ads_budget_adjustment',origem_horario:'google_ads_api',ocorrido_em_utc:'2026-11-20T12:03:00.000Z',orcamento_novo_micros:'25520000',moeda:'USD'}]}]},calls=[];
   vm.runInContext(await readFile(new URL('../src/overview/sale-roi-domain.js',import.meta.url),'utf8'),context);
   Object.assign(context,{SaleRoiDomain:context.window.SaleRoiDomain,state:{database,workbook:null},operationalDatabase:()=>database,campaignRows:()=>rows,campaignSheet:()=> 'Mesmo produto',cpaTitleInfo:()=>({payout:null,payoutCurrency:''}),cpaDesired:()=>({value:null,currency:null}),
     CampaignDatabase:{dailyRows:(_db,sheet,id)=>{calls.push([sheet,id]);return diario.filter(r=>r.campanha_id===id)},campaignDiaryStatusWindow:()=>({pauseConfirmedAt:null,reactivatedAt:null})},ProductCatalog:{normalize:value=>value||{aliases:{}}},overviewGoogleAdsCampaignActionInventory:()=>new Map(),accountProductIdentity:()=>({key:'produto',label:'Produto'}),campaignAccount:()=>null,
-    ProductDiaryDomain:context.window.ProductDiaryDomain,sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
+    ProductDiaryDomain:context.window.ProductDiaryDomain,ProductDiaryObservations:context.window.ProductDiaryObservations,sheetDailyRows:context.window.ProductDiaryDomain.sheetDailyRows,manifestProductRow:()=>[],
     currentGuruMediaCampaignProjection:()=>null,guruMediaCampaignProjectionModule:{},
     derivedContext:()=>({salesAdjustments:new Map([['id-b',{byDate:{'2026-09-30':{pendingConversions:1}}}]])}),
     d0Totals:()=>{throw Error('diary totals must not use only D0')}});
@@ -56,6 +56,8 @@ test('diary adapter disambiguates same display names by stable ID, never writes 
   const snapshot=context.productDiarySnapshot('Mesmo produto','workbook','id-b');
   assert.equal(snapshot.rows.length,2);assert.equal(snapshot.rows[0].cells.C.value,20);assert.equal(snapshot.investment,12.35);
   assert.equal(snapshot.clicks,20);assert.equal(snapshot.conversions,3);
+  assert.equal(snapshot.budgetAdjustment.budgetAmountMicros,'25520000','o orçamento confirmado após a captura prevalece na projeção do Diário');
+  assert.equal(snapshot.budgetAdjustment.observedAtUtc,'2026-11-20T12:03:00.000Z');
   assert.deepEqual(calls,[['Mesmo produto','id-b']]);assert.equal(snapshot.manualSalesByDate.size,1);
   assert.equal(snapshot.manualSalesByDate.get('2026-09-30').pendingConversions,1);assert.equal(JSON.stringify(database),before);
 });

@@ -46,10 +46,60 @@ const actionErrorMessages = Object.freeze({
   campaign_destination_url_resource_limit: 'A campanha tem mais recursos de URL do que o serviço consegue processar com segurança em uma operação.',
   campaign_destination_url_update_rejected: 'O Google Ads recusou a alteração de URL. Nenhuma confirmação foi registrada; confira a campanha antes de tentar novamente.',
   campaign_destination_url_update_unverified: 'O Google Ads recebeu a alteração, mas o serviço não conseguiu confirmar todos os destinos. Confira a campanha antes de tentar novamente.',
+  campaign_keyword_inventory_campaign_changed: 'A campanha mudou ou não é mais uma campanha Search disponível. Atualize o Diário antes de tentar novamente.',
+  campaign_keyword_inventory_incomplete: 'O Google Ads não retornou a lista completa de palavras-chave. Nenhum resultado parcial foi exibido; tente novamente.',
 });
 
 function actionRequest(operation, parameters, options) {
   return requestGoogleAdsEndpoint(GOOGLE_ADS_CAMPAIGN_ACTION_ENDPOINT, operation, parameters, { ...options, errorMessages: actionErrorMessages });
+}
+
+export async function fetchGoogleAdsCampaignKeywordInventory({ managerCustomerId, customerId, campaignId }, options) {
+  const manager = String(managerCustomerId ?? '').replace(/\D/g, '');
+  const customer = String(customerId ?? '').replace(/\D/g, '');
+  const campaign = String(campaignId ?? '');
+  if (!/^\d{10}$/.test(manager) || !/^\d{10}$/.test(customer) || !/^[1-9]\d{0,19}$/.test(campaign)) {
+    throw new Error('Selecione uma MCC, conta e campanha Google Ads válidas para atualizar as palavras-chave.');
+  }
+  let payload;
+  try {
+    payload = await actionRequest('read_campaign_keyword_inventory', {
+      manager_customer_id: manager, customer_id: customer, campaign_id: campaign,
+    }, options);
+  } catch (error) {
+    if (error?.code === 'api_unavailable' || error?.code === 'private_service_unavailable') {
+      throw new Error('A leitura de palavras-chave da campanha ainda não foi publicada no servidor.');
+    }
+    throw error;
+  }
+  const validStatus = value => ['ENABLED', 'PAUSED'].includes(value);
+  const validRows = (rows, negative) => Array.isArray(rows) && rows.every(item => {
+    if (!item || typeof item.term !== 'string' || !item.term.trim()
+        || !['BROAD', 'PHRASE', 'EXACT'].includes(item.match_type)
+        || typeof item.status !== 'string' || !item.status
+        || !['AD_GROUP', 'CAMPAIGN'].includes(item.scope)) return false;
+    if (item.scope === 'CAMPAIGN') return negative && item.ad_group_id === null;
+    return /^[1-9]\d{0,19}$/.test(String(item.ad_group_id ?? ''));
+  });
+  const campaignInfo = payload?.campaign;
+  if (payload?.schema_version !== 1 || payload.operation !== 'read_campaign_keyword_inventory'
+      || !campaignInfo || String(campaignInfo.customer_id) !== customer || String(campaignInfo.campaign_id) !== campaign
+      || typeof campaignInfo.campaign_name !== 'string' || !campaignInfo.campaign_name.trim()
+      || !validStatus(campaignInfo.status) || campaignInfo.channel_type !== 'SEARCH'
+      || payload.verified !== true || !Number.isFinite(Date.parse(payload.read_at_utc))
+      || !validRows(payload.positive_keywords, false) || !validRows(payload.negative_keywords, true)) {
+    throw new Error('O servidor retornou uma lista de palavras-chave incompleta ou incompatível com a campanha.');
+  }
+  return {
+    campaign: { customerId: customer, campaignId: campaign, campaignName: campaignInfo.campaign_name,
+      status: campaignInfo.status, channelType: campaignInfo.channel_type },
+    verified: true,
+    readAtUtc: payload.read_at_utc,
+    positiveKeywords: payload.positive_keywords.map(item => ({ term: item.term, matchType: item.match_type,
+      status: item.status, scope: item.scope, adGroupId: item.ad_group_id })),
+    negativeKeywords: payload.negative_keywords.map(item => ({ term: item.term, matchType: item.match_type,
+      status: item.status, scope: item.scope, adGroupId: item.ad_group_id })),
+  };
 }
 
 export async function fetchGoogleAdsCampaignActionCapabilities({ managerCustomerId, customerId }, options) {

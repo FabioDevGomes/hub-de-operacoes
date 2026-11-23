@@ -4,6 +4,13 @@ import { requestGoogleAdsEndpoint } from './google-ads-http-client.mjs?v=6';
 
 export const GOOGLE_ADS_READONLY_ENDPOINT = 'https://track.travenzo.shop/google-ads-readonly.php';
 
+export async function fetchGoogleAdsGeographicDetailTest({managerCustomerId,customerId,campaignId,dateFrom,dateTo}, options) {
+  if (!/^\d{10}$/.test(String(managerCustomerId)) || !/^\d{10}$/.test(String(customerId)) || !/^[1-9]\d{0,19}$/.test(String(campaignId)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateFrom)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateTo))) throw new Error('Campanha ou período inválido.');
+  const payload=await request('geographic_detail_test',{manager_customer_id:managerCustomerId,customer_id:customerId,campaign_id:campaignId,date_from:dateFrom,date_to:dateTo},options);
+  if(payload?.ok!==true||payload.operation!=='geographic_detail_test'||payload.query_complete!==true||payload.customer_id!==customerId||payload.manager_customer_id!==managerCustomerId||payload.campaign_id!==campaignId||payload.date_from!==dateFrom||payload.date_to!==dateTo||!Array.isArray(payload.baseline)||!Array.isArray(payload.details))throw new Error('Resposta geográfica incompleta ou de outra campanha.');
+  return payload;
+}
+
 const errorMessages = Object.freeze({
   api_unavailable: 'O endpoint Google Ads ainda não foi publicado no servidor. Use o pacote local em Tracking MVP.',
   api_not_configured: 'A API ainda não está configurada no servidor. Confira o token compartilhado do Hub.',
@@ -77,6 +84,17 @@ async function requestWithAccountMetadataContextFallback(operation, parameters, 
 
 export function fetchGoogleAdsAccounts(options) {
   return request('accounts', {}, options);
+}
+
+export async function fetchGoogleAdsCampaignPolicyFindings({managerCustomerId,customerId,campaignIds},options) {
+  const manager=managerCustomerId==null||managerCustomerId===''?null:String(managerCustomerId).replace(/\D/g,''),customer=String(customerId??'').replace(/\D/g,'');
+  const ids=Array.isArray(campaignIds)?campaignIds.map(String):[];
+  if(!/^\d{10}$/.test(customer)||(manager!==null&&!/^\d{10}$/.test(manager))||!ids.length||ids.length>1000||new Set(ids).size!==ids.length||ids.some(id=>!/^[1-9]\d{0,19}$/.test(id)))throw new Error('Conta ou campanhas inválidas para consultar políticas.');
+  const payload=await request('campaign_policy_findings',{manager_customer_id:manager,customer_id:customer,campaign_ids:ids},options);
+  if(payload?.ok!==true||payload.schema_version!==1||payload.complete!==true||payload.customer_id!==customer||(payload.manager_customer_id||null)!==manager||!Number.isFinite(Date.parse(payload.read_at_utc))||!Array.isArray(payload.campaign_ids)||payload.campaign_ids.length!==ids.length||ids.some(id=>!payload.campaign_ids.includes(id))||!Array.isArray(payload.ads)||payload.ads.length>10000)throw new Error('A resposta de políticas está incompleta ou pertence a outra conta.');
+  const allowed=new Set(ids);
+  for(const ad of payload.ads){if(!allowed.has(ad?.campaign_id)||!/^[1-9]\d{0,19}$/.test(String(ad.ad_group_id||''))||!/^[1-9]\d{0,19}$/.test(String(ad.ad_id||''))||typeof ad.approval_status!=='string'||!Array.isArray(ad.topics)||ad.topics.some(topic=>typeof topic?.topic!=='string'||!topic.topic||typeof topic.type!=='string'))throw new Error('A resposta de políticas contém anúncios inválidos.');}
+  return payload;
 }
 
 export async function fetchGoogleAdsConversionActions({ managerCustomerId, customerId = managerCustomerId }, options) {

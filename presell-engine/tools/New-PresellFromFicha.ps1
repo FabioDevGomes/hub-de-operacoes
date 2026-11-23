@@ -286,7 +286,7 @@ body {
   background-image: url('./$assetFolder/01.png');
   background-position: top center;
   background-repeat: no-repeat;
-  background-size: cover;
+  background-size: 100% auto;
   background-attachment: fixed;
   background-color: #d9dde2;
 }

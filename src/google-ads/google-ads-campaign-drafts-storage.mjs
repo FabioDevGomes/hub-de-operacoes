@@ -46,3 +46,7 @@ export function saveGoogleAdsCampaignDrafts(value, { storage = null } = {}) {
   try { target.setItem(GOOGLE_ADS_CAMPAIGN_DRAFTS_STORAGE_KEY, JSON.stringify(value)); }
   catch { throw new Error('Não foi possível salvar os rascunhos. Verifique o espaço disponível no navegador.'); }
 }
+export function mergeGoogleAdsCampaignDraftValues(previous, values, representedNames) {
+  const names = new Set(representedNames);
+  return {...Object.fromEntries(Object.entries(previous || {}).filter(([name]) => !names.has(name))), ...values};
+}

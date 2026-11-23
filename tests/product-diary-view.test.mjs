@@ -22,6 +22,24 @@ test('native diary preserves columns, empty data, escaping and selection argumen
   assert.match(s.get('#productSummary').innerHTML,/<strong>—<\/strong>/);assert.equal(s.get('#rowCount').textContent,'0 dias');
   assert.equal(s.get('#legacySummaryBody').classList.contains('hidden'),true);
 });
+test('keyword refresh reads one mapped campaign and displays only the verified API inventory',async()=>{
+  const calls=[],scope={mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'},readAtUtc='2026-11-20T15:30:00Z';
+  const s=setup({...empty(),storedCampaignId:'campaign-local',googleAdsCampaignAction:scope},{async readCampaignKeywordInventory(input){calls.push(input);return{verified:true,readAtUtc,campaign:{status:'ENABLED'},positiveKeywords:[{term:'positive term',matchType:'EXACT',status:'ENABLED',scope:'AD_GROUP',adGroupId:'456'}],negativeKeywords:[{term:'negative term',matchType:'PHRASE',status:'PAUSED',scope:'CAMPAIGN',adGroupId:null}]}}});
+  s.controller.render('Campanha Search');
+  const button={disabled:false},inventory=s.get('#productCampaignKeywordInventory');
+  await inventory.onclick({target:{closest:selector=>selector==='[data-refresh-campaign-keywords]'?button:null},preventDefault(){}});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[{managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789'}]);
+  assert.match(inventory.innerHTML,/positive term/);assert.match(inventory.innerHTML,/negative term/);assert.match(inventory.innerHTML,/Correspondência/);
+  assert.match(inventory.innerHTML,/Google Ads · Grupo 456 · Ativa/);assert.match(inventory.innerHTML,/Google Ads · Campanha · Pausada/);
+  assert.match(inventory.innerHTML,/Leitura confirmada/);assert.match(inventory.innerHTML,/20\/11 · 12:30/);
+});
+test('failed keyword refresh keeps local inventory and reports the API error',async()=>{
+  const scope={mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'},observations=[{eventos:[{tipo:'google_ads_campaign_keyword_added',kind:'positive',term:'local positive',match_type:'EXACT',source:'search_terms',ocorrido_em_utc:'2026-11-20T14:00:00Z'}]}];
+  const s=setup({...empty(),storedCampaignId:'campaign-local',googleAdsCampaignAction:scope,observations},{async readCampaignKeywordInventory(){throw new Error('Serviço indisponível')}});
+  s.controller.render('Campanha Search');const inventory=s.get('#productCampaignKeywordInventory'),button={disabled:false};
+  await inventory.onclick({target:{closest:selector=>selector==='[data-refresh-campaign-keywords]'?button:null},preventDefault(){}});
+  assert.match(inventory.innerHTML,/local positive/);assert.match(inventory.innerHTML,/Serviço indisponível/);
+});
 test('manual-sale rows remain display-only, official zero separate, formats preserved',()=>{
   const rows=[{date:'2026-09-29',cells:{A:{value:'2026-09-29'},C:{value:4},F:{value:0},E:{value:0.25},O:{value:12.34},Q:{value:'<observação>'}}}];
   const adjustments=new Map([['2026-09-29',{pendingConversions:1}],['2026-09-30',{pendingConversions:2}]]),before=JSON.stringify(rows);
@@ -117,19 +135,19 @@ test('search-term history keeps the current entries visible during a same-campai
 test('search-term button records the campaign analysis before opening the search screen',async()=>{
   const order=[],notices=[],button={disabled:false,isConnected:true},s=setup({...empty(),storedCampaignId:'id-campaign',googleAdsCampaignAction:{mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'}},{
     async recordSearchTermsAnalysisInDiary(input){order.push('record');assert.equal(input.campaignId,'id-campaign');assert.ok(Number.isFinite(Date.parse(input.occurredAtUtc)));return{recorded:true}},
-    openSearchTerms(context){order.push('open');assert.deepEqual(JSON.parse(JSON.stringify(context)),{managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search',includeToday:true,autoQuery:false})},
+    openSearchTerms(context){order.push('open');assert.equal(button.disabled,true);assert.deepEqual(JSON.parse(JSON.stringify(context)),{managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search',includeToday:true,autoQuery:false})},
     notifySearchTermsAnalysisError:message=>notices.push(message)
   });
   s.controller.render('Campanha Search');
   await s.get('#productCampaignEventsToolbar').onclick({target:{closest:selector=>selector==='[data-product-search-terms]'?button:null}});
-  assert.deepEqual(order,['record','open']);assert.deepEqual(notices,[]);assert.equal(button.disabled,true);
+  assert.deepEqual(order,['record','open']);assert.deepEqual(notices,[]);
 });
 test('search-term screen still opens when local event recording fails and reports the failure',async()=>{
   const opened=[],notices=[],button={disabled:false,isConnected:true},s=setup({...empty(),storedCampaignId:'id-campaign',googleAdsCampaignAction:{mappingStatus:'mapped',managerCustomerId:'3533796641',customerId:'4404265713',campaignId:'123456789',campaignName:'Campanha Search'}},{
-    async recordSearchTermsAnalysisInDiary(){throw new Error('Base local indisponível')},openSearchTerms(){opened.push(true)},notifySearchTermsAnalysisError:message=>notices.push(message)
+    async recordSearchTermsAnalysisInDiary(){throw new Error('Base local indisponível')},openSearchTerms(){opened.push(true);assert.equal(button.disabled,true)},notifySearchTermsAnalysisError:message=>notices.push(message)
   });
   s.controller.render('Campanha Search');await s.get('#productCampaignEventsToolbar').onclick({target:{closest:()=>button}});
-  assert.deepEqual(opened,[true]);assert.deepEqual(notices,['Base local indisponível']);assert.equal(button.disabled,true);
+  assert.deepEqual(opened,[true]);assert.deepEqual(notices,['Base local indisponível']);
 });
 
 test('diary totals use inclusive pause cutoff and only unconfirmed manual-sale excess without modifying official cells',()=>{

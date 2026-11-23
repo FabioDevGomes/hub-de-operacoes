@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Transferir ações de conversão</title>
+<style>body{font:16px system-ui;max-width:760px;margin:3rem auto;padding:0 1rem;color:#dbe8f8;background:#091323}button,input{font:inherit;padding:.65rem;margin:.5rem 0}section{background:#13233a;padding:1rem;margin:1rem 0;border-radius:.5rem}pre{white-space:pre-wrap}button:disabled{opacity:.5}</style></head>
+<body><h1>Transferir ações de conversão</h1><p>Exporta somente as ações de conversão por MCC deste navegador. Não altera campanhas, ações no Google Ads nem envio de conversões.</p>
+<section><h2>1. Primário: exportar</h2><button id="export">Baixar configurações</button></section>
+<section><h2>2. Secundário: conferir e importar</h2><input id="file" type="file" accept="application/json,.json"><button id="import" disabled>Importar MCCs ausentes</button><p>As MCCs já existentes neste navegador serão preservadas, mesmo se forem diferentes.</p></section>
+<pre id="status" role="status" aria-live="polite"></pre><script type="module" src="./transferencia-conversao.mjs"></script></body></html>

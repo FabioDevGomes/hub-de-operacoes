@@ -8,12 +8,13 @@
   function yieldToBrowser(signal){
     return new Promise((resolve,reject)=>{
       let id=null,kind='';
-      const cleanup=()=>signal?.removeEventListener?.('abort',onAbort);
+      let channel=null;
+      const cleanup=()=>{signal?.removeEventListener?.('abort',onAbort);if(channel){channel.port1.close();channel.port2.close();channel=null}};
       const finish=()=>{cleanup();resolve()};
       const onAbort=()=>{try{if(kind==='idle')root.cancelIdleCallback?.(id);else root.clearTimeout?.(id)}catch{}cleanup();reject(signal.reason||abortError())};
       if(signal?.aborted){reject(signal.reason||abortError());return}
       signal?.addEventListener?.('abort',onAbort,{once:true});
-      try{kind='timeout';id=root.setTimeout(finish,0)}catch{finish()}
+      try{if(typeof root.MessageChannel==='function'){kind='message';channel=new root.MessageChannel();channel.port1.onmessage=finish;channel.port2.postMessage(0)}else{kind='timeout';id=root.setTimeout(finish,0)}}catch{if(channel){channel.port1.close();channel.port2.close();channel=null}try{kind='timeout';id=root.setTimeout(finish,0)}catch{finish()}}
     });
   }
 

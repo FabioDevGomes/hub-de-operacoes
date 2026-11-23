@@ -1,10 +1,17 @@
 ﻿[CmdletBinding()]
 param(
     [int]$Port = 8765,
-    [string]$ProductsRoot
+    [string]$ProductsRoot,
+    [switch]$CentralReadOnlyProxy,
+    [int]$CentralReadOnlyPort = 18781,
+    [switch]$CentralFictitiousProxy,
+    [switch]$CentralWriteProxy,
+    [string]$CentralReadOnlyDatabase
 )
 
 $ErrorActionPreference = 'Stop'
+if ($CentralFictitiousProxy -and ($Port -eq 8765 -or $CentralReadOnlyProxy -or $CentralWriteProxy)) { throw 'O proxy fictício exige porta de teste e modo exclusivo.' }
+if ($CentralWriteProxy -and ($CentralReadOnlyProxy -or [string]::IsNullOrWhiteSpace($CentralReadOnlyDatabase))) { throw 'O modo de escrita exige uma base explícita e exclusiva.' }
 if (-not ('HubLocal.FileReparseTagReader' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -80,6 +87,8 @@ if (Test-Path -LiteralPath $securityModuleManifest -PathType Leaf) {
     Import-Module -Name Microsoft.PowerShell.Security -ErrorAction Stop
 }
 $projectRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($CentralReadOnlyDatabase)) { $CentralReadOnlyDatabase = Join-Path $projectRoot 'data-local\base-central-inicial.sqlite' }
+$CentralReadOnlyDatabase = [IO.Path]::GetFullPath($CentralReadOnlyDatabase)
 $siteDirectory = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist'))
 $engineRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'presell-engine'))
 $knowledgeExportScript = Join-Path $PSScriptRoot 'knowledge-export.ps1'
@@ -119,6 +128,7 @@ function Get-StatusReason {
         413 { 'Payload Too Large' }
         500 { 'Internal Server Error' }
         502 { 'Bad Gateway' }
+        503 { 'Service Unavailable' }
         default { 'Error' }
     }
 }
@@ -182,7 +192,8 @@ function Read-HttpRequest {
     if ($headers.ContainsKey('Content-Length') -and -not [int]::TryParse($headers['Content-Length'], [ref]$contentLength)) {
         throw 'Content-Length inválido.'
     }
-    if ($contentLength -lt 0 -or $contentLength -gt 200000) { throw 'O tamanho da ficha é inválido.' }
+    $maxBody = if (($CentralFictitiousProxy -or $CentralWriteProxy) -and $requestLine[1].StartsWith('/central/')) { 67108864 } else { 200000 }
+    if ($contentLength -lt 0 -or $contentLength -gt $maxBody) { throw 'O tamanho da ficha é inválido.' }
     $bodyBytes = New-Object byte[] $contentLength
     $offset = 0
     while ($offset -lt $contentLength) {
@@ -2177,10 +2188,35 @@ try {
             $stream = $client.GetStream()
             $request = Read-HttpRequest $stream
             $path = [Uri]::UnescapeDataString(($request.Target -split '\?', 2)[0])
+            if ($path.StartsWith('/central/', [StringComparison]::Ordinal)) {
+                if (-not $CentralReadOnlyProxy -and -not $CentralFictitiousProxy -and -not $CentralWriteProxy) { Write-JsonResponse $stream 404 @{ error = 'central_not_enabled' }; continue }
+                $origin = [string]$request.Headers['Origin']
+                $sameOrigin = $request.Headers['Host'] -ceq "127.0.0.1:$Port" -and ($origin -ceq "http://127.0.0.1:$Port" -or ($request.Method -eq 'GET' -and [string]::IsNullOrWhiteSpace($origin) -and $request.Headers['Sec-Fetch-Site'] -ceq 'same-origin' -and $request.Headers['X-Hub-Lab'] -ceq '1'))
+                if (-not $sameOrigin) { Write-JsonResponse $stream 403 @{ error = 'forbidden' }; continue }
+                $readPost = @('/central/indexed/query','/central/indexed/get','/central/indexed/scan','/central/indexed/binary','/central/transaction/read')
+                if ($request.Method -ne 'GET' -and -not ($request.Method -eq 'POST' -and ($CentralFictitiousProxy -or $CentralWriteProxy -or $path -in $readPost))) { Write-JsonResponse $stream 403 @{ error = 'read_only' }; continue }
+                try {
+                    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$CentralReadOnlyPort/health" -TimeoutSec 2 -Proxy $null
+                    $expectedService = if ($CentralFictitiousProxy) { 'hub-central-fictitious-v1' } elseif ($CentralWriteProxy) { 'hub-central-write-v1' } else { 'hub-central-readonly-v1' }
+                    if ($health.service -cne $expectedService -or $health.hubPort -ne $Port) { throw 'Serviço central incompatível' }
+                    if (-not $CentralFictitiousProxy -and $health.database -cne $CentralReadOnlyDatabase) { throw 'Base central incompatível' }
+                    $upstream = [Net.HttpWebRequest]::Create("http://127.0.0.1:$CentralReadOnlyPort$($request.Target)")
+                    $upstream.Proxy = $null; $upstream.Method = $request.Method; $upstream.Timeout = 10000; $upstream.ReadWriteTimeout = 10000
+                    $upstream.Headers.Add('Origin', "http://127.0.0.1:$Port")
+                    if ($request.Method -eq 'POST') {
+                        if ($request.Headers['Content-Type'] -cne 'application/json') { Write-JsonResponse $stream 400 @{ error = 'invalid_content_type' }; continue }
+                        $bodyBytes = [Text.Encoding]::UTF8.GetBytes([string]$request.Body); $upstream.ContentType = 'application/json'; $upstream.ContentLength = $bodyBytes.Length
+                        $requestStream = $upstream.GetRequestStream(); try { $requestStream.Write($bodyBytes, 0, $bodyBytes.Length) } finally { $requestStream.Dispose() }
+                    }
+                    try { $upstreamResponse = $upstream.GetResponse() } catch [Net.WebException] { if (-not $_.Exception.Response) { throw }; $upstreamResponse = $_.Exception.Response }
+                    try { $buffer = New-Object IO.MemoryStream; try { $upstreamResponse.GetResponseStream().CopyTo($buffer); Write-HttpResponse $stream ([int]$upstreamResponse.StatusCode) 'application/json; charset=utf-8' $buffer.ToArray() } finally { $buffer.Dispose() } } finally { $upstreamResponse.Dispose() }
+                } catch { Write-JsonResponse $stream 503 @{ error = 'central_unavailable' } }
+                continue
+            }
             if ($path -in @('/api/hostinger/publish','/api/hostinger/publish/verify','/api/presell/overwrite','/api/presell/batch-overwrite')) { $client.SendTimeout = 600000 }
             if ($path -eq '/api/asset-studio/capture') { $client.SendTimeout = 180000 }
             if ($request.Method -eq 'GET' -and $path -eq '/api/presell/health') {
-                Write-JsonResponse $stream 200 @{ presellApi = 'v2'; runtime = 'powershell'; engine = 'embedded'; instanceId = $serverInstanceId; mcpBridgeApi = $false }
+                Write-JsonResponse $stream 200 @{ presellApi = 'v2'; runtime = 'powershell'; engine = 'embedded'; instanceId = $serverInstanceId; mcpBridgeApi = $false; centralReadOnlyProxy = [bool]$CentralReadOnlyProxy; centralWriteProxy = [bool]$CentralWriteProxy }
                 continue
             }
             if ($path -eq '/api/server/restart') {

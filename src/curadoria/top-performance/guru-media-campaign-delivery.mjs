@@ -15,6 +15,16 @@ import * as Storage from './top-performance-storage.mjs?v=4';
 import { buildGuruMediaDeliveryData, GURU_MEDIA_PLATFORM_CODE } from './guru-media-delivery-domain.mjs?v=5';
 import { normalizeAffiliateUrl } from '../../campaign-delivery/affiliate-url-domain.mjs?v=1';
 import { globalCandidatesFromImageRecord, MAX_CANDIDATES, uniqueCandidates } from './guru-media-negative-candidates-domain.mjs?v=2';
+import {curationBridges} from '../central-bridge-slot.mjs';
+
+async function centralSnapshot(){const snapshot=await curationBridges.delivery.list();curationBridges.guruDeliverySnapshot=snapshot;return snapshot}
+async function centralUpdate(offerId,changes){
+ const client=curationBridges.delivery;
+ const snapshot=curationBridges.guruDeliverySnapshot||await centralSnapshot();
+ const linked=client.forOffer(snapshot,String(offerId),'GM');
+ await client.update(snapshot,String(offerId),'GM',changes);
+ const current=await centralSnapshot();return client.forOffer(current,String(offerId),'GM').filter(row=>linked.some(old=>old.id===row.id));
+}
 
 async function readOfferContext(offerId) {
   const key = String(offerId || '').trim();
@@ -25,7 +35,7 @@ async function readOfferContext(offerId) {
     Storage.getByKey(Storage.STORES.images, key),
   ]);
   if (!offer) throw new Error('A oferta não está mais salva na Curadoria Guru Media. Atualize a tela e tente novamente.');
-  return { offer, trendsRecord: trendsRecord || {}, imagesRecord: imagesRecord || {} };
+  return { offer, trendsRecord: trendsRecord || {}, imagesRecord: imagesRecord || {}, hasTrendsRecord: Boolean(trendsRecord), hasImagesRecord: Boolean(imagesRecord) };
 }
 
 export async function saveGuruMediaNegativeKeywordCandidates(offerId, values) {
@@ -63,7 +73,7 @@ export async function saveGuruMediaCommission(offerId, value) {
   const { offer } = await readOfferContext(offerId);
   const saved = await Storage.put(Storage.STORES.offers, { ...offer, commissionOverrideUsd: commissionAmountUsd });
   let deliverySyncWarning = '';
-  try { updateCampaignDeliveryCommissionForOffer(String(offerId), commissionAmountUsd, undefined, GURU_MEDIA_PLATFORM_CODE); }
+  try { if(curationBridges.delivery)await centralUpdate(offerId,{commissionAmountUsd});else updateCampaignDeliveryCommissionForOffer(String(offerId), commissionAmountUsd, undefined, GURU_MEDIA_PLATFORM_CODE); }
   catch (error) { deliverySyncWarning = error?.message || 'Não foi possível sincronizar o valor com a entrega existente.'; }
   return { offer: saved, deliverySyncWarning };
 }
@@ -76,7 +86,7 @@ export async function saveGuruMediaAffiliateUrl(offerId, value) {
   let deliverySyncWarning = '';
   let deliveriesUpdated = 0;
   try {
-    deliveriesUpdated = updateCampaignDeliveryAffiliateUrlForOffer(String(offerId), affiliateUrl, undefined, GURU_MEDIA_PLATFORM_CODE).length;
+    deliveriesUpdated = curationBridges.delivery?(await centralUpdate(offerId,{affiliateUrl})).length:updateCampaignDeliveryAffiliateUrlForOffer(String(offerId), affiliateUrl, undefined, GURU_MEDIA_PLATFORM_CODE).length;
   } catch (error) {
     deliverySyncWarning = error?.message || 'Não foi possível sincronizar o link com o fluxo existente.';
   }
@@ -88,7 +98,8 @@ export async function saveGuruMediaCanonicalProductName(offerId, value) {
   if (!canonicalProductName || canonicalProductName.length > 100) throw new Error('Informe um nome de produto com até 100 caracteres.');
   const { offer } = await readOfferContext(offerId);
   const normalizedName = canonicalProductName.replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
-  const collision = listCampaignDeliveries().find(record => (record.platformCode || 'CB') === GURU_MEDIA_PLATFORM_CODE
+  const deliverySnapshot=curationBridges.delivery?await centralSnapshot():null;
+  const collision = (deliverySnapshot?deliverySnapshot.deliveries:listCampaignDeliveries()).find(record => (record.platformCode || 'CB') === GURU_MEDIA_PLATFORM_CODE
     && String(record.offerKey || '') !== String(offerId)
     && String(record.productName || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === normalizedName);
   if (collision) throw new Error('Já existe um fluxo Guru Media com esse nome ligado a outra oferta. Escolha um nome distinto para não misturar os fluxos.');
@@ -96,7 +107,7 @@ export async function saveGuruMediaCanonicalProductName(offerId, value) {
   let deliverySyncWarning = '';
   let deliveriesUpdated = 0;
   try {
-    const linked = updateCampaignDeliveryProductNameForOffer(String(offerId), canonicalProductName, undefined, GURU_MEDIA_PLATFORM_CODE);
+    const linked = curationBridges.delivery?await centralUpdate(offerId,{productName:canonicalProductName}):updateCampaignDeliveryProductNameForOffer(String(offerId), canonicalProductName, undefined, GURU_MEDIA_PLATFORM_CODE);
     deliveriesUpdated = linked.length;
   } catch (error) {
     deliverySyncWarning = error?.message || 'Não foi possível sincronizar o nome com o fluxo existente.';
@@ -107,6 +118,19 @@ export async function saveGuruMediaCanonicalProductName(offerId, value) {
 export async function syncGuruMediaCampaignDelivery(offerId) {
   const context = await readOfferContext(offerId);
   const data = buildGuruMediaDeliveryData(context);
+  if(curationBridges.delivery){
+    const changes={};
+    if(context.hasTrendsRecord){
+      if(Array.isArray(context.trendsRecord.pageDraft?.countries)||Array.isArray(context.trendsRecord.assessments)&&context.trendsRecord.assessments.length){changes.countries=data.countries;changes.geoTargetingMode=data.geoTargetingMode}
+      if(Array.isArray(context.trendsRecord.keywordCandidates))changes.positiveKeywords=data.positiveKeywords;
+    }
+    if(context.hasImagesRecord){changes.negativeKeywords=data.negativeKeywords;changes.negativeKeywordCountries=data.negativeKeywordCountries}
+    if(data.canonicalProductName)changes.productName=data.canonicalProductName;
+    if(data.affiliateUrl)changes.affiliateUrl=data.affiliateUrl;
+    if(isCommissionUsd(data.commissionAmountUsd))changes.commissionAmountUsd=data.commissionAmountUsd;
+    if(!Object.keys(changes).length){const snapshot=await centralSnapshot();return curationBridges.delivery.forOffer(snapshot,data.offerKey,'GM');}
+    return centralUpdate(data.offerKey,changes);
+  }
   const linked = getCampaignDeliveriesForOffer(data.offerKey, undefined, GURU_MEDIA_PLATFORM_CODE);
   if (!linked.length) return [];
   if (data.canonicalProductName) {
@@ -130,11 +154,12 @@ export async function startGuruMediaCampaignDelivery(offerId) {
   if (!normalizeAffiliateUrl(data.affiliateUrl)) {
     throw new Error('Informe e salve uma URL HTTP ou HTTPS válida para o link de afiliado antes de iniciar ou continuar a entrega.');
   }
-  const existing = getCampaignDeliveriesForOffer(data.offerKey, undefined, GURU_MEDIA_PLATFORM_CODE);
+  const snapshot=curationBridges.delivery?await centralSnapshot():null;
+  const existing = snapshot?curationBridges.delivery.forOffer(snapshot,data.offerKey,'GM'):getCampaignDeliveriesForOffer(data.offerKey, undefined, GURU_MEDIA_PLATFORM_CODE);
   if (existing.length > 1) throw new Error('Há mais de uma entrega desta oferta Guru Media. Abra Entrega de campanha e selecione o fluxo correto.');
   if (existing.length === 1) {
     await syncGuruMediaCampaignDelivery(data.offerKey);
-    return getCampaignDelivery(existing[0].id);
+    return curationBridges.delivery?curationBridges.guruDeliverySnapshot.deliveries.find(record=>record.id===existing[0].id):getCampaignDelivery(existing[0].id);
   }
   if (!data.productName) throw new Error('Defina o nome do produto antes de iniciar a entrega.');
   if (data.geoTargetingMode !== 'WORLD'
@@ -144,13 +169,13 @@ export async function startGuruMediaCampaignDelivery(offerId) {
   if (!isCommissionUsd(data.commissionAmountUsd)) {
     throw new Error('Informe e salve a comissão da oferta em USD antes de iniciar a entrega.');
   }
-  const duplicateProduct = listCampaignDeliveries().find(record => (record.platformCode || 'CB') === GURU_MEDIA_PLATFORM_CODE
+  const duplicateProduct = (snapshot?snapshot.deliveries:listCampaignDeliveries()).find(record => (record.platformCode || 'CB') === GURU_MEDIA_PLATFORM_CODE
     && String(record.productName || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
       === data.productName.replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR'));
   if (duplicateProduct && duplicateProduct.offerKey !== data.offerKey) {
     throw new Error('Já existe um fluxo Guru Media para este produto ligado a outra oferta. Confira o fluxo salvo antes de criar outro.');
   }
-  return createCampaignDelivery({
+  const input={
     platformCode: GURU_MEDIA_PLATFORM_CODE,
     offerKey: data.offerKey,
     offerName: data.offerName,
@@ -165,7 +190,9 @@ export async function startGuruMediaCampaignDelivery(offerId) {
     negativeKeywords: data.negativeKeywords,
     negativeKeywordCountries: data.negativeKeywordCountries,
     operationSnapshot: { type: 'campaign_delivery_started', sourceActivity: 'Curadoria Guru Media', destinationActivity: 'Criação de campanha' },
-  });
+  };
+  if(curationBridges.delivery){const created=await curationBridges.delivery.create(input,snapshot);await centralSnapshot();return created;}
+  return createCampaignDelivery(input);
 }
 
 export function watchGuruMediaCampaignDeliverySources(onError = () => {}) {

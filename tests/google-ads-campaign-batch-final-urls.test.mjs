@@ -48,7 +48,7 @@ test('Google Ads history renders the saved Pre-Sell address as a new-tab link in
   assert.ok(start>=0&&end>start);
   const renderer=source.slice(start,end);
   assert.match(renderer,/href="\$\{escapeHtml\(campaignFinalUrl\)\}" target="_blank"/);
-  assert.match(renderer,/title="URL final da Pre-Sell registrada no lote local"/);
-  assert.match(renderer,/URL final não registrada no lote local/);
+  assert.match(renderer,/title="URL final da Pre-Sell registrada no Hub"/);
+  assert.match(renderer,/URL final não encontrada nos registros disponíveis/);
   assert.doesNotMatch(renderer,/ID Google Ads/);
 });

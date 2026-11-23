@@ -333,6 +333,12 @@
 .google-ads-history-click-indicator.is-decrease{color:#f3ca76}
 .google-ads-history-click-unavailable{max-width:108px;color:#e5c477;font-size:.58rem;font-weight:650;line-height:1.15;overflow-wrap:anywhere}
 .google-ads-history-click-dot{display:inline-block;flex:0 0 7.7px;width:7.7px;height:7.7px;border-radius:50%;background:#79efb5;box-shadow:0 0 0 2.2px rgba(121,239,181,.13)}
+.google-ads-history-policy-dot{display:inline-block;flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#ff5f6d;box-shadow:0 0 0 2px rgba(255,95,109,.2)}
+.google-ads-policy-details{margin-top:14px;padding:12px;background:rgba(148,35,52,.14);border-radius:8px;color:var(--text)}
+.google-ads-policy-details>summary{color:#ff858f;font-weight:700;cursor:pointer}
+.google-ads-policy-details .google-ads-table-wrap{margin-top:10px}
+.google-ads-policy-details th{color:#ffafb5}
+.google-ads-policy-review-button{white-space:nowrap}
 .google-ads-history-click-minus{color:#f3ca76;font-size:.76rem;font-weight:800;line-height:1}
 .google-ads-history-click-plus{padding-left:1px;color:#79efb5;font-size:.72rem;font-weight:800;line-height:1}
 .google-ads-history-button-time{color:var(--muted);font-size:.66rem;line-height:1.3}
@@ -1287,6 +1293,7 @@
 .google-ads-geographic-target.is-outside,.google-ads-geographic-target.is-conflict{color:#ffc1c9;border-color:rgba(224,104,126,.48);background:rgba(139,43,62,.16)}
 .google-ads-geographic-target.is-world{color:#b9dcff;border-color:rgba(82,161,229,.42);background:rgba(48,111,170,.16)}
 .google-ads-geographic-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.google-ads-geographic-pagination{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 @media(max-width:640px){.google-ads-campaign-csv-workflow-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.google-ads-campaign-csv-workflow-panel{max-height:calc(100dvh - 16px)}.google-ads-campaign-csv-workflow-header{align-items:stretch;padding:12px;flex-direction:column}.google-ads-campaign-csv-workflow-header .btn,.google-ads-campaign-csv-workflow-actions .btn,.google-ads-campaign-csv-workflow-manager .btn,.google-ads-campaign-csv-workflow-step>.btn{width:100%}.google-ads-campaign-csv-workflow-body{padding:12px}.google-ads-campaign-csv-workflow-step{padding:12px}.google-ads-campaign-csv-workflow-step-heading{grid-template-columns:auto minmax(0,1fr)}.google-ads-campaign-csv-workflow-state{grid-column:2}}
 .google-ads-creation-mode{padding:14px 22px 0}
 .google-ads-creation-mode fieldset{margin:0;padding:14px;border:1px solid #29415d;border-radius:12px;background:#10223a}

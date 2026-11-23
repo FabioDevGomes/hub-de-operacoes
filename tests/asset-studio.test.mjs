@@ -3,6 +3,7 @@ import{readFile}from'node:fs/promises';
 
 const html=await readFile(new URL('../dist/asset-studio/index.html',import.meta.url),'utf8');
 const app=await readFile(new URL('../dist/asset-studio/app.js',import.meta.url),'utf8');
+const centralStart=await readFile(new URL('../dist/asset-studio/central-start.mjs',import.meta.url),'utf8');
 const css=await readFile(new URL('../dist/asset-studio/styles.css',import.meta.url),'utf8');
 const mobileDimensions=await import('../dist/asset-studio/mobile-dimensions.mjs');
 
@@ -21,7 +22,9 @@ assert.ok(app.includes('canvas.width = width')&&app.includes('canvas.height = he
 assert.ok(app.includes("if (blob.type === 'image/png')")&&app.includes('return { blob, width, height }'),'PNG original não é preservado sem recodificação');
 assert.ok(app.includes("canvas.toBlob(result => result ? resolve(result)")&&app.includes("'image/png'"),'favicon não é convertido para PNG');
 assert.ok(app.includes('desktop: { name: \'01.png\', width: 1892, height: 908, brightness: 0.72, colorMask: 0xFC }'),'imagem desktop deve manter brilho e dimensões, com redução de cor menos agressiva');
-assert.ok(html.includes('data-mobile-dimension-warning role="alert"')&&html.includes('app.js?v=17'),'aviso de dimensões Mobile deve existir com atualização de cache');
+assert.ok(html.includes('data-mobile-dimension-warning role="alert"'),'aviso de dimensões Mobile deve existir');
+assert.match(html,/src="central-start\.mjs\?v=\d+"/,'HTML deve carregar o inicializador com cache versionado');
+assert.match(centralStart,/import\('\.\/app\.js\?v=18'\)/,'inicializador deve carregar a versão atual do Asset Studio');
 assert.ok(app.includes('void inspectMobileDimensions(file)')&&app.includes('tolerância de 10% após compensar a escala uniforme da captura'),'a captura e restauração Mobile devem validar dimensões considerando a escala da captura');
 assert.ok(app.includes('if (label === \'Mobile\')')&&app.includes('isMobileDimensionsCompatible(decoded.width, decoded.height, expected)'),'capturas Mobile automáticas devem aceitar a escala de pixels preservando a tolerância de proporção');
 assert.equal(mobileDimensions.isMobileDimensionsCompatible(373,819,{width:373,height:819}),true);

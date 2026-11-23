@@ -5,6 +5,8 @@ const producer=await readFile(new URL('../presell-engine/tools/New-PresellFromFi
 const rules=JSON.parse(await readFile(new URL('../presell-engine/config/presell-rules.json',import.meta.url),'utf8'));
 
 assert.equal(rules.visualRules.preserveMobileBackgroundFramingWhenDetailsOpen,true);
+assert.equal(rules.visualRules.desktopBackgroundSizing,'width-locked');
+assert.match(producer,/background-image: url\('\.\/\$assetFolder\/01\.png'\);[\s\S]*?background-size: 100% auto;[\s\S]*?background-attachment: fixed;/);
 assert.equal(rules.visualRules.mobileBackgroundSizing,'width-locked');
 assert.equal(rules.visualRules.expandedDetailsSurface,'neutral-gray');
 assert.match(producer,/@media \(max-width: 767px\)[\s\S]*background-size: 100% auto;/);

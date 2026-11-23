@@ -155,6 +155,26 @@ function tracking_clicks_fetch_report(PDO $pdo, array $dates, string $platform, 
     }, $rows);
 }
 
+/** Aggregate sessions without exposing visitor or click identifiers. */
+function tracking_clicks_campaign_advance(PDO $pdo, array $dates, string $campaignId): array
+{
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS sessions, COALESCE(SUM(advanced),0) AS advanced FROM (
+        SELECT e.presell_host, e.visitor_id,
+            CASE WHEN MAX(CASE WHEN e.event_type='outbound_click' THEN e.received_at_utc END)
+              >= MIN(CASE WHEN e.event_type='page_view' THEN e.received_at_utc END) THEN 1 ELSE 0 END AS advanced
+        FROM tracking_events e INNER JOIN tracking_allowed_domains d ON d.page_host=e.presell_host
+        WHERE e.received_at_utc >= :start_at AND e.received_at_utc < :end_at
+          AND e.utm_campaign=:campaign_id AND d.platform='gurumedia'
+          AND e.event_type IN ('page_view','outbound_click')
+          AND NULLIF(TRIM(e.visitor_id),'') IS NOT NULL AND NULLIF(TRIM(e.presell_host),'') IS NOT NULL
+        GROUP BY e.presell_host,e.visitor_id
+        HAVING MIN(CASE WHEN e.event_type='page_view' THEN e.received_at_utc END) IS NOT NULL
+    ) sessions");
+    $stmt->execute([':start_at'=>$dates['start_at_utc'], ':end_at'=>$dates['end_before_utc'], ':campaign_id'=>$campaignId]);
+    $row = $stmt->fetch();
+    return ['sessions'=>(int)$row['sessions'], 'advanced'=>(int)$row['advanced']];
+}
+
 function tracking_clicks_authorization_header(): ?string
 {
     $value = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
@@ -231,7 +251,7 @@ function tracking_clicks_report_dispatch(): never
     } catch (Throwable $error) {
         tracking_clicks_send_json(400, ['ok' => false, 'error' => 'invalid_json']);
     }
-    if (!is_array($payload) || array_diff(array_keys($payload), ['start_date', 'end_date', 'platform', 'include_traffic_source']) !== []
+    if (!is_array($payload) || array_diff(array_keys($payload), ['start_date', 'end_date', 'platform', 'include_traffic_source', 'campaign_advance_id']) !== []
         || !array_key_exists('start_date', $payload) || !array_key_exists('end_date', $payload)) {
         tracking_clicks_send_json(400, ['ok' => false, 'error' => 'invalid_payload']);
     }
@@ -246,6 +266,14 @@ function tracking_clicks_report_dispatch(): never
         }
         $dates = tracking_clicks_normalize_dates($payload['start_date'], $payload['end_date']);
         $pdo = tracking_clicks_connect_db($config);
+        if (array_key_exists('campaign_advance_id', $payload)) {
+            $id = $payload['campaign_advance_id'];
+            if ($platform !== 'gurumedia' || !is_string($id) || preg_match('/^[1-9][0-9]{0,19}$/D', $id) !== 1) {
+                throw new InvalidArgumentException('invalid_payload');
+            }
+            $result = tracking_clicks_campaign_advance($pdo, $dates, $id);
+            tracking_clicks_send_json(200, ['ok'=>true, 'campaign_id'=>$id, 'start_date'=>$dates['start_date'], 'end_date'=>$dates['end_date'], 'generated_at_utc'=>gmdate('Y-m-d\TH:i:s\Z')] + $result);
+        }
         $rows = tracking_clicks_fetch_report($pdo, $dates, $platform, $includeTrafficSource);
     } catch (InvalidArgumentException $error) {
         tracking_clicks_send_json(400, ['ok' => false, 'error' => $error->getMessage()]);

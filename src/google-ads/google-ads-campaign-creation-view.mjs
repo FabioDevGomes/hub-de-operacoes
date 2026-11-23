@@ -86,7 +86,7 @@ import {
   saveGoogleAdsResourceBookmarks,
   summarizeGoogleAdsResourceBookmarkMatches,
 } from './google-ads-resource-bookmarks.mjs?v=1';
-import { GOOGLE_ADS_CAMPAIGN_BOOKMARKS_STORAGE_KEY, loadGoogleAdsCampaignBookmarks, matchGoogleAdsCampaignBookmark, saveGoogleAdsCampaignBookmarks } from './google-ads-campaign-bookmarks.mjs?v=2';
+import { GOOGLE_ADS_CAMPAIGN_BOOKMARKS_STORAGE_KEY, loadGoogleAdsCampaignBookmarks, matchGoogleAdsCampaignBookmark, saveGoogleAdsCampaignBookmarks } from './google-ads-campaign-bookmarks.mjs?v=3';
 import { GOOGLE_ADS_MANAGER_BOOKMARKS_STORAGE_KEY, loadGoogleAdsManagerBookmarks, saveGoogleAdsManagerBookmarks } from './google-ads-manager-bookmarks.mjs?v=1';
 import {
   createGoogleAdsAccountImageEligibilityStorage,
@@ -174,7 +174,7 @@ function makeFields() {
     '<fieldset class="google-ads-creation-fields" disabled>',
     '<div class="google-ads-creation-budget-grid"><div class="google-ads-creation-name-field"><label class="google-ads-creation-field"><span>Novo nome da campanha</span><input class="input" name="campaign_name" type="text" maxlength="128" required autocomplete="off"><small class="google-ads-creation-help" data-google-ads-batch-campaign-reference hidden></small></label><button class="btn google-ads-creation-calculate" type="button" data-google-ads-campaign-name-calculate>Calcular informações</button></div><label class="google-ads-creation-field"><span>Orçamento diário <small data-creation-currency>moeda da conta</small></span><input class="input" name="daily_budget" type="text" inputmode="decimal" value="100" placeholder="100" required></label><label class="google-ads-creation-field" data-bidding-field="max-cpc" hidden><span data-max-cpc-label>CPC máximo <small data-creation-currency>moeda da conta</small></span><input class="input" name="max_cpc_bid" type="text" inputmode="decimal" placeholder="2,00"></label></div>',
     '<label class="google-ads-creation-field"><span>Comissão da oferta (USD)</span><input class="input" type="text" data-clickbank-commission-field readonly placeholder="Comissão não informada"><small class="google-ads-creation-help">Valor recebido da oferta na Curadoria.</small></label>',
-    '<fieldset class="google-ads-creation-field google-ads-brand-bidding-field"><legend>Brand bidding da Curadoria</legend><div class="google-ads-brand-bidding-options" role="radiogroup" aria-label="Brand bidding da Curadoria"><label><input type="radio" name="brand_bidding" value="no_brand_bidding" data-curation-brand-bidding><span>NBB · No brand bidding</span></label><label><input type="radio" name="brand_bidding" value="brand_bidding" data-curation-brand-bidding><span>BB · Brand bidding</span></label></div><small class="google-ads-creation-help">A classificação vem da Curadoria; você pode escolher o padrão desta campanha.</small></fieldset>',
+    '<fieldset class="google-ads-creation-field google-ads-brand-bidding-field"><legend>Brand bidding da Curadoria</legend><div class="google-ads-brand-bidding-options" role="radiogroup" aria-label="Brand bidding da Curadoria"><label><input type="radio" name="brand_bidding" value="no_brand_bidding" data-curation-brand-bidding><span>NBB · No brand bidding</span></label><label><input type="radio" name="brand_bidding" value="brand_bidding" data-curation-brand-bidding><span>BB · Brand bidding</span></label></div><small class="google-ads-creation-help">BB é o padrão nesta tela; você pode alterar para NBB nesta campanha.</small></fieldset>',
     '<h3>Segmentação e lances</h3>',
     '<div class="google-ads-creation-settings-grid">',
     '<label class="google-ads-creation-field"><span>Estratégia de lances</span><select class="input" name="bidding_strategy" required><option value="TARGET_CPA" selected>CPA desejado</option><option value="MAXIMIZE_CONVERSIONS">Maximizar conversões</option><option value="TARGET_ROAS">ROAS desejado</option><option value="MAXIMIZE_CONVERSION_VALUE">Maximizar valor da conversão</option><option value="MAXIMIZE_CLICKS">Maximizar cliques</option><option value="TARGET_IMPRESSION_SHARE">Parcela de impressões desejada</option><option value="MANUAL_CPC">CPC manual</option></select></label>',
@@ -245,7 +245,8 @@ function makeFields() {
   ].join('');
 }
 
-export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCampaignNames = null, getUsdBrlQuote = null, refreshUsdBrlQuote = null, forceRefreshUsdBrlQuote = null, onCampaignCreated = null, onCampaignsCreated = null, onRegisterSavedHubCampaigns = null, getSavedHubCampaignRecoveryStatus = null } = {}) {
+export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCampaignNames = null, getUsdBrlQuote = null, refreshUsdBrlQuote = null, forceRefreshUsdBrlQuote = null, onCampaignCreated = null, onCampaignsCreated = null, onRegisterSavedHubCampaigns = null, getSavedHubCampaignRecoveryStatus = null, centralDraft = null, centralBatch = null, snapshotClient = null, centralHandoffClient = null, previewSimulation = null } = {}) {
+  if (previewSimulation && (location.origin !== 'http://127.0.0.1:18796' || !snapshotClient || typeof previewSimulation.prepare !== 'function' || typeof previewSimulation.preview !== 'function' || typeof previewSimulation.create !== 'function')) throw new Error('Simulação indisponível.');
   if (!root) throw new Error('A área de criação de campanhas Google Ads não foi encontrada.');
   const handoffQueryId = new URLSearchParams(window.location.search).get(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM) || '';
   const handoffJobQueryId = new URLSearchParams(window.location.search).get(GOOGLE_ADS_PRESELL_HANDOFF_JOB_QUERY_PARAM) || '';
@@ -510,8 +511,8 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   const discountDetectionStatus = page.querySelector('[data-discount-detection-status]');
   const triggerValueField = form.elements.namedItem('trigger_value');
   const triggerField = page.querySelector('[data-promotion-trigger-field]');
-  const isTokenReady = () => Boolean(readTrackingHubToken().token);
-  const cachedDirectory = loadGoogleAdsAccountsCache();
+  const isTokenReady = () => Boolean(previewSimulation || readTrackingHubToken().token);
+  const cachedDirectory = previewSimulation ? {accounts:previewSimulation.directory,savedAtUtc:'2026-01-01T00:00:00Z'} : loadGoogleAdsAccountsCache();
   let directory = cachedDirectory?.accounts || null;
   let directoryCacheAt = cachedDirectory?.savedAtUtc || '';
   let directoryRefreshedAt = cachedDirectory?.refreshedAtUtc || cachedDirectory?.savedAtUtc || '';
@@ -655,6 +656,99 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   let campaignBatchStorageError = '';
   let draftSaveTimer = null;
   let draftDirty = false;
+  let centralDraftEditRevision = 0;
+  let centralSnapshots = [];
+  let selectedCentralExportSnapshot = null;
+  function showCentralCampaignCopy(snapshot) {
+    selectedCentralExportSnapshot = snapshot || null;
+    page.querySelector('[data-central-campaign-copy]')?.remove();
+    if (!snapshot) return;
+    const panel = document.createElement('section');
+    panel.dataset.centralCampaignCopy = '';
+    panel.className = 'notice';
+    const heading = document.createElement('strong');
+    heading.textContent = 'Campanhas na base central · consulta';
+    panel.append(heading);
+    const note = document.createElement('p');
+    const saved = Number.isFinite(Date.parse(snapshot.savedAt)) ? new Date(snapshot.savedAt).toLocaleString('pt-BR') : 'data indisponível';
+    note.textContent = 'Último registro: ' + saved + '. Estes dados não são uma consulta em tempo real ao Google Ads.';
+    panel.append(note);
+    const list = document.createElement('ul');
+    const campaigns = Array.isArray(snapshot.data?.createdCampaigns) ? snapshot.data.createdCampaigns : [];
+    renderCentralExclusionExports(snapshot, panel);
+    for (const campaign of campaigns) {
+      const item = document.createElement('li');
+      item.textContent = [campaign.campaignName || 'Campanha', campaign.accountName || campaign.customerId || 'Conta não informada', campaign.campaignId || 'ID não informado', campaign.status || 'Status não informado'].join(' · ');
+      list.append(item);
+    }
+    if (campaigns.length) panel.append(list);
+    else { const empty = document.createElement('p'); empty.textContent = 'Nenhuma campanha registrada nesta cópia.'; panel.append(empty); }
+    draftPickerCard.after(panel);
+    renderAudienceExclusionUploadPanel();
+  }
+  function renderCentralExclusionExports(snapshot, panel) {
+    const campaigns = Array.isArray(snapshot?.data?.createdCampaigns) ? snapshot.data.createdCampaigns : [];
+    const exportGroups = new Map();
+    for (const campaign of campaigns) {
+      const manager = String(campaign.managerCustomerId || '').replace(/\D/g, '');
+      if (!exportGroups.has(manager)) exportGroups.set(manager, []);
+      exportGroups.get(manager).push(campaign);
+    }
+    for (const [manager, items] of exportGroups) {
+      const item = document.createElement('div');
+      item.className = 'google-ads-audience-exclusion-workbook-item';
+      const row = document.createElement('div');
+      row.className = 'google-ads-audience-exclusion-export-row';
+      const summary = document.createElement('div');
+      summary.className = 'google-ads-audience-exclusion-export-details';
+      const label = document.createElement('strong');
+      label.textContent = managerMccLabel(manager);
+      const count = document.createElement('span');
+      const accountCount = new Set(items.map(campaign => String(campaign.customerId || '').replace(/\D/g, '')).filter(Boolean)).size;
+      count.textContent = accountCount + ' conta(s) · ' + items.length + ' campanha(s) no arquivo · ' + (items.length * 13) + ' critérios';
+      summary.append(label, count);
+      const actions = document.createElement('div');
+      actions.className = 'google-ads-audience-exclusion-workbook-actions';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn primary';
+      button.textContent = 'Baixar Excel';
+      const targets = items.map(item => ({ customerId: String(item.customerId || '').replace(/\D/g, ''), campaignId: String(item.campaignId || '') }));
+      const keys = targets.map(item => item.customerId + ':' + item.campaignId);
+      button.disabled = !/^\d{10}$/.test(manager) || items.length > 100 || !targets.every(item => /^\d{10}$/.test(item.customerId) && /^[1-9]\d{0,19}$/.test(item.campaignId)) || new Set(keys).size !== keys.length;
+      const status = document.createElement('p');
+      status.setAttribute('role', 'status');
+      status.textContent = button.disabled ? 'Confira os IDs das campanhas, contas e MCC antes de gerar o arquivo.' : 'Inclui todas as campanhas desta cópia, inclusive as confirmadas; as confirmações permanecem intactas.';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const catalog = await fetchGoogleAdsAudienceExclusionUploadCatalog({ managerCustomerId: manager, customerId: targets[0].customerId, campaignIds: [targets[0].campaignId] });
+          const workbook = buildGoogleAdsAudienceExclusionWorkbook({ campaigns: targets, audiences: catalog.audiences });
+          const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = 'Exclusoes_Google_Ads_MCC_' + manager + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+          document.body.append(anchor); anchor.click(); anchor.remove();
+          globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          status.textContent = 'Excel gerado para ' + targets.length + ' campanha(s). As confirmações não foram alteradas.';
+        } catch (error) { status.textContent = 'Não foi possível gerar o Excel: ' + String(error?.message || error); }
+        finally { button.disabled = false; }
+      });
+      actions.append(createGoogleAdsCampaignBookmarkControl(manager), button);
+      row.append(summary, actions);
+      item.append(row);
+      const content = document.createElement('div');
+      content.className = 'google-ads-audience-exclusion-workbook-expanded';
+      const help = document.createElement('p');
+      help.textContent = 'Baixe um arquivo por MCC com 13 exclusões por campanha. O arquivo inclui as campanhas já confirmadas e não altera as confirmações. Baixar não altera campanhas nem consulta a Google Ads API.';
+      const note = document.createElement('p');
+      note.className = 'google-ads-audience-exclusion-export-note';
+      note.textContent = 'A configuração atual identifica 9 públicos por ID e 4 por nome.';
+      content.append(help, note, status);
+      item.append(content);
+      panel.append(item);
+    }
+  }
   let draftForce = false;
   let restoringDraft = false;
   let clickBankKeywordSources = [];
@@ -671,7 +765,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   let promotionTargetSource = '';
   let promotionTargetAutoValue = '';
   try {
-    draftStore = loadGoogleAdsCampaignDrafts();
+    draftStore = centralDraft ? structuredClone(centralDraft.store) : loadGoogleAdsCampaignDrafts();
     activeDraftId = draftStore.activeDraftId;
     if (!draftStore.drafts.some(draft => draft.id === activeDraftId)) activeDraftId = '';
   } catch (error) {
@@ -679,7 +773,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   }
   if (handoffQueryId) activeDraftId = '';
   try {
-    campaignBatchStore = loadGoogleAdsCampaignBatches();
+    campaignBatchStore = centralBatch ? structuredClone(centralBatch.store) : loadGoogleAdsCampaignBatches();
   } catch (error) {
     campaignBatchStorageError = error.message || 'Não foi possível acessar os lotes de campanhas deste navegador.';
   }
@@ -689,7 +783,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     campaignCsvWorkflowStorageError = error.message || 'Não foi possível acessar os fluxos CSV deste navegador.';
   }
   try {
-    savedActiveCampaignContext = loadGoogleAdsCampaignActiveContext();
+    savedActiveCampaignContext = centralDraft ? centralDraft.context : loadGoogleAdsCampaignActiveContext();
   } catch (error) {
     activeCampaignContextStorageError = error.message || 'Não foi possível ler o último contexto de campanha.';
   }
@@ -927,6 +1021,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   }
 
   function effectivePresellCampaignHandoff() {
+    if (centralHandoffClient && activePresellCampaignHandoff) return activePresellCampaignHandoff;
     const selected = readSelectedGoogleAdsPresellCampaignHandoff();
     if (selected.ok) return selected.payload;
     if (selected.reason === 'no-selected-job' || selected.reason === 'storage-unavailable') {
@@ -1094,6 +1189,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const match = matchGoogleAdsCampaignBookmark(campaignBookmarks, {
       accountId,
       accountName: String(manager?.name || '').trim(),
+      firstMatch: true,
     });
     if (match.status !== 'matched') {
       const warning = document.createElement('small');
@@ -1510,8 +1606,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const savedAmount=campaignDeliverySource?.commissionCurrency==='USD'?campaignDeliverySource.commissionAmountUsd:null;
     const recovered=clickBankCurationCommission?.offerKey===campaignDeliverySource?.offerKey&&keywordSourcePlatform(campaignDeliverySource)==='CB'?clickBankCurationCommission:null;
     const amount=isCommissionUsd(savedAmount)?savedAmount:recovered?.amount;
-    const brand=campaignDeliverySource&&Object.hasOwn(campaignDeliverySource,'brandBidding')?campaignDeliverySource.brandBidding:recovered?.brandBidding;
-    const selectedBrand=brand==='brand_bidding'||brand==='no_brand_bidding'?brand:campaignDeliverySource?'no_brand_bidding':'';
+    const selectedBrand=campaignDeliverySource?'brand_bidding':'';
     for(const input of curationBrandBiddingInputs){input.disabled=!campaignDeliverySource; if(!deliveryBrandBiddingOverride)input.checked=input.value===selectedBrand;}
     const sourceName=keywordSourcePlatformName(campaignDeliverySource);
     if(clickBankCommissionField)clickBankCommissionField.value=isCommissionUsd(amount)?formatCommissionUsd(amount):'';
@@ -1920,7 +2015,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const commission=isCommissionUsd(source.commissionAmountUsd)&&source.commissionCurrency==='USD'?source.commissionAmountUsd:recovered?.amount;
     const brand=form.querySelector('[name="brand_bidding"]:checked')?.value
       ||(Object.hasOwn(source,'brandBidding')?source.brandBidding:recovered?.brandBidding)
-      ||'no_brand_bidding';
+      ||'brand_bidding';
     const productField=form.elements.namedItem('source_product');
     const product=String(productField.value||source.productName||'').trim();
     const countries=normalizeGoogleAdsCountryCodeInput(form.elements.namedItem('geo_target_country_codes').value).countryCodes;
@@ -3428,10 +3523,10 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const maxWrites = tasks.reduce((sum, task) => sum + task.account.campaignIds.length + 1, 0);
     const pendingAccounts = [...new Map(tasks.map(task => [task.account.customerId, task.account])).values()];
     const targetLabel = pendingAccounts.map(account => account.accountName + ' (' + account.campaignIds.length + ' campanha(s))').join('\n• ');
-    const confirmed = globalThis.confirm('Enviar ' + new Set(tasks.map(task => task.image.imageSha256)).size + ' imagem(ns) para ' + pendingAccounts.length
+    const confirmed = await confirmCopyReplacement('Enviar ' + new Set(tasks.map(task => task.image.imageSha256)).size + ' imagem(ns) para ' + pendingAccounts.length
       + ' conta(s) e associar às campanhas Search deste lote? O Hub reutiliza cada imagem dentro da própria conta e não altera o status das campanhas. Estimativa máxima: '
       + maxWrites + ' gravações da cota Google Ads, além das consultas de validação. Recursos já ativos serão ignorados; associações pausadas serão reativadas.'
-      + '\n\nContas e campanhas:\n• ' + targetLabel);
+      + '\n\nContas e campanhas:\n• ' + targetLabel, {title:'Confirmar envio de imagens',confirmLabel:'Enviar imagens'});
     if (!confirmed) return;
     if (!saveActiveCampaignBatch()) {
       setStatus('Não foi possível salvar o lote antes do envio. Nenhuma imagem foi enviada.', true);
@@ -4804,7 +4899,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         setStatus(campaignStatusActionGerund(operation) + ' campanha ' + (index + 1) + ' de ' + pending.length + ': ' + campaign.campaignName + ' · ' + (campaign.accountName || campaign.customerId) + '…');
         renderCampaignResult();
         try {
-          const result = await changeGoogleAdsCampaignStatus({
+          const result = await (previewSimulation ? previewSimulation.status : changeGoogleAdsCampaignStatus)({
             managerCustomerId: campaign.managerCustomerId,
             customerId: campaign.customerId,
             campaignId: campaign.campaignId,
@@ -4826,6 +4921,16 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         }
         processed = index + 1;
         campaignStatusBatchProgress = { operation, processed, total: pending.length, currentCampaignKey: '' };
+        if (snapshotClient && campaign.statusActionResult?.verified) {
+          try {
+            const {recordCampaignStatus} = await import('./campanha-copia-central.mjs');
+            await recordCampaignStatus(snapshotClient, activeDraftId, campaign);
+          } catch (error) {
+            campaign.statusActionError = 'Status alterado, mas não confirmado na base central: ' + error.message;
+            stoppedForStorage = true;
+            break;
+          }
+        }
         if (!saveActiveCampaignBatch()) {
           stoppedForStorage = true;
           break;
@@ -5907,10 +6012,10 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const activeCount = pending.filter(campaign => campaign.status === 'ENABLED').length;
     const names = pending.map(campaign => '• ' + campaign.campaignName + ' · ' + (campaign.accountName || campaign.customerId)).join('\n');
     const linkSummary = activeCampaignBatchSitelinks.map(link => '• #' + link.anchor + ' · ' + link.title).join('\n');
-    const confirmed = globalThis.confirm('Aplicar ' + activeCampaignBatchSitelinks.length + ' sitelink(s) em ' + pending.length
+    const confirmed = await confirmCopyReplacement('Aplicar ' + activeCampaignBatchSitelinks.length + ' sitelink(s) em ' + pending.length
       + ' campanha(s), distribuídas em ' + accountCount + ' conta(s)? Para cada campanha, o servidor consulta a URL do anúncio e os sitelinks existentes, grava o que faltar e confirma o resultado. Isso usa leituras e gravações da cota Google Ads. Links iguais ativos não serão duplicados; associações pausadas serão reativadas.'
       + (activeCount ? '\n\n' + activeCount + ' campanha(s) estão ativas; a alteração pode mudar os recursos exibidos nos anúncios.' : '')
-      + '\n\nSitelinks:\n' + linkSummary + '\n\nCampanhas:\n' + names);
+      + '\n\nSitelinks:\n' + linkSummary + '\n\nCampanhas:\n' + names, {title:'Confirmar aplicação dos sitelinks',confirmLabel:'Aplicar sitelinks'});
     if (!confirmed) return;
     if (!saveActiveCampaignBatch()) {
       setStatus('Não foi possível salvar a seleção no lote. Nenhum sitelink foi enviado.', true);
@@ -6022,6 +6127,13 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   function renderAudienceExclusionUploadPanel() {
     if (!audienceExclusionWorkbookPanel) return;
     audienceExclusionWorkbookPanel.replaceChildren();
+    const deliveryId = String(campaignDeliverySource?.deliveryId || '');
+    const matchingCopies = deliveryId ? centralSnapshots.filter(snapshot => snapshot.data?.deliveryId === deliveryId && Array.isArray(snapshot.data?.createdCampaigns) && snapshot.data.createdCampaigns.length) : [];
+    const centralCopy = selectedCentralExportSnapshot || (matchingCopies.length === 1 ? matchingCopies[0] : null);
+    if (!activeCampaignBatchId && centralCopy) {
+      renderCentralExclusionExports(centralCopy, audienceExclusionWorkbookPanel);
+      return;
+    }
     if (sharedActionsBlocked()) {
       const notice = document.createElement('p');
       notice.textContent = 'Conclua a ampliação do lote para liberar as exclusões.';
@@ -6367,12 +6479,13 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       button.disabled = busy || state[step] || sharedActionsBlocked() || typeof navigator?.locks?.request !== 'function';
       button.addEventListener('click', async () => {
         const signature = campaignSetSignature(createdCampaigns);
-        if (!globalThis.confirm('Você concluiu ' + label.toLocaleLowerCase('pt-BR') + ' para todas as ' + createdCampaigns.length + ' campanhas deste lote?')) return;
+        if (!await confirmCopyReplacement('Você concluiu ' + label.toLocaleLowerCase('pt-BR') + ' para todas as ' + createdCampaigns.length + ' campanhas deste lote? Esta confirmação é registrada no Hub e não altera nem verifica o Google Ads.', {title:'Confirmar ' + label.toLocaleLowerCase('pt-BR'),confirmLabel:'Confirmar'})) return;
         try {
           await navigator.locks.request('hub-google-ads-cpa-expansion:' + activeCampaignBatchId, async () => {
             if (sharedActionsBlocked()) throw new Error('O lote mudou ou possui ampliação pendente. Reabra e confira antes de confirmar.');
             campaignBatchStore = confirmGoogleAdsCampaignBatchStep(activeCampaignBatchId, step, signature);
           });
+          if (snapshotClient) void syncLocalConfirmations();
           renderCampaignResult();
         } catch (error) { setCampaignBatchStatus(error.message || 'Não foi possível confirmar a etapa.', true); }
       });
@@ -7841,7 +7954,18 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       });
       draftPicker.append(batchesGroup);
     }
-    draftPicker.value = activeCampaignBatchId
+    if (centralSnapshots.length) {
+      const group = document.createElement('optgroup');
+      group.label = 'Cópias na base central · consulta';
+      for (const snapshot of centralSnapshots) {
+        const option = document.createElement('option');
+        option.value = 'snapshot:' + snapshot.batchId;
+        option.textContent = 'Cópia central · ' + String(snapshot.data?.draft?.values?.campaign_name || snapshot.batchId);
+        group.append(option);
+      }
+      draftPicker.append(group);
+    }
+    draftPicker.value = selectedCentralExportSnapshot ? 'snapshot:' + selectedCentralExportSnapshot.batchId : activeCampaignBatchId
       ? 'batch:' + activeCampaignBatchId
       : activeDraftId ? 'draft:' + activeDraftId : 'draft:__new__';
     draftPicker.disabled = busy;
@@ -8154,6 +8278,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   }
 
   async function associateSelectedCampaigns() {
+    if (centralDraft) { setCampaignAssociationStatus('A associação de lotes ainda não está disponível na base central.', true); return; }
     if (campaignAssociationBusy || !campaignAssociationSearchReady) return;
     const selected = campaignAssociationCandidates.filter(candidate => candidate.selected && !candidate.alreadySaved);
     if (!selected.length || selected.length > 100) return;
@@ -8287,14 +8412,15 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     campaignDestinationUrlBatchApplying = false;
   }
 
-  function saveActiveCampaignBatch(campaigns = createdCampaigns) {
+  function saveActiveCampaignBatch(campaigns = createdCampaigns, {buildOnly = false} = {}) {
+    if (centralBatch && !buildOnly) { setCampaignBatchStatus('A gravação de lotes centrais ainda está em integração.', true); return false; }
     if (!activeCampaignBatchId || !Array.isArray(campaigns) || !campaigns.length) return true;
     if (campaignBatchChangedInOtherTab) { setCampaignBatchStatus('O armazenamento de lotes mudou em outra aba. Recarregue esta tela antes de salvar.', true); return false; }
     if (cpaExpansionBlocked()) { setCampaignBatchStatus('Conclua a ampliação antes de alterar o lote.', true); return false; }
     const now = new Date().toISOString();
     let existing;
     try {
-      campaignBatchStore = loadGoogleAdsCampaignBatches();
+      if (!centralBatch) campaignBatchStore = loadGoogleAdsCampaignBatches();
       existing = campaignBatchStore.batches.find(batch => batch.id === activeCampaignBatchId);
       const incoming = new Set(campaigns.map(campaignOperationKey));
       if (existing?.campaigns.some(campaign => !incoming.has(campaignOperationKey(campaign)))) throw new Error('O lote mudou em outra aba. Reabra o lote para preservar todas as campanhas.');
@@ -8371,7 +8497,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       ? campaignEuPoliticalDeclarationBatchQuotaSummary.summary
       : existing?.euPoliticalAdvertisingQuotaSummary || null;
     try {
-      campaignBatchStore = saveGoogleAdsCampaignBatch({
+      const nextBatch = {
         ...existing,
         id: activeCampaignBatchId,
         label: campaignRecords.length + ' campanha(s) · ' + campaignRecords[0].campaignName,
@@ -8402,7 +8528,9 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         imageUploadSelectedAccountIds: campaignImageUploadSelectedAccountIds,
         imageAssetUploads: campaignImageAssetUploads,
         campaigns: campaignRecords,
-      });
+      };
+      if (buildOnly) return nextBatch;
+      campaignBatchStore = saveGoogleAdsCampaignBatch(nextBatch);
       campaignBatchStorageError = '';
       refreshCampaignBatchPicker();
       const contextSaved = rememberCampaignCreationContext('batch', activeCampaignBatchId);
@@ -8415,6 +8543,23 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       setCampaignBatchStatus(campaignBatchStorageError + ' As campanhas já criadas permanecem no Google Ads.', true);
       return false;
     }
+  }
+
+  async function saveCentralCampaignBatch(campaigns = createdCampaigns) {
+    if (!centralBatch) return saveActiveCampaignBatch(campaigns);
+    if (!activeCampaignBatchId || !Array.isArray(campaigns) || !campaigns.length) return true;
+    try {
+      const previous = campaignBatchStore.batches.find(item => item.id === activeCampaignBatchId);
+      const fresh = await centralBatch.bridge.read();
+      const latest = fresh.batches.find(item => item.id === activeCampaignBatchId);
+      if (JSON.stringify(previous) !== JSON.stringify(latest)) throw new Error('O lote mudou; recarregue antes de salvar.');
+      campaignBatchStore = fresh;
+      const candidate = saveActiveCampaignBatch(campaigns, {buildOnly:true});
+      if (!candidate) return false;
+      const saved = await centralBatch.bridge.saveSnapshot(candidate);
+      campaignBatchStore = {...fresh, batches:[...fresh.batches.filter(item=>item.id!==saved.id),saved]};
+      refreshCampaignBatchPicker(); setCampaignBatchStatus('Lote salvo na base central.'); return true;
+    } catch(error) { setCampaignBatchStatus(error.message || 'Não foi possível salvar o lote central.', true); return false; }
   }
 
   function clearActiveCampaignBatchView() {
@@ -8482,6 +8627,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   }
 
   function openSavedCampaignBatch(batchId) {
+    if (centralDraft) { setCampaignBatchStatus('A abertura de lotes centrais ainda não está disponível.', true); return; }
     if (busy) return;
     if (batchId === '__none__') {
       clearActiveCampaignBatchView();
@@ -8721,6 +8867,18 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       refreshDraftPicker();
       return true;
     }
+    if (centralDraft) {
+      const revision = centralDraftEditRevision;
+      const names = [...new Set([...form.querySelectorAll('[name]')].map(control => control.name).filter(Boolean))];
+      try { centralDraft.controller.queue(values, String(values.campaign_name || '').trim(), names); }
+      catch (error) { setDraftStatus(error.message || 'Não foi possível preparar o rascunho central.', true); return Promise.resolve(false); }
+      return centralDraft.controller.flush().then(saved => {
+        activeDraftId = saved.id;
+        draftStore = {...draftStore, activeDraftId: saved.id, drafts: [saved, ...draftStore.drafts.filter(draft => draft.id !== saved.id)]};
+        if (revision === centralDraftEditRevision) { draftDirty = false; draftForce = false; }
+        refreshDraftPicker(); setDraftStatus('Rascunho salvo na base central.'); return true;
+      }).catch(error => { setDraftStatus(error.message || 'Não foi possível salvar o rascunho central.', true); return false; });
+    }
     try {
       const latestStore = loadGoogleAdsCampaignDrafts();
       const id = activeDraftId || createDraftId();
@@ -8758,6 +8916,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
 
   function scheduleDraftSave({ force = false } = {}) {
     if (restoringDraft) return;
+    centralDraftEditRevision++;
     draftDirty = true;
     draftForce ||= force;
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
@@ -9026,7 +9185,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     return true;
   }
 
-  function receivePresellHandoff(id = (new URLSearchParams(window.location.search).get(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM) || ''), payloadOverride = null) {
+  function receivePresellHandoff(id = (new URLSearchParams(window.location.search).get(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM) || ''), payloadOverride = null, deferAcknowledgement = false) {
     const queryId = String(id || '').trim();
     if (!queryId) return false;
     const payload = payloadOverride
@@ -9063,7 +9222,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         setStatus(draftStatus.classList.contains('is-error') ? draftStatus.textContent : 'Não foi possível abrir a preparação salva da Pre-Sell.', true);
         return false;
       }
-      return acknowledgeReceivedPresellHandoff(payload);
+      return deferAcknowledgement ? true : acknowledgeReceivedPresellHandoff(payload);
     }
     if (!beginNewDraft({ openCopyImport: false })) {
       setStatus(draftStatus.classList.contains('is-error') ? draftStatus.textContent : 'Não foi possível iniciar a preparação da Pre-Sell. Tente novamente.', true);
@@ -9094,7 +9253,28 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       setStatus('Não foi possível salvar a entrega em preparação com os dados recebidos. A transferência continua disponível; corrija o armazenamento e tente novamente.', true);
       return false;
     }
-    return acknowledgeReceivedPresellHandoff(payload);
+    return deferAcknowledgement ? true : acknowledgeReceivedPresellHandoff(payload);
+  }
+
+  let centralHandoffPending = false;
+  async function receiveCentralPresellHandoff(id) {
+    if (centralHandoffPending) return false;
+    centralHandoffPending = true;
+    try {
+      const {payload} = await centralHandoffClient.read(id);
+      const deliveryId = new URLSearchParams(window.location.search).get('campaign_delivery_id') || '';
+      const delivery = deliveryId ? await centralHandoffClient.readDeliveryForHandoff(payload, deliveryId) : null;
+      if (!receivePresellHandoff(id, payload, true)) return false;
+      if (delivery && !receiveCampaignDeliveryContext(deliveryId, delivery, {preserveFields:true})) return false;
+      await centralHandoffClient.acknowledge(payload);
+      clearPresellHandoffQuery();
+      setDraftStatus('Pre-Sell recebida e salva neste navegador · ' + (String(payload.product || '').trim() || 'produto') + '.');
+      setStatus('Entrega em preparação recebida: produto, ' + payload.targets.length + ' conta(s) e URLs HTTPS publicadas. As campanhas ainda não foram criadas.', false, false, true);
+      return true;
+    } catch (error) {
+      setStatus('Não foi possível concluir a transferência central. Os dados existentes foram preservados; tente novamente. ' + (error?.message || ''), true);
+      return false;
+    } finally { centralHandoffPending = false; }
   }
 
   function receivePresellHandoffFromJob(jobId = handoffJobQueryId) {
@@ -9113,23 +9293,53 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     return receivePresellHandoff(selected.payload.id, selected.payload);
   }
 
+  let centralDeliveryPending = false;
+  async function restoreCentralHandoffForDelivery(id) {
+    if (!centralHandoffClient || !id || activePresellCampaignHandoff || activeCampaignBatchId) return;
+    try {
+      const handoff = await centralHandoffClient.readSelectedHandoffForDelivery(id);
+      if (!handoff || activePresellCampaignHandoff || campaignDeliverySource?.deliveryId !== id || activeCampaignBatchId) return;
+      if (!matchesGoogleAdsProductPhrase(handoff.product, campaignDeliverySource.productName)) return;
+      activePresellCampaignHandoff = handoff;
+      updateFinalUrlFromPreSell();
+      renderCampaignTargetSummary();
+      renderCpaVariantOptions();
+      scheduleDraftSave({force:true});
+    } catch (error) {
+      setStatus('Não foi possível recuperar as contas da Pre-Sell. Os dados existentes foram preservados. ' + (error?.message || ''), true);
+    }
+  }
+  async function receiveCentralDeliveryContext(id) {
+    if (centralDeliveryPending) return;
+    centralDeliveryPending = true;
+    try {
+      const delivery = await centralHandoffClient.readDelivery(id);
+      if (receiveCampaignDeliveryContext(id, delivery, {preserveFields:true})) await restoreCentralHandoffForDelivery(id);
+    } catch (error) {
+      setStatus('Não foi possível carregar a entrega central. Os dados atuais foram preservados. ' + (error?.message || ''), true);
+    } finally { centralDeliveryPending = false; }
+  }
+
   function receiveInitialContexts() {
     let params = new URLSearchParams(window.location.search);
     const handoffId = params.get(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM) || '';
     const jobId = params.get(GOOGLE_ADS_PRESELL_HANDOFF_JOB_QUERY_PARAM) || '';
     if (handoffId || jobId) {
+      if (handoffId && centralHandoffClient) { void receiveCentralPresellHandoff(handoffId); return false; }
+      if (jobId && centralHandoffClient) { setStatus('A abertura pelo lote da Pre-Sell ainda não está disponível na base central. Abra a transferência pela Ficha e Presell.', true); return false; }
       const received = handoffId ? receivePresellHandoff(handoffId) : receivePresellHandoffFromJob(jobId);
       if (!received) return false;
     }
     params = new URLSearchParams(window.location.search);
     const deliveryId = params.get('campaign_delivery_id') || '';
+    if (deliveryId && centralHandoffClient) { void receiveCentralDeliveryContext(deliveryId); return false; }
     return deliveryId ? receiveCampaignDeliveryContext(deliveryId) : true;
   }
 
-  function receiveCampaignDeliveryContext(id = campaignDeliveryQueryId) {
+  function receiveCampaignDeliveryContext(id = campaignDeliveryQueryId, deliveryOverride = null, {preserveFields=false} = {}) {
     const queryId = String(id || '').trim();
     if (!queryId) return false;
-    const delivery = getCampaignDelivery(queryId);
+    const delivery = deliveryOverride || getCampaignDelivery(queryId);
     if (!delivery) {
       setStatus('A entrega local não está disponível neste navegador. Volte à Curadoria e abra novamente a etapa de criação de campanha.', true);
       return false;
@@ -9185,10 +9395,10 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     const countries = normalizedDeliveryCountries.countryCodes;
     setGeoCountryNormalizationStatus(normalizedDeliveryCountries.aliases);
     const currentCountries = normalizeGoogleAdsCountryCodeInput(countryField?.value || '').countryCodes;
-    if (countryField && campaignDeliverySource?.geoTargetingMode === 'WORLD' && countryField.value) {
+    if (countryField && campaignDeliverySource?.geoTargetingMode === 'WORLD' && countryField.value && !preserveFields) {
       countryField.value = '';
       changed = true;
-    } else if (countryField && countries.length && JSON.stringify(currentCountries) !== JSON.stringify(countries)) {
+    } else if (countryField && countries.length && (!preserveFields || !currentCountries.length) && JSON.stringify(currentCountries) !== JSON.stringify(countries)) {
       countryField.value = countries.join(', ');
       changed = true;
     }
@@ -9221,6 +9431,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   }
 
   function deleteSelectedDraft(draftId = '') {
+    if (centralDraft) { setDraftStatus('A exclusão de rascunhos centrais ainda não está disponível.', true); return; }
     if (busy || creating) return;
     const selectedValue = draftId ? 'draft:' + draftId : draftPicker.value;
     if (!selectedValue.startsWith('draft:') || selectedValue === 'draft:__new__') return;
@@ -9308,15 +9519,27 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     }
   }
 
-  function openSavedDraft(draftId) {
+  function openSavedDraft(draftId, centralStore = null) {
     if (!draftId || busy || creating) return;
-    if (!saveDraftNow()) { refreshDraftPicker(); return; }
+    if (centralDraft && !centralStore) {
+      void (async () => {
+        try {
+          if (!await saveDraftNow()) { refreshDraftPicker(); return; }
+          if (activeCampaignBatchId) throw new Error('A troca a partir de um lote central ainda não está disponível.');
+          const selected = await centralDraft.controller.select(draftId);
+          openSavedDraft(draftId, selected.store);
+        } catch (error) { setDraftStatus(error.message, true); refreshDraftPicker(); }
+      })();
+      return;
+    }
+    if (!centralStore && !saveDraftNow()) { refreshDraftPicker(); return; }
     if (activeCampaignBatchId) {
+      if (centralDraft) { setDraftStatus('A troca a partir de um lote central ainda não está disponível.', true); refreshDraftPicker(); return; }
       saveAudienceStateForCurrentCampaign();
       if (!saveActiveCampaignBatch()) { refreshDraftPicker(); return; }
     }
     let latestStore;
-    try { latestStore = loadGoogleAdsCampaignDrafts(); }
+    try { latestStore = centralStore || loadGoogleAdsCampaignDrafts(); }
     catch (error) { setDraftStatus(error.message, true); refreshDraftPicker(); return; }
     draftStore = latestStore;
     const draft = draftStore.drafts.find(item => item.id === draftId);
@@ -9355,7 +9578,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     audienceExclusionsBatchProgress = null;
     refreshCampaignBatchPicker();
     restoreDraft(draft);
-    if (!rememberCampaignCreationContext('draft', draft.id)) {
+    if (!centralDraft && !rememberCampaignCreationContext('draft', draft.id)) {
       setDraftStatus(activeCampaignContextStorageError + ' A análise abriu, mas pode não ser retomada automaticamente após um refresh.', true);
     }
     renderCampaignResult();
@@ -9363,6 +9586,32 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
 
   function openSavedContext(value) {
     if (busy || creating) return;
+    if (!value.startsWith('snapshot:') && selectedCentralExportSnapshot) {
+      selectedCentralExportSnapshot = null;
+      page.querySelector('[data-central-campaign-copy]')?.remove();
+      setDraftStatus('');
+      draftDirty = false;
+    }
+    if (value.startsWith('snapshot:')) {
+      const id = value.slice('snapshot:'.length);
+      const snapshot = centralSnapshots.find(item => item.batchId === id);
+      if (!snapshot) { setDraftStatus('Cópia central não encontrada.', true); refreshDraftPicker(); return; }
+      if (!selectedCentralExportSnapshot && !saveDraftNow()) return;
+      if (activeCampaignBatchId) {
+        clearActiveCampaignBatchView();
+        if (activeCampaignBatchId) return;
+      }
+      activeDraftId = '';
+      applyDraftValues(snapshot.data?.draft?.values || {});
+      showCentralCampaignCopy(snapshot);
+      const campaigns = Array.isArray(snapshot.data?.createdCampaigns) ? snapshot.data.createdCampaigns : [];
+      const summary = campaigns.length ? campaigns.map(item => [item.campaignName || 'Campanha', item.accountName || item.customerId || 'Conta não informada', item.campaignId || 'ID não informado', item.status || 'Status não informado'].join(' · ')).join(' | ') : 'Nenhuma campanha criada nesta cópia.';
+      setDraftStatus('Cópia central (somente consulta) · ' + campaigns.length + ' campanha(s).');
+      setCampaignBatchStatus('');
+      refreshDraftPicker();
+      updateControlState();
+      return;
+    }
     if (value === 'draft:__new__') {
       if (activeCampaignBatchId) clearActiveCampaignBatchView();
       else refreshDraftPicker();
@@ -9635,21 +9884,21 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
   function updateControlState() {
     const hasManager = managerSelect.options.length > 1;
     const hasAccount = accountSelect.options.length > 1;
-    managerSelect.disabled = busy || completed || uncertain || !hasManager;
-    accountSelect.disabled = busy || completed || uncertain || !hasAccount;
+    managerSelect.disabled = busy || completed || uncertain || Boolean(selectedCentralExportSnapshot) || !hasManager;
+    accountSelect.disabled = busy || completed || uncertain || Boolean(selectedCentralExportSnapshot) || !hasAccount;
     refreshButton.disabled = busy;
     draftPicker.disabled = busy;
     draftPickerTrigger.disabled = busy;
     if (busy) closeDraftPickerMenu();
     newDraftButton.disabled = busy || creating;
     campaignAssociationOpenButton.disabled = busy || campaignAssociationBusy;
-    const fieldsDisabled = busy || !currentIds() || completed || uncertain;
+    const fieldsDisabled = busy || !currentIds() || completed || uncertain || Boolean(selectedCentralExportSnapshot);
     fields.forEach(fieldset => { fieldset.disabled = fieldsDisabled; });
     const existingBatchMode = campaignBatchRestored && Boolean(activeCampaignBatchId);
     cpaVariantsOptions.inert = fieldsDisabled;
     previewButton.hidden = completed || uncertain || existingBatchMode;
     previewNextButton.hidden = completed || uncertain || existingBatchMode;
-    previewButton.disabled = busy || !currentIds() || completed || uncertain || existingBatchMode;
+    previewButton.disabled = busy || !currentIds() || completed || uncertain || existingBatchMode || Boolean(selectedCentralExportSnapshot);
     const pendingCount = batchEntries.filter(entry => ['pending', 'preview_stale'].includes(entry.state)).length;
     const failedCount = batchEntries.filter(entry => entry.state === 'preview_failed').length;
     if (batchEntries.length) {
@@ -9662,7 +9911,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     previewNextButton.textContent = batchEntries.length
       ? pendingCount + failedCount > 0 ? 'Validar próxima campanha (' + (pendingCount + failedCount) + ' pendente(s)/falha(s))' : 'Sem campanhas pendentes'
       : 'Validar próxima campanha';
-    previewNextButton.disabled = busy || !currentIds() || completed || uncertain || existingBatchMode
+    previewNextButton.disabled = busy || !currentIds() || completed || uncertain || existingBatchMode || Boolean(selectedCentralExportSnapshot)
       || (batchEntries.length > 0 && pendingCount === 0 && failedCount === 0);
     if (existingBatchMode) {
       previewArea.hidden = true;
@@ -10485,7 +10734,29 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     copyImportInputTimer = window.setTimeout(organizeCopyImportInput, 250);
   }
 
-  function applySelectedCopy() {
+  function confirmCopyReplacement(message, {title:dialogTitle='Confirmar aplicação da copy',confirmLabel='Aplicar copy'} = {}) {
+    return new Promise(resolve => {
+      const previousFocus = document.activeElement;
+      const dialog = document.createElement('dialog');
+      dialog.className = 'google-ads-campaign-name-dialog';
+      dialog.setAttribute('aria-labelledby', 'googleAdsCopyReplacementTitle');
+      const panel = document.createElement('section'); panel.className = 'google-ads-campaign-name-panel';
+      const header = document.createElement('header'), title = document.createElement('h2');
+      title.id = 'googleAdsCopyReplacementTitle'; title.textContent = dialogTitle; header.append(title);
+      const content = document.createElement('div'); content.className = 'google-ads-campaign-name-content';
+      const text = document.createElement('p'); text.textContent = message; text.style.whiteSpace = 'pre-line'; content.append(text);
+      const footer = document.createElement('footer'), cancel = document.createElement('button'), confirmButton = document.createElement('button');
+      cancel.type = confirmButton.type = 'button'; cancel.className = 'btn'; cancel.textContent = 'Cancelar';
+      confirmButton.className = 'btn primary'; confirmButton.textContent = confirmLabel;
+      footer.append(cancel, confirmButton); panel.append(header, content, footer); dialog.append(panel); document.body.append(dialog);
+      let settled = false; const finish = value => { if (settled) return; settled = true; dialog.close(); dialog.remove(); if (previousFocus?.isConnected) previousFocus.focus(); resolve(value); };
+      cancel.addEventListener('click', () => finish(false)); confirmButton.addEventListener('click', () => finish(true));
+      dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+      dialog.showModal(); cancel.focus();
+    });
+  }
+
+  async function applySelectedCopy() {
     if (copyImportMode === 'batch-sitelinks') {
       if (!activeCampaignBatchId || !createdCampaigns.length) {
         setCopyImportStatus(campaignBatchUnavailableMessage('guardar sitelinks para aplicação nas campanhas'), true);
@@ -10551,7 +10822,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     if (importedSitelinks.sitelinks.length && currentSitelinks.length) {
       replacements.push(currentSitelinks.length + ' sitelink(s) salvo(s) ' + (activeCampaignBatchId ? 'neste lote' : 'neste rascunho'));
     }
-    if (replacements.length && !globalThis.confirm('Aplicar a copy selecionada substituirá ' + replacements.join(' e ')
+    if (replacements.length && !await confirmCopyReplacement('Aplicar a copy selecionada substituirá ' + replacements.join(' e ')
         + '. Os demais campos da campanha, incluindo URL final, orçamento e palavras-chave, serão mantidos. Continuar?')) return;
 
     [...form.querySelectorAll('[name="headline"]')].forEach((field, index) => { field.value = headlines[index].text; });
@@ -11106,7 +11377,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       setStatus('Criando campanha ' + (index + 1) + ' de ' + entriesToCreate.length + ' em ' + entry.accountName + ': ' + entry.payload.campaignName + '.');
       let result = null;
       try {
-        result = await createGoogleAdsSearchCampaign(entry.payload);
+        result = await (previewSimulation ? previewSimulation.create : createGoogleAdsSearchCampaign)(entry.payload);
       } catch (error) {
         entry.state = error?.code && definitiveCreationFailureCodes.has(error.code) ? 'failed' : 'uncertain';
         entry.diagnostic = error?.diagnostic || null;
@@ -11159,7 +11430,17 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         if (!audienceStateByCampaign.has(campaignOperationKey(entry.result))) audienceStateByCampaign.set(campaignOperationKey(entry.result), {});
         createdDuringRun.push(entry.result);
         const confirmedCampaigns = [...existingTargets, ...batchEntries.filter(item => item.state === 'created').map(item => item.result)];
-        const batchSaved = saveActiveCampaignBatch(confirmedCampaigns);
+        if (snapshotClient) {
+          try {
+            const {recordConfirmedCampaign} = await import('./campanha-copia-central.mjs');
+            await recordConfirmedCampaign(snapshotClient, activeDraftId, entry.result);
+          } catch (error) {
+            entry.creationAttemptSaveError = true;
+            setCampaignBatchStatus('Campanha criada, mas o resultado não foi confirmado na base central. Confira o ID antes de continuar: ' + error.message, true);
+            break;
+          }
+        }
+        const batchSaved = await saveCentralCampaignBatch(confirmedCampaigns);
         let localRegistrationError = '';
         if (typeof onCampaignsCreated !== 'function' && onCampaignCreated) {
           try {
@@ -11172,7 +11453,8 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
           }
         }
         if (localRegistrationError) setCampaignBatchStatus(localRegistrationError + ' O lote salvo poderá ser usado para recuperar o vínculo sem consultar a API.', true);
-        else if (!batchSaved) setCampaignBatchStatus('A criação foi confirmada, mas o lote não foi salvo neste navegador. A campanha permanece criada no Google Ads.', true);
+        else if (!batchSaved) setCampaignBatchStatus('A criação foi confirmada, mas o lote não foi salvo. A campanha permanece criada no Google Ads.', true);
+        if (!batchSaved) break;
       }
       renderCampaignResult();
     }
@@ -11192,7 +11474,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
         audienceExclusionsError = '';
       }
     }
-    if (createdCampaigns.length) saveActiveCampaignBatch();
+    if (createdCampaigns.length) await saveCentralCampaignBatch();
     else {
       const attemptedBatchId = activeCampaignBatchId;
       if (previewId && attemptedBatchId && !uncertain) {
@@ -11300,7 +11582,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
 
   async function runCampaignPreview({ mode = 'bulk', entryIndex = null, entryIdentity = null, triggerButton = null } = {}) {
     if (busy || completed || uncertain || !currentIds()) return;
-    const draftSaved = saveDraftNow();
+    const draftSaved = await saveDraftNow();
     const quotaUsage = emptyPreviewQuotaUsage();
     lastPreviewQuotaUsage = quotaUsage;
     updateCpaVariantSelectionCount();
@@ -11432,7 +11714,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     let preparedPreviewContexts;
     try {
       setStatus('Preparando consultas compartilhadas por conta de conversão para ' + indices.length + ' validação(ões)…', false, true, true);
-      preparedPreviewContexts = await prepareGoogleAdsSearchCampaignPreviewContexts(
+      preparedPreviewContexts = await (previewSimulation ? previewSimulation.prepare : prepareGoogleAdsSearchCampaignPreviewContexts)(
         indices.map(index => batchEntries[index].payload),
         { onQuotaTelemetry: recordPreviewQuotaTelemetry },
       );
@@ -11482,7 +11764,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
       try {
         const previewContext = preparedPreviewContexts.getContext(entry.payload);
         if (!previewContext) throw new Error('O contexto compartilhado da MCC não está disponível. Nenhuma prévia foi consultada.');
-        entry.previewResult = await previewGoogleAdsSearchCampaign({
+        entry.previewResult = await (previewSimulation ? previewSimulation.preview : previewGoogleAdsSearchCampaign)({
           ...entry.payload,
           previewContext,
           campaignNameLookupContext,
@@ -11518,6 +11800,25 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     } else previewSnapshot = '';
     if (previewFingerprint && !savePreviewCheckpoint({ draftSaved })) {
       setCampaignBatchStatus('O progresso continua na tela, mas não foi salvo para retomada: ' + campaignPreviewStorageError, true);
+    }
+    if (snapshotClient && allResolved) {
+      try {
+        if (!draftSaved || !activeDraftId || !previewId || !previewFingerprint) throw new Error('Rascunho ou prévia incompleta.');
+        const previous = await snapshotClient.read(activeDraftId);
+        await snapshotClient.save(activeDraftId, {
+          ...(previous.snapshot?.data || {}),
+          draft:{id:activeDraftId,values:collectDraftValues()},
+          preview:{id:previewId,validatedAt:previewValidatedAt,payloadFingerprint:previewFingerprint,entries:storedPreviewEntries()},
+          deliveryId:campaignDeliverySource?.deliveryId || '',
+        }, previous);
+        centralSnapshots = (await snapshotClient.list()).snapshots;
+        refreshDraftPicker();
+      } catch (error) {
+        previewSnapshot = '';
+        renderBatchPreview(); updateControlState();
+        setStatus('A prévia foi consultada, mas a cópia central não foi confirmada: ' + error.message, true);
+        return;
+      }
     }
     renderBatchPreview();
     if (allResolved) {
@@ -12207,6 +12508,7 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     setCampaignBatchStatus(activeCampaignContextStorageError + ' O contexto salvo foi ignorado; selecione um lote ou rascunho e ele será salvo novamente.', true);
   }
   receiveInitialContexts();
+  if (!hasExternalCampaignContext && campaignDeliverySource?.deliveryId) void restoreCentralHandoffForDelivery(campaignDeliverySource.deliveryId);
   if (ambiguousDeliveryBatches) setCampaignBatchStatus('Esta entrega tem mais de um lote salvo. Selecione no contexto da campanha o lote que deseja abrir; nenhum dado foi alterado.', true);
   renderCampaignResult();
   updateControlState();
@@ -12246,5 +12548,29 @@ export function mountGoogleAdsCampaignCreation({ root, campaignNames = [], getCa
     refreshHubCampaignRecovery: () => { void refreshHubCampaignRecovery(); },
   };
   mountedRoots.set(root, controller);
+  async function syncLocalConfirmations() {
+    try {
+      const {syncCampaignConfirmations} = await import('./campanha-confirmacoes-central.mjs');
+      const batches = loadGoogleAdsCampaignBatches().batches;
+      const copies = (await snapshotClient.list()).snapshots;
+      for (const copy of copies) await syncCampaignConfirmations(snapshotClient, copy, batches, {isExpansionBlocked: id => {
+        try { return cpaExpansionBlocksSharedSteps(readCpaExpansion(id)); } catch { return true; }
+      }});
+    } catch (error) {
+      setDraftStatus('Não foi possível sincronizar as confirmações com a base central: ' + error.message, true);
+    }
+  }
+  if (snapshotClient) {
+    void snapshotClient.list().then(result => {
+      centralSnapshots = result.snapshots;
+      refreshDraftPicker();
+      renderAudienceExclusionUploadPanel();
+      const deliveryId = new URLSearchParams(window.location.search).get('campaign_delivery_id');
+      const matching = centralSnapshots.filter(snapshot => snapshot.data?.deliveryId === deliveryId);
+      if (deliveryId && matching.length === 1) showCentralCampaignCopy(matching[0]);
+      void syncLocalConfirmations();
+    })
+      .catch(error => setDraftStatus('Não foi possível listar as cópias centrais: ' + error.message, true));
+  }
   return controller;
 }

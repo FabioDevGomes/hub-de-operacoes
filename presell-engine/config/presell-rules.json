@@ -23,6 +23,7 @@
     "legacyDetailsIds": ["glp-faq"]
   },
   "visualRules": {
+    "desktopBackgroundSizing": "width-locked",
     "preserveMobileBackgroundFramingWhenDetailsOpen": true,
     "mobileBackgroundSizing": "width-locked",
     "expandedDetailsSurface": "neutral-gray"

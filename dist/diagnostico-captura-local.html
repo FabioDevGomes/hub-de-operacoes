@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Diagnóstico da exportação do Hub</title></head>
+<body>
+<h1>Diagnóstico local da exportação</h1>
+<p>Faz a exportação normal sem incluir a pasta de produtos e informa apenas nomes de chaves alteradas; não altera os dados nem mostra seus valores.</p>
+<button id="start">Gerar ZIP e identificar alterações</button>
+<pre id="status" aria-live="polite">Aguardando.</pre>
+<script type="module">
+import {exportMigration, readAllowedStorage} from './overview/migration-export.mjs';
+const button=document.getElementById('start'), output=document.getElementById('status');
+button.addEventListener('click',async()=>{
+  button.disabled=true; output.textContent='Iniciando...';
+  const initial=readAllowedStorage(localStorage), changed=new Set();
+  const observe=()=>{const now=readAllowedStorage(localStorage);for(const k of new Set([...Object.keys(initial),...Object.keys(now)]))if(initial[k]!==now[k])changed.add(k)};
+  const onStorage=event=>{if(event.storageArea===localStorage&&event.key&&Object.hasOwn(initial,event.key))changed.add(event.key)};
+  window.addEventListener('storage',onStorage);
+  try {
+    const result=await exportMigration({indexedDB,storage:localStorage,version:'1.380.4',onProgress:message=>{observe();output.textContent=message}});
+    observe();
+    const url=URL.createObjectURL(result.blob), link=document.createElement('a');
+    link.href=url;link.download='hub-migracao-diagnostico-v2.zip';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    output.textContent=JSON.stringify({chavesAlteradas:[...changed].sort(),pendencias:result.manifest.pendencias},null,2);
+  }catch(error){output.textContent='Falha: '+error.message}
+  finally{window.removeEventListener('storage',onStorage);button.disabled=false}
+});
+</script></body></html>

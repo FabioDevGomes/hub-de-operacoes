@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hub v1.378.9 · Top Offers CB · Curadoria</title>
+  <title>Hub v1.386.40 · Top Offers CB · Curadoria</title>
   <link rel="icon" href="/favicon.png?v=1.133.1">
   <link rel="stylesheet" href="../trends-sheet.css?v=20261027-keyword-candidate-edit-negative">
   <link rel="stylesheet" href="./clickbank-top-offers.css?v=69">
@@ -14,9 +14,9 @@
   <link rel="stylesheet" href="/table-columns.css?v=2">
 <link rel="stylesheet" href="/table-layout.css?v=1"><link rel="stylesheet" href="/curadoria/curation-table-filters.css?v=2"><link rel="stylesheet" href="/curadoria/curation-list-layout.css?v=2"><link rel="stylesheet" href="/input-standard.css?v=1"><link rel="stylesheet" href="/table-headers.css?v=9"><link rel="stylesheet" href="/white-button.css?v=6"><link rel="stylesheet" href="/curadoria/column-widths.css?v=1"><link rel="stylesheet" href="/curadoria/trends-save-action.css?v=2">  <link rel="stylesheet" href="/hub-scrollbars.css?v=1">
 <!-- hub-system-version:start -->
-<meta name="hub-system-version" content="1.378.9">
-<link rel="stylesheet" href="/system-version.css?v=1.378.9">
-<script defer src="/system-version.js?v=1.378.9"></script>
+<meta name="hub-system-version" content="1.386.40">
+<link rel="stylesheet" href="/system-version.css?v=1.386.40">
+<script defer src="/system-version.js?v=1.386.40"></script>
 <!-- hub-system-version:end -->
 </head>
 <body data-hub-green-actions="clickbank">
@@ -32,6 +32,7 @@
         <div><div class="eyebrow">Curadoria · ClickBank</div><h1>Top Offers CB</h1><div class="sub">Acompanhe as posições e métricas observadas nas capturas do Affiliate Marketplace.</div></div>
         <div class="actions"><button class="btn" id="exportBackup" type="button">Baixar backup JSON</button><label class="btn file-button">Restaurar backup<input id="restoreBackup" type="file" accept="application/json,.json" hidden></label><button class="btn primary" id="openImport" type="button">Colar captura</button></div>
       </header>
+      <p id="clickbankStorageNotice" class="sub" role="status">Verificando a base de dados…</p>
       <section class="summary" aria-label="Resumo"><span class="chip">Capturas salvas <b id="captureCount">0</b></span><span class="chip"><span id="offerCountLabel">Ofertas no histórico</span> <b id="offerCount">0</b></span><span class="chip">Mudanças de posição <b id="movementCount">—</b></span><a class="clickbank-rank-link marketplace-link" href="https://accounts.clickbank.com/master/dashboard/affiliate-marketplace?v=0.5198402258977115#/results?sortField=rank&amp;sortDescending=false" target="_blank" rel="noopener noreferrer">Abrir Top Offers</a></section>
       <section class="surface">
         <div class="filter-grid hub-curation-table-filters">
@@ -51,7 +52,7 @@
           <th><button class="sort-btn" data-sort="trends" type="button">Google Trends</button></th><th><button class="sort-btn" data-sort="glimpse" type="button">Glimpse</button></th><th><button class="sort-btn" data-sort="images" type="button">Imagens</button></th>
           <th><button class="sort-btn" data-sort="average" type="button">Avg $</button></th><th><button class="sort-btn" data-sort="initial" type="button">Initial $</button></th><th><button class="sort-btn" data-sort="future" type="button">PAG.</button></th>
           <th><button class="sort-btn" data-sort="epc" type="button">EPC</button></th><th><button class="sort-btn" data-sort="cvr" type="button">CVR</button></th><th><button class="sort-btn" data-sort="gravity" type="button">Gravity</button></th><th><button class="sort-btn" data-sort="movement" type="button">Variação</button></th><th><button class="sort-btn" data-sort="decision" type="button">Decisão</button></th>
-        <th class="hub-last-collection"><button class="sort-btn" data-sort="lastSeen" type="button">Última coleta</button></th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Cole a primeira captura Top Offers da ClickBank para começar.</div></div>
+        <th class="hub-last-collection"><button class="sort-btn" data-sort="lastSeen" type="button">Última coleta</button></th></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty">Cole a primeira captura Top Offers da ClickBank para começar.</div></div><nav class="clickbank-offer-pagination" id="offerPagination" aria-label="Paginação das ofertas"><span data-page-summary aria-live="polite"></span><div><button class="btn" type="button" data-page-action="first" data-page-first aria-label="Primeira página">«</button><button class="btn" type="button" data-page-action="prev" data-page-prev aria-label="Página anterior">‹</button><strong data-page-current>Página 1 de 1</strong><button class="btn" type="button" data-page-action="next" data-page-next aria-label="Próxima página">›</button><button class="btn" type="button" data-page-action="last" data-page-last aria-label="Última página">»</button></div></nav>
       </section>
       <div class="message" id="message" role="status" aria-live="polite"></div>
 
@@ -104,6 +105,6 @@
     </main>
   </div>
   <script src="/sidebar-component.js?v=20261101-quick-access-pins"></script>
-  <script type="module" src="./clickbank-top-offers-page.mjs?v=69"></script>
+  <script type="module" src="./clickbank-top-offers-page.mjs?v=70"></script>
 <script type="module" src="/curadoria/sheet-escape.mjs?v=1"></script><script type="module" src="/curadoria/column-widths-page.mjs?v=1" data-curation-widths="clickbank"></script></body>
 </html>

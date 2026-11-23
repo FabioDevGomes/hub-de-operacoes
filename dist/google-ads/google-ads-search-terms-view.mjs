@@ -686,9 +686,17 @@ export function mountGoogleAdsSearchTerms({ root, campaignContext: rawCampaignCo
     try {
       negativePreview = await previewGoogleAdsProductNegativeKeyword(negativeDraft);
       renderNegativePreview(negativePreview);
+      const existing = negativePreview.campaigns.filter(item => item.alreadyPresent);
+      let historyWarning = '';
+      if (existing.length && typeof state.onRecordKeywordAdditions === 'function') {
+        try {
+          const history = await state.onRecordKeywordAdditions({ managerCustomerId: String(state.campaignPrefill?.managerCustomerId || state.selectedManagerKey || ''), term: negativePreview.term, matchType: negativePreview.matchType, kind: 'negative', occurredAtUtc: negativePreview.previewAtUtc || new Date().toISOString(), results: existing, observed: true });
+          if (!history?.recorded) historyWarning = ' Algumas negativas não puderam ser vinculadas ao Diário local.';
+        } catch { historyWarning = ' Não foi possível registrar a verificação no Diário local.'; }
+      }
       setNegativeStatus(negativePreview.toCreateCount
         ? 'Confira a lista completa e marque a confirmação para habilitar a aplicação.'
-        : 'A negativa já existe em todas as campanhas listadas; nenhuma gravação é necessária.');
+        : 'A negativa já existe em todas as campanhas listadas; nenhuma gravação é necessária.' + historyWarning);
       if (!negativePreview.toCreateCount && negativeDraft.reviewTermId) {
         const completedAtUtc = new Date().toISOString();
         const saved = saveReviewDecision(negativeDraft.reviewTermId, {
@@ -748,7 +756,7 @@ export function mountGoogleAdsSearchTerms({ root, campaignContext: rawCampaignCo
           localKeywordHistoryRecorded = false;
         } else {
           try {
-            const historyResult = await state.onRecordKeywordAdditions({ managerCustomerId: String(state.campaignPrefill?.managerCustomerId || state.selectedManagerKey || ''), term: result.term, matchType: result.matchType, occurredAtUtc: result.verifiedAtUtc || new Date().toISOString(), results: added });
+            const historyResult = await state.onRecordKeywordAdditions({ managerCustomerId: String(state.campaignPrefill?.managerCustomerId || state.selectedManagerKey || ''), term: result.term, matchType: result.matchType, kind: 'negative', occurredAtUtc: result.verifiedAtUtc || new Date().toISOString(), results: added });
             localKeywordHistoryRecorded = historyResult?.recorded === true;
             localKeywordHistoryMessage = String(historyResult?.reason || '');
           } catch (error) {

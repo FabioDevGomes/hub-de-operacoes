@@ -8,7 +8,8 @@ import { googleAdsResourcesUrlForAccount, retryGoogleAdsAccountSelection, select
 import { readGoogleAdsResourceBookmarkFolder } from './google-ads-resource-bookmarks.mjs';
 
 const ASSET_STUDIO_URL = 'http://127.0.0.1:8765/asset-studio/';
-const ASSET_STUDIO_MATCH = `${ASSET_STUDIO_URL}*`;
+const ASSET_STUDIO_MATCH = ['http://127.0.0.1/asset-studio/*', 'http://192.168.15.4/asset-studio/*'];
+const ASSET_STUDIO_ORIGINS = new Set(['http://127.0.0.1:8765', 'http://192.168.15.4:18790']);
 const HUB_ORIGIN = 'http://127.0.0.1:8765';
 const GOOGLE_ADS_RESOURCES_HOST_PERMISSION = 'https://ads.google.com/*';
 const GOOGLE_ADS_RESOURCE_BOOKMARK_PERMISSION = 'bookmarks';
@@ -479,7 +480,7 @@ function receiveAssetInStudio(payload) {
 async function findOrOpenAssetStudio(windowId) {
   const candidates = await chrome.tabs.query({ windowId, url: ASSET_STUDIO_MATCH });
   let tab = candidates.find(candidate => {
-    try { return new URL(candidate.url).pathname.startsWith('/asset-studio/'); }
+    try { const url = new URL(candidate.url); return ASSET_STUDIO_ORIGINS.has(url.origin) && url.pathname.startsWith('/asset-studio/'); }
     catch { return false; }
   });
   if (!tab) tab = await chrome.tabs.create({ windowId, url: ASSET_STUDIO_URL, active: false });
@@ -591,7 +592,7 @@ function receiveProductImageCandidatesInStudio(payload) {
 }
 
 function isProductImageGalleryReceiverReady() {
-  return location.origin === 'http://127.0.0.1:8765'
+  return ['http://127.0.0.1:8765', 'http://192.168.15.4:18790'].includes(location.origin)
     && /^\/asset-studio\/?$/.test(location.pathname)
     && typeof window.setProductImageCandidates === 'function'
     && typeof window.setProductImageFiles === 'function';
@@ -619,7 +620,7 @@ async function findReadyProductImageStudio(windowId) {
   const candidates = await chrome.tabs.query({ windowId, url: ASSET_STUDIO_MATCH });
   for (const tab of candidates) {
     try {
-      if (!tab?.id || !new URL(tab.url).pathname.startsWith('/asset-studio/')) continue;
+      if (!tab?.id || !ASSET_STUDIO_ORIGINS.has(new URL(tab.url).origin) || !new URL(tab.url).pathname.startsWith('/asset-studio/')) continue;
       if (tab.status !== 'complete') await waitUntilLoaded(tab.id, 10000, 'Asset Studio');
       if (await productImageStudioReceiverReady(tab.id)) return tab;
     } catch { /* Try another Asset Studio tab without replacing the user's current one. */ }
@@ -740,7 +741,7 @@ async function importSelectedProductImages(images, sender) {
   let senderUrl;
   try { senderUrl = new URL(sender?.url || sender?.tab?.url || ''); }
   catch { throw new Error('A solicitação precisa vir do Asset Studio local.'); }
-  if (senderUrl.origin !== HUB_ORIGIN || senderUrl.pathname.replace(/\/+$/, '') !== '/asset-studio') {
+  if (!ASSET_STUDIO_ORIGINS.has(senderUrl.origin) || senderUrl.pathname.replace(/\/+$/, '') !== '/asset-studio') {
     throw new Error('A solicitação precisa vir do Asset Studio local.');
   }
   if (!Array.isArray(images) || images.length < 1 || images.length > 2) throw new Error('Escolha de uma a duas imagens para importar.');

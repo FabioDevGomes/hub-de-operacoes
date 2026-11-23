@@ -30,6 +30,7 @@
       const group=entry.group||by(view.navId)?.closest('[data-sidebar-group]')?.dataset.sidebarGroup;
       by('openAutoPauseReport')?.classList.toggle('hidden',view.id!=='totals');
       by('registerSale')?.classList.toggle('hidden',view.id!=='totals');
+      by('downloadMigrationPackage')?.classList.toggle('hidden',view.id!=='totals');
       by('correctCampaignDate')?.classList.toggle('hidden',group!=='operation'&&group!=='products');
       if(group)document.defaultView?.HubSidebar?.setOpenGroup(group);
     }

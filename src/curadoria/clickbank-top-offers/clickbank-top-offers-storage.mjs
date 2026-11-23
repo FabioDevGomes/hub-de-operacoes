@@ -8,6 +8,11 @@ export const STORES = Object.freeze({captures: 'captures', offerMetadata: 'offer
 export const BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v3';
 export const LEGACY_BACKUP_V2_FORMAT = 'radar-clickbank-top-offers-backup-v2';
 export const LEGACY_BACKUP_FORMAT = 'radar-clickbank-top-offers-backup-v1';
+import {curationBridges} from '../central-bridge-slot.mjs';
+export function configureClickBankCentral(bridge){
+  if(bridge!==null&&(!bridge||['listClickBankRecords','saveClickBankCapture','updateClickBankRecords'].some(name=>typeof bridge[name]!=='function')))throw Error('Ponte central incompleta');
+  curationBridges.clickbank=bridge;
+}
 
 const DECISION_VALUES = new Set(['Não definido', 'Subir campanha', 'Campanha no ar', 'Revisar', 'Solicitação Enviada', 'Precisa de aprovação', 'VSL', 'Ocultar']);
 const PAGE_CLASSIFICATIONS = new Set(['review','cookies','vsl']);
@@ -68,6 +73,7 @@ function preserveTrendSearchHistory(record, current) {
 }
 
 export function openDB() {
+  if(curationBridges.clickbank)return Promise.reject(new Error('Acesso IndexedDB direto não está integrado ao modo central.'));
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
@@ -85,6 +91,7 @@ export function openDB() {
 
 export async function getAll(storeName = STORES.captures) {
   if (!Object.values(STORES).includes(storeName)) throw new Error('Store ClickBank desconhecida.');
+  if(curationBridges.clickbank)return curationBridges.clickbank.listClickBankRecords(storeName);
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const request = db.transaction(storeName).objectStore(storeName).getAll();
@@ -95,6 +102,7 @@ export async function getAll(storeName = STORES.captures) {
 
 export async function saveCapture(capture) {
   if (!isCapture(capture)) throw new Error('Captura ClickBank inválida.');
+  if(curationBridges.clickbank){await curationBridges.clickbank.saveClickBankCapture(capture);return capture}
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES.captures, 'readwrite');
@@ -169,6 +177,10 @@ export async function putOfferRecord(storeName, record) {
   if (![STORES.offerMetadata, STORES.trends, STORES.images].includes(storeName) || !validOfferRecord(storeName, record)) {
     throw new Error('Registro de análise ClickBank inválido.');
   }
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:storeName,key:record.offerKey,requireObserved:true,transform:previous=>{
+    const next=storeName===STORES.trends?preserveTrendSearchHistory(record,previous):record;
+    if(!validOfferRecord(storeName,next))throw Error('Registro de análise ClickBank inválido.');return next;
+  }}]);return saved}
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
@@ -194,6 +206,7 @@ export async function saveAffiliateLink(identity, value) {
   if (!identity || !affiliateLink) throw new Error('Informe um link de afiliado HTTP ou HTTPS válido.');
   const initial={...identity,manualCountries:[],affiliateLink};
   if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Metadado de link de afiliado inválido.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.offerMetadata,key:identity.offerKey,transform:previous=>{const next={manualCountries:[],...previous,...identity,affiliateLink};if(!validOfferRecord(STORES.offerMetadata,next))throw Error('Metadado de link inválido.');return next}}]);return saved}
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
@@ -216,6 +229,7 @@ export async function saveCommissionUsd(identity, value) {
   if (!identity || commissionUsd == null) throw new Error('Informe uma comissão ClickBank em USD válida, com até duas casas decimais.');
   const initial={...identity,manualCountries:[],commissionUsd};
   if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Comissão ClickBank inválida.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.offerMetadata,key:identity.offerKey,transform:previous=>{const next={manualCountries:[],...previous,...identity,commissionUsd};if(!validOfferRecord(STORES.offerMetadata,next))throw Error('Comissão ClickBank inválida.');return next}}]);return saved}
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
@@ -238,6 +252,7 @@ export async function saveCanonicalProductName(identity, value) {
   if (!identity || !canonicalProductName || canonicalProductName.length > 200) throw new Error('Informe um nome de produto com até 200 caracteres.');
   const initial={...identity,manualCountries:[],canonicalProductName};
   if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Nome de produto inválido.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.offerMetadata,key:identity.offerKey,transform:previous=>{const next={manualCountries:[],...previous,...identity,canonicalProductName};if(!validOfferRecord(STORES.offerMetadata,next))throw Error('Nome de produto inválido.');return next}}]);return saved}
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
@@ -259,6 +274,11 @@ export async function saveTrendPage(record,metadataPatch={}) {
   if(!validOfferRecord(STORES.trends,record)||Object.keys(metadataPatch).some(key=>!['salesPageType','brandBidding'].includes(key))||
     (Object.hasOwn(metadataPatch,'salesPageType')&&!isSalesPageType(metadataPatch.salesPageType))||
     (Object.hasOwn(metadataPatch,'brandBidding')&&!isBrandBidding(metadataPatch.brandBidding)))throw new Error('Ficha Trends inválida.');
+  if(curationBridges.clickbank){
+    const entries=[{store:STORES.trends,key:record.offerKey,requireObserved:true,transform:previous=>{const next=preserveTrendSearchHistory(record,previous);if(!validOfferRecord(STORES.trends,next))throw Error('Ficha Trends inválida.');return next}}];
+    if(Object.keys(metadataPatch).length)entries.push({store:STORES.offerMetadata,key:record.offerKey,transform:previous=>{const identity={offerKey:record.offerKey,productKey:record.productKey,offerName:record.offerName,seller:record.seller};const next={manualCountries:[],...previous,...identity,...metadataPatch};if(!validOfferRecord(STORES.offerMetadata,next))throw Error('Metadado inválido.');return next}});
+    const saved=await curationBridges.clickbank.updateClickBankRecords(entries);return {record:saved[0],metadata:saved[1]};
+  }
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction([STORES.trends,STORES.offerMetadata],'readwrite');
@@ -292,6 +312,7 @@ export async function setTrendSearchTimestamp(identity, searchedAt, term) {
   const initial={...identity,assessments:[],keywordCandidates:[]};
   const nextEntry={searchedAt,term:String(term??'').trim()};
   if (!validTrendSearch(nextEntry)) throw new Error('Busca de Google Trends inválida.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.trends,key:identity.offerKey,transform:previous=>{const current=previous||initial;const next={...current,...identity,lastSearchedAt:searchedAt,searchHistory:appendTrendSearch(current,searchedAt,nextEntry.term)};if(!validOfferRecord(STORES.trends,next))throw Error('Histórico inválido.');return next}}]);return saved}
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORES.trends,'readwrite'),store=tx.objectStore(STORES.trends);
@@ -313,6 +334,7 @@ export async function setTrendSearchTimestamp(identity, searchedAt, term) {
 export async function saveBrandBidding(identity, value) {
   const initial=withBrandBidding({...identity,manualCountries:[]},identity,value);
   if (!validOfferRecord(STORES.offerMetadata,initial)) throw new Error('Metadado ClickBank inválido.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.offerMetadata,key:identity.offerKey,transform:previous=>withBrandBidding(previous||initial,identity,value)}]);return saved}
   const db=await openDB();
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(STORES.offerMetadata,'readwrite'),store=tx.objectStore(STORES.offerMetadata);
@@ -340,6 +362,7 @@ function validDecisionRecord(record) {
 
 export async function putDecision(record) {
   if (!validDecisionRecord(record)) throw new Error('Decisão Top Offers CB inválida.');
+  if(curationBridges.clickbank){const [saved]=await curationBridges.clickbank.updateClickBankRecords([{store:STORES.decisions,key:record.offerKey,requireObserved:true,transform:()=>record}]);return saved}
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES.decisions, 'readwrite');
@@ -433,6 +456,10 @@ function mergeDecisionRecord(existing, incoming) {
 
 export async function mergeBackup(payload) {
   const backup = validateBackup(payload);
+  if(curationBridges.clickbank){
+    if(typeof curationBridges.clickbank.mergeClickBankBackup!=='function')throw new Error('Importação central indisponível.');
+    return curationBridges.clickbank.mergeClickBankBackup(backup,mergeDecisionRecord);
+  }
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(Object.values(STORES), 'readwrite');

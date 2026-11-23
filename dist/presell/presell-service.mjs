@@ -90,7 +90,7 @@ export async function createPresellBatch(targets,{
     resolvedDestination:String(target.destination||''),
   })):[];
   const message=typeof confirmationMessage==='function'?confirmationMessage(normalizedTargets,preparation,preflight):confirmationMessage;
-  if(!confirmCreate(message))return {cancelled:true,preflight};
+  if(!await confirmCreate(message))return {cancelled:true,preflight};
   let committed=null;
   try{
     committed=afterConfirm?await afterConfirm(normalizedTargets,preparation):null;
@@ -124,7 +124,7 @@ export async function createPresellFromFicha(ficha,{
   const normalized=parseFicha(JSON.stringify(ficha));
   const preparation=beforeConfirm?await beforeConfirm(normalized):null;
   const message=typeof confirmationMessage==='function'?confirmationMessage(normalized,preparation):confirmationMessage;
-  if(!confirmCreate(message))return {cancelled:true};
+  if(!await confirmCreate(message))return {cancelled:true};
   const committed=afterConfirm?await afterConfirm(normalized,preparation):null;
   try{
     const confirmedDestination=overwriteExisting?{

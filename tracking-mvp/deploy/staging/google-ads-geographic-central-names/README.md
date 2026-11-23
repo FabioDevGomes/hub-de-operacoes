@@ -1,0 +1,5 @@
+# Localização detalhada: nomes e base central
+
+Pacote local, ainda não publicado. Arquivo único `hostinger-private-tools/google-ads-readonly-service.php`; destino `/home/u572283517/domains/travenzo.shop/domains/travenzo.shop/private-tools/google-ads-readonly-service.php`. Antes da substituição, verifique e preserve backup do arquivo instalado e compare as funcionalidades da versão instalada com este serviço completo. Não alterar wrapper, configurações, credenciais, banco ou agendamentos. Não há SQL.
+
+O relatório por campanha acrescenta consultas `geo_target_constant` em lotes de até 500 IDs para resolver nomes. Falha se um ID não puder ser resolvido. São duas consultas para os dados mais uma por lote não vazio de identificadores. O Hub v1.386.37 grava cada leitura confirmada na base central por MCC, conta e campanha, preservando versões anteriores. A consulta continua manual e limitada a 14 dias; não altera o agendamento existente nem migra relatórios antigos. Falhas na leitura ou na gravação central devem ser informadas. Validar uma campanha após a publicação e conferir o consumo real e a leitura no computador principal e no notebook.

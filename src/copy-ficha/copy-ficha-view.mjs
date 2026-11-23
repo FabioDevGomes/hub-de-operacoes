@@ -5,7 +5,7 @@ import {renderTemplate} from './copy-ficha-template.mjs?v=25';
 import {countryPresentationDefaults} from './copy-ficha-country-defaults.mjs?v=1';
 import {readDraft,writeDraft,clearDraft} from './copy-ficha-draft.mjs?v=4';
 import {createFromStructuredContent} from './copy-ficha-workflow.mjs?v=3';
-import {createPresellFromFicha,createPresellBatch,callApi} from '../presell/presell-service.mjs?v=8';
+import {createPresellFromFicha,createPresellBatch,callApi} from '../presell/presell-service.mjs?v=9';
 import {reportHtml as presellReportHtml} from '../presell/presell-report.mjs?v=4';
 import {readClipboardText} from './copy-ficha-clipboard.mjs?v=1';
 import {preparePresellTracking,preparePresellTrackingBatch} from './copy-ficha-tracking-service.mjs?v=3';
@@ -16,7 +16,7 @@ import {accountDomainUrl} from '../accounts/accounts-domain.mjs?v=13';
 import {findAccountDomainAssociation,saveAccountDomainAssociation,ACCOUNT_DOMAIN_ASSOCIATIONS_KEY,ACCOUNT_DOMAIN_ASSOCIATIONS_UPDATED_EVENT} from '../accounts/account-domains-storage.mjs?v=1';
 import {ACCOUNT_MAP_DUPLICATION_TARGET_KEY,ACCOUNT_MAP_DUPLICATION_TARGET_UPDATED_EVENT,createAccountDuplicationTargetStorage} from '../accounts/accounts-target-storage.mjs?v=3';
 import {GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY,loadGoogleAdsAccountsCache} from '../google-ads/google-ads-accounts-cache.mjs?v=4';
-import {queuePresellDeployJob,mountPresellDeployWorkflow,openPresellDeployWorkflow} from './copy-ficha-deploy.mjs?v=56';
+import {queuePresellDeployJob,mountPresellDeployWorkflow,openPresellDeployWorkflow} from './copy-ficha-deploy.mjs?v=58';
 import {getCampaignDelivery,getCampaignDeliveryAssetStudioPageDirectory} from '../campaign-delivery/delivery-store.mjs?v=17';
 
 let mounted=false,creatingPresell=false,assetStudioAppliedGenerationId='',nextPresellOverwriteOnce=false;
@@ -32,9 +32,11 @@ const currentAccountDomainDrafts=new Map(),currentAccountDomainEditing=new Set()
 // Persistence is isolated in copy-ficha-draft.mjs.
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const by=(root,id)=>root.querySelector(`#${id}`);
-const readFichaDraft=()=>readDraft(undefined,campaignDeliveryQueryId());
-const writeFichaDraft=data=>writeDraft(data,undefined,campaignDeliveryQueryId());
-const clearFichaDraft=()=>clearDraft(undefined,campaignDeliveryQueryId());
+const fichaDraftStorage=()=>{if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true)return undefined;const storage=globalThis.__HUB_CENTRAL_LAB_FICHA__?.storage;if(!storage)throw new Error('Rascunho central experimental indisponível.');return storage};
+const readFichaDraft=()=>readDraft(fichaDraftStorage(),campaignDeliveryQueryId());
+const writeFichaDraft=data=>writeDraft(data,fichaDraftStorage(),campaignDeliveryQueryId());
+const clearFichaDraft=()=>clearDraft(fichaDraftStorage(),campaignDeliveryQueryId());
+const getFichaDelivery=id=>{if(!id)return null;if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true)return getCampaignDelivery(id);const bridge=globalThis.__HUB_CENTRAL_LAB_FICHA__;if(typeof bridge?.getDelivery!=='function')throw new Error('Entrega central experimental indisponível.');return bridge.getDelivery(id)};
 
 function updateProductPriceNote(root){
   const field=by(root,'copyProductPrice'),note=by(root,'copyProductPriceNote');if(!field||!note)return;
@@ -192,6 +194,7 @@ function updatePendingHighlights(root,{fields=[]}={}){
 
 function inputValue(root,id){return by(root,id)?.value?.trim()||''}
 function consumeAssetStudioPageHandoff(handoffId){
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true)return;
   try{if(JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null')?.id===handoffId)localStorage.removeItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)}catch{}
 }
 function normalizedWindowsPath(value){return String(value||'').trim().replace(/[\\/]+/g,'\\').replace(/\\+$/,'').toLocaleLowerCase('pt-BR')}
@@ -199,7 +202,7 @@ function applyAssetStudioPageDirectory(root,handoff){
   if(!handoff?.id||!handoff.directory)return false;
   const deliveryId=campaignDeliveryQueryId();
   if(deliveryId){
-    const delivery=getCampaignDelivery(deliveryId);
+    const delivery=getFichaDelivery(deliveryId);
     const normalizeProduct=value=>String(value||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');
     if(!delivery||!normalizeProduct(handoff.productName)||normalizeProduct(handoff.productName)!==normalizeProduct(delivery.productName))return false;
   }
@@ -231,9 +234,10 @@ function applyAssetStudioPageDirectory(root,handoff){
   return true;
 }
 function applyPendingAssetStudioPageDirectory(root){
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){const bridge=globalThis.__HUB_CENTRAL_LAB_FICHA__,id=campaignDeliveryQueryId();if(id){const handoff=bridge.getAssetPageHandoff(id);if(handoff)applyAssetStudioPageDirectory(root,handoff);return}}
   try{applyAssetStudioPageDirectory(root,JSON.parse(localStorage.getItem(ASSET_STUDIO_PAGE_HANDOFF_KEY)||'null'))}catch{}
 }
-function updateCampaignDeliveryAffiliatePresentation(root,delivery=getCampaignDelivery(campaignDeliveryQueryId())){
+function updateCampaignDeliveryAffiliatePresentation(root,delivery=getFichaDelivery(campaignDeliveryQueryId())){
   const field=by(root,'copyAffiliateUrl'),view=by(root,'copyAffiliateUrlIntegrated'),link=by(root,'copyAffiliateUrlLink');
   if(!field||!view||!link)return false;
   const deliveredUrl=normalizedUrl(delivery?.affiliateUrl),currentUrl=normalizedUrl(field.value);
@@ -249,7 +253,7 @@ function updateCampaignDeliveryAffiliatePresentation(root,delivery=getCampaignDe
   updateExistingAffiliateLink(root);
   return integrated;
 }
-function renderCampaignDeliveryFaviconStatus(root,delivery=getCampaignDelivery(campaignDeliveryQueryId())){
+function renderCampaignDeliveryFaviconStatus(root,delivery=getFichaDelivery(campaignDeliveryQueryId())){
   const status=by(root,'copyAssetFaviconStatus');
   if(!status)return;
   if(!campaignDeliveryQueryId()||!delivery){status.hidden=true;status.textContent='';return}
@@ -261,7 +265,7 @@ function renderCampaignDeliveryFaviconStatus(root,delivery=getCampaignDelivery(c
 }
 function applyCampaignDeliveryPrefill(root,id=campaignDeliveryQueryId()){
   if(!id){updateCampaignDeliveryAffiliatePresentation(root,null);renderCampaignDeliveryFaviconStatus(root,null);return false}
-  const delivery=getCampaignDelivery(id);if(!delivery){updateCampaignDeliveryAffiliatePresentation(root,null);renderCampaignDeliveryFaviconStatus(root,null);return false}
+  const delivery=getFichaDelivery(id);if(!delivery){updateCampaignDeliveryAffiliatePresentation(root,null);renderCampaignDeliveryFaviconStatus(root,null);return false}
   renderCampaignDeliveryFaviconStatus(root,delivery);
   const productField=by(root,'copyProduct'),currentProduct=String(productField?.value||'').trim(),deliveryProduct=String(delivery.productName||'').trim();
   const normalizeProduct=value=>String(value||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');
@@ -300,7 +304,7 @@ function applyCampaignDeliveryPrefill(root,id=campaignDeliveryQueryId()){
 }
 function syncTrackingPlatformFromAffiliate(root){
   const select=by(root,'copyTrackingPlatform');if(!select)return;
-  const delivery=campaignDeliveryQueryId()?getCampaignDelivery(campaignDeliveryQueryId()):null;
+  const delivery=campaignDeliveryQueryId()?getFichaDelivery(campaignDeliveryQueryId()):null;
   const deliveryPlatform=String(delivery?.platformCode||'').trim().toUpperCase()==='GM'?'gurumedia':String(delivery?.platformCode||'').trim().toUpperCase()==='CB'?'clickbank':'';
   const urlText=normalizedUrl(inputValue(root,'copyAffiliateUrl'));
   let hostname='';try{hostname=new URL(urlText).hostname.toLowerCase()}catch{}
@@ -368,7 +372,7 @@ function updatePresellSourceMode(root,{save=false}={}){
 }
 function readAccountMapTarget(){
   try{
-    const target=createAccountDuplicationTargetStorage(window.localStorage).read();
+    const target=createAccountDuplicationTargetStorage(globalThis.__HUB_CENTRAL_LAB_MODE__===true?fichaDraftStorage():window.localStorage).read();
     if(!target)return null;
     const accountId=normalizeTrackingAccountId(target.accountId);
     return {...target,accountDigits:accountId,accountFormatted:formatTrackingAccountId(accountId)};
@@ -402,7 +406,7 @@ function selectAllTrackingAccounts(root){
 function accountHostForHpanel(account){
   const accountId=String(account?.customerId||'').replace(/\D/g,'');
   if(/^\d{10}$/.test(accountId)){
-    const association=findAccountDomainAssociation(accountId);
+    const association=findAccountDomainAssociation(accountId,{storage:fichaDraftStorage()});
     if(association)return association.domain||'';
   }
   const candidates=[account?.domain,account?.website,account?.name].filter(value=>typeof value==='string');
@@ -505,6 +509,7 @@ function renderAccountDomainEditor(root,row,account){
   const feedback=document.createElement('span');feedback.className='copy-ficha-hpanel-domain-feedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');feedback.textContent=currentAccountDomainErrors.get(accountId)||'Será salvo localmente para esta conta e usado nas próximas sugestões.';
   cancel.addEventListener('click',()=>{currentAccountDomainEditing.delete(accountId);currentAccountDomainDrafts.delete(accountId);currentAccountDomainErrors.delete(accountId);renderHpanelLinks(root)});
   const saveDomain=()=>{
+    if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){currentAccountDomainErrors.set(accountId,'Edição de domínio indisponível no laboratório.');renderHpanelLinks(root);return}
     const domain=input.value.trim();currentAccountDomainDrafts.set(accountId,domain);
     if(!domain){feedback.textContent='Informe o domínio principal, por exemplo voltreva.shop.';input.focus();return}
     currentAccountDomainEditing.delete(accountId);currentAccountDomainErrors.delete(accountId);
@@ -620,7 +625,7 @@ function refreshTrackingAccountDirectory(root,{directory=null,initial=false}={})
   const managerSelect=by(root,'copyTrackingManager');if(!managerSelect)return;
   const previousManager=initial?'':String(managerSelect.value||''),previousAccount=initial?'':String(by(root,'copyTrackingAccount')?.value||'');
   const previousManual=by(root,'copyTrackingAccountId')?.value||'';
-  const cached=directory?{accounts:directory}:loadGoogleAdsAccountsCache();
+  const cached=directory&&globalThis.__HUB_CENTRAL_LAB_MODE__!==true?{accounts:directory}:loadGoogleAdsAccountsCache({storage:fichaDraftStorage()});
   currentAccountDirectory=cached?.accounts||{managers:[],accounts:[]};currentTrackingTarget=readAccountMapTarget();
   const managers=(currentAccountDirectory.managers||[]).filter(manager=>/^\d{10}$/.test(String(manager.customerId||'')));
   managerSelect.replaceChildren();
@@ -656,7 +661,7 @@ function normalizedUrl(value){
   return markdown?markdown[1]:text;
 }
 function payload(root){
-  const deliveryId=campaignDeliveryQueryId(),delivery=deliveryId?getCampaignDelivery(deliveryId):null;
+  const deliveryId=campaignDeliveryQueryId(),delivery=deliveryId?getFichaDelivery(deliveryId):null;
   renderCampaignDeliveryFaviconStatus(root,delivery);
   return {
     dtcUrl:normalizedUrl(inputValue(root,'copyDtcUrl')),
@@ -778,6 +783,7 @@ function applyDefaultDiscountPercent(root){
 }
 
 function resetCollection(root,toast){
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){toast?.('Limpeza de rascunho indisponível na base central experimental.',true);return}
   if(!confirm('Limpar todos os campos e resultados desta coleta?'))return;
   clearFichaDraft();
   assetStudioAppliedGenerationId='';
@@ -1410,15 +1416,38 @@ function showExistingPresellDecision(root,{targets=[],product='Pre-Sell',onQueue
   actions.append(deploy,cancel,overwrite);dialog.append(header,intro,list,note,feedback,actions);overlay.append(dialog);root.append(overlay);
   const dismiss=()=>{overlay.remove();if(previousFocus&&root.contains(previousFocus))previousFocus.focus()};
   const closeAndCancel=()=>{dismiss();onCancel?.()};
-  deploy.addEventListener('click',()=>{
-    const job=onQueueDeploy?.();
-    if(!job){feedback.hidden=false;feedback.textContent='Não foi possível guardar esse destino na etapa de hospedagem. Confira se a lista de contas selecionadas está correta e tente novamente.';return}
-    dismiss();openPresellDeployWorkflow(job.id);
+  deploy.addEventListener('click',async()=>{
+    deploy.disabled=true;
+    try {
+      const job=onQueueDeploy?.();
+      if(!job)throw new Error('Não foi possível guardar esse destino na etapa de hospedagem. Confira a lista de contas selecionadas.');
+      if(globalThis.__HUB_CENTRAL_LAB_MODE__===true)await globalThis.__HUB_CENTRAL_LAB_FICHA__.flush();
+      dismiss();openPresellDeployWorkflow(job.id);
+    } catch(error) {feedback.hidden=false;feedback.textContent=error?.message||'Não foi possível confirmar o lote de hospedagem.';deploy.disabled=false;}
   });
   cancel.addEventListener('click',closeAndCancel);close.addEventListener('click',closeAndCancel);
   overwrite.addEventListener('click',()=>{dismiss();onOverwrite?.()});
   overlay.addEventListener('click',event=>{if(event.target===overlay)closeAndCancel()});
   dialog.addEventListener('keydown',event=>{if(event.key==='Escape')closeAndCancel()});cancel.focus();
+}
+
+function confirmPresellCreation(root,message){
+  return new Promise(resolve=>{
+    const previousFocus=document.activeElement,overlay=document.createElement('div');
+    overlay.className='copy-ficha-existing-modal';overlay.setAttribute('role','presentation');
+    const dialog=document.createElement('section');dialog.className='copy-ficha-existing-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','copyFichaConfirmTitle');
+    const header=document.createElement('header'),heading=document.createElement('h2');heading.id='copyFichaConfirmTitle';heading.textContent='Confirmar criação da Pre-Sell';header.append(heading);
+    const content=document.createElement('p');content.textContent=message;content.style.whiteSpace='pre-line';
+    const actions=document.createElement('footer');actions.className='copy-ficha-existing-actions';
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='copy-ficha-btn';cancel.textContent='Cancelar';
+    const confirmButton=document.createElement('button');confirmButton.type='button';confirmButton.className='copy-ficha-btn primary';confirmButton.textContent='Confirmar';
+    actions.append(cancel,confirmButton);dialog.append(header,content,actions);overlay.append(dialog);root.append(overlay);
+    let settled=false;const finish=value=>{if(settled)return;settled=true;overlay.remove();if(previousFocus?.isConnected)previousFocus.focus();resolve(value)};
+    cancel.addEventListener('click',()=>finish(false));confirmButton.addEventListener('click',()=>finish(true));
+    overlay.addEventListener('click',event=>{if(event.target===overlay)finish(false)});
+    dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();finish(false)}else if(event.key==='Tab'){if(event.shiftKey&&document.activeElement===cancel){event.preventDefault();confirmButton.focus()}else if(!event.shiftKey&&document.activeElement===confirmButton){event.preventDefault();cancel.focus()}}});
+    cancel.focus();
+  });
 }
 
 async function generateFichaAndCreatePresell(root,toast,{overwriteExisting=false}={}){
@@ -1432,7 +1461,7 @@ async function generateFichaAndCreatePresell(root,toast,{overwriteExisting=false
         const targets=buildPresellBatchTargets(root,ficha);
         return createPresellBatch(targets,{
           sourceDirectory:ficha.destination,assetFolder:ficha.assetFolder,
-          overwriteExisting,confirmCreate:overwriteExisting?(message=>linkTargetConfirmationNeeded?window.confirm(message):true):undefined,
+          overwriteExisting,confirmCreate:message=>overwriteExisting&&!linkTargetConfirmationNeeded?true:confirmPresellCreation(root,message),
           beforeConfirm:async batchTargets=>{
             const trackings=batchTargets.map(target=>target.ficha.tracking).filter(tracking=>tracking.enabled);
             return trackings.length?preparePresellTrackingBatch(trackings):null;
@@ -1452,7 +1481,7 @@ async function generateFichaAndCreatePresell(root,toast,{overwriteExisting=false
         }).catch(error=>{error.batchTargets=targets;error.baseFicha=ficha;throw error});
       }
       return createPresellFromFicha(ficha,{
-      overwriteExisting,confirmCreate:overwriteExisting?(message=>linkTargetConfirmationNeeded?window.confirm(message):true):undefined,
+      overwriteExisting,confirmCreate:message=>overwriteExisting&&!linkTargetConfirmationNeeded?true:confirmPresellCreation(root,message),
       beforeConfirm:async normalized=>{
         if(!normalized.tracking?.enabled&&!overwriteExisting)return null;
         const preflight=await callApi(overwriteExisting?'/api/presell/overwrite-preflight':'/api/presell/preflight',normalized);
@@ -1514,13 +1543,31 @@ async function generateFichaAndCreatePresell(root,toast,{overwriteExisting=false
 
 export async function mount({root,toast}={}){
   if(!root)return;
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true){
+    const response=await fetch('/api/presell/health',{cache:'no-store'});
+    if(!response.ok)throw new Error('Não foi possível identificar o armazenamento da Ficha.');
+    const health=await response.json();
+    if(health.centralWriteProxy===true){
+      const {createFichaDraftLabBridge}=await import('./ficha-central-lab.mjs');
+      const request=async(path,input)=>{
+        const result=await fetch('/central'+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+        if(!result.ok){const error=new Error(result.status===409?'Dados alterados; atualize a Ficha.':'Serviço central indisponível.');if(result.status===409)error.code='VERSION_CONFLICT';throw error}
+        return result.json();
+      };
+      globalThis.__HUB_CENTRAL_LAB_FICHA__=createFichaDraftLabBridge({request,referenceStorage:globalThis.localStorage,onError:error=>toast?.('Não foi possível salvar a Ficha: '+error.message,true)});
+      globalThis.__HUB_CENTRAL_LAB_MODE__=true;
+      globalThis.__HUB_CENTRAL_OPERATIONAL__=true;
+    }
+  }
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){const bridge=globalThis.__HUB_CENTRAL_LAB_FICHA__;if(typeof bridge?.open!=='function')throw new Error('Rascunho central experimental indisponível.');await bridge.open(campaignDeliveryQueryId())}
   if(mounted){if(campaignDeliveryQueryId()){const resetButton=by(root,'copyReset');if(resetButton)resetButton.hidden=true}applyCampaignDeliveryPrefill(root);applyDefaultDiscountPercent(root);applyPendingAssetStudioPageDirectory(root);return}
   if(!mounted){
+    if(globalThis.__HUB_CENTRAL_LAB_MODE__===true)window.addEventListener('beforeunload',event=>{if(globalThis.__HUB_CENTRAL_LAB_FICHA__?.isDirty()){event.preventDefault();event.returnValue=''}});
     root.innerHTML=renderTemplate();
     if(campaignDeliveryQueryId()){const resetButton=by(root,'copyReset');if(resetButton)resetButton.hidden=true}
     refreshTrackingAccountDirectory(root,{initial:true});restoreDraft(root);applyDefaultDiscountPercent(root);syncTrackingPlatformFromAffiliate(root);updatePresellSourceMode(root);updateTrackingTitlePreview(root);updateDiscountAmountLabel(root);updateProductPriceNote(root);updateDiscountNote(root);renderOfferQuestions(root);
     applyCampaignDeliveryPrefill(root);
-    mountPresellDeployWorkflow({root,toast,getDraftTargets:()=>presellDeployDraftTargets(root),getCampaignDeliveryContext:()=>{const id=campaignDeliveryQueryId();if(!id)return null;const delivery=getCampaignDelivery(id);return{id,productName:String(delivery?.productName||by(root,'copyProduct')?.value||'').trim(),createdAt:String(delivery?.createdAt||'')}},onGenerateDraft:()=>{const generateButton=by(root,'copyGenerateFicha');if(!generateButton)return false;generateButton.scrollIntoView({behavior:'smooth',block:'center'});generateButton.focus({preventScroll:true});generateButton.click();return true},hpanelUrlForDomain:(domain,parentDomain)=>accountDomainUrl(parentDomain)||accountDomainUrl(domain)});
+    mountPresellDeployWorkflow({root,toast,...(globalThis.__HUB_CENTRAL_LAB_MODE__===true?{storage:fichaDraftStorage(),...(globalThis.__HUB_CENTRAL_OPERATIONAL__===true?{}:{fetchImpl:async()=>{throw new Error('Hospedagem externa indisponível no laboratório.')}})}:{}),getDraftTargets:()=>presellDeployDraftTargets(root),getCampaignDeliveryContext:()=>{const id=campaignDeliveryQueryId();if(!id)return null;const delivery=getFichaDelivery(id);return{id,productName:String(delivery?.productName||by(root,'copyProduct')?.value||'').trim(),createdAt:String(delivery?.createdAt||'')}},onGenerateDraft:()=>{const generateButton=by(root,'copyGenerateFicha');if(!generateButton)return false;generateButton.scrollIntoView({behavior:'smooth',block:'center'});generateButton.focus({preventScroll:true});generateButton.click();return true},hpanelUrlForDomain:(domain,parentDomain)=>accountDomainUrl(parentDomain)||accountDomainUrl(domain)});
     by(root,'copyAnalyze').onclick=()=>analyzeClipboard(root);
     by(root,'copyAnalyzeManual').onclick=()=>analyzeManualText(root);
     by(root,'copyReset').onclick=()=>resetCollection(root,toast);
@@ -1531,13 +1578,15 @@ export async function mount({root,toast}={}){
     window.addEventListener(ACCOUNT_MAP_DUPLICATION_TARGET_UPDATED_EVENT,()=>refreshTrackingAccountDirectory(root));
     window.addEventListener('hub:google-ads-account-directory-updated',event=>refreshTrackingAccountDirectory(root,{directory:event.detail?.accounts||null}));
     window.addEventListener(ACCOUNT_DOMAIN_ASSOCIATIONS_UPDATED_EVENT,()=>refreshTrackingAccountDirectory(root));
-    window.addEventListener(ASSET_STUDIO_PAGE_HANDOFF_EVENT,event=>applyAssetStudioPageDirectory(root,event.detail));
+    window.addEventListener(ASSET_STUDIO_PAGE_HANDOFF_EVENT,event=>{if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true)applyAssetStudioPageDirectory(root,event.detail)});
     window.addEventListener('storage',event=>{
       if(event.key===ACCOUNT_MAP_DUPLICATION_TARGET_KEY||event.key===GOOGLE_ADS_ACCOUNTS_CACHE_STORAGE_KEY||event.key===ACCOUNT_DOMAIN_ASSOCIATIONS_KEY)refreshTrackingAccountDirectory(root);
-      if(event.key===ASSET_STUDIO_PAGE_HANDOFF_KEY&&event.newValue){try{applyAssetStudioPageDirectory(root,JSON.parse(event.newValue))}catch{}}
+      if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true&&event.key===ASSET_STUDIO_PAGE_HANDOFF_KEY&&event.newValue){try{applyAssetStudioPageDirectory(root,JSON.parse(event.newValue))}catch{}}
     });
     by(root,'copyGenerateFicha').onclick=async()=>{
       if(creatingPresell)return;
+      if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){try{await globalThis.__HUB_CENTRAL_LAB_FICHA__.flush()}catch(error){by(root,'copyPresellStatus').textContent='Não foi possível salvar o rascunho central. Recarregue e confira antes de continuar.';toast?.(by(root,'copyPresellStatus').textContent,true);return}}
+      if(globalThis.__HUB_CENTRAL_LAB_MODE__===true&&globalThis.__HUB_CENTRAL_OPERATIONAL__!==true){by(root,'copyPresellStatus').textContent='Geração e publicação indisponíveis no laboratório.';return}
       if(existingPageMode(root)){
         creatingPresell=true;const button=by(root,'copyGenerateFicha');button.disabled=true;button.textContent='Preparando página existente…';
         try{await prepareExistingPageForHosting(root,toast)}catch(error){by(root,'copyPresellStatus').textContent=error.message;by(root,'copyWarnings').textContent=error.message;toast?.(error.message,true)}
@@ -1557,7 +1606,7 @@ export async function mount({root,toast}={}){
             targets,product,
             onQueueDeploy:()=>{
               const publishableTargets=targets.filter(target=>target.exists);
-              const job=queuePresellDeployJob({campaignDeliveryId:campaignDeliveryQueryId(),product,targets:publishableTargets});
+              const job=queuePresellDeployJob({campaignDeliveryId:campaignDeliveryQueryId(),product,targets:publishableTargets},{storage:fichaDraftStorage()});
               if(job)by(root,'copyPresellStatus').textContent='A pasta existente foi adicionada à etapa de hospedagem e publicação.';
               return job;
             },
@@ -1665,7 +1714,7 @@ export async function mount({root,toast}={}){
       if(['copyTrackingEnabled','copyTrackingHostname','copyTrackingSubdomain','copyTrackingPlatform','copyTrackingManager','copyTrackingAccount','copyTrackingAccountId','copyTrackingAllAccounts','copyAffiliateUrl'].includes(event.target.id)||event.target.matches('[data-tracking-presell-url]'))saveTrackingDraft(root);
       if(event.target.id==='copyTrackingAccount'&&event.target.value==='manual')by(root,'copyTrackingAccountId').focus();
       if(event.target.id!=='copyFichaSource')updatePendingHighlights(root);
-      if(['copyProductPrice','copyDiscount','copyDiscountAmount','copyCurrency','copyCountry','copyLanguage','copyGuarantee','copyGuaranteeStatus','copyFreeShipping','copyBonusStatus','copyBonusDescription'].includes(event.target.id))saveDraft(root);
+      if(['copyProductPrice','copyDiscount','copyDiscountAmount','copyCurrency','copyCountry','copyLanguage','copyGuarantee','copyGuaranteeStatus','copyFreeShipping','copyBonusStatus','copyBonusDescription','copyPageTitle'].includes(event.target.id))saveDraft(root);
     };
     root.addEventListener('input',handleFieldEdit);root.addEventListener('change',handleFieldEdit);
     if(inputValue(root,'copyFichaSource'))renderStructuredFichaAnalysis(root,inputValue(root,'copyFichaSource'),{origin:'draft'});

@@ -1,6 +1,6 @@
 (() => {
-  const HUB_ORIGIN = 'http://127.0.0.1:8765';
-  if (location.origin !== HUB_ORIGIN) return;
+  const HUB_ORIGIN = location.origin;
+  if (HUB_ORIGIN !== 'http://127.0.0.1:8765' && !(HUB_ORIGIN === 'http://192.168.15.4:18790' && /^\/asset-studio\/?$/.test(location.pathname))) return;
 
   const markBridgeReady = () => {
     if (!document.documentElement) return false;

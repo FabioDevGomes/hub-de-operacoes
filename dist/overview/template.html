@@ -67,6 +67,7 @@
               <select id="campaignStartDate" class="hub-month-label hub-month-date-select" aria-label="Data de início das campanhas"><option value="">Todas as datas</option></select>
               <button id="campaignNextDate" class="btn hub-month-arrow" type="button" aria-label="Próxima data de início" title="Próxima data; em Todas, começa pela mais antiga">›</button>
             </div>
+            <button id="overviewCampaignBulkActionOpen" class="btn overview-bulk-action-open" type="button" aria-haspopup="dialog" aria-controls="overviewCampaignBulkActionDialog" hidden>Ação em lote</button>
             <span id="campaignDateStatus" class="overview-date-status" role="status"></span>
             <input id="search" class="search hub-search-filter" type="search" placeholder="Buscar campanha" aria-label="Buscar campanha"><select id="campaignStatusFilter" class="search hub-table-filter" style="width:auto" aria-label="Filtrar campanhas por situação"><option value="all">Todas</option><option value="active">Ativas</option><option value="paused">Pausadas</option><option value="history">Histórico</option><option value="paused7">Pausadas nos últimos 7 dias</option></select><div class="view-toggle" role="group" aria-label="Período da visão geral"><button id="totalsConsolidated" class="active" type="button">Consolidado</button><button id="totalsD1" type="button">D−1</button><button id="totalsD0" type="button">D zero</button></div>
             <details id="overviewColumnPicker" class="overview-column-picker hub-column-picker">
@@ -203,5 +204,30 @@
             <div class="overview-fractional-columns" aria-hidden="true"><span>Produto</span><span>Valor atual (MCC)</span><span>Novo valor (R$)</span><span></span></div>
             <div id="fractionalValueList" class="overview-fractional-list" aria-live="polite"></div>
             <div class="overview-roi-actions"><button id="fractionalValueCancel" class="btn" type="button">Fechar</button></div>
+          </div>
+        </dialog>
+        <dialog id="overviewCampaignBulkActionDialog" class="overview-campaign-bulk-action-dialog" aria-labelledby="overviewCampaignBulkActionTitle" aria-describedby="overviewCampaignBulkActionDescription">
+          <div class="overview-campaign-bulk-action-content">
+            <div class="overview-campaign-action-eyebrow">PRÉVIA · AÇÃO EM LOTE</div>
+            <h2 id="overviewCampaignBulkActionTitle">Prévia da ação em lote</h2>
+            <p id="overviewCampaignBulkActionDescription">A prévia usa as campanhas visíveis nesta data. A execução é sequencial, exige confirmação e registra cada resultado no Diário.</p>
+            <div class="overview-campaign-bulk-action-controls">
+              <label for="overviewCampaignBulkActionSelect">Ajuste para pré-visualizar</label>
+              <select id="overviewCampaignBulkActionSelect" class="overview-roi-input">
+                <optgroup label="CPA desejado">
+                  <option value="cpa:increase:2">CPA +2%</option><option value="cpa:decrease:2">CPA −2%</option>
+                  <option value="cpa:increase:4">CPA +4%</option><option value="cpa:decrease:4">CPA −4%</option>
+                </optgroup>
+                <optgroup label="Orçamento diário">
+                  <option value="budget:increase:5">Orçamento +5%</option><option value="budget:decrease:5">Orçamento −5%</option>
+                  <option value="budget:increase:10">Orçamento +10%</option><option value="budget:decrease:10">Orçamento −10%</option>
+                </optgroup>
+              </select>
+            </div>
+            <p id="overviewCampaignBulkActionSummary" class="overview-campaign-bulk-action-summary" role="status" aria-live="polite"></p>
+            <div class="overview-campaign-bulk-action-list-header"><input id="overviewCampaignBulkSelectAll" type="checkbox" aria-label="Selecionar todas as campanhas"><span>Campanha</span><span>Nº</span><span>Conta</span><span>Ajuste</span></div>
+            <ul id="overviewCampaignBulkActionList" class="overview-campaign-bulk-action-list" aria-label="Prévia das campanhas para o ajuste"></ul>
+            <section id="overviewCampaignBulkActionConfirmation" class="overview-campaign-bulk-action-confirmation" hidden aria-labelledby="overviewCampaignBulkActionConfirmationTitle"><h3 id="overviewCampaignBulkActionConfirmationTitle">Confirmar execução</h3><p id="overviewCampaignBulkActionConfirmationText"></p><div><button id="overviewCampaignBulkActionConfirmationCancel" class="btn" type="button">Cancelar lote</button><button id="overviewCampaignBulkActionConfirm" class="btn primary" type="button">Confirmar e executar</button></div></section>
+            <div class="overview-campaign-bulk-action-footer"><span id="overviewCampaignBulkActionFooterNote">Ajustes de CPA e de orçamento podem ser executados em sequência, com confirmação e registro individual no Diário.</span><button id="overviewCampaignBulkActionStart" class="btn primary" type="button" hidden>Preparar execução</button><button id="overviewCampaignBulkActionClose" class="btn" type="button">Fechar</button></div>
           </div>
         </dialog>

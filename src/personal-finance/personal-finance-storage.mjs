@@ -278,8 +278,8 @@ export async function createCategory(category, { monthKey = null } = {}) {
   return writeCategory(category, { monthKey, add: true });
 }
 
-export async function saveCategory(category) {
-  return writeCategory(category, { add: false });
+export async function saveCategory(category, { monthKey = null } = {}) {
+  return writeCategory(category, { monthKey, add: false });
 }
 
 async function writeCategory(category, { monthKey = null, add = false } = {}) {
@@ -300,6 +300,14 @@ async function writeCategory(category, { monthKey = null, add = false } = {}) {
         const monthRequest = tx.objectStore(STORES.months).get(monthKey);
         monthRequest.onsuccess = () => {
           if (monthRequest.result && add) tx.objectStore(STORES.entries).put(snapshotNewCategory(normalized, group, monthKey));
+          if (monthRequest.result && !add) {
+            const entriesStore = tx.objectStore(STORES.entries);
+            const entryRequest = entriesStore.get(`${monthKey}:${normalized.category_id}`);
+            entryRequest.onsuccess = () => {
+              if (entryRequest.result) entriesStore.put({ ...entryRequest.result, currency: normalized.currency });
+            };
+            entryRequest.onerror = () => tx.abort();
+          }
         };
         monthRequest.onerror = () => tx.abort();
       };

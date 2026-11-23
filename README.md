@@ -1,7 +1,7 @@
 # Base de Dados Local de Campanhas
 
 <!-- hub-version:start -->
-## Versão atual: v1.378.9
+## Versão atual: v1.386.40
 
 Fonte única: [VERSION](VERSION). Mudanças: [CHANGELOG](CHANGELOG.md).
 A mesma versão aparece junto ao título das telas e no título da aba do navegador.

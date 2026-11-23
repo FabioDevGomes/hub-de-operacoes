@@ -3778,6 +3778,148 @@ function hub_google_ads_campaign_negative_keywords_enabled(array $config): bool
         && ($config['tracking_google_ads_negative_keywords_enabled'] ?? false) === true;
 }
 
+/** Strict read-only inventory request. It never accepts caller-provided GAQL. */
+function hub_google_ads_campaign_keyword_inventory_validate_payload(array $payload): array
+{
+    $keys = array_keys($payload);
+    sort($keys, SORT_STRING);
+    if ($keys !== ['campaign_id', 'customer_id', 'manager_customer_id', 'operation']
+        || ($payload['operation'] ?? null) !== 'read_campaign_keyword_inventory') {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    $managerId = hub_google_ads_valid_customer_id($payload['manager_customer_id'] ?? null);
+    $customerId = hub_google_ads_valid_customer_id($payload['customer_id'] ?? null);
+    $campaignId = $payload['campaign_id'] ?? null;
+    if ($managerId === null || $customerId === null || $managerId === $customerId
+        || !is_string($campaignId) || preg_match('/^[1-9][0-9]{0,19}$/D', $campaignId) !== 1) {
+        throw new HubGoogleAdsApiException('invalid_payload', 400);
+    }
+    return [$managerId, $customerId, $campaignId];
+}
+
+function hub_google_ads_campaign_keyword_inventory_normalize_rows(
+    string $customerId,
+    string $campaignId,
+    array $adGroupRows,
+    array $campaignRows
+): array {
+    $positive = [];
+    $negative = [];
+    $seen = [];
+    foreach ($adGroupRows as $row) {
+        $criterion = $row['adGroupCriterion'] ?? null;
+        if (!is_array($criterion)) throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        $campaignResource = (string)($row['campaign']['resourceName'] ?? '');
+        $adGroupResource = (string)($criterion['adGroup'] ?? '');
+        if (preg_match('#^customers/' . preg_quote($customerId, '#') . '/campaigns/' . preg_quote($campaignId, '#') . '$#D', $campaignResource) !== 1
+            || preg_match('#^customers/' . preg_quote($customerId, '#') . '/adGroups/([1-9][0-9]{0,19})$#D', $adGroupResource, $groupMatch) !== 1) {
+            throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        }
+        $keyword = $criterion['keyword'] ?? null;
+        $term = is_array($keyword) ? ($keyword['text'] ?? null) : null;
+        $matchType = is_array($keyword) ? ($keyword['matchType'] ?? null) : null;
+        $status = $criterion['status'] ?? null;
+        $negativeFlag = $criterion['negative'] ?? null;
+        if (!is_string($term) || trim($term) === '' || !is_string($matchType)
+            || !in_array($matchType, ['BROAD', 'PHRASE', 'EXACT'], true)
+            || !is_string($status) || $status === '' || !is_bool($negativeFlag)) {
+            throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        }
+        $item = [
+            'term' => $term,
+            'match_type' => $matchType,
+            'status' => $status,
+            'scope' => 'AD_GROUP',
+            'ad_group_id' => $groupMatch[1],
+        ];
+        $key = implode('|', ['AD_GROUP', $groupMatch[1], $matchType, hub_google_ads_negative_keyword_normalize_text($term), $status, $negativeFlag ? '1' : '0']);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        if ($negativeFlag) $negative[] = $item;
+        else $positive[] = $item;
+    }
+    foreach ($campaignRows as $row) {
+        $criterion = $row['campaignCriterion'] ?? null;
+        if (!is_array($criterion)) throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        $campaignResource = (string)($criterion['campaign'] ?? '');
+        if (preg_match('#^customers/' . preg_quote($customerId, '#') . '/campaigns/' . preg_quote($campaignId, '#') . '$#D', $campaignResource) !== 1) {
+            throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        }
+        $keyword = $criterion['keyword'] ?? null;
+        $term = is_array($keyword) ? ($keyword['text'] ?? null) : null;
+        $matchType = is_array($keyword) ? ($keyword['matchType'] ?? null) : null;
+        $status = $criterion['status'] ?? null;
+        if (!is_string($term) || trim($term) === '' || !is_string($matchType)
+            || !in_array($matchType, ['BROAD', 'PHRASE', 'EXACT'], true)
+            || !is_string($status) || $status === '' || ($criterion['negative'] ?? null) !== true) {
+            throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+        }
+        $item = ['term' => $term, 'match_type' => $matchType, 'status' => $status, 'scope' => 'CAMPAIGN', 'ad_group_id' => null];
+        $key = implode('|', ['CAMPAIGN', $matchType, hub_google_ads_negative_keyword_normalize_text($term), $status]);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $negative[] = $item;
+    }
+    $sort = static fn(array $left, array $right): int =>
+        [$left['scope'], $left['ad_group_id'] ?? '', hub_google_ads_negative_keyword_normalize_text($left['term']), $left['match_type'], $left['status']]
+        <=> [$right['scope'], $right['ad_group_id'] ?? '', hub_google_ads_negative_keyword_normalize_text($right['term']), $right['match_type'], $right['status']];
+    usort($positive, $sort);
+    usort($negative, $sort);
+    return ['positive_keywords' => $positive, 'negative_keywords' => $negative];
+}
+
+/** Read all non-removed keyword criteria directly configured on one Search campaign. */
+function hub_google_ads_campaign_keyword_inventory_read(array $config, array $payload): array
+{
+    [$managerId, $customerId, $campaignId] = hub_google_ads_campaign_keyword_inventory_validate_payload($payload);
+    if (!hub_google_ads_campaign_manager_is_allowed($config, $managerId)) {
+        throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    }
+    $accessToken = hub_google_ads_access_token(hub_google_ads_credentials());
+    if (!hub_google_ads_campaign_customer_is_active_child($accessToken, $managerId, $customerId)) {
+        throw new HubGoogleAdsApiException('campaign_account_not_allowed', 403);
+    }
+    $campaignQuery = 'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type '
+        . 'FROM campaign WHERE campaign.id = ' . $campaignId . " AND campaign.status != 'REMOVED' LIMIT 2";
+    $campaignRows = hub_google_ads_search($customerId, $campaignQuery, $accessToken, $managerId);
+    if (count($campaignRows) !== 1) throw new HubGoogleAdsApiException('campaign_keyword_inventory_campaign_changed', 409);
+    $campaign = $campaignRows[0]['campaign'] ?? null;
+    if (!is_array($campaign) || (string)($campaign['id'] ?? '') !== $campaignId
+        || !is_string($campaign['name'] ?? null) || !in_array($campaign['status'] ?? null, ['ENABLED', 'PAUSED'], true)
+        || ($campaign['advertisingChannelType'] ?? null) !== 'SEARCH') {
+        throw new HubGoogleAdsApiException('campaign_keyword_inventory_campaign_changed', 409);
+    }
+    $adGroupQuery = 'SELECT campaign.resource_name, ad_group_criterion.ad_group, ad_group_criterion.status, '
+        . 'ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type '
+        . 'FROM ad_group_criterion WHERE campaign.id = ' . $campaignId
+        . " AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED' LIMIT 1001";
+    $adGroupRows = hub_google_ads_search($customerId, $adGroupQuery, $accessToken, $managerId);
+    if (count($adGroupRows) > 1000) throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+    $campaignCriterionQuery = 'SELECT campaign_criterion.campaign, campaign_criterion.status, campaign_criterion.negative, '
+        . 'campaign_criterion.keyword.text, campaign_criterion.keyword.match_type '
+        . 'FROM campaign_criterion WHERE campaign.id = ' . $campaignId
+        . " AND campaign_criterion.type = 'KEYWORD' AND campaign_criterion.negative = TRUE "
+        . "AND campaign_criterion.status != 'REMOVED' LIMIT 1001";
+    $campaignCriterionRows = hub_google_ads_search($customerId, $campaignCriterionQuery, $accessToken, $managerId);
+    if (count($campaignCriterionRows) > 1000) throw new HubGoogleAdsApiException('campaign_keyword_inventory_incomplete', 502);
+    $keywords = hub_google_ads_campaign_keyword_inventory_normalize_rows($customerId, $campaignId, $adGroupRows, $campaignCriterionRows);
+    return [
+        'ok' => true,
+        'schema_version' => 1,
+        'operation' => 'read_campaign_keyword_inventory',
+        'campaign' => [
+            'customer_id' => $customerId,
+            'campaign_id' => $campaignId,
+            'campaign_name' => $campaign['name'],
+            'status' => $campaign['status'],
+            'channel_type' => 'SEARCH',
+        ],
+        ...$keywords,
+        'verified' => true,
+        'read_at_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+    ];
+}
+
 function hub_google_ads_campaign_batch_negative_keywords_enabled(array $config): bool
 {
     return hub_google_ads_campaign_negative_keywords_enabled($config)
@@ -5375,7 +5517,11 @@ function hub_google_ads_campaign_action_dispatch(): never
         }
         if ($operation === 'apply_batch_positive_keywords') {
             hub_google_ads_campaign_action_json(200, hub_google_ads_batch_positive_keywords_apply($config, $payload));
-        }        if (!in_array($operation, ['pause_campaign', 'enable_campaign'], true)) {
+        }
+        if ($operation === 'read_campaign_keyword_inventory') {
+            hub_google_ads_campaign_action_json(200, hub_google_ads_campaign_keyword_inventory_read($config, $payload));
+        }
+        if (!in_array($operation, ['pause_campaign', 'enable_campaign'], true)) {
             hub_google_ads_campaign_action_json(400, ['ok' => false, 'error' => 'invalid_payload']);
         }
 

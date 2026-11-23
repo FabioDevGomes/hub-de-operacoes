@@ -23,16 +23,16 @@ export function normalizeGoogleAdsCampaignBookmarks(values) {
   return [...unique.values()];
 }
 
-export function matchGoogleAdsCampaignBookmark(values, { accountId = '', accountName = '' } = {}) {
+export function matchGoogleAdsCampaignBookmark(values, { accountId = '', accountName = '', firstMatch = false } = {}) {
   const bookmarks = normalizeGoogleAdsCampaignBookmarks(values);
   const id = String(accountId || '').replace(/\D/g, '');
   const byId = id.length === 10 ? [...new Map(bookmarks.filter(item => item.title.replace(/\D/g, '').includes(id)).map(item => [item.url, item])).values()] : [];
   if (byId.length === 1) return { status: 'matched', bookmark: byId[0] };
-  if (byId.length > 1) return { status: 'ambiguous', bookmark: null };
+  if (byId.length > 1) return firstMatch ? { status: 'matched', bookmark: byId[0] } : { status: 'ambiguous', bookmark: null };
   const name = normalizeBookmarkMatchText(accountName);
   if (name.length < 5) return { status: 'not-found', bookmark: null };
   const byName = [...new Map(bookmarks.filter(item => normalizeBookmarkMatchText(item.title).includes(name)).map(item => [item.url, item])).values()];
-  if (byName.length === 1) return { status: 'matched', bookmark: byName[0] };
+  if (byName.length === 1 || (firstMatch && byName.length > 0)) return { status: 'matched', bookmark: byName[0] };
   return { status: byName.length ? 'ambiguous' : 'not-found', bookmark: null };
 }
 

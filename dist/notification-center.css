@@ -32,6 +32,7 @@
 .notification-center-click-status.is-partial{color:#e5c477;font-weight:600}
 .notification-center-click-status.is-unavailable{color:#e5c477;font-weight:500}
 .notification-center-click-dot{display:inline-block;flex:0 0 7.7px;width:7.7px;height:7.7px;border-radius:50%;background:#79efb5;box-shadow:0 0 0 2.2px rgba(121,239,181,.13)}
+.notification-center-policy-notice{color:#ff858f;font-size:.72rem;margin:6px 0}
 .notification-center-click-minus{color:#e5c477;font-size:11px;font-weight:800;line-height:1}
 .notification-center-click-plus{padding-left:1px;color:#91f0bd;font-size:11px;font-weight:800;line-height:1}
 .notification-center-click-partial{margin-left:2px;color:#e5c477;font-size:10px;font-weight:600}

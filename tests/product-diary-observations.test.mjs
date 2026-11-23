@@ -23,6 +23,20 @@ test('CPA previews support independent 2 and 4 percentage-point steps',()=>{
   assert.equal(cpaDomain.createPreview(adjustment,'decrease',4).targetCpaMicros,25_760_000);
   assert.equal(cpaDomain.createPreview(adjustment,'increase',3),null,'passos fora da lista permitida são recusados');
 });
+test('latest confirmed budget adjustment is used until a newer API snapshot arrives',()=>{
+  const snapshot={budgetAmountMicros:'19170000',currencyCode:'USD',observedAtUtc:'2026-11-20T12:00:00.000Z',budgetResource:'customers/1234567890/campaignBudgets/10'},
+    observations=[{campanha_id:'a',eventos:[
+      {tipo:'google_ads_budget_adjustment',origem_horario:'google_ads_api',ocorrido_em_utc:'2026-11-20T12:01:00.000Z',orcamento_novo_micros:'21090000',moeda:'USD'},
+      {tipo:'google_ads_budget_adjustment',origem_horario:'google_ads_api',ocorrido_em_utc:'2026-11-20T12:02:00.000Z',orcamento_novo_micros:'23200000',moeda:'USD'},
+      {tipo:'google_ads_budget_adjustment',origem_horario:'google_ads_api',ocorrido_em_utc:'2026-11-20T12:03:00.000Z',orcamento_novo_micros:'25520000',moeda:'USD'}]}];
+  const projected=domain.latestVerifiedBudgetAdjustment(snapshot,observations);
+  assert.equal(projected.budgetAmountMicros,'25520000');
+  assert.equal(projected.observedAtUtc,'2026-11-20T12:03:00.000Z');
+  assert.equal(snapshot.budgetAmountMicros,'19170000','a projeção não altera a configuração capturada');
+  assert.equal(domain.latestVerifiedBudgetAdjustment({...snapshot,budgetAmountMicros:'26000000',observedAtUtc:'2026-11-20T12:04:00.000Z'},observations).budgetAmountMicros,'26000000','captura API posterior prevalece');
+  assert.equal(domain.latestVerifiedBudgetAdjustment(snapshot,[{eventos:[{...observations[0].eventos[2],moeda:'EUR'}]}]).budgetAmountMicros,'19170000','evento em outra moeda não é misturado');
+  assert.equal(domain.latestVerifiedBudgetAdjustment(snapshot,[{eventos:[{...observations[0].eventos[2],orcamento_novo_micros:'inválido'}]}]).budgetAmountMicros,'19170000','evento inválido não substitui o valor');
+});
 test('bulk pause lookup preserves individual lookup semantics, including historical events',()=>{
   const data={campanhas:[{id:'a'},{id:2},{id:'a'},{id:'missing'},{id:3}],observacoes_diario:[
     {campanha_id:'a',eventos:[{tipo:'google_ads_auto_pause',ocorrido_em_data:'2026-10-01'}]},
@@ -210,9 +224,9 @@ test('shared edit stylesheet/build contracts include both consumers without dupl
   assert.match(css,/\.hub-edit-host\{position:relative\}/);assert.match(css,/top:var\(--hub-corner-edit-top,1px\)/);
   assert.match(css,/right:var\(--hub-corner-edit-right,2px\)/);assert.match(css,/:focus-visible/);
   assert.match(overview,/overview-remaining-edit hub-corner-edit/);assert.match(index,/table-edit-actions.css\?v=3/);
-  assert.match(build,/src\/table-edit-actions.css/);assert.match(index,/observation-storage.js\?v=5/);
+  assert.match(build,/src\/table-edit-actions.css/);assert.match(index,/observation-storage.js\?v=7/);
   const adapter=index.match(/async function saveDiaryObservation\(input\)\{[^\r\n]+/)?.[0];
   assert.match(adapter,/diary-observation-updated/);
   assert.doesNotMatch(adapter,/announceBaseUpdated|syncMccDiaryRowsToBilling|persistLocalBase/);
-  assert.match(index,/type==='diary-observation-updated'\)\{restoreLocalBase\(\{persist:false,renderPage:false,includeCatalog:true\}\)/);
+  assert.match(index,/type==='diary-observation-updated'\)\{[^\r\n]*restoreLocalBase\(\{persist:false,renderPage:false,includeCatalog:true\}\)\.then\(/);
 });

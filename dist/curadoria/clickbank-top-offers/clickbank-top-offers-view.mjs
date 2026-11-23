@@ -14,6 +14,7 @@ import {SALES_PAGE_TYPES, salesPageTypeLabel} from './sales-page-type.mjs?v=3';
 import {BRAND_BIDDING_TYPES,brandBiddingLabel} from './brand-bidding.mjs?v=1';
 import {productNameFromOfferTitle} from './product-name.mjs?v=1';
 import {formatClickBankCommissionUsd,isClickBankCommissionUsd} from '../../campaign-delivery/commission-domain.mjs?v=1';
+import {hasSavedAnalysisInput} from '../saved-analysis-status.mjs?v=1';
 
 const $ = (selector, root) => root.querySelector(selector);
 const $$ = (root, selector) => [...root.querySelectorAll(selector)];
@@ -40,7 +41,8 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   const imageSearchTermInput=$('#imagesTerm',root),imageSearchTermField=imageSearchTermInput.closest('label'),imageSearchTermStatus=$('#imagesTermStatus',root),imageValidationIntro=$('.image-validation-intro',root);
   imageSearchTermField.classList.add('image-search-term-field');
   if (preferences === undefined) { try { preferences = root.ownerDocument.defaultView.localStorage; } catch {} }
-  let sortKey = 'rank', sortDirection = 'asc';
+  let sortKey = 'rank', sortDirection = 'asc', currentPage = 1;
+  const PAGE_SIZE = 20;
   try {
     const saved = JSON.parse(preferences?.getItem(SORT_PREFERENCE_KEY) || 'null');
     if (saved && SORT_KEYS.has(saved.key) && (saved.direction === 'asc' || saved.direction === 'desc')) {
@@ -202,8 +204,8 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
     const imageRank=item=>{const progress=tableImageProgress(item);return progress.done*10+Images.resultRank(tableImageLatest(progress)?.status);};
     const glimpseRank=item=>Glimpse.analysisRank(tableGlimpseFor(item));
     const trendBadge=item=>{
-      const latest=tableTrendLatest(item),statusClass=latest?.status||'unsearched',label=Trends.resultLabel(latest?.status),candidateMarker=KeywordCandidatesUI.keywordCandidateMarkerHtml(tableTrendsFor(item).keywordCandidates?.length||0,'positive');
-      return `<button type="button" class="table-action trends-badge ${escape(statusClass)}" data-action="trends" data-key="${escape(item.offerKey)}" data-curation-focus="trends" title="Abrir Google Trends">${escape(label)}${candidateMarker}</button>`;
+      const trend=tableTrendsFor(item),latest=tableTrendLatest(item),inAnalysis=!latest&&hasSavedAnalysisInput({trend,metadata:tableMetadataFor(item)}),statusClass=latest?.status||(inAnalysis?'in_analysis unsearched':'unsearched'),label=inAnalysis?'Em análise':Trends.resultLabel(latest?.status),candidateMarker=KeywordCandidatesUI.keywordCandidateMarkerHtml(trend.keywordCandidates?.length||0,'positive');
+      return `<button type="button" class="table-action trends-badge ${escape(statusClass)}" data-action="trends" data-key="${escape(item.offerKey)}" data-curation-focus="trends" title="${inAnalysis?'Informações salvas; análise de Google Trends pendente':'Abrir Google Trends'}">${escape(label)}${candidateMarker}</button>`;
     };
     const glimpseBadge=item=>{
       const analysis=tableGlimpseFor(item);
@@ -229,7 +231,8 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       return sortDirection==='asc'?compare:-compare;
     });
     offers=offers.map(entry=>entry.item);
-    $('#rows',root).innerHTML=offers.map(item=>`<tr data-offer="${escape(item.offerKey)}" class="${DecisionUI.rowClass(tableDecisionFor(item).currentStatus)}">
+    const totalOffers=offers.length,totalPages=Math.max(1,Math.ceil(totalOffers/PAGE_SIZE));currentPage=Math.min(Math.max(1,currentPage),totalPages);const pageStart=(currentPage-1)*PAGE_SIZE,pageOffers=offers.slice(pageStart,pageStart+PAGE_SIZE);
+    $('#rows',root).innerHTML=pageOffers.map(item=>`<tr data-offer="${escape(item.offerKey)}" class="${DecisionUI.rowClass(tableDecisionFor(item).currentStatus)}">
       <td class="number">${item.offerId
         ? `<a class="clickbank-rank-link" href="${escape(clickBankOfferDetailsUrl(item.offerId))}" target="_blank" rel="noopener noreferrer" title="Abrir detalhes da ClickBank para ${escape(item.offerName)}">#${escape(item.rank)}</a>`
         : `#${escape(item.rank)}`}</td><td class="offer-name hub-edit-host" title="${escape(item.offerName)}"><span>${escape(item.displayName)}</span><button type="button" class="hub-corner-edit" data-offer-visibility="${escape(item.offerKey)}" aria-label="${escape((hiddenOffers.has(item.offerKey)?'Reexibir':'Ocultar')+' '+item.displayName)}">${hiddenOffers.has(item.offerKey)?'Reexibir':'Ocultar'}</button></td><td>${escape(item.seller)}</td>
@@ -244,12 +247,13 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
       if(labels.length)button.textContent=button.textContent+' · '+labels.join(' · ');
     }
     columns.apply();
+    const pagination=$('#offerPagination',root);if(pagination){pagination.querySelector('[data-page-summary]').textContent=totalOffers?`Exibindo ${pageStart+1}–${Math.min(pageStart+PAGE_SIZE,totalOffers)} de ${totalOffers} produtos`:'Nenhum produto';pagination.querySelector('[data-page-first]').disabled=currentPage===1;pagination.querySelector('[data-page-prev]').disabled=currentPage===1;pagination.querySelector('[data-page-next]').disabled=currentPage===totalPages;pagination.querySelector('[data-page-last]').disabled=currentPage===totalPages;pagination.querySelector('[data-page-current]').textContent=`Página ${currentPage} de ${totalPages}`}
     $('#empty',root).classList.toggle('hidden',offers.length>0);
     $('#empty',root).textContent=selected?'Nenhuma oferta corresponde aos filtros.':'Cole a primeira captura Top Offers da ClickBank para começar.';
     $$ (root,'[data-sort]').forEach(button=>{
       button.classList.toggle('active',button.dataset.sort===sortKey);
       button.setAttribute('aria-sort',button.dataset.sort===sortKey?(sortDirection==='asc'?'ascending':'descending'):'none');
-      button.onclick=()=>{const key=button.dataset.sort;if(!SORT_KEYS.has(key))return;if(sortKey===key)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortKey=key;sortDirection=key==='rank'?'asc':'desc';}persistSortPreference();renderTable(selected,previous)};
+      button.onclick=()=>{currentPage=1;const key=button.dataset.sort;if(!SORT_KEYS.has(key))return;if(sortKey===key)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortKey=key;sortDirection=key==='rank'?'asc':'desc';}persistSortPreference();renderTable(selected,previous)};
     });
   }
 
@@ -521,9 +525,10 @@ export function mountClickBankTopOffersView({root, actions, preferences}) {
   $('#validateImport',root).onclick=()=>actions.validateImport(paste.value);
   confirmButton.onclick=()=>actions.confirmImport(paste.value);
   paste.oninput=()=>{confirmButton.disabled=true;$('#previewStatus',root).textContent='A colagem mudou; valide novamente antes de confirmar.';};
-  $('#captureSelect',root).onchange=event=>{selectedCaptureId=event.target.value;render();};
-  $('#search',root).oninput=()=>renderTable(selectedCapture(),previousCapture(selectedCapture()));
-  $('#visibilityFilter',root).onchange=()=>renderTable(selectedCapture(),previousCapture(selectedCapture()));
+  $('#captureSelect',root).onchange=event=>{selectedCaptureId=event.target.value;currentPage=1;render();};
+  $('#search',root).oninput=()=>{currentPage=1;renderTable(selectedCapture(),previousCapture(selectedCapture()))};
+  $('#visibilityFilter',root).onchange=()=>{currentPage=1;renderTable(selectedCapture(),previousCapture(selectedCapture()))};
+  $('#offerPagination',root).onclick=event=>{const button=event.target.closest('button[data-page-action]');if(!button||button.disabled)return;const total=Math.max(1,Math.ceil(Number($('#offerCount',root).textContent||0)/PAGE_SIZE));currentPage=button.dataset.pageAction==='first'?1:button.dataset.pageAction==='prev'?currentPage-1:button.dataset.pageAction==='next'?currentPage+1:total;renderTable(selectedCapture(),previousCapture(selectedCapture()))};
   $('#exportBackup',root).onclick=()=>actions.exportBackup();
   $('#restoreBackup',root).onchange=event=>{const file=event.target.files?.[0];if(file)actions.restoreBackup(file);event.target.value='';};
   importDialog.addEventListener('close',()=>importDialog.classList.add('hidden'));

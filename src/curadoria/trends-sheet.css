@@ -72,6 +72,20 @@
 .decision-option.selected.live{outline-color:#34d399}
 .decision-option.selected.app{outline-color:#60a5fa}
 
+/* A decisão GuruMedia tem oito opções e mantém o conjunto em uma única faixa. */
+.decision-dialog:has(#sharedDecisionActions.has-dtc-option){width:min(1640px,calc(100% - 28px))}
+.decision-dialog-actions.has-dtc-option{grid-template-columns:repeat(12,minmax(0,1fr));overflow-x:auto;scrollbar-width:thin}
+.decision-dialog-actions.has-dtc-option .decision-option{white-space:nowrap;padding-inline:3px;font-size:.7rem}
+.decision-option.dtc,.decision-badge.dtc{border-color:#277e84;background:#12353a;color:#7ee8dd}
+.decision-option.selected.dtc{outline-color:#7ee8dd}
+.decision-option.request-sent,.decision-badge.request-sent{border-color:#594b83;background:#211b36;color:#c9b8ff}
+.decision-option.selected.request-sent{outline-color:#bca5ff}
+.decision-option.vsl,.decision-badge.vsl{border-color:#465a82;background:#19263d;color:#bdcaff}
+.decision-option.selected.vsl{outline-color:#a9baff}
+.decision-option.vpn,.decision-badge.vpn{border-color:#8a4c61;background:#351c2a;color:#ffb5c3}
+.decision-option.selected.vpn{outline-color:#ff9eae}
+@media(max-width:700px){.decision-dialog-actions.has-dtc-option{grid-template-columns:repeat(12,minmax(92px,1fr))}}
+
 /* Ações principais da validação de imagens seguem o CTA azul da referência. */
 button.image-search-button[data-manager-image-search],button.image-search-button[data-top-image-search],#managerFinishImages,#topFinishImages{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:8px 19px;border:1px solid #4b9df5;border-radius:10px;background:linear-gradient(180deg,#4697ec 0%,#2876ce 100%);box-shadow:0 3px 11px rgba(37,117,205,.22);color:#fff;font:inherit;font-weight:750;white-space:nowrap;text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
 button.image-search-button[data-manager-image-search]::after,button.image-search-button[data-top-image-search]::after,#managerFinishImages::after,#topFinishImages::after{content:"→";font-weight:800}
@@ -211,3 +225,4 @@ html body button.decision-badge.undefined{color:#8794a5}
 .glimpse-host-back:hover{border:0!important;background:rgba(19,38,62,.72)!important}
 .glimpse-host-back:focus-visible{border:0!important}
 @media(max-width:560px){.glimpse-host-controls{gap:5px}.glimpse-host-finish{padding:8px 10px}}
+.decision-dialog-commit{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:0 21px 19px;color:var(--muted);font-size:.78rem}.decision-dialog-commit[hidden]{display:none}.decision-dialog-commit>div{display:flex;gap:8px;justify-content:flex-end}.decision-dialog-commit button{min-width:100px}.decision-badge.multiple{display:inline-flex;align-items:center;gap:4px;max-width:100%;white-space:normal;text-align:left}.decision-badge.multiple>span{display:inline}.decision-badge-separator{opacity:.72}

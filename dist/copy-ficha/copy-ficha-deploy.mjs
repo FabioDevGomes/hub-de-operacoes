@@ -559,7 +559,23 @@ function renderTarget(target,index,sites,jobId=''){
   return `<article class="copy-ficha-deploy-item" data-deploy-item="${index}"><div class="copy-ficha-deploy-item-heading"><h3>Página ${String(target.pageNumber||index+1).padStart(2,'0')} · ${esc(target.accountName||target.hpanelDomain||'Conta')}</h3><span class="copy-ficha-deploy-state ${finalStatusClass}" title="${esc(statusTitle)}">${status}</span></div><p class="copy-ficha-note">Pasta local: <code>${esc(target.sourceDirectory||'')}</code></p><label>Endereço público da Pre-Sell<input class="copy-ficha-input" type="url" data-deploy-field="publicUrl" data-deploy-index="${index}" value="${esc(target.publicUrl||'')}" placeholder="https://produto.seu-dominio.com" ${disabled}></label><div class="copy-ficha-deploy-fields"><label>Site principal Hostinger<select class="copy-ficha-select" data-deploy-field="parent" data-deploy-index="${index}" title="${esc(statusTitle)}" ${fields.roots.length&&!readOnly?'':'disabled'}><option value="">${fields.roots.length?'Selecione um domínio principal':'Nenhum domínio principal na lista Hostinger'}</option>${parentFallback}${options}</select></label><label>Prefixo do subdomínio<input class="copy-ficha-input" data-deploy-field="prefix" data-deploy-index="${index}" value="${esc(target.prefix||'')}" placeholder="ex.: lymph-tonic" ${disabled}></label></div><p class="copy-ficha-deploy-address">Destino: <strong>${esc(domain||'informe o prefixo e o site principal')}</strong>${manualVerified?` · <span class="copy-ficha-deploy-existing">Validado manualmente como funcionando.</span>`:existing?` · <span class="copy-ficha-deploy-existing">Já existe na conta ${esc(fields.username)}; será usado sem recriação.</span>`:''}</p><p class="copy-ficha-note">Pasta Hostinger: <code class="copy-ficha-deploy-storage-path">${esc(remoteDirectory)}</code></p>${manualVerified?'':target.error?`<p class="copy-ficha-warning">${esc(deploymentErrorForDisplay(target.error,latestExecution))}</p>`:''}${previousPublishNote}${planHtml}${recoveryHtml}${manualVerificationNote}${historyHtml}</article>`;
 }
 
-export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage,fetchImpl=globalThis.fetch,confirmFn=globalThis.confirm?.bind(globalThis),hpanelUrlForDomain=()=>null,getDraftTargets=()=>null,getCampaignDeliveryContext=()=>null,onGenerateDraft=()=>false,toast=()=>{}}={}){
+function confirmDeployAction(root,message,{title,confirmLabel}){
+  return new Promise(resolve=>{
+    const previousFocus=document.activeElement,overlay=document.createElement('div');overlay.className='copy-ficha-existing-modal';overlay.setAttribute('role','presentation');
+    const dialog=document.createElement('section');dialog.className='copy-ficha-existing-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','copySubdomainConfirmTitle');
+    const header=document.createElement('header'),heading=document.createElement('h2');heading.id='copySubdomainConfirmTitle';heading.textContent=title;header.append(heading);
+    const content=document.createElement('p');content.textContent=message;content.style.whiteSpace='pre-line';
+    const actions=document.createElement('footer');actions.className='copy-ficha-existing-actions';
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='copy-ficha-btn';cancel.textContent='Cancelar';
+    const confirmButton=document.createElement('button');confirmButton.type='button';confirmButton.className='copy-ficha-btn primary';confirmButton.textContent=confirmLabel;
+    actions.append(cancel,confirmButton);dialog.append(header,content,actions);overlay.append(dialog);root.append(overlay);
+    let settled=false;const finish=value=>{if(settled)return;settled=true;overlay.remove();if(previousFocus?.isConnected)previousFocus.focus();resolve(value)};
+    cancel.addEventListener('click',()=>finish(false));confirmButton.addEventListener('click',()=>finish(true));overlay.addEventListener('click',event=>{if(event.target===overlay)finish(false)});
+    dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();finish(false)}else if(event.key==='Tab'){if(event.shiftKey&&document.activeElement===cancel){event.preventDefault();confirmButton.focus()}else if(!event.shiftKey&&document.activeElement===confirmButton){event.preventDefault();cancel.focus()}}});cancel.focus();
+  });
+}
+
+export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage,fetchImpl=globalThis.fetch,confirmFn=null,hpanelUrlForDomain=()=>null,getDraftTargets=()=>null,getCampaignDeliveryContext=()=>null,onGenerateDraft=()=>false,toast=()=>{}}={}){
   if(!root)return()=>{};
   mountedRoot=root;
   const button=by(root,'#copyPresellDeployOpen');
@@ -787,7 +803,8 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       });
       if(missing.length){
         const detail=missing.map(target=>`• ${String(target.prefix).toLowerCase()}.${String(target.parentDomain).toLowerCase()} → ${target.directory}`).join('\n');
-        if(typeof confirmFn!=='function'||!confirmFn(`Criar ${missing.length} subdomínio(s) na Hostinger?\n\n${detail}\n\nA criação altera a conta Hostinger; o DNS pode levar algum tempo para propagar. Depois da criação, o Hub fará apenas a prévia dos arquivos. Continuar?`))return;
+        const message=`Criar ${missing.length} subdomínio(s) na Hostinger?\n\n${detail}\n\nA criação altera a conta Hostinger; o DNS pode levar algum tempo para propagar. Depois da criação, o Hub fará apenas a prévia dos arquivos. Continuar?`;
+        if(!await (typeof confirmFn==='function'?confirmFn(message):confirmDeployAction(root,message,{title:'Confirmar criação de subdomínios',confirmLabel:'Criar subdomínios'})))return;
       }
       setBusy(true,'Criando os subdomínios necessários e analisando os arquivos…','analyze');
       const outcomes=[];
@@ -831,7 +848,8 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
       const detail=eligible.map(target=>{const plan=plans.get(`${job.id}:${target.id}`);return `• ${target.domain} · ${plan.fileCount} arquivo(s) · nenhum conflito encontrado`}).join('\n');
       const confirmation=`Enviar ${total} arquivo(s) para ${eligible.length} subdomínio(s)?`;
       const safeguard='O Hub não apaga nem substitui arquivos existentes. Se uma prévia encontrar conflito, o envio daquele destino será bloqueado para limpeza manual no HPanel.';
-      if(typeof confirmFn!=='function'||!confirmFn(`${confirmation}\n\n${detail}\n\n${safeguard} Se houver interrupção, parte dos arquivos poderá ter sido enviada. Continuar?`))return;
+      const message=`${confirmation}\n\n${detail}\n\n${safeguard} Se houver interrupção, parte dos arquivos poderá ter sido enviada. Continuar?`;
+      if(!await (typeof confirmFn==='function'?confirmFn(message):confirmDeployAction(root,message,{title:'Confirmar publicação dos arquivos',confirmLabel:'Publicar arquivos'})))return;
       publishProgress={items:eligible.map(target=>({targetId:String(target.id),page:String(target.pageNumber||'' ).padStart(2,'0'),domain:String(target.domain||`${target.prefix||''}.${target.parentDomain||''}`),fileCount:Number(plans.get(`${job.id}:${target.id}`)?.fileCount)||0,state:'queued',outcome:'',uploadedCount:null,responseTotal:Number(plans.get(`${job.id}:${target.id}`)?.fileCount)||0,failedPath:'',error:'',verification:null}))};
       renderPublishProgress();
       setBusy(true,'Enviando os arquivos para os destinos confirmados…','publish');
@@ -941,11 +959,27 @@ export function mountPresellDeployWorkflow({root,storage=globalThis.localStorage
   button.addEventListener('click',onOpen);
   const onHandoffSelection=()=>{try{storage.setItem(GOOGLE_ADS_PRESELL_HANDOFF_SELECTION_KEY,handoffSelect.value)}catch{}renderAction()};
   const onHandoffAckChanged=event=>{if(event?.key===GOOGLE_ADS_PRESELL_HANDOFF_ACK_KEY)renderAction()};
-  const onSendCampaignHandoff=()=>{
+  const onSendCampaignHandoff=async()=>{
     if(!handoffButton||handoffButton.disabled)return;
     const selection=resolveCampaignHandoffSelection(readJobs(storage),storage,getDeliveryContext(),getCampaignDraft(),String(handoffSelect?.value||''));
     const current=selection.current,job=current?.job,prepared=current?.prepared;
     if(!job||!prepared?.ok){if(handoffSection){handoffSection.classList.add('is-required');const message=by(root,'#copyPresellCampaignHandoffStatus');if(message)message.textContent=selection.reason||prepared?.reason||'A Pre-Sell ainda não está pronta para envio.'}return}
+    if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){
+      handoffButton.disabled=true;
+      try{
+        const bridge=globalThis.__HUB_CENTRAL_LAB_FICHA__;
+        if(typeof bridge?.saveCampaignHandoff!=='function')throw Error('Serviço central indisponível');
+        const payload=await bridge.saveCampaignHandoff(prepared.payload,String(job.id));
+        const destination=new URL(globalThis.location.href);
+        destination.searchParams.set('view','google-ads-create');
+        destination.searchParams.set(GOOGLE_ADS_PRESELL_HANDOFF_QUERY_PARAM,payload.id);
+        const delivery=getDeliveryContext();
+        if(delivery?.id)destination.searchParams.set('campaign_delivery_id',delivery.id);
+        handoffButton.textContent='Abrindo criação de campanha…';
+        globalThis.location.assign(destination.href);
+      }catch(error){handoffButton.disabled=false;const message=by(root,'#copyPresellCampaignHandoffStatus');if(message)message.textContent='A transferência central não foi confirmada. Confira e tente novamente.';}
+      return;
+    }
     const payload=writeGoogleAdsPresellCampaignHandoff(prepared.payload,storage);
     if(!payload){
       const destination=new URL(globalThis.location.href);

@@ -23,7 +23,9 @@ const state = { desktop: null, mobile: null, favicon: null, directory: null, pro
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 let assetCaptureCacheWriteQueue = Promise.resolve();
+let assetDeliveryWorkQueue = Promise.resolve();
 const mobileDimensionRulesPromise = import('./mobile-dimensions.mjs');
+const assetDeliveryContextPromise = import('./asset-delivery-context.mjs');
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -45,18 +47,19 @@ function updateReadyState() {
     captureButton.disabled = state.assetCaptureRunning || state.processingAll || state.deliveryContextLoading || !hasCaptureUrl;
     captureButton.querySelector('span').textContent = state.assetCaptureRunning ? 'Capturando…' : 'Capturar imagens';
   }
-  $('#processAll').disabled = state.processingAll || state.assetCaptureRunning || state.deliveryContextLoading || !(state.desktop && state.mobile && (state.favicon || state.skipFavicon) && state.productsRoot && state.rootPermission && productNameIsValid);
+  $('#processAll').disabled = state.processingAll || state.assetCaptureRunning || state.deliveryContextLoading || !(state.desktop && state.mobile && (state.favicon || state.skipFavicon) && productNameIsValid);
   const handoff = getAssetDeliveryHandoff();
   const pageAssetsSaved = handoff.pageAssetsSaved === true;
   $('#processAll').textContent = pageAssetsSaved ? 'Imagens da página salvas ✓' : 'Enviar Imagens';
   $('#processAll').classList.toggle('is-success', pageAssetsSaved);
   const selectedImages = state.productImageCandidates.filter(candidate => candidate.selected).length;
-  $('#saveProductImages').disabled = state.processingAll || state.assetCaptureRunning || state.deliveryContextLoading || selectedImages < 1 || !state.productsRoot || !state.rootPermission || !productNameIsValid;
+  const selectedPrepared = selectedImages > 0 && state.productImageCandidates.filter(candidate => candidate.selected).every(candidate => state.productImages.some(item => item.candidateId === candidate.id && item.file instanceof File));
+  $('#saveProductImages').disabled = state.processingAll || state.assetCaptureRunning || state.deliveryContextLoading || selectedImages < 1 || !productNameIsValid;
   const selectedImagesSaved = Boolean(selectedImages > 0 && state.productsRoot
     && state.productImagesSavedRoot === state.productsRoot
     && state.productImagesSavedSelectionKey === productImageSelectionKey(state.productImageCandidates.filter(candidate => candidate.selected).slice(0, 2)));
-  $('#saveProductImages').textContent = selectedImagesSaved ? 'Imagem(ns) do produto salvas ✓' : selectedImages ? `Salvar ${selectedImages} imagem(ns) agora` : 'Salvar imagens selecionadas';
-  $('#saveProductImages').classList.toggle('is-success', selectedImagesSaved);
+  $('#saveProductImages').textContent = selectedImagesSaved ? 'Imagem(ns) do produto salvas ✓' : selectedPrepared ? 'Imagem(ns) pronta(s) para envio ✓' : selectedImages ? `Preparar ${selectedImages} imagem(ns)` : 'Preparar imagens selecionadas';
+  $('#saveProductImages').classList.toggle('is-success', selectedImagesSaved || selectedPrepared);
   const deliveryPicker = $('#assetDeliveryPicker');
   if (deliveryPicker) deliveryPicker.disabled = state.processingAll || state.deliveryContextLoading || state.campaignDeliveries.length === 0;
   renderAssetDeliveryNextStep(handoff);
@@ -154,6 +157,7 @@ async function saveProductRoot(directory) {
 }
 
 function openAssetCaptureCacheDb() {
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true)return Promise.reject(new Error('Cache central experimental indisponível.'));
   return new Promise((resolve, reject) => {
     if (!window.indexedDB) {
       reject(new Error('Este navegador não permite manter o cache local das imagens.'));
@@ -175,6 +179,7 @@ function assetCaptureCacheKey() {
 }
 
 async function readAssetCaptureCacheRecord(key = assetCaptureCacheKey()) {
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){const bridge=globalThis.__HUB_CENTRAL_LAB_ASSET_BRIDGE__;if(typeof bridge?.read!=='function')throw new Error('Cache central experimental indisponível.');return bridge.read(key)}
   const database = await openAssetCaptureCacheDb();
   try {
     return await new Promise((resolve, reject) => {
@@ -193,6 +198,7 @@ async function readAssetCaptureCacheRecord(key = assetCaptureCacheKey()) {
 }
 
 async function writeAssetCaptureCacheRecord(record, key = assetCaptureCacheKey()) {
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){const bridge=globalThis.__HUB_CENTRAL_LAB_ASSET_BRIDGE__;if(typeof bridge?.write!=='function')throw new Error('Cache central experimental indisponível.');await bridge.write(key,record);return}
   const database = await openAssetCaptureCacheDb();
   try {
     await new Promise((resolve, reject) => {
@@ -208,6 +214,7 @@ async function writeAssetCaptureCacheRecord(record, key = assetCaptureCacheKey()
 }
 
 async function deleteAssetCaptureCacheRecord(key = assetCaptureCacheKey()) {
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){const bridge=globalThis.__HUB_CENTRAL_LAB_ASSET_BRIDGE__;if(typeof bridge?.remove!=='function')throw new Error('Cache central experimental indisponível.');await bridge.remove(key);return}
   const database = await openAssetCaptureCacheDb();
   try {
     await new Promise((resolve, reject) => {
@@ -231,7 +238,7 @@ function assetCaptureCacheSnapshot() {
       blob: new Blob([file], { type: file.type || 'application/octet-stream' }),
       name: String(file.name || `asset-${slot}`),
       type: String(file.type || ''),
-      lastModified: Number(file.lastModified) || Date.now()
+      lastModified: Number.isFinite(file.lastModified) ? file.lastModified : Date.now()
     };
   }
   const productImageCandidates = state.productImageCandidates.map(({ id, url, alt, width, height, selected }) => ({ id, url, alt, width, height, selected: Boolean(selected) }));
@@ -241,7 +248,7 @@ function assetCaptureCacheSnapshot() {
     blob: new Blob([item.file], { type: item.file.type || 'application/octet-stream' }),
     name: String(item.file.name || 'imagem-produto'),
     type: String(item.file.type || ''),
-    lastModified: Number(item.file.lastModified) || Date.now()
+    lastModified: Number.isFinite(item.file.lastModified) ? item.file.lastModified : Date.now()
   }));
   return {
     schema: 'hub_asset_studio_capture_cache_v2',
@@ -266,7 +273,7 @@ function persistAssetCaptureCache({ clearFirst = false } = {}) {
   const record = assetCaptureCacheSnapshot();
   const key = assetCaptureCacheKey();
   const write = async () => {
-    if (clearFirst) await deleteAssetCaptureCacheRecord(key);
+    if (clearFirst && globalThis.__HUB_CENTRAL_LAB_MODE__!==true) await deleteAssetCaptureCacheRecord(key);
     await writeAssetCaptureCacheRecord(record, key);
   };
   const operation = assetCaptureCacheWriteQueue.then(write, write);
@@ -362,7 +369,17 @@ function readResultRows(selector) {
   })).filter(row => row.text.trim());
 }
 
-function persistCampaignDeliveryAssetStudioWork(status, { startedAtUtc = '', completedAtUtc = '' } = {}) {
+function persistCampaignDeliveryAssetStudioWork(status, options = {}) {
+  const deliveryId=state.activeCampaignDeliveryId;
+  const work=assetDeliveryWorkQueue.then(()=>{
+    if(state.activeCampaignDeliveryId!==deliveryId)return null;
+    return persistCampaignDeliveryAssetStudioWorkNow(status,options);
+  });
+  assetDeliveryWorkQueue=work.catch(()=>null);
+  return work;
+}
+
+async function persistCampaignDeliveryAssetStudioWorkNow(status, { startedAtUtc = '', completedAtUtc = '' } = {}) {
   if (!state.campaignDeliveryStore || !state.activeCampaignDeliveryId) return null;
   const previous = state.activeCampaignDelivery?.assetStudioWork || {};
   const selected = state.productImageCandidates.filter(candidate => candidate.selected).slice(0, 2);
@@ -391,7 +408,7 @@ function persistCampaignDeliveryAssetStudioWork(status, { startedAtUtc = '', com
     const legacySavedFiles = (previous.selectedProductImages || []).map(image => image?.fileName).filter(fileName => /^imagem-produto-0[12]\.(?:png|jpg)$/i.test(String(fileName || '')));
     const previousProductImageFiles = Array.isArray(previous.productImageFiles) ? previous.productImageFiles : legacySavedFiles;
     const previousProductImagesProductName = previous.productImagesProductName || (previousProductImageFiles.length ? previous.productName : '');
-    const updated = state.campaignDeliveryStore.updateCampaignDeliveryAssetStudioWork(state.activeCampaignDeliveryId, {
+    const updated = await state.campaignDeliveryStore.updateCampaignDeliveryAssetStudioWork(state.activeCampaignDeliveryId, {
       status: nextStatus,
       productName: $('#productName').value.trim(),
       startedAtUtc: startedAtUtc || previous.startedAtUtc || '',
@@ -495,6 +512,7 @@ function updateAssetStudioDeliveryUrl(id) {
 }
 
 async function activateAssetStudioDelivery(id, { updateUrl = true } = {}) {
+  await assetDeliveryWorkQueue;
   const deliveryId = String(id || '');
   const delivery = state.campaignDeliveries.find(item => item.id === deliveryId) || null;
   if (deliveryId && !delivery) {
@@ -548,9 +566,9 @@ async function activateAssetStudioDelivery(id, { updateUrl = true } = {}) {
   updateReadyState();
   await restoreAssetCaptureCache();
   renderAssetDeliveryWork(state.activeCampaignDelivery || delivery);
-  persistCampaignDeliveryAssetStudioWork();
-  if (delivery?.assetStudioWork?.status === 'processing') {
-    const interrupted = persistCampaignDeliveryAssetStudioWork('interrupted', { completedAtUtc: new Date().toISOString() });
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__!==true)await persistCampaignDeliveryAssetStudioWork();
+  if (delivery?.assetStudioWork?.status === 'processing' && globalThis.__HUB_CENTRAL_LAB_MODE__!==true) {
+    const interrupted = await persistCampaignDeliveryAssetStudioWork('interrupted', { completedAtUtc: new Date().toISOString() });
     renderAssetDeliveryWork(interrupted || delivery);
     renderAssetDeliveryStatus(interrupted?.assetStudioWork || delivery.assetStudioWork);
   } else if (delivery) {
@@ -569,9 +587,10 @@ async function initializeAssetStudioDeliveries() {
       import('../campaign-delivery/delivery-store.mjs?v=17'),
       import('./handoff-domain.mjs?v=1')
     ]);
-    state.campaignDeliveryStore = deliveryStore;
+    state.campaignDeliveryStore = globalThis.__HUB_CENTRAL_LAB_MODE__===true ? globalThis.__HUB_CENTRAL_LAB_DELIVERY__ : deliveryStore;
+    if(!state.campaignDeliveryStore)throw new Error('Serviço central de entrega indisponível.');
     state.assetStudioHandoffDomain = handoffDomain;
-    state.campaignDeliveries = state.campaignDeliveryStore.listCampaignDeliveries();
+    state.campaignDeliveries = await state.campaignDeliveryStore.listCampaignDeliveries();
     const queryId = new URLSearchParams(location.search).get('campaign_delivery_id') || '';
     let savedId = '';
     try { savedId = localStorage.getItem(ASSET_DELIVERY_SELECTION_KEY) || ''; } catch { }
@@ -683,7 +702,9 @@ async function restoreAssetCaptureCache() {
       const migration = await readAssetCaptureCacheRecord(migrationKey);
       if (!migration) {
         const legacy = await readAssetCaptureCacheRecord(ASSET_CAPTURE_CACHE_KEY);
-        if (legacy?.schema === 'hub_asset_studio_capture_cache_v1' || legacy?.schema === 'hub_asset_studio_capture_cache_v2') {
+        const legacyCompatible=legacy?.schema === 'hub_asset_studio_capture_cache_v1' || legacy?.schema === 'hub_asset_studio_capture_cache_v2';
+        const safelyLinked=globalThis.__HUB_CENTRAL_LAB_MODE__!==true || legacy?.campaignDeliveryId===state.activeCampaignDeliveryId;
+        if (legacyCompatible && safelyLinked) {
           record = { ...legacy, schema: 'hub_asset_studio_capture_cache_v2', campaignDeliveryId: state.activeCampaignDeliveryId };
           await writeAssetCaptureCacheRecord(record, key);
           await writeAssetCaptureCacheRecord({ schema: 'hub_asset_studio_capture_cache_migration_v1', campaignDeliveryId: state.activeCampaignDeliveryId }, migrationKey);
@@ -691,6 +712,7 @@ async function restoreAssetCaptureCache() {
       }
     }
     if (revision !== state.assetCaptureCacheRevision || !['hub_asset_studio_capture_cache_v1', 'hub_asset_studio_capture_cache_v2'].includes(record?.schema)) return;
+    if(globalThis.__HUB_CENTRAL_LAB_MODE__===true&&state.activeCampaignDeliveryId){const {assertAssetDeliveryContext}=await assetDeliveryContextPromise;if(revision!==state.assetCaptureCacheRevision)return;assertAssetDeliveryContext(record,state.activeCampaignDeliveryId)}
     state.captureSessionActive = Boolean(record.captureSessionActive);
     const deliveryFaviconChoice = state.activeCampaignDelivery?.assetStudioWork?.skipFavicon;
     if (typeof deliveryFaviconChoice !== 'boolean' && typeof record.skipFavicon === 'boolean') state.skipFavicon = record.skipFavicon;
@@ -720,7 +742,7 @@ async function restoreAssetCaptureCache() {
         const type = String(item.type || item.blob.type || 'application/octet-stream');
         return {
           candidateId: item.candidateId,
-          file: new File([item.blob], String(item.name || 'imagem-produto'), { type, lastModified: Number(item.lastModified) || Date.now() }),
+          file: new File([item.blob], String(item.name || 'imagem-produto'), { type, lastModified: Number.isFinite(item.lastModified) ? item.lastModified : Date.now() }),
           width: candidate?.width || 0,
           height: candidate?.height || 0
         };
@@ -729,6 +751,7 @@ async function restoreAssetCaptureCache() {
       state.productImagesSavedSelectionKey = String(record.productImagesSavedSelectionKey || '');
       state.productImagesSavedNames = Array.isArray(record.productImagesSavedNames) ? record.productImagesSavedNames.map(name => String(name || '').slice(0, 120)).filter(Boolean).slice(0, 2) : [];
       state.productImagesSavedRoot = state.productImagesSavedSelectionKey ? state.productsRoot : null;
+      if(state.productImages.length) $('#productImageStatus').textContent = `${state.productImages.length} imagem(ns) recuperada(s) do rascunho; ainda é necessário salvar na pasta Assets.`;
     }
     if (!restoredCount && !restoredProductImages) return;
     if (restoredCount) {
@@ -909,8 +932,7 @@ function renderProductImageCandidates(payload) {
       card.classList.toggle('selected', candidate.selected);
       $('#productImageStatus').textContent = productImageSelectionInstruction(state.productImageCandidates.filter(item => item.selected).length);
       updateReadyState();
-      void persistAssetCaptureCache().catch(error => setAssetCaptureCacheStatus(`Não foi possível salvar a seleção de imagens: ${error.message}`));
-      persistCampaignDeliveryAssetStudioWork('draft');
+      void persistAssetCaptureCache().then(()=>persistCampaignDeliveryAssetStudioWork('draft')).catch(error => setAssetCaptureCacheStatus(`Não foi possível salvar a seleção de imagens: ${error.message}`));
     });
     card.classList.toggle('selected', candidate.selected);
     card.append(head, preview, metadata);
@@ -922,8 +944,7 @@ function renderProductImageCandidates(payload) {
 
 window.setProductImageCandidates = payload => {
   const result = renderProductImageCandidates(payload);
-  void persistAssetCaptureCache().catch(error => setAssetCaptureCacheStatus(`Não foi possível salvar a galeria localmente: ${error.message}`));
-  persistCampaignDeliveryAssetStudioWork();
+  void persistAssetCaptureCache().then(()=>persistCampaignDeliveryAssetStudioWork()).catch(error => setAssetCaptureCacheStatus(`Não foi possível salvar a galeria localmente: ${error.message}`));
   return result;
 };
 
@@ -963,8 +984,7 @@ window.setProductImageFiles = payload => {
     ? `${loaded.length} imagem(ns) carregada(s); preparando a gravação local…`
     : 'Nenhuma imagem pôde ser carregada.';
   if (loaded.length) {
-    void persistAssetCaptureCache().catch(error => setAssetCaptureCacheStatus(`Não foi possível salvar as imagens do produto no rascunho local: ${error.message}`));
-    persistCampaignDeliveryAssetStudioWork();
+    void persistAssetCaptureCache().then(()=>{ $('#productImageStatus').textContent = `${loaded.length} imagem(ns) guardada(s) no rascunho; ainda é necessário salvar na pasta Assets.`; persistCampaignDeliveryAssetStudioWork(); }).catch(error => { $('#productImageStatus').textContent='Imagens recebidas, mas não salvas no rascunho.'; setAssetCaptureCacheStatus(`Não foi possível salvar as imagens do produto no rascunho local: ${error.message}`); });
   }
   return loaded.length
     ? { ok: true, message: `${loaded.length} imagem(ns) lida(s) para salvar localmente.` }
@@ -973,7 +993,8 @@ window.setProductImageFiles = payload => {
 
 $$('[data-clear]').forEach(button => button.addEventListener('click', () => clearSlot(button.dataset.clear)));
 
-$('#skipFavicon').addEventListener('change', event => {
+$('#skipFavicon').addEventListener('change', async event => {
+  const previousSkip=state.skipFavicon;
   state.skipFavicon = event.target.checked;
   renderFaviconChoiceState();
   if (state.skipFavicon && state.activeSlot === 'favicon') {
@@ -981,9 +1002,11 @@ $('#skipFavicon').addEventListener('change', event => {
     markActive(state.activeSlot);
   }
   updateReadyState();
-  const updated = persistCampaignDeliveryAssetStudioWork();
+  const updated = await persistCampaignDeliveryAssetStudioWork();
   if (state.activeCampaignDeliveryId && !updated) {
+    state.skipFavicon=previousSkip;event.target.checked=previousSkip;updateReadyState();
     renderFaviconChoiceState('Não foi possível salvar a escolha do favicon nesta entrega. Confira o status da entrega antes de continuar.');
+    return;
   } else if (state.activeCampaignDeliveryId) {
     renderFaviconChoiceState(state.skipFavicon
       ? 'Escolha salva nesta entrega: a Pre-Sell poderá ser gerada sem assets/03.png.'
@@ -1061,15 +1084,6 @@ async function blobToImage(blob) {
   return { image, width: image.width, height: image.height, close: () => image.close() };
 }
 
-function drawCover(ctx, image, width, height) {
-  const scale = Math.max(width / image.width, height / image.height);
-  const sourceWidth = width / scale;
-  const sourceHeight = height / scale;
-  const sourceX = (image.width - sourceWidth) / 2;
-  const sourceY = (image.height - sourceHeight) / 2;
-  ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
-}
-
 function optimizeColorsBalanced(imageData, colorMask = 0xF8) {
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
@@ -1085,15 +1099,20 @@ async function processBackground(file, spec) {
   const image = decoded.image;
   const canvas = document.createElement('canvas');
   canvas.width = spec.width;
-  canvas.height = spec.height;
+  canvas.height = Math.max(1, Math.round(decoded.height * spec.width / decoded.width));
+  if (canvas.width * canvas.height > 50000000) {
+    decoded.close();
+    throw new Error('A imagem processada excede o limite de 50 megapixels.');
+  }
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.filter = `brightness(${spec.brightness})`;
-  drawCover(ctx, image, spec.width, spec.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   ctx.filter = 'none';
-  const pixels = ctx.getImageData(0, 0, spec.width, spec.height);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
   ctx.putImageData(optimizeColorsBalanced(pixels, spec.colorMask), 0, 0);
   decoded.close();
-  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  const blob = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('Não foi possível gerar a imagem.')), 'image/png'));
+  return { blob, width: canvas.width, height: canvas.height };
 }
 
 async function processFavicon(blob) {
@@ -1196,10 +1215,13 @@ $('#productName').addEventListener('input', () => {
   if (!state.deliveryContextLoading) persistCampaignDeliveryAssetStudioWork();
 });
 
-$('#continueToPresell').addEventListener('click', () => {
+$('#continueToPresell').addEventListener('click', async () => {
   const deliveryId = state.activeCampaignDeliveryId;
   if (!deliveryId || !getAssetDeliveryHandoff().ready) return;
-  const updated = state.campaignDeliveryStore?.markCampaignDeliveryOpened(deliveryId, 'presell');
+  await assetDeliveryWorkQueue;
+  let updated;
+  try { updated = await state.campaignDeliveryStore?.markCampaignDeliveryOpened(deliveryId, 'presell'); }
+  catch(error){$('#assetDeliveryHandoffStatus').textContent=error?.message||'Não foi possível atualizar a entrega.';$('#assetDeliveryHandoffStatus').dataset.state='warning';return;}
   if (!updated) {
     $('#assetDeliveryHandoffStatus').textContent = 'Não foi possível localizar esta entrega salva. Atualize a tela e confira a seleção.';
     $('#assetDeliveryHandoffStatus').dataset.state = 'warning';
@@ -1401,7 +1423,22 @@ async function saveSelectedProductImages() {
   }
 }
 
-$('#saveProductImages').addEventListener('click', saveSelectedProductImages);
+$('#saveProductImages').addEventListener('click', async () => {
+  const selected = state.productImageCandidates.filter(candidate => candidate.selected).slice(0, 2);
+  if (!selected.length) return;
+  const button = $('#saveProductImages');
+  button.disabled = true;
+  $('#productImageStatus').textContent = 'Preparando imagens para o envio…';
+  try {
+    const result = await requestSelectedProductImages(selected.map(({ id, url }) => ({ id, url })));
+    if (!result.ok || !selected.every(candidate => state.productImages.some(item => item.candidateId === candidate.id && item.file instanceof File))) {
+      throw new Error(result.message || 'Não foi possível preparar todas as imagens selecionadas.');
+    }
+    $('#productImageStatus').textContent = 'Imagem(ns) preparada(s) para enviar com Desktop e Mobile.';
+  } catch (error) {
+    $('#productImageStatus').textContent = `Não foi possível preparar as imagens: ${error.message}`;
+  } finally { updateReadyState(); }
+});
 
 $('#openFolder').addEventListener('click', async () => {
   if (!state.outputDirectory || !window.showDirectoryPicker) return;
@@ -1568,6 +1605,10 @@ async function notifyHubOfGeneratedPage(productName) {
   let result = {};
   try { result = await response.json(); } catch { }
   if (!response.ok || !result.directory) throw new Error(result.error || 'O Hub não confirmou o diretório da página.');
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true){
+    const {publishGeneratedPageLab}=await import('./passagem-asset-central-lab.mjs');
+    return publishGeneratedPageLab({result,productName,deliveryId:state.activeCampaignDeliveryId,bridge:globalThis.__HUB_CENTRAL_LAB_ASSET_HANDOFF__});
+  }
   const handoff = {
     id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     directory: result.directory,
@@ -1575,8 +1616,8 @@ async function notifyHubOfGeneratedPage(productName) {
     pageFolder: result.pageFolder || PAGE_ONE_FOLDER,
     generatedAtUtc: new Date().toISOString()
   };
-  localStorage.setItem(PAGE_DIRECTORY_HANDOFF_KEY, JSON.stringify(handoff));
-  window.dispatchEvent(new CustomEvent(PAGE_DIRECTORY_HANDOFF_EVENT, { detail: handoff }));
+    localStorage.setItem(PAGE_DIRECTORY_HANDOFF_KEY, JSON.stringify(handoff));
+    window.dispatchEvent(new CustomEvent(PAGE_DIRECTORY_HANDOFF_EVENT, { detail: handoff }));
   return handoff;
 }
 
@@ -1701,13 +1742,32 @@ $('#capturePageImages').addEventListener('click', async () => {
 
 $('#processAll').addEventListener('click', async () => {
   const button = $('#processAll');
+  if (!state.productsRoot || !state.rootPermission) {
+    if (!window.showDirectoryPicker) {
+      $('#folderHelp').textContent = 'O Chrome bloqueou a seleção de pasta neste endereço. Abra o Hub em uma conexão segura para enviar as imagens.';
+      return;
+    }
+    try {
+      if (!state.productsRoot) state.productsRoot = await window.showDirectoryPicker({ mode: 'readwrite' });
+      state.rootPermission = await hasWritePermission(state.productsRoot);
+      if (!state.rootPermission && typeof state.productsRoot.requestPermission === 'function') state.rootPermission = await state.productsRoot.requestPermission({ mode: 'readwrite' }) === 'granted';
+      if (!state.rootPermission) throw new Error('Autorize o acesso à pasta para enviar as imagens.');
+      state.directory = state.productsRoot;
+      try { await saveProductRoot(state.productsRoot); } catch {}
+      renderProductDestination();
+    } catch (error) {
+      if (error.name !== 'AbortError') $('#folderHelp').textContent = error.message;
+      return;
+    }
+  }
   const deliveryStartedAtUtc = new Date().toISOString();
   state.processingAll = true;
   button.disabled = true;
   button.textContent = 'Enviando imagens…';
   $('#openFolder').hidden = true;
   $('#results').replaceChildren();
-  persistCampaignDeliveryAssetStudioWork('processing', { startedAtUtc: deliveryStartedAtUtc, completedAtUtc: '' });
+  const processingSaved=await persistCampaignDeliveryAssetStudioWork('processing', { startedAtUtc: deliveryStartedAtUtc, completedAtUtc: '' });
+  if(globalThis.__HUB_CENTRAL_LAB_MODE__===true&&state.activeCampaignDeliveryId&&!processingSaved){state.processingAll=false;updateReadyState();return;}
   updateReadyState();
   try {
     const productName = $('#productName').value.trim();
@@ -1735,8 +1795,8 @@ $('#processAll').addEventListener('click', async () => {
       }
     }
     const outputs = [
-      { spec: specs.desktop, blob: await processBackground(state.desktop, specs.desktop), width: specs.desktop.width, height: specs.desktop.height },
-      { spec: specs.mobile, blob: await processBackground(state.mobile, specs.mobile), width: specs.mobile.width, height: specs.mobile.height }
+      { spec: specs.desktop, ...(await processBackground(state.desktop, specs.desktop)) },
+      { spec: specs.mobile, ...(await processBackground(state.mobile, specs.mobile)) }
     ];
     if (!state.skipFavicon) outputs.push({ spec: specs.favicon, ...(await processFavicon(state.favicon)) });
     for (const { spec, blob, width, height } of outputs) {
@@ -1760,14 +1820,14 @@ $('#processAll').addEventListener('click', async () => {
       addResult(`Assets gerados, mas o Hub não conseguiu preencher o Diretório da Presell: ${error.message}`, 'error');
     }
     const status = [...$('#results').children].some(row => row.classList.contains('error')) ? 'completed_with_warnings' : 'completed';
-    persistCampaignDeliveryAssetStudioWork(status, { completedAtUtc: new Date().toISOString() });
+    await persistCampaignDeliveryAssetStudioWork(status, { completedAtUtc: new Date().toISOString() });
   } catch (error) {
     if (error.name === 'NotAllowedError') {
       state.rootPermission = false;
       renderProductDestination('A permissão da pasta expirou ou foi revogada. Autorize a pasta salva para continuar.');
     }
     addResult(`Falha: ${error.message}`, 'error');
-    persistCampaignDeliveryAssetStudioWork('failed', { completedAtUtc: new Date().toISOString() });
+    await persistCampaignDeliveryAssetStudioWork('failed', { completedAtUtc: new Date().toISOString() });
   } finally {
     state.processingAll = false;
     updateReadyState();

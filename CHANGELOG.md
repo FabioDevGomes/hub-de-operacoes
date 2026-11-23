@@ -2,6 +2,419 @@
 
 As versões abaixo identificam entregas do Hub, não capturas MCC nem versões do banco.
 
+## [1.386.40] - 2026-11-22
+
+- Ajusta fundo da Pre-Sell à largura da tela no desktop e celular.
+
+## [1.386.39] - 2026-11-22
+
+- Valida cache e processamento proporcional das capturas do Asset Studio.
+
+## [1.386.38] - 2026-11-22
+
+- Asset Studio preserva o enquadramento proporcional de imagens desktop e mobile.
+
+## [1.386.37] - 2026-11-22
+
+- Salva localizações por campanha na base central
+
+## [1.386.36] - 2026-11-22
+
+- Adiciona teste de localização detalhada por campanha
+
+## [1.386.35] - 2026-11-21
+
+- Corrige corte do Diário após pausa confirmada
+
+## [1.386.34] - 2026-11-21
+
+- Preserva controles de campanha na virada de fuso
+
+## [1.386.33] - 2026-11-21
+
+- Mostra investimentos da campanha e do produto no Diário
+
+## [1.386.32] - 2026-11-21
+
+- Exibe negativas confirmadas após a última leitura no Diário
+
+## [1.386.31] - 2026-11-21
+
+- Corrige associação de favoritos às contas nos motivos de reprovação
+
+## [1.386.30] - 2026-11-21
+
+- Adiciona link de conta aos motivos de reprovação
+
+## [1.386.29] - 2026-11-21
+
+- Identifica pausa manual no histórico
+
+## [1.386.28] - 2026-11-21
+
+- Adiciona pesquisa Google Trends no diário
+
+## [1.386.27] - 2026-11-21
+
+- Pagina a localização dos cliques
+
+## [1.386.26] - 2026-11-21
+
+- Destaca e registra análise de reprovações
+
+## [1.386.25] - 2026-11-21
+
+- Restaura tabela de snapshots
+
+## [1.386.24] - 2026-11-21
+
+- Corrige atualização do indicador de análise
+
+## [1.386.23] - 2026-11-21
+
+- Renomeia atalho de retorno à visão geral
+
+## [1.386.22] - 2026-11-21
+
+- Adiciona atalho à visão geral no Diário
+
+## [1.386.21] - 2026-11-21
+
+- Desativa botão de oferta não identificada
+
+## [1.386.20] - 2026-11-21
+
+- Registra motivos de reprovação no snapshot
+
+## [1.386.19] - 2026-11-21
+
+- Abre campanhas da conta pelo snapshot
+
+## [1.386.18] - 2026-11-21
+
+- Atualiza ambiente dos testes de D0 e D−1
+
+## [1.386.17] - 2026-11-21
+
+- Correção da prévia e cálculo da Visão geral em segundo plano
+
+## [1.386.16] - 2026-11-21
+
+- Persiste palavras-chave na base central
+
+## [1.386.15] - 2026-11-21
+
+- Ajusta o botão Abrir oferta
+
+## [1.386.14] - 2026-11-21
+
+- Encontra oferta vinculada pela cópia central da campanha
+
+## [1.386.13] - 2026-11-21
+
+- Adiciona acesso à oferta vinculada no Diário
+
+## [1.386.12] - 2026-11-21
+
+- Consulta URLs finais de campanhas na base central
+
+## [1.386.11] - 2026-11-20
+
+- Move o indicador X de erro 2 px para cima
+
+## [1.386.10] - 2026-11-20
+
+- Atualiza prévia em lote com orçamento confirmado no Diário
+
+## [1.386.9] - 2026-11-20
+
+- Permite selecionar campanhas na ação em lote
+
+## [1.386.8] - 2026-11-20
+
+- Usa o último orçamento diário confirmado após a captura
+
+## [1.386.7] - 2026-11-20
+
+- Remove rótulo de ajuste repetido na prévia em lote
+
+## [1.386.6] - 2026-11-20
+
+- Move a conta para coluna própria na prévia em lote
+
+## [1.386.5] - 2026-11-20
+
+- Retoma ajustes de orçamento em lote após confirmar novo valor
+
+## [1.386.4] - 2026-11-20
+
+- Filtra datas pela busca de campanha
+
+## [1.386.3] - 2026-11-20
+
+- Separa o número da campanha na prévia em lote
+
+## [1.386.2] - 2026-11-20
+
+- Corrige retomada do Diário após pausa
+
+## [1.386.1] - 2026-11-20
+
+- Confirma seleção do registro antes de concluir navegação da notificação
+
+## [1.386.0] - 2026-11-20
+
+- Executa ajustes de orçamento em lote com confirmação de valores divergentes
+
+## [1.385.0] - 2026-11-20
+
+- Executa ajustes de CPA em lote com confirmação
+
+## [1.384.2] - 2026-11-20
+
+- Amplia modal da prévia em lote em 20%
+
+## [1.384.1] - 2026-11-20
+
+- Remove ID de conta duplicado na prévia em lote
+
+## [1.384.0] - 2026-11-20
+
+- Adiciona prévia de ajustes em lote por data na Visão Geral
+
+## [1.383.3] - 2026-11-20
+
+- Atualiza inventário de palavras-chave no Diário
+
+## [1.383.2] - 2026-11-20
+
+- Sincroniza confirmações do lote com a entrega central
+
+## [1.383.1] - 2026-11-20
+
+- Exibe campanhas registradas na base central na entrega e na criação
+
+## [1.383.0] - 2026-11-20
+
+- Permite salvar até duas decisões por oferta Guru Media
+
+## [1.382.33] - 2026-11-20
+
+- Corrige o inventário de palavras-chave positivas
+
+## [1.382.32] - 2026-11-19
+
+- Paginar Top Offers CB em blocos de 20 itens
+
+## [1.382.31] - 2026-11-19
+
+- Paginar Top Offers CB em blocos de 20 itens
+
+## [1.382.30] - 2026-11-19
+
+- Conecta Top Offers CB à base central mantendo Glimpse local
+
+## [1.382.29] - 2026-11-19
+
+- Contar campanhas ativas registradas apenas nos snapshots API
+
+## [1.382.28] - 2026-11-19
+
+- Prepara transferência pontual das ações de conversão entre navegadores
+
+## [1.382.27] - 2026-11-19
+
+- Define BB como padrão na criação de campanhas
+
+## [1.382.26] - 2026-11-19
+
+- Recupera contas da Pre-Sell vinculadas à entrega central
+
+## [1.382.25] - 2026-11-19
+
+- Permite abrir criação de campanha com entrega da base central
+
+## [1.382.24] - 2026-11-19
+
+- Recupera dados da curadoria na transferência central para campanha
+
+## [1.382.23] - 2026-11-19
+
+- Corrige abertura da hospedagem de páginas existentes na base central
+
+## [1.382.22] - 2026-11-19
+
+- Reconhece assets salvos com avisos no andamento da entrega
+
+## [1.382.21] - 2026-11-19
+
+- Confirma preparo de imagem e solicita pasta ao enviar assets
+
+## [1.382.20] - 2026-11-19
+
+- Prepara imagens de produto para envio conjunto no Asset Studio
+
+## [1.382.19] - 2026-11-19
+
+- Permite solicitar a pasta ao salvar imagem de produto no Asset Studio
+
+## [1.382.18] - 2026-11-19
+
+- Adiciona decisão Precisa de VPN à Curadoria GuruMedia
+
+## [1.382.17] - 2026-11-19
+
+- Centralizar painel Google Trends no espaço livre do menu
+
+## [1.382.16] - 2026-11-19
+
+- Centralizar ficha Guru Media ao lado do menu lateral
+
+## [1.382.15] - 2026-11-19
+
+- Adicionar status Coleta concluída à curadoria Guru Media
+
+## [1.382.14] - 2026-11-19
+
+- Adiciona opção VSL às decisões da Curadoria GuruMedia
+
+## [1.382.13] - 2026-11-19
+
+- Registra horário ao marcar solicitação enviada na Curadoria GuruMedia
+
+## [1.382.12] - 2026-11-19
+
+- Adiciona decisão DTC à Curadoria GuruMedia
+
+## [1.382.11] - 2026-11-19
+
+- Adicionar opção Coletar dados à curadoria Guru Media
+
+## [1.382.10] - 2026-11-19
+
+- Corrige o salvamento de coletas grandes da Guru Media na base central
+
+## [1.382.9] - 2026-11-18
+
+- Prepara a Ficha e a criação de campanhas para a base central nova
+
+## [1.382.8] - 2026-11-18
+
+- Prepara rascunho central da Ficha e Pre-Sell
+
+## [1.382.7] - 2026-11-18
+
+- Prepara leitura central das entregas na ficha Guru Media
+- Prepara pontos experimentais de entrega e capturas centrais no Asset Studio
+
+## [1.382.6] - 2026-11-18
+
+- Prepara passagem central das curadorias para entregas
+
+## [1.382.5] - 2026-11-18
+
+- Prepara pontes centrais opcionais das curadorias e do Glimpse
+
+## [1.382.4] - 2026-11-18
+
+- Prepara conexão opcional da curadoria Guru Media à base central
+
+## [1.382.3] - 2026-11-18
+
+- Registrar no Diário negativas verificadas em termos de pesquisa
+
+## [1.382.2] - 2026-11-18
+
+- Corrige erro que impedia carregar a Curadoria GuruMedia
+
+## [1.382.1] - 2026-11-18
+
+- Corrige transações em lote para consumidores centrais ClickBank
+
+## [1.382.0] - 2026-11-18
+
+- Marca ofertas com dados salvos como em análise
+
+## [1.381.0] - 2026-11-18
+
+- Prepara encaminhamento central isolado no servidor local
+
+## [1.380.14] - 2026-11-18
+
+- Inicia exportação para servidor local sem confirmação prévia
+
+## [1.380.13] - 2026-11-18
+
+- Corrige o salvamento do título da Ficha e Pre-Sell
+
+## [1.380.12] - 2026-11-18
+
+- Usa diálogos do Hub nas confirmações da entrega de campanha
+
+## [1.380.11] - 2026-11-18
+
+- Usa diálogo do Hub para confirmar envio de imagens ao Google Ads
+
+## [1.380.10] - 2026-11-18
+
+- Usa diálogo do Hub para confirmar aplicação de sitelinks
+
+## [1.380.9] - 2026-11-18
+
+- Usa diálogo do Hub para confirmar aplicação da copy
+
+## [1.380.8] - 2026-11-18
+
+- Usa diálogo do Hub para confirmar publicação da Pre-Sell
+
+## [1.380.7] - 2026-11-18
+
+- Usa diálogo do Hub para confirmar criação de subdomínios
+
+## [1.380.6] - 2026-11-18
+
+- Substitui confirmação nativa de criação da Pre-Sell por diálogo do Hub
+
+## [1.380.5] - 2026-11-18
+
+- Corrige moeda da categoria no mês editado do Controle de gastos
+
+## [1.380.4] - 2026-11-18
+
+- Inclui selecoes de copy e historico do Preparador MCC na migracao.
+
+## [1.380.3] - 2026-11-18
+
+- Amplia dados operacionais e preferencias incluidos na migracao.
+
+## [1.380.2] - 2026-11-18
+
+- Inclui revisoes de termos de pesquisa no pacote de migracao.
+
+## [1.380.1] - 2026-11-18
+
+- Amplia a cobertura das preferencias operacionais na exportacao de migracao.
+
+## [1.380.0] - 2026-11-18
+
+- Amplia o exportador de migracao com fontes adicionais inventariadas.
+
+## [1.379.2] - 2026-11-17
+
+- Exporta dados para servidor sem selecionar pasta de produtos
+
+## [1.379.1] - 2026-11-17
+
+- Amplia cobertura e verifica alterações na exportação de migração
+
+## [1.379.0] - 2026-11-17
+
+- Adiciona exportação local de dados de curadoria e entrega
+
+## [1.378.10] - 2026-11-17
+
+- Prepara componentes de leitura e serialização para migração local
+
 ## [1.378.9] - 2026-11-17
 
 - Ignora cópia histórica local de preparação do Tracking

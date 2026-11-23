@@ -213,6 +213,48 @@ test('vincula campanha confirmada pelo Hub às capturas salvas e projeta impress
     'captura da API não acrescenta linhas depois da pausa confirmada');
 });
 
+test('métricas diárias da API identificam a primeira retomada após pausa e reabrem o Diário', () => {
+  const pausedBase = db.create();
+  const internalId = 'paused-api-campaign';
+  pausedBase.campanhas.push({
+    id: internalId, nome_mcc: campaignName, nome_exibicao: campaignName,
+    conta_id: '222-222-2222', mcc_id: '111-111-1111', google_ads_campaign_id: campaignId,
+    status: 'ativa', pausa_confirmada_em: '2026-10-28', status_origem: 'google_ads_auto_pause',
+    ultima_aparicao: '2026-10-30',
+  });
+  const capture = (date, impressions, clicks) => ({
+    captureSchemaVersion: 4, managerCustomerId, customerId, date, currencyCode: 'USD',
+    timeZone: 'America/Sao_Paulo', exchangeRateUsdBrl: 5, capturedAtUtc: `${date}T15:00:00.000Z`,
+    coverageStatus: 'rows_returned', queryComplete: true,
+    rows: [{ campaignInternalId: internalId, campaignId, campaignName, mappingStatus: 'mapped',
+      impressions, clicks, conversions: 0, costMicros: clicks * 1_000_000 }],
+  });
+  pausedBase.google_ads_api_daily_captures.push(capture('2026-10-29', 4, 1), capture('2026-10-30', 0, 0));
+
+  const window = db.campaignDiaryStatusWindow(pausedBase, internalId);
+  assert.equal(window.pauseConfirmedAt, '2026-10-28');
+  assert.equal(window.reactivatedAt, '2026-10-29', 'última aparição não substitui a primeira data de atividade observada');
+  assert.equal(db.campaignDiaryDateAllowed(pausedBase, internalId, '2026-10-28'), true, 'o dia da pausa permanece inclusivo');
+  assert.equal(db.campaignDiaryDateAllowed(pausedBase, internalId, '2026-10-29'), true);
+
+  const projected = db.googleAdsApiOperationalProjection(pausedBase);
+  const rows = projected.diario.filter(item => item.campanha_id === internalId).sort((a, b) => a.data.localeCompare(b.data));
+  assert.deepEqual(rows.map(item => item.data), ['2026-10-29', '2026-10-30']);
+  assert.equal(rows[0].celulas.B.value, 4);
+  assert.equal(rows[0].celulas.C.value, 1);
+  assert.equal(rows[1].celulas.B.value, 0, 'dia consultado após a retomada preserva zero confirmado');
+});
+
+test('atividade no dia da pausa não comprova retomada e não abre dias posteriores', () => {
+  const base=db.create(),id='paused-same-day';
+  base.campanhas.push({id,nome_mcc:campaignName,nome_exibicao:campaignName,conta_id:customerId,mcc_id:managerCustomerId,google_ads_campaign_id:campaignId,status:'pausada',pausa_confirmada_em:'2026-10-28'});
+  base.google_ads_api_daily_captures.push({captureSchemaVersion:4,managerCustomerId,customerId,date:'2026-10-28',currencyCode:'USD',timeZone:'America/Sao_Paulo',capturedAtUtc:'2026-10-28T15:00:00Z',coverageStatus:'rows_returned',queryComplete:true,rows:[{campaignInternalId:id,campaignId,campaignName,mappingStatus:'mapped',impressions:2,clicks:1}]});
+  const state=db.campaignDiaryStatusWindow(base,id);
+  assert.equal(state.pauseConfirmedAt,'2026-10-28');
+  assert.equal(state.reactivatedAt,null);
+  assert.equal(db.campaignDiaryDateAllowed(base,id,'2026-10-29'),false);
+});
+
 test('o ID verificado da API mapeia capturas futuras sem depender apenas do nome', () => {
   const base = db.create();
   base.manifesto_atual = { campanhas: [], separacao_temporal: {} };

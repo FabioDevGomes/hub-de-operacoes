@@ -3,6 +3,7 @@ import { normalizeAffiliateUrl } from '../../campaign-delivery/affiliate-url-dom
 import { guruMediaCommission } from './guru-media-delivery-domain.mjs?v=5';
 import { getCampaignDeliveriesForOffer } from '../../campaign-delivery/delivery-store.mjs?v=17';
 import { saveGuruMediaAffiliateUrl, saveGuruMediaCanonicalProductName, saveGuruMediaCommission, startGuruMediaCampaignDelivery, watchGuruMediaCampaignDeliverySources } from './guru-media-campaign-delivery.mjs?v=8';
+import { curationBridges } from '../central-bridge-slot.mjs';
 
 function loadStyles() {
   if (document.querySelector('[data-guru-media-delivery-style]')) return;
@@ -105,6 +106,8 @@ export function mountGuruMediaCampaignDeliveryView({ root, getContext, beforeSta
   let affiliateSaving = false;
   let affiliateStatus = '';
   let affiliateStatusState = '';
+  let centralLoading = false;
+  let centralLoadError = '';
 
   function currentOffer() {
     const offer = getContext?.()?.offer;
@@ -112,7 +115,26 @@ export function mountGuruMediaCampaignDeliveryView({ root, getContext, beforeSta
   }
 
   function linkedDeliveries(offer) {
+    if (curationBridges.delivery) {
+      const snapshot = curationBridges.guruDeliverySnapshot;
+      if (!snapshot) throw new Error('Entregas centrais ainda não foram carregadas.');
+      return curationBridges.delivery.forOffer(snapshot, String(offer?.offerId || ''), 'GM');
+    }
     return getCampaignDeliveriesForOffer(String(offer?.offerId || ''), undefined, 'GM');
+  }
+
+  async function loadCentralDeliveries() {
+    if (centralLoading || !curationBridges.delivery) return;
+    centralLoading = true;
+    try {
+      curationBridges.guruDeliverySnapshot = await curationBridges.delivery.list();
+      centralLoadError = '';
+    } catch {
+      centralLoadError = 'Não foi possível carregar as entregas centrais. Reabra a oferta e tente novamente.';
+    } finally {
+      centralLoading = false;
+      render();
+    }
   }
 
   function renderAffiliateLink(offer, deliveries = linkedDeliveries(offer)) {
@@ -230,6 +252,13 @@ export function mountGuruMediaCampaignDeliveryView({ root, getContext, beforeSta
   function render() {
     const offer = currentOffer();
     if (!offer) return;
+    if (curationBridges.delivery && !curationBridges.guruDeliverySnapshot) {
+      deliveryButton.disabled = true;
+      deliveryButton.textContent = 'Carregando entrega…';
+      message.textContent = centralLoadError || 'Consultando entregas centrais…';
+      if (!centralLoadError) void loadCentralDeliveries();
+      return;
+    }
     const offerId = String(offer.offerId);
     const commission = guruMediaCommission(offer);
     const payout = offer.payout?.currency === 'USD' && isCommissionUsd(Number(offer.payout?.value))
@@ -455,7 +484,8 @@ export function mountGuruMediaCampaignDeliveryView({ root, getContext, beforeSta
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 
   const observer = new MutationObserver(() => {
-    if (!root.classList.contains('hidden')) render();
+    if (root.classList.contains('hidden')) centralLoadError = '';
+    else render();
   });
   observer.observe(root.querySelector('#sheetTitle'), { childList: true, characterData: true, subtree: true });
   observer.observe(root, { attributes: true, attributeFilter: ['class'] });

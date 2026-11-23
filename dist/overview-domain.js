@@ -351,7 +351,7 @@
       .filter(date=>typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&manifestDate(date)===date))].sort();
   }
   function campaignDateNavigation(rows,selectedDate='',direction=0,options={}){
-    const dates=activeCampaignStartDates(rows,options);
+    const dates=activeCampaignStartDates(searchRows(rows,options.search||''),options);
     let date=dates.includes(selectedDate)?selectedDate:'';
     const index=dates.indexOf(date);
     // From All, backward starts at newest and forward starts at oldest.

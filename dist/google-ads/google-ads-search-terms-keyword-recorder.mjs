@@ -35,7 +35,7 @@ export function resolveSearchTermsDiaryCampaignId({ database, inventory, manager
 }
 
 export async function recordGoogleAdsSearchTermsKeywordAdditions({
-  database, managerCustomerId, term, matchType, occurredAtUtc, results, inventory,
+  database, managerCustomerId, term, matchType, kind = 'negative', occurredAtUtc, results, inventory, observed = false,
   openDatabase, storage, domain, onSaved = null,
 } = {}) {
   const inputs = [];
@@ -46,7 +46,7 @@ export async function recordGoogleAdsSearchTermsKeywordAdditions({
       unresolvedCount += 1;
       continue;
     }
-    inputs.push({ campaignId, term, matchType, kind: 'negative', source: 'search_terms', occurredAtUtc });
+    inputs.push({ campaignId, term, matchType, kind, source: observed ? 'search_terms_observed' : 'search_terms', occurredAtUtc });
   }
   if (!inputs.length) {
     return { recorded: false, recordedCount: 0, unresolvedCount, reason: 'Não foi encontrado um vínculo único entre a resposta do Google Ads e uma campanha do Diário local.' };

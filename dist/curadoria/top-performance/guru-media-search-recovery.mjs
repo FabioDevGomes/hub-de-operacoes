@@ -1,4 +1,5 @@
 import * as Storage from './top-performance-storage.mjs?v=2';
+import {curationBridges} from '../central-bridge-slot.mjs';
 
 function recoveredOfferFromSnapshot(snapshot, group, collectionsById) {
   const collection = collectionsById.get(String(snapshot.collectionId || '')) || null;
@@ -82,6 +83,11 @@ export async function recoverMissingGuruMediaOffersFromRecords({ existingOffers 
     }
   }
   if (!candidates.length) return { recovered: [], candidateCount: 0 };
+
+  if(curationBridges.guru){
+    const recovered=await curationBridges.guru.recoverGuruOffers(candidates);
+    return {recovered,candidateCount:candidates.length};
+  }
 
   const database = await Storage.openTopPerformanceDB();
   try {

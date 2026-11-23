@@ -1,5 +1,5 @@
 import * as Domain from './personal-finance-domain.mjs?v=38';
-import * as Storage from './personal-finance-storage.mjs?v=27';
+import * as Storage from './personal-finance-storage.mjs?v=28';
 import { subscribeToPersonalFinanceUpdates } from './personal-finance-sync.mjs?v=1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
@@ -826,7 +826,7 @@ export async function mount({ root, toast = () => {}, now = new Date() }) {
       } else if (type === 'category') {
         const existing = categoryById(id);
         const category = { category_id: existing?.category_id || newId('category'), name: values.name, group_id: values.group_id, currency: values.currency, default_plan: parseAmount(values.default_plan), sort_order: existing?.sort_order ?? state.categories.length, active: existing?.active ?? true };
-        if (existing) await Storage.saveCategory(category); else await Storage.createCategory(category, { monthKey: state.month?.month_key || null });
+        if (existing) await Storage.saveCategory(category, { monthKey: state.viewMode === 'month' ? state.month?.month_key || null : null }); else await Storage.createCategory(category, { monthKey: state.month?.month_key || null });
       } else if (type === 'debt') {
         const existing = state.debts.find(item => item.item_id === id), itemId = existing?.item_id || newId('debt');
         const debt = { snapshot_id: `${state.monthKey}:${itemId}`, month_key: state.monthKey, item_id: itemId, name: values.name, amount: parseAmount(values.amount), currency: values.currency, status: values.status || 'open', notes: values.notes };

@@ -1,0 +1,22 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conferência de cobertura do Hub</title></head><body>
+<h1>Conferência de cobertura</h1><p>Somente nomes e contagens; valores e possíveis credenciais não são exibidos.</p>
+<button id="run">Inventariar fontes</button><button id="save" disabled>Baixar inventário</button><pre id="out">Aguardando.</pre>
+<script type="module">
+import {DATABASES,readAllowedStorage} from './overview/migration-export.mjs';
+const out=document.getElementById('out'), save=document.getElementById('save');let report;
+document.getElementById('run').onclick=async()=>{
+  try{
+    if(location.origin!=='http://127.0.0.1:8765')throw Error('Origem incorreta');
+    const names=Array.from({length:localStorage.length},(_,i)=>localStorage.key(i)).filter(x=>typeof x==='string');
+    const mock={length:names.length,key:i=>names[i],getItem:()=>''};const included=new Set(Object.keys(readAllowedStorage(mock)));
+    const excluded=names.filter(n=>!included.has(n)), sensitive=/token|secret|senha|password|credential|authorization|api[-_:]?key/i;
+    const dbs=[];for(const d of await indexedDB.databases()){
+      if(!d.name)continue;const db=await new Promise((resolve,reject)=>{const r=indexedDB.open(d.name);r.onupgradeneeded=()=>{r.transaction.abort();reject(Error('Banco alterado durante leitura'))};r.onerror=()=>reject(Error('Falha ao abrir banco'));r.onsuccess=()=>resolve(r.result)});
+      try{const stores=Array.from(db.objectStoreNames);if(!stores.length){dbs.push({name:d.name,version:db.version,stores:{}});continue}const tx=db.transaction(stores,'readonly'),counts={};for(const n of stores){const r=tx.objectStore(n).count();r.onsuccess=()=>counts[n]=r.result}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(Error('Contagem interrompida'))});dbs.push({name:d.name,version:db.version,stores:counts});}finally{db.close()}
+    }
+    report={origin:location.origin,capturedAtUtc:new Date().toISOString(),databases:dbs,selectedDatabases:Object.keys(DATABASES),localStorage:{total:names.length,selected:included.size,excluded:excluded.length,possiblySensitiveCount:excluded.filter(n=>sensitive.test(n)).length,otherExcludedNames:excluded.filter(n=>!sensitive.test(n)).sort()}};
+    out.textContent=JSON.stringify(report,null,2);save.disabled=false;
+  }catch(e){out.textContent='Falha: '+e.message}
+};
+save.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(report)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='hub-cobertura-inventario.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+</script></body></html>

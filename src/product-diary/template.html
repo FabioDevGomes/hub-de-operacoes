@@ -4,7 +4,8 @@
           <div id="productCampaignEventsToolbar" class="product-campaign-events-toolbar">
             <div id="productCampaignPrimary" class="product-campaign-primary">
               <ul id="productCampaignEventList"></ul>
-              <div id="productCampaignActions" class="product-campaign-actions-card hidden" role="group" aria-label="Ações da campanha"></div>
+              <div class="product-action-block" role="group" aria-label="Atalhos da campanha"><div class="product-primary-shortcuts"><a id="productOpenOffer" class="btn product-open-offer" target="_blank" rel="noopener noreferrer" aria-disabled="true">Abrir oferta</a><button type="button" class="btn product-open-overview" data-product-open-overview>Voltar para visão geral</button><a id="productOpenTrends" class="btn product-open-trends" target="google-trends-top-performance" rel="noopener noreferrer" aria-disabled="true">Pesquisar no Google Trends</a></div>
+              <div id="productCampaignActions" class="product-campaign-actions-card hidden" role="group" aria-label="Ações da campanha"></div></div>
             </div>
             <aside id="productSearchTermsAccessHistory" class="product-search-terms-history hidden" aria-label="Últimas consultas de Termos de Pesquisa desta campanha">
               <h4>Últimas consultas</h4>
@@ -51,6 +52,7 @@
             <div id="productCaptureChartContent" class="product-capture-chart-content" aria-live="polite"></div>
           </section>
           <aside id="productCampaignKeywordInventory" class="card product-campaign-keyword-inventory" aria-label="Palavras-chave da campanha"></aside>
+          <section id="productGeographicTest" class="card product-capture-chart" aria-label="Localização dos cliques"><div class="product-capture-chart-head"><div><h3>Localização dos cliques</h3><p>Teste de leitura por campanha · 14 dias fechados, datas de São Paulo consultadas no fuso da conta.</p></div><button class="product-campaign-keyword-refresh" type="button" data-geographic-test>Atualizar dados agora</button></div><div data-geographic-result role="status" aria-live="polite"></div></section>
         </div>
         <dialog id="productObservationDialog" class="product-observation-dialog" aria-labelledby="productObservationTitle">
           <form id="productObservationForm">

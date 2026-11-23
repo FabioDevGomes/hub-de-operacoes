@@ -634,7 +634,7 @@
   }
   function googleAdsApiOperationalProjection(baseInput){
     if(!baseInput)return null;
-    const base=normalize(baseInput),captures=(base.google_ads_api_daily_captures||[]).filter(item=>Number(item?.captureSchemaVersion)>=2&&String(item?.date||'')>=GOOGLE_ADS_API_OPERATIONAL_START_DATE&&item.coverageStatus==='rows_returned').sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.capturedAtUtc).localeCompare(String(b.capturedAtUtc)));clearManifestGoogleAdsMetricFallbacks(base);addCurrentApiSnapshotCampaigns(base,captures);const summary=googleAdsApiProjectionSummary(base),campaignById=new Map(base.campanhas.map(item=>[String(item.id),item])),saoPauloToday=googleAdsDateInTimeZone('America/Sao_Paulo'),saoPauloYesterday=shiftGoogleAdsDate(saoPauloToday,-1),mappingIndex=apiCampaignMappingIndex(base,captures);
+    const base=normalize(baseInput),captures=(base.google_ads_api_daily_captures||[]).filter(item=>Number(item?.captureSchemaVersion)>=2&&String(item?.date||'')>=GOOGLE_ADS_API_OPERATIONAL_START_DATE&&item.coverageStatus==='rows_returned').sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.capturedAtUtc).localeCompare(String(b.capturedAtUtc)));clearManifestGoogleAdsMetricFallbacks(base);addCurrentApiSnapshotCampaigns(base,captures);const summary=googleAdsApiProjectionSummary(base),campaignById=new Map(base.campanhas.map(item=>[String(item.id),item])),saoPauloToday=googleAdsDateInTimeZone('America/Sao_Paulo'),saoPauloYesterday=shiftGoogleAdsDate(saoPauloToday,-1),mappingIndex=apiCampaignMappingIndex(base,captures),apiActivityDates=googleAdsApiActivityDatesByCampaign(base,captures,mappingIndex);
     const accountMatches=(campaign,capture)=>Boolean(campaign&&campaign.conta_id===canonicalAccountId(capture.customerId)&&(!capture.managerCustomerId||!campaign.mcc_id||campaign.mcc_id===canonicalAccountId(capture.managerCustomerId)));
     const stateMetric=value=>value==null?null:{valor:value,estado:Number(value)===0?'zero_confirmado':'confirmado',origem:'google_ads_api'};
     const setMetric=(metrics,key,value)=>{if(value==null)return;metrics[key]=stateMetric(value)};
@@ -648,7 +648,7 @@
       for(const apiRow of capture.rows||[]){
         const mapping=apiRow.mappingStatus==='unmapped'&&apiRow.campaignInternalId?apiRow:apiRow.mappingStatus==='mapped'&&apiRow.campaignInternalId?apiRow:apiCampaignMapping(base,capture.managerCustomerId,capture.customerId,apiRow,mappingIndex);if(mapping.mappingStatus!=='mapped'||!mapping.campaignInternalId)continue;
         const campaign=campaignById.get(String(mapping.campaignInternalId));if(!accountMatches(campaign,capture))continue;
-        if(!campaignDiaryDateAllowed(base,campaign.id,capture.date))continue;
+        if(!campaignDiaryDateAllowed(base,campaign.id,capture.date,{apiActivityDates:apiActivityDates.get(String(campaign.id))||[]}))continue;
         const existing=diaryByCampaignDate.get(campaign.id)?.get(capture.date),record=existing||{campanha_id:campaign.id,data:capture.date,celulas:{},fontes:[]};
         record.celulas??={};if(!Array.isArray(record.fontes))record.fontes=[];if(!record.fontes.includes('google_ads_api'))record.fontes.push('google_ads_api');
         record.google_ads_api_sao_paulo_day=capture.businessTimeZone==='America/Sao_Paulo'&&capture.businessDate===capture.date;
@@ -691,7 +691,8 @@
         }
         if(campaign.apiSnapshotOnly===true)source.apiSnapshotOnly=true;
         if(campaign.google_ads_campaign_origem)source.google_ads_campaign_origem=campaign.google_ads_campaign_origem;
-        if(config&&globalThis.GoogleAdsConfigDomain&&capture.date===saoPauloToday&&capture.date===googleAdsDateInTimeZone(capture.timeZone)){const labels=globalThis.GoogleAdsConfigDomain;source.google_ads_current_configuration={...clone(config),observedAtUtc:capture.configuration.generatedAtUtc,currencyCode:capture.currencyCode,qualificationLabel:labels.qualification(config),strategyLabel:labels.strategy(config),budgetLabel:labels.budget(config,capture.currencyCode)}}
+        const configurationTime=Date.parse(capture.configuration?.generatedAtUtc||''),configurationAge=Date.now()-configurationTime,previousConfigurationTime=Date.parse(source.google_ads_current_configuration?.observedAtUtc||'');
+        if(config&&globalThis.GoogleAdsConfigDomain&&capture.businessTimeZone!=='America/Sao_Paulo'&&Number.isFinite(configurationTime)&&configurationAge>=0&&configurationAge<=24*60*60*1000&&(!Number.isFinite(previousConfigurationTime)||configurationTime>=previousConfigurationTime)){const labels=globalThis.GoogleAdsConfigDomain;source.google_ads_current_configuration={...clone(config),observedAtUtc:capture.configuration.generatedAtUtc,currencyCode:capture.currencyCode,qualificationLabel:labels.qualification(config),strategyLabel:labels.strategy(config),budgetLabel:labels.budget(config,capture.currencyCode)}}
         if(!operationalPeriod)continue;
         const periods=operationalPeriod==='d1'?[['d1','metricas_D_menos_1']]:[['d0','metricas_D_zero']];
         for(const[period,field]of periods){
@@ -752,6 +753,21 @@
     }}
     return latest;
   }
+  function googleAdsApiActivityDatesByCampaign(base,captures=base?.google_ads_api_daily_captures||[],providedMappingIndex=null){
+    const campaigns=new Map((base?.campanhas||[]).map(item=>[String(item.id),item])),mappingIndex=providedMappingIndex||apiCampaignMappingIndex(base,captures),dates=new Map();
+    for(const capture of captures){if(capture?.coverageStatus!=='rows_returned'||capture?.queryComplete!==true)continue;const customer=canonicalAccountId(capture.customerId),manager=canonicalAccountId(capture.managerCustomerId);
+      for(const row of capture.rows||[]){const impressions=Number(row?.impressions),clicks=Number(row?.clicks);if(!(Number.isFinite(impressions)&&impressions>0||Number.isFinite(clicks)&&clicks>0))continue;
+        const mapping=row.mappingStatus==='unmapped'&&row.campaignInternalId?row:row.mappingStatus==='mapped'&&row.campaignInternalId?row:apiCampaignMapping(base,capture.managerCustomerId,capture.customerId,row,mappingIndex);if(mapping.mappingStatus!=='mapped'||!mapping.campaignInternalId)continue;
+        const id=String(mapping.campaignInternalId),campaign=campaigns.get(id),date=String(capture.date||'');if(!campaign||!/^\d{4}-\d{2}-\d{2}$/.test(date)||campaign.conta_id!==customer||manager&&campaign.mcc_id!==manager||campaign.google_ads_campaign_id&&String(row?.campaignId||'')!==String(campaign.google_ads_campaign_id))continue;
+        const values=dates.get(id)||[];if(!values.includes(date)){values.push(date);dates.set(id,values)}
+      }
+    }
+    for(const values of dates.values())values.sort();return dates;
+  }
+  function firstGoogleAdsActivityDateAfterPause(base,campaignId,pauseDate,activityDates=null){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(pauseDate||'')))return null;
+    const dates=activityDates||googleAdsApiActivityDatesByCampaign(base).get(String(campaignId))||[];return dates.find(date=>date>pauseDate)||null;
+  }
   function confirmAutomaticPause(baseInput,{campaignId,occurredAtUtc}={}){
     const base=normalize(baseInput),matches=base.campanhas.filter(item=>String(item.id)===String(campaignId)),instant=new Date(occurredAtUtc);
     if(matches.length!==1)throw new Error('Campanha não identificada na base local.');
@@ -773,14 +789,17 @@
     else{campaign.reativada_em=date;delete campaign.pausada_em;delete campaign.pausa_confirmada_em}
     base.atualizado_em=now;return base;
   }
-  function campaignDiaryStatusWindow(baseInput,campaignId,{manifest=null,source=null}={}){
+  function campaignDiaryStatusWindow(baseInput,campaignId,options={}){
+    const{manifest=null,source=null}=options;
     const base=baseInput?.schema===SCHEMA?baseInput:create(),campaign=base.campanhas.find(item=>String(item.id)===String(campaignId));if(!campaign)return{pauseConfirmedAt:null,reactivatedAt:null};
     let matchingSource=null,currentState=null,sourcePause=null,sourceActive=null;
     if(manifest){const exactName=String(campaign.nome_mcc||'').trim().toLocaleLowerCase('pt-BR'),candidates=(manifest.campanhas||[]).filter(item=>String(item.nome_campanha_exato||'').trim().toLocaleLowerCase('pt-BR')===exactName),sameIdentity=item=>{try{return(!campaign.conta_id||sourceAccountId(item)===canonicalAccountId(campaign.conta_id))&&(!campaign.mcc_id||sourceManagerId(item,manifest)===canonicalAccountId(campaign.mcc_id))}catch{return false}};matchingSource=source||(candidates.find(sameIdentity)||(candidates.length===1?candidates[0]:null));currentState=matchingSource?manifestOperationalStates(manifest).get(exactName):null;sourcePause=explicitPauseDate(matchingSource,manifest);sourceActive=explicitActiveDate(matchingSource,manifest)||(currentState==='ativa'?manifestDate(manifest):null)}
     const event=latestConfirmedAutomaticPause(base,campaignId),explicit=confirmedPauseDate(campaign),recordedPause=[explicit,event?.date].filter(value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))).sort().at(-1)||null;
-    let reactivatedAt=/^\d{4}-\d{2}-\d{2}$/.test(String(campaign.reativada_em||''))?campaign.reativada_em:null;
-    if(sourceActive&&(!reactivatedAt||sourceActive>reactivatedAt))reactivatedAt=sourceActive;
-    if(campaign.status==='ativa'&&recordedPause&&campaign.ultima_aparicao>recordedPause&&(!reactivatedAt||campaign.ultima_aparicao>reactivatedAt))reactivatedAt=campaign.ultima_aparicao;
+    const apiActivity=recordedPause?firstGoogleAdsActivityDateAfterPause(base,campaignId,recordedPause,Object.hasOwn(options,'apiActivityDates')?options.apiActivityDates:null):null;
+    // ultima_aparicao and the current manifest date are observation dates, not
+    // proof of when delivery resumed. Prefer the earliest dated evidence.
+    const reactivationCandidates=[campaign.reativada_em,...[sourceActive,apiActivity].filter(value=>!recordedPause||value>recordedPause)].filter(value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))&&(!recordedPause||value>=recordedPause)).sort();
+    const reactivatedAt=reactivationCandidates[0]||null;
     // A repeated paused status is not a new pause. Keep the original cutoff until
     // a confirmed reactivation opens a new cycle; then the source can establish
     // the date of a subsequent explicit pause.

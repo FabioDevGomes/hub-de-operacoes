@@ -5,6 +5,7 @@ import vm from'node:vm';
 const html=await readFile(new URL('../dist/curadoria/top-performance/index.html',import.meta.url),'utf8'),storage=await readFile(new URL('../dist/curadoria/top-performance/top-performance-storage.mjs',import.meta.url),'utf8'),tableStyles=await readFile(new URL('../dist/curadoria/top-performance/table-standard.css',import.meta.url),'utf8');
 const trendCandidateView=await readFile(new URL('../dist/curadoria/top-performance/guru-media-trend-candidates-view.mjs',import.meta.url),'utf8'),trendCandidateController=await readFile(new URL('../dist/curadoria/top-performance/guru-media-trend-candidates-controller.mjs',import.meta.url),'utf8');
 assert.ok(html.includes('Plataforma Guru Media'));
+assert.ok(html.includes("hasSavedAnalysisInput({trend})")&&html.includes("inAnalysis?'Em análise':Trends.resultLabel(latest?.status)"),'Guru Media mostra Em análise quando campos de curadoria foram salvos antes da avaliação Trends');
 const guruDeliveryView=await readFile(new URL('../dist/curadoria/top-performance/guru-media-campaign-delivery-view.mjs',import.meta.url),'utf8'),guruDeliveryService=await readFile(new URL('../dist/curadoria/top-performance/guru-media-campaign-delivery.mjs',import.meta.url),'utf8');
 const guruDeliveryStyles=await readFile(new URL('../dist/curadoria/top-performance/guru-media-campaign-delivery.css',import.meta.url),'utf8');
 const negativeCandidatesView=await readFile(new URL('../dist/curadoria/top-performance/guru-media-negative-candidates-view.mjs',import.meta.url),'utf8'),negativeCandidatesService=await readFile(new URL('../dist/curadoria/top-performance/guru-media-campaign-delivery.mjs',import.meta.url),'utf8');
@@ -19,7 +20,7 @@ assert.ok(html.includes('Images.googleSearchUrl(name,country)')&&html.includes('
 assert.ok(html.includes('/white-button.css?v=6'),'E-commerce GM carrega o padrão botão branco compartilhado');
 assert.ok(html.includes('class="btn primary hub-white-button" id="openTrends"')&&html.includes('class="btn primary hub-white-button" id="topManualCountryAdd"'),'somente os dois botões solicitados adotam o padrão branco');
 assert.equal((html.match(/hub-white-button/g)||[]).length,2,'não ampliar o padrão aos demais controles da ficha');
-assert.ok(html.includes("$('#openTrends').onclick=()=>window.open(Trends.exploreUrl($('#trendsTerm').value),'google-trends-top-performance')")&&html.includes('button.onclick=()=>void addManualOfferCountry(item)'),'preservar as ações de pesquisa e inclusão de país');
+assert.ok(html.includes("$('#openTrends').onclick=()=>openTopGoogleTrends(item,$('#trendsTerm').value)")&&html.includes('button.onclick=()=>void addManualOfferCountry(item)'),'preservar as ações de pesquisa e inclusão de país');
 assert.ok(html.includes('class="surface offer-table-surface"><header class="offer-table-caption"><h2>Ofertas</h2></header>'),'a área da tabela mantém um título acessível');
 assert.ok(html.includes('<table class="hub-table-layout hub-table-button-behavior">'),'a lista de ofertas deve optar explicitamente pelos padrões compartilhados de linhas e botões da tabela');
 assert.ok(html.includes('table-standard.css?v=1')&&tableStyles.includes('.offer-table-surface {\n  border: 0;'),'o painel da tabela precisa usar bordas externas removidas');
@@ -27,8 +28,8 @@ assert.ok(['up','stable','down','low_volume','point_peak','inconclusive'].every(
 assert.ok(['th[data-col="payout"] .sort-btn','th[data-col="movement"] .sort-btn','td[data-col="payout"]','td[data-col="movement"]'].every(selector=>tableStyles.includes(`.hub-table-layout ${selector}`))&&tableStyles.includes('text-align: center;'),'os títulos e valores das colunas Payout e Movimento ficam centralizados');
 assert.ok(tableStyles.includes('.offer-table-caption {\n  position: absolute;')&&tableStyles.includes('  height: 1px;\n  min-height: 0;')&&tableStyles.includes('  overflow: hidden;')&&tableStyles.includes('  clip: rect(0, 0, 0, 0);'),'o título Ofertas permanece acessível sem ocupar altura nem deixar espaço acima dos filtros');
 assert.ok(html.includes('./top-performance-storage.mjs'));
-assert.ok(storage.includes("DB_NAME='radar-top-performance'"));
-assert.ok(storage.includes("snapshots:'collection_offer_snapshots'"));
+assert.ok(storage.includes("DB_NAME = 'radar-top-performance'"));
+assert.match(storage,/snapshots:\s*'collection_offer_snapshots'/);
 const trendSearchWriter=storage.slice(storage.indexOf('export async function setTrendSearchTimestamp'),storage.indexOf('export async function saveCollection'));
 assert.ok(trendSearchWriter.includes("db.transaction(STORES.trends,'readwrite')")&&trendSearchWriter.includes('store.get(offerId)')&&trendSearchWriter.includes('lastSearchedAt:searchedAt')&&trendSearchWriter.includes('searchHistory:appendTrendSearch(current,searchedAt,searchedTerm)'),'a busca e o histórico precisam atualizar somente a metadata existente da oferta, sem migração de store');
 assert.ok(!trendSearchWriter.includes('curation-record-written'),'registrar uma busca não deve disparar uma atualização de cache de avaliação de Trends');

@@ -37,3 +37,7 @@ for(const pagePath of curatedListPages){
   assert.ok(page.includes('trends-sheet.css?v=20261021-curation-low-contrast'),`${pagePath} precisa carregar o padrão compartilhado atualizado`);
 }
 console.log('decision ui ok');
+
+const {GURU_MEDIA_DECISION_OPTIONS}=await import('../src/curadoria/top-performance/guru-media-decision-options.mjs?v=test');
+assert.ok(GURU_MEDIA_DECISION_OPTIONS.some(option=>option.value==='Coletar dados'&&option.tone==='collect'));
+assert.equal(normalizeDecision('Coletar dados',GURU_MEDIA_DECISION_OPTIONS),'Coletar dados');

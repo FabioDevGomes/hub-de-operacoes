@@ -1,5 +1,6 @@
 import { buildGoogleAdsPresellCampaignHandoff } from '../google-ads/google-ads-presell-campaign-handoff.mjs?v=4';
 import { normalizeCampaignSequenceProduct } from '../google-ads/google-ads-campaign-sequence-domain.mjs?v=1';
+import { assessAssetStudioCampaignHandoff } from '../asset-studio/handoff-domain.mjs';
 
 export const DELIVERY_MANUAL_STEPS = Object.freeze({
   targeting: 'Segmentação', exclusions: 'Exclusões', images: 'Imagens',
@@ -101,7 +102,9 @@ export function deliveryProgress({ delivery, jobs = [], batches = [], drafts = [
   const shared = sharedStepStatus(batch);
   const assetsBypassed = delivery?.assetStudioRoute?.mode === 'existing_local_page'
     && Number.isFinite(Date.parse(delivery?.assetStudioRoute?.selectedAtUtc));
-  const assets = assetsBypassed || delivery?.assetStudioWork?.status === 'completed';
+  const assets = assetsBypassed || delivery?.assetStudioWork?.status === 'completed'
+    || (delivery?.assetStudioWork?.status === 'completed_with_warnings'
+      && assessAssetStudioCampaignHandoff(delivery.assetStudioWork, delivery.productName).pageAssetsSaved);
   const campaignSettings = campaigns.length > 0 && campaigns.every(campaignDeliverySettingsVerified);
   const campaign = Boolean(batch && campaignSetSignature(campaigns) && campaignSettings && !expansionBlocked);
   return { curadoria, assets, assetsBypassed, presell: pageComplete, campaign, campaignSettings, shared, ambiguous, batch, pages: pages.size,

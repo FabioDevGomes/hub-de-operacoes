@@ -117,9 +117,25 @@
   function appendCampaignKeywordAddedEvent(base,{campaignId,term,matchType,kind,source='search_terms',occurredAtUtc},now=new Date().toISOString()){
     const matches=(base?.campanhas||[]).filter(item=>String(item.id)===String(campaignId));if(matches.length!==1)throw new Error('Campanha não identificada na base local.');
     const keyword=String(term||'').trim().replace(/\s+/g,' '),match=String(matchType||'').toUpperCase(),keywordKind=String(kind||''),origin=String(source||''),instant=new Date(occurredAtUtc),recorded=new Date(now);
-    if(!keyword||Array.from(keyword).length>80||!['BROAD','PHRASE','EXACT'].includes(match)||!['positive','negative'].includes(keywordKind)||!['search_terms','campaign_creation'].includes(origin)||!Number.isFinite(instant.getTime())||!Number.isFinite(recorded.getTime()))throw new Error('O registro da palavra-chave não contém dados válidos.');
-    const storedCampaignId=matches[0].id,occurredAt=instant.toISOString(),date=campaignDateForInstant(occurredAt),eventId=`google-ads-keyword-added:${storedCampaignId}:${keywordKind}:${encodeURIComponent(keyword)}:${match}:${occurredAt}`;
+    if(!keyword||Array.from(keyword).length>80||!['BROAD','PHRASE','EXACT'].includes(match)||!['positive','negative'].includes(keywordKind)||!['search_terms','search_terms_observed','campaign_creation'].includes(origin)||!Number.isFinite(instant.getTime())||!Number.isFinite(recorded.getTime()))throw new Error('O registro da palavra-chave não contém dados válidos.');
+    const storedCampaignId=matches[0].id;
+    if(origin==='search_terms_observed'&&(base?.observacoes_diario||[]).some(item=>String(item.campanha_id)===String(storedCampaignId)&&(item.eventos||[]).some(event=>event?.tipo==='google_ads_campaign_keyword_added'&&event.kind===keywordKind&&String(event.term||'').trim().replace(/\s+/g,' ').toLocaleLowerCase()===keyword.toLocaleLowerCase()&&event.match_type===match)))return base;
+    const occurredAt=instant.toISOString(),date=campaignDateForInstant(occurredAt),eventId=`google-ads-keyword-added:${storedCampaignId}:${keywordKind}:${encodeURIComponent(keyword)}:${match}:${occurredAt}`;
     return appendEvent(base,storedCampaignId,date,{id:eventId,tipo:'google_ads_campaign_keyword_added',kind:keywordKind,term:keyword,match_type:match,source:origin,ocorrido_em_utc:occurredAt},recorded.toISOString());
+  }
+  function latestVerifiedBudgetAdjustment(input,observations=[]){
+    if(!input||typeof input!=='object')return input;
+    const currency=String(input.currencyCode||'').toUpperCase(),capturedAt=Date.parse(input.observedAtUtc||'');
+    if(!/^[A-Z]{3}$/.test(currency))return input;
+    let latest=null,latestAt=-Infinity;
+    for(const observation of Array.isArray(observations)?observations:[])for(const event of Array.isArray(observation?.eventos)?observation.eventos:[]){
+      if(event?.tipo!=='google_ads_budget_adjustment'||event.origem_horario!=='google_ads_api'||String(event.moeda||'').toUpperCase()!==currency)continue;
+      const occurredAt=Date.parse(event.ocorrido_em_utc||''),amount=safeInteger(event.orcamento_novo_micros);
+      if(!Number.isFinite(occurredAt)||amount==null||amount<=0)continue;
+      if(occurredAt>latestAt){latest=event;latestAt=occurredAt}
+    }
+    if(!latest||Number.isFinite(capturedAt)&&latestAt<=capturedAt)return input;
+    return{...input,budgetAmountMicros:String(safeInteger(latest.orcamento_novo_micros)),observedAtUtc:new Date(latestAt).toISOString()};
   }
   function campaignAnalysisIndicators(base){
     const campaignIds=new Set((base?.campanhas||[]).map(campaign=>String(campaign.id))),latestByCampaign=new Map();
@@ -147,5 +163,5 @@
     return[...latestByCampaign.values()].map(({eventId,...item})=>item).sort((a,b)=>a.campaignId.localeCompare(b.campaignId));
   }
   function safeInteger(value){const number=Number(value);return Number.isSafeInteger(number)&&number>=0?number:null}
-  global.ProductDiaryObservations=Object.freeze({observationFor,saveObservation,hasAutomaticPauseEvent,automaticPauseCampaignIds,listAutomaticPauseEvents,appendAutomaticPauseEvent,appendObservedAutomaticPauseEvent,appendCpaAdjustmentEvent,appendBudgetAdjustmentEvent,appendSearchTermsAnalysisEvent,appendCampaignListOpenedEvent,appendCampaignKeywordAddedEvent,campaignAnalysisIndicators});
+  global.ProductDiaryObservations=Object.freeze({observationFor,saveObservation,hasAutomaticPauseEvent,automaticPauseCampaignIds,listAutomaticPauseEvents,appendAutomaticPauseEvent,appendObservedAutomaticPauseEvent,appendCpaAdjustmentEvent,appendBudgetAdjustmentEvent,appendSearchTermsAnalysisEvent,appendCampaignListOpenedEvent,appendCampaignKeywordAddedEvent,latestVerifiedBudgetAdjustment,campaignAnalysisIndicators});
 })(typeof window==='object'?window:globalThis);

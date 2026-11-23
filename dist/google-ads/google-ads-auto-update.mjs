@@ -603,6 +603,15 @@ export function createGoogleAdsAutoUpdater({
     }
     const history = Array.isArray(saved?.base?.google_ads_api_change_history) ? saved.base.google_ads_api_change_history : [];
     const historyEntry = [...history].reverse().find(item => item?.executionMode === 'automatic' && item?.periodType === period && (item?.executionPass || 'initial') === executionPass && (period !== 'D-1' || !businessDate || item?.dateTo === businessDate) && (item?.triggerReason || null) === triggerReason);
+    if (!isD1 && executionPass === 'initial' && historyEntry?.id) {
+      try {
+        const {createPolicyCentral}=await import('./google-ads-policy-central.mjs?v=2');
+        const policy=createPolicyCentral();
+        for (const report of reports) { try { await policy.collect(report,String(historyEntry.id)); } catch(error) { console.warn('Detalhes de políticas indisponíveis para uma conta.',error); } }
+        if(typeof document!=='undefined')document.dispatchEvent(new CustomEvent('google-ads-policy-snapshot-updated',{detail:{snapshotId:String(historyEntry.id)}}));
+        if(typeof BroadcastChannel!=='undefined'){const channel=new BroadcastChannel('painel-campanhas');channel.postMessage({type:'google-ads-policy-snapshot-updated',snapshotId:String(historyEntry.id)});channel.close()}
+      } catch(error) { console.warn('Captura salva; detalhes de políticas indisponíveis.',error); }
+    }
     const completedAtUtc = historyEntry?.completedAtUtc || now().toISOString();
     const run = {
       completedAtUtc,

@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
   const CACHE_KEY='hub:overview:table-preview:v1';
-  const SCHEMA='overview_table_preview_v1';
+  const SCHEMA='overview_table_preview_v2';
   const MAX_SERIALIZED_CHARS=1_048_576;
   const MODES=new Set(['consolidated','d1','d0']);
   const SNAPSHOT_FIELDS=['previewOnly','rows','dates','referenceDate','remainingAlertMinimum','remainingAlertYellowMinimum','billedRevenueLoaded','billedRevenueReadError','historyEntries'];
